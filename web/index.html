@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Bot Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    :root {
+      --tv-bg: #131722;
+      --tv-panel: #1e222d;
+      --tv-border: #2a2e39;
+      --tv-text: #d1d4dc;
+      --tv-muted: #787b86;
+      --tv-green: #089981;
+      --tv-red: #f23645;
+      --tv-blue: #2962ff;
+      --tv-cyan: #00bcd4;
+      --tv-gold: #f7931a;
+      --tv-accent: #2962ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px;
+      background: var(--tv-bg);
+      color: var(--tv-text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Unified command bar (tabs + controls) ── */
+    .command-bar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      height: 46px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--tv-border);
+      background: var(--tv-panel);
+      flex-shrink: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      scrollbar-gutter: stable;
+    }
+
+    .command-bar::-webkit-scrollbar { height: 4px; }
+    .command-bar::-webkit-scrollbar-thumb { background: var(--tv-border); border-radius: 2px; }
+
+    .command-tabs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .command-sep {
+      width: 1px;
+      height: 22px;
+      background: var(--tv-border);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--tv-muted);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: color 0.12s, background 0.12s, border-color 0.12s;
+    }
+
+    .tab-btn:hover {
+      color: var(--tv-text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: rgba(41, 98, 255, 0.2);
+      border-color: rgba(41, 98, 255, 0.45);
+    }
+
+    .command-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .command-spacer { flex: 1; min-width: 8px; }
+
+    .backtest-inline {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .backtest-inline.visible { display: flex; }
+
+    .bt-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .bt-inline label {
+      font-size: 10px;
+      color: var(--tv-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .bt-inline input,
+    .bt-inline select {
+      background: #131722;
+      border: 1px solid var(--tv-border);
+      border-radius: 3px;
+      color: var(--tv-text);
+      font-size: 11px;
+      height: 24px;
+      padding: 0 6px;
+      font-family: inherit;
+    }
+
+    .bt-inline input[type="text"] { width: 88px; }
+    .bt-inline input[type="date"] { width: 112px; }
+    .bt-inline select { width: 64px; }
+
+    .bt-date-wrap {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .bt-date-nav {
+      width: 18px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--tv-border);
+      background: #131722;
+      color: var(--tv-muted);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+
+    .bt-date-nav:hover {
+      color: var(--tv-text);
+      border-color: var(--tv-muted);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .bt-date-wrap input[type="date"] {
+      width: 112px;
+      padding: 0 4px;
+    }
+
+    .btn-compact {
+      background: var(--tv-accent);
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      height: 24px;
+      padding: 0 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-compact:hover { filter: brightness(1.08); }
+    .btn-compact:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--tv-border);
+      border-radius: 3px;
+      color: var(--tv-muted);
+      font-size: 11px;
+      font-weight: 600;
+      height: 24px;
+      padding: 0 8px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-ghost:hover { color: var(--tv-text); border-color: var(--tv-muted); }
+    .btn-ghost.active { color: #fff; border-color: var(--tv-accent); background: rgba(41,98,255,0.15); }
+
+    /* ── Chart toolbar (compact second row) ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px;
+      height: 36px;
+      border-bottom: 1px solid var(--tv-border);
+      background: rgba(30, 34, 45, 0.95);
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+
+    .toolbar-symbol {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--tv-text);
+      white-space: nowrap;
+    }
+
+    .toolbar-symbol span {
+      color: var(--tv-muted);
+      font-weight: 500;
+      font-size: 11px;
+      margin-left: 4px;
+    }
+
+    .tf-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+
+    .tf-favorites {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .tf-picker { position: relative; }
+
+    .tf-current-btn {
+      background: rgba(41,98,255,0.25);
+      border: 1px solid var(--tv-accent);
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .tf-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 100;
+      width: 280px;
+      max-height: 70vh;
+      overflow-y: auto;
+      background: #1e222d;
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+
+    .tf-dropdown[hidden] { display: none; }
+
+    .tf-custom {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--tv-border);
+    }
+
+    .tf-custom input {
+      flex: 1;
+      background: #131722;
+      border: 1px solid var(--tv-border);
+      border-radius: 4px;
+      color: var(--tv-text);
+      font-size: 0.75rem;
+      padding: 5px 8px;
+    }
+
+    .tf-custom button {
+      background: transparent;
+      border: 1px solid var(--tv-border);
+      color: var(--tv-muted);
+      border-radius: 4px;
+      width: 28px;
+      cursor: pointer;
+    }
+
+    .tf-group-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--tv-muted);
+      padding: 8px 12px 4px;
+      text-transform: uppercase;
+    }
+
+    .tf-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--tv-text);
+    }
+
+    .tf-menu-item:hover { background: rgba(255,255,255,0.05); }
+    .tf-menu-item.selected { background: rgba(255,255,255,0.1); }
+
+    .tf-star {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--tv-muted);
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .tf-star.fav { color: #fff; }
+
+    .tf-group {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .tf-btn {
+      background: transparent;
+      border: none;
+      color: var(--tv-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tf-btn:hover:not(:disabled) {
+      background: rgba(255,255,255,0.06);
+      color: var(--tv-text);
+    }
+
+    .tf-btn.active {
+      background: var(--tv-accent);
+      color: #fff;
+    }
+
+    .tf-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .tool-btn {
+      background: transparent;
+      border: 1px solid var(--tv-border);
+      color: var(--tv-muted);
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:hover { border-color: var(--tv-muted); color: var(--tv-text); }
+    .tool-btn.active { background: rgba(41,98,255,0.2); border-color: var(--tv-accent); color: #fff; }
+
+    .seg-group {
+      display: flex;
+      gap: 1px;
+      background: var(--tv-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .seg-btn {
+      background: #131722;
+      border: none;
+      color: var(--tv-muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .seg-btn:hover { color: var(--tv-text); }
+    .seg-btn.active { background: rgba(41,98,255,0.25); color: #fff; }
+
+    .toolbar-meta {
+      margin-left: auto;
+      display: flex;
+      gap: 14px;
+      font-size: 0.75rem;
+      color: var(--tv-muted);
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .toolbar-meta span {
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    .toolbar-meta .meta-val {
+      display: inline-block;
+      min-width: 4.5ch;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .toolbar-meta strong { color: var(--tv-text); margin-left: 4px; }
+
+    .regime {
+      display: inline-block;
+      min-width: 72px;
+      text-align: center;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      box-sizing: border-box;
+    }
+    .regime.EXPANSION { background: #2962ff33; color: #58a6ff; }
+    .regime.SQUEEZE   { background: #f7931a33; color: #f7931a; }
+    .regime.CLIMAX    { background: #f2364533; color: #f23645; }
+
+    /* ── Indicator toggles ── */
+    .indicator-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--tv-border);
+      background: rgba(30,34,45,0.95);
+    }
+
+    .ind-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--tv-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .ind-toggle input { accent-color: var(--tv-accent); cursor: pointer; }
+    .ind-toggle.active { color: var(--tv-text); }
+
+    .ind-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Slim header merged into command-bar ── */
+    .slim-header {
+      display: contents;
+    }
+
+    .header-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .status-badge {
+      display: inline-block;
+      min-width: 82px;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: #2b313f;
+      color: #787b86;
+      flex-shrink: 0;
+    }
+
+    .status-badge.in-position {
+      background: rgba(8, 153, 129, 0.2);
+      color: #089981;
+    }
+
+    .status-badge.idle {
+      background: #2b313f;
+      color: #787b86;
+    }
+
+    .score-block {
+      font-variant-numeric: tabular-nums;
+      flex: 0 0 168px;
+      width: 168px;
+    }
+
+    .score-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 168px;
+    }
+
+    .score-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 58px;
+      width: 58px;
+    }
+
+    #hdr-score-long,
+    #hdr-score-short {
+      display: inline-block;
+      flex: 0 0 4ch;
+      width: 4ch;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #hdr-score-long { color: #089981; font-weight: 700; }
+    #hdr-score-short { color: #f23645; font-weight: 700; }
+
+    .mini-bar-bg {
+      width: 56px;
+      height: 8px;
+      background: #2b313f;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .mini-bar-fill {
+      height: 100%;
+      width: 100%;
+      transform: scaleX(0);
+      transform-origin: left center;
+      will-change: transform;
+    }
+
+    .long-fill { background: #089981; }
+    .short-fill { background: #f23645; }
+
+    .mini-input {
+      width: 42px;
+      height: 24px;
+      background: #131722;
+      border: 1px solid var(--tv-border);
+      border-radius: 3px;
+      color: var(--tv-text);
+      font-size: 11px;
+      padding: 0 4px;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .mini-input:focus {
+      outline: none;
+      border-color: var(--tv-accent);
+    }
+
+    .matrix-btn {
+      background: transparent;
+      border: 1px solid var(--tv-border);
+      color: var(--tv-muted);
+      font-size: 11px;
+      font-weight: 600;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .matrix-btn:hover {
+      border-color: var(--tv-muted);
+      color: var(--tv-text);
+    }
+
+    .matrix-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .matrix-modal.open { display: flex; }
+
+    .matrix-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    .matrix-modal-panel {
+      position: relative;
+      z-index: 1;
+      width: min(420px, calc(100vw - 32px));
+      max-height: min(80vh, 560px);
+      background: #1e222d;
+      border: 1px solid #2b313f;
+      border-radius: 6px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .matrix-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid #2b313f;
+    }
+
+    .matrix-modal-header h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #d1d4dc;
+    }
+
+    .matrix-modal-close {
+      background: none;
+      border: none;
+      color: #787b86;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .matrix-modal-close:hover { color: #fff; }
+
+    .matrix-modal-body {
+      padding: 10px 14px 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .matrix-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #d1d4dc;
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 0;
+    }
+
+    .matrix-toggle input {
+      accent-color: var(--tv-accent);
+      cursor: pointer;
+    }
+
+    /* ── Backtester tab ── */
+    .backtest-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 4px;
+    }
+
+    #backtest-chart-container {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      border: 1px solid var(--tv-border);
+      border-radius: 4px;
+      overflow: hidden;
+      flex-direction: column;
+    }
+
+    /* ── Console drawer (overlay) ── */
+    .console-drawer {
+      position: fixed;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      height: 160px;
+      max-height: 35vh;
+      background: rgba(13, 17, 23, 0.94);
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
+      z-index: 600;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(6px);
+    }
+
+    .console-drawer[hidden] { display: none !important; }
+
+    .console-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--tv-border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--tv-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+
+    .console-drawer-close {
+      background: none;
+      border: none;
+      color: var(--tv-muted);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .console-drawer-close:hover { color: #fff; }
+
+    #backtest-logs {
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+      padding: 8px 10px;
+      overflow: auto;
+      background: transparent;
+      border: none;
+      color: #9db0cb;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .pro-chart-root {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #backtest-chart-container.pro-chart-root .charts-stack {
+      flex: 1;
+      height: 100%;
+      padding: 0;
+    }
+
+    #live-chart-container.pro-chart-root {
+      width: 100%;
+      min-height: 0;
+    }
+
+    .pro-chart-root .chart-wrap > div[id$="-container"],
+    .pro-chart-root .osc-wrap > div[id$="-container"],
+    .pro-chart-root .rsx-wrap > div[id$="-container"] {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Statistics tab ── */
+    .stats-panel {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: var(--tv-panel);
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+
+    .stat-card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--tv-muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-card-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--tv-text);
+    }
+
+    .stat-card-value.positive { color: var(--tv-green); }
+    .stat-card-value.negative { color: var(--tv-red); }
+
+    .stats-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--tv-muted);
+    }
+
+    #equity-chart {
+      width: 100%;
+      flex: 1 1 200px;
+      min-height: 200px;
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .trade-history-wrap {
+      flex-shrink: 0;
+    }
+
+    #trade-history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    #trade-history-table th,
+    #trade-history-table td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--tv-border);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #trade-history-table th {
+      background: rgba(30, 34, 45, 0.95);
+      color: var(--tv-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+    }
+
+    #trade-history-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    #trade-history-table .pnl-pos { color: var(--tv-green); }
+    #trade-history-table .pnl-neg { color: var(--tv-red); }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .tab-content.active { display: flex; }
+
+    .tab-placeholder {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--tv-muted);
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+    }
+
+    #sandbox-badge.sandbox-badge {
+      visibility: hidden;
+      opacity: 0;
+      width: 0;
+      min-width: 0;
+      padding: 0;
+      overflow: hidden;
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(90deg, #e65100, #ff5722);
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    #sandbox-badge.sandbox-badge.active {
+      visibility: visible;
+      opacity: 1;
+      width: auto;
+      min-width: 72px;
+      text-align: center;
+      padding: 3px 8px;
+      box-shadow: 0 0 12px rgba(255, 87, 34, 0.45);
+      animation: sandbox-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes sandbox-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.72; }
+    }
+
+    /* ── Chart area ── */
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    @media (max-width: 900px) {
+      .command-bar { gap: 10px; }
+      .backtest-inline { flex-wrap: wrap; }
+    }
+
+    .charts-stack {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 4px 4px 0;
+      gap: 0;
+    }
+
+    .chart-wrap,
+    .osc-wrap,
+    .rsx-wrap {
+      position: relative;
+      min-height: 72px;
+      overflow: hidden;
+    }
+
+    .osc-wrap,
+    .rsx-wrap {
+      resize: vertical;
+      min-height: 80px;
+      max-height: 70vh;
+    }
+
+    .fullscreen-pane {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999;
+      background: var(--tv-bg);
+      flex: none !important;
+      max-height: none !important;
+      resize: none !important;
+    }
+
+    .chart-wrap { flex: 55 1 0; }
+    .osc-wrap { flex: 22 1 0; }
+    .rsx-wrap { flex: 23 1 0; }
+
+    .pane-label {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      z-index: 5;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--tv-muted);
+      pointer-events: none;
+      letter-spacing: 0.02em;
+    }
+
+    .pane-label .val {
+      margin-left: 6px;
+      color: var(--tv-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pane-label--interactive {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      z-index: 6;
+    }
+
+    .rsx-label-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-weight: 600;
+      color: var(--tv-muted);
+      cursor: pointer;
+      letter-spacing: 0.02em;
+    }
+
+    .rsx-label-btn:hover {
+      color: var(--tv-text);
+    }
+
+    .pane-resize {
+      flex: 0 0 5px;
+      cursor: ns-resize;
+      background: var(--tv-border);
+      transition: background 0.15s;
+      z-index: 6;
+    }
+
+    .pane-resize:hover,
+    .pane-resize.dragging {
+      background: var(--tv-accent);
+    }
+
+    #chart-container,
+    #osc-container,
+    #rsx-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Ruler overlay ── */
+    .ruler-shade,
+    #ruler-shade {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(41,98,255,0.18);
+      border: 1px solid rgba(41,98,255,0.5);
+      display: none;
+      z-index: 10;
+    }
+
+    .ruler-tooltip,
+    #ruler-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(41,98,255,0.92);
+      color: #fff;
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+      padding: 6px 10px;
+      border-radius: 4px;
+      line-height: 1.5;
+      white-space: nowrap;
+      display: none;
+      z-index: 11;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .ruler-tooltip .pct,
+    #ruler-tooltip .pct { font-weight: 700; font-size: 0.82rem; }
+
+    #orderflow-buffer {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(19, 23, 34, 0.72);
+      color: var(--tv-text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      z-index: 12;
+      pointer-events: none;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .toolbar-meta { display: none; }
+      .slim-header { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="command-bar">
+    <div class="command-tabs tabs-nav">
+      <button type="button" class="tab-btn active" data-tab="tab-live">Live</button>
+      <button type="button" class="tab-btn" data-tab="tab-stats">Stats</button>
+      <button type="button" class="tab-btn" data-tab="tab-backtest">Backtest</button>
+    </div>
+
+    <div class="command-sep"></div>
+
+    <div class="command-cluster">
+      <span class="status-badge idle" id="bot-status">IDLE</span>
+      <span id="sandbox-badge" class="sandbox-badge">SANDBOX</span>
+    </div>
+
+    <div class="command-cluster score-block">
+      <div class="score-row">
+        <span class="score-label">L <span id="hdr-score-long">0</span></span>
+        <div class="mini-bar-bg"><div class="mini-bar-fill long-fill" id="bar-long"></div></div>
+        <input type="number" id="ui-threshold-long" value="70" min="10" max="200" step="5" class="mini-input" title="Long threshold" />
+      </div>
+    </div>
+
+    <div class="command-cluster score-block">
+      <div class="score-row">
+        <span class="score-label">S <span id="hdr-score-short">0</span></span>
+        <div class="mini-bar-bg"><div class="mini-bar-fill short-fill" id="bar-short"></div></div>
+        <input type="number" id="ui-threshold-short" value="70" min="10" max="200" step="5" class="mini-input" title="Short threshold" />
+      </div>
+    </div>
+
+    <button type="button" class="matrix-btn" id="matrix-open-btn" title="Signal Matrix">Matrix</button>
+
+    <div class="risk-menu-wrap">
+      <button type="button" class="matrix-btn" id="btn-risk-menu" title="Risk Settings">Risk</button>
+      <div id="risk-settings-menu" class="indicator-settings-menu indicator-settings-menu--floating indicator-settings-menu--dropup" data-float-direction="down" hidden>
+        <div class="setting-row">
+          <label>Risk Per Trade (%)</label>
+          <input type="number" id="risk-per-trade" min="0.1" max="100" step="0.1" value="1" />
+        </div>
+        <div class="setting-row">
+          <label>Max Drawdown (%)</label>
+          <input type="number" id="risk-max-drawdown" min="0.1" max="100" step="0.1" value="5" />
+        </div>
+        <div class="setting-row">
+          <label>Leverage</label>
+          <input type="number" id="risk-leverage" min="1" max="125" step="1" value="10" />
+        </div>
+        <div class="setting-row">
+          <label>Stop Loss Type</label>
+          <select id="risk-stop-loss-type">
+            <option value="fractal_atr">Fractal + ATR</option>
+            <option value="fixed_pct">Fixed %</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>ATR Multiplier</label>
+          <input type="number" id="risk-atr-multiplier" min="0.1" max="10" step="0.1" value="1.5" />
+        </div>
+        <button type="button" class="risk-save-btn" id="risk-save-btn">Save</button>
+      </div>
+    </div>
+
+    <form class="backtest-inline" id="backtest-controls" onsubmit="return false;">
+      <div class="bt-inline">
+        <input type="text" id="bt-symbol" value="BTCUSDT" autocomplete="off" title="Symbol" />
+      </div>
+      <div class="bt-inline">
+        <select id="bt-interval" title="Timeframe">
+          <option value="1m">1m</option>
+          <option value="3m">3m</option>
+          <option value="15m" selected>15m</option>
+          <option value="1h">1h</option>
+          <option value="4h">4h</option>
+          <option value="1d">D</option>
+          <option value="1w">W</option>
+          <option value="1M">M</option>
+        </select>
+      </div>
+      <div class="bt-inline">
+        <div class="bt-date-wrap" data-date-wrap="bt-start">
+          <button type="button" class="bt-date-nav" data-date-nav="bt-start" data-dir="-1" title="Previous month" aria-label="Previous month">‹</button>
+          <input type="date" id="bt-start" title="Start" />
+          <button type="button" class="bt-date-nav" data-date-nav="bt-start" data-dir="1" title="Next month" aria-label="Next month">›</button>
+        </div>
+      </div>
+      <div class="bt-inline">
+        <div class="bt-date-wrap" data-date-wrap="bt-end">
+          <button type="button" class="bt-date-nav" data-date-nav="bt-end" data-dir="-1" title="Previous month" aria-label="Previous month">‹</button>
+          <input type="date" id="bt-end" title="End" />
+          <button type="button" class="bt-date-nav" data-date-nav="bt-end" data-dir="1" title="Next month" aria-label="Next month">›</button>
+        </div>
+      </div>
+      <button type="button" id="btn-run-backtest" class="btn-compact">Run</button>
+    </form>
+
+    <div class="command-spacer"></div>
+
+    <button type="button" class="btn-ghost" id="console-toggle" title="Backtest console">Console</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-symbol">
+      <span id="symbol">BTCUSDT</span>
+      <span id="timeframe-label">1m</span>
+    </div>
+
+    <div class="tf-bar" id="tf-bar">
+      <div class="tf-favorites" id="tf-favorites"></div>
+      <div class="tf-picker">
+        <button type="button" class="tf-current-btn" id="tf-current-btn">1m ▾</button>
+        <div class="tf-dropdown" id="tf-dropdown" hidden>
+          <div class="tf-custom">
+            <input id="tf-custom-input" type="text" placeholder="Add custom interval (e.g. 35m, 200 ticks)" />
+            <button type="button" id="tf-custom-add" title="Add custom">+</button>
+          </div>
+          <div id="tf-menu-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="tool-btn" id="ruler-btn" title="Measurement Tool">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 21l18-18M7 3l4 4M3 7l4-4M17 17l4 4M13 21l4-4"/>
+      </svg>
+      Ruler
+    </button>
+
+    <div class="seg-group" id="scale-group">
+      <button type="button" class="seg-btn active" data-scale="log">Log</button>
+      <button type="button" class="seg-btn" data-scale="auto">Auto</button>
+    </div>
+
+    <div class="seg-group" id="chart-type-group">
+      <button type="button" class="seg-btn active" data-chart="candles">Candles</button>
+      <button type="button" class="seg-btn" data-chart="bars">Bars</button>
+      <button type="button" class="seg-btn" data-chart="line">Line</button>
+    </div>
+
+    <div class="toolbar-meta">
+      <span>Regime<strong><span id="regime" class="regime meta-val">—</span></strong></span>
+      <span>J<strong id="jurik-val" class="meta-val">—</strong></span>
+      <span>R<strong id="red-val" class="meta-val">—</strong></span>
+      <span>G<strong id="green-val" class="meta-val">—</strong></span>
+    </div>
+  </div>
+
+  <div id="matrix-modal" class="matrix-modal" aria-hidden="true">
+    <div class="matrix-modal-backdrop" id="matrix-modal-backdrop"></div>
+    <div class="matrix-modal-panel" role="dialog" aria-labelledby="matrix-modal-title">
+      <div class="matrix-modal-header">
+        <h3 id="matrix-modal-title">Signal Matrix</h3>
+        <button type="button" class="matrix-modal-close" id="matrix-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="matrix-modal-body" id="matrix-modal-body">
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRSX" data-matrix-key="useRSX" checked /> RSX L / S markers (+35/+45)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhCross" data-matrix-key="useWozduhCross" checked /> Wozduh vol cross lime/red (+35)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRedCross" data-matrix-key="useRedCross" checked /> Red × Green cross (+35)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometry" data-matrix-key="useGeometry" checked /> Geometry breakout (+30)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryBounce" data-matrix-key="useGeometryBounce" checked /> Geometry bounce (+25)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryTriangle" data-matrix-key="useGeometryTriangle" checked /> Geometry triangle (+10)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useDivergence" data-matrix-key="useDivergence" checked /> Divergence score (±)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useFib" data-matrix-key="useFib" checked /> Fib 0.618 active (+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useExpRegime" data-matrix-key="useExpRegime" checked /> Regime EXPANSION (+15)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useJurikTrend" data-matrix-key="useJurikTrend" checked /> Jurik tailwind (+15/+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhSpike" data-matrix-key="useWozduhSpike" checked /> Wozduh volume spike (+15)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAD" data-matrix-key="useAD" checked /> AD accumulation / distribution (+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAOCross" data-matrix-key="useAOCross" checked /> AO cross zero (+15)</label>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div id="tab-live" class="tab-content active">
+      <div class="indicator-bar">
+        <label class="ind-toggle active"><input type="checkbox" id="tog-jurik" checked /><span class="ind-dot" style="background:#c8a882"></span>RSX Jurik</label>
+        <label class="ind-toggle active"><input type="checkbox" id="tog-spike" checked /><span class="ind-dot" style="background:#f7931a"></span>Volume Spike</label>
+        <label class="ind-toggle active"><input type="checkbox" id="tog-volume" checked /><span class="ind-dot" style="background:#787b86"></span>Volume</label>
+        <label class="ind-toggle active"><input type="checkbox" id="tog-fib" checked /><span class="ind-dot" style="background:#e3b341"></span>Fib Zones</label>
+      </div>
+
+      <div id="live-chart-container" class="pro-chart-root">
+      <div class="charts-stack" id="charts-stack">
+      <div class="chart-wrap" id="price-wrap">
+        <div class="pane-label" id="volume-label">Vol<span class="val" id="volume-val">—</span></div>
+        <div class="chart-legend" data-pane="price" data-context="live"></div>
+        <div id="chart-container"></div>
+        <div id="orderflow-buffer">Buffering Order Flow data... Please wait.</div>
+        <div id="ruler-shade" class="ruler-shade"></div>
+        <div id="ruler-tooltip" class="ruler-tooltip"></div>
+      </div>
+      <div class="pane-resize" data-resize="price-osc"></div>
+      <div class="osc-wrap" id="osc-wrap">
+        <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
+        <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2" checked /> Фиолетовая — RSI(HL2)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiVol" checked /> Голубая/Синяя — Vol RSI + Dots</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="volChan" checked /> Голубой — RSI(vol) Канал</label>
+            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
+          </div>
+        <div id="osc-container"></div>
+      </div>
+      <div class="pane-resize" data-resize="osc-rsx"></div>
+      <div class="rsx-wrap" id="rsx-wrap">
+        <div class="chart-legend" data-pane="rsx" data-context="live"></div>
+        <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+            <div class="setting-row">
+              <label>RSX Length:</label>
+              <input type="number" class="rsx-length-input" min="3" max="100" step="1" value="14" />
+            </div>
+            <div class="setting-row">
+              <label>Div Lookback (bars):</label>
+              <input type="number" class="rsx-div-lookback-input" min="10" max="200" step="1" value="90" />
+            </div>
+            <div class="setting-row">
+              <label>Signal Line Length:</label>
+              <input type="number" class="rsx-signal-length-input" min="2" max="50" step="1" value="9" />
+            </div>
+            <div class="setting-row">
+              <label>Source:</label>
+              <select class="rsx-source-select">
+                <option value="close">close</option>
+                <option value="hlc3">hlc3</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Pivot Radius:</label>
+              <input type="number" class="rsx-pivot-radius-input" min="1" max="10" step="1" value="2" />
+            </div>
+            <div class="setting-row">
+              <label>Div Method:</label>
+              <select class="rsx-div-method-select">
+                <option value="tv">TradingView</option>
+                <option value="fractal">Fractal</option>
+              </select>
+            </div>
+            <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
+          </div>
+        <span class="val rsx-val-inline" id="rsx-val">—</span>
+        <div id="rsx-container"></div>
+      </div>
+    </div>
+    </div>
+    </div>
+
+    <div id="tab-stats" class="tab-content">
+      <div class="stats-panel">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-label">Total Trades</div>
+            <div class="stat-card-value" id="stat-total-trades">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Win Rate (%)</div>
+            <div class="stat-card-value" id="stat-win-rate">0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Net Profit (%)</div>
+            <div class="stat-card-value" id="stat-net-profit">0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Profit Factor</div>
+            <div class="stat-card-value" id="stat-profit-factor">0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Max Drawdown (%)</div>
+            <div class="stat-card-value" id="stat-max-drawdown">0.00</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Recovery Factor</div>
+            <div class="stat-card-value" id="stat-recovery-factor">0.00</div>
+          </div>
+        </div>
+
+        <div class="stats-section-title">Equity Curve</div>
+        <div id="equity-chart"></div>
+
+        <div class="stats-section-title">Trade History</div>
+        <div class="trade-history-wrap">
+          <table id="trade-history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Side</th>
+                <th>Entry Price</th>
+                <th>Exit Price</th>
+                <th>PnL</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="trade-history-body">
+              <tr><td colspan="6" style="color: var(--tv-muted);">No trades yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-backtest" class="tab-content">
+      <div class="backtest-panel">
+        <div id="backtest-chart-container" class="pro-chart-root">
+          <div class="charts-stack" id="bt-charts-stack">
+            <div class="chart-wrap" id="bt-price-wrap">
+              <div class="chart-legend" data-pane="price" data-context="backtest"></div>
+              <div id="bt-chart-container"></div>
+              <div id="bt-ruler-shade" class="ruler-shade"></div>
+              <div id="bt-ruler-tooltip" class="ruler-tooltip"></div>
+            </div>
+            <div class="osc-wrap" id="bt-osc-wrap">
+              <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
+              <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2" checked /> Фиолетовая — RSI(HL2)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiVol" checked /> Голубая/Синяя — Vol RSI + Dots</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="volChan" checked /> Голубой — RSI(vol) Канал</label>
+                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
+                </div>
+              <div id="bt-osc-container"></div>
+            </div>
+            <div class="rsx-wrap" id="bt-rsx-wrap">
+              <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
+              <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
+              <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+                  <div class="setting-row">
+                    <label>RSX Length:</label>
+                    <input type="number" class="rsx-length-input" min="3" max="100" step="1" value="14" />
+                  </div>
+                  <div class="setting-row">
+                    <label>Div Lookback (bars):</label>
+                    <input type="number" class="rsx-div-lookback-input" min="10" max="200" step="1" value="90" />
+                  </div>
+                  <div class="setting-row">
+                    <label>Signal Line Length:</label>
+                    <input type="number" class="rsx-signal-length-input" min="2" max="50" step="1" value="9" />
+                  </div>
+                  <div class="setting-row">
+                    <label>Source:</label>
+                    <select class="rsx-source-select">
+                      <option value="close">close</option>
+                      <option value="hlc3">hlc3</option>
+                    </select>
+                  </div>
+                  <div class="setting-row">
+                    <label>Pivot Radius:</label>
+                    <input type="number" class="rsx-pivot-radius-input" min="1" max="10" step="1" value="2" />
+                  </div>
+                  <div class="setting-row">
+                    <label>Div Method:</label>
+                    <select class="rsx-div-method-select">
+                      <option value="tv">TradingView</option>
+                      <option value="fractal">Fractal</option>
+                    </select>
+                  </div>
+                  <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
+                </div>
+              <div id="bt-rsx-container"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Trendlines navigator popups (DOM must match app.js selectors: .navigator-popup, .btn-ok, [data-nav-field]) -->
+  <div id="popup-price" class="popup-container navigator-popup" data-pane="price" hidden>
+    <div class="navigator-popup__header">
+      <span>Trendlines — PRICE</span>
+      <button type="button" class="navigator-popup__close" aria-label="Close">×</button>
+    </div>
+    <div class="navigator-popup__body" data-nav-pane="price">
+      <div class="setting-row">
+        <label>Period</label>
+        <select data-nav-field="period">
+          <option value="">Chart TF</option>
+          <option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option>
+          <option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="targetPrice" checked /> Price</label>
+        <label class="menu-row"><input type="checkbox" data-nav-field="targetRSX" /> RSX</label>
+        <label class="menu-row"><input type="checkbox" data-nav-field="targetWozduh" /> Wozduh</label>
+      </div>
+      <div class="setting-row">
+        <label>Trend Type</label>
+        <select data-nav-field="trendType"><option value="Wicks">Wicks</option><option value="Body">Body</option></select>
+      </div>
+      <div class="setting-row">
+        <label>Periods</label>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useLong" checked /> Long</label><input type="number" data-nav-field="longLen" min="3" max="500" value="60" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useMedium" checked /> Medium</label><input type="number" data-nav-field="mediumLen" min="3" max="500" value="30" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useShort" checked /> Short</label><input type="number" data-nav-field="shortLen" min="3" max="500" value="10" /></div>
+      </div>
+      <div class="setting-row">
+        <label>Term</label>
+        <select data-nav-field="term"><option value="Long">Long</option><option value="Medium">Medium</option><option value="Short">Short</option></select>
+      </div>
+      <div class="setting-row">
+        <label>HH/LL</label>
+        <select data-nav-field="hhll">
+          <option value="None">None</option>
+          <option value="Only">Only HH/LL</option>
+          <option value="Previous">HH/LL &amp; previous H/L</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="momentumEnabled" /> Momentum Break</label>
+        <div class="inline-pair">
+          <input type="number" data-nav-field="momentumPercent" min="0" step="1" value="100" title="% of ATR" placeholder="% ATR" />
+          <input type="number" data-nav-field="momentumBars" min="1" step="1" value="14" title="ATR Bars" placeholder="ATR bars" />
+        </div>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="timeHoldEnabled" /> Time Hold Filter</label>
+        <input type="number" data-nav-field="timeHoldBars" min="1" step="1" value="2" title="Hold bars" />
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="backgroundColor" /> Background Color</label>
+        <label class="menu-row"><input type="checkbox" data-nav-field="barColor" /> Bar Color</label>
+      </div>
+    </div>
+    <div class="navigator-popup__footer">
+      <button type="button" class="btn-reset">Reset</button>
+      <button type="button" class="btn-save-default">Save as Default</button>
+      <button type="button" class="btn-ok">Ok</button>
+    </div>
+  </div>
+
+  <div id="popup-rsx" class="popup-container navigator-popup" data-pane="rsx" hidden>
+    <div class="navigator-popup__header">
+      <span>Trendlines — RSX</span>
+      <button type="button" class="navigator-popup__close" aria-label="Close">×</button>
+    </div>
+    <div class="navigator-popup__body" data-nav-pane="rsx">
+      <div class="setting-row">
+        <label>Trend Type</label>
+        <select data-nav-field="trendType"><option value="Wicks">Wicks</option><option value="Body">Body</option></select>
+      </div>
+      <div class="setting-row">
+        <label>Periods</label>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useLong" checked /> Long</label><input type="number" data-nav-field="longLen" min="3" max="500" value="60" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useMedium" checked /> Medium</label><input type="number" data-nav-field="mediumLen" min="3" max="500" value="30" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useShort" checked /> Short</label><input type="number" data-nav-field="shortLen" min="3" max="500" value="10" /></div>
+      </div>
+      <div class="setting-row">
+        <label>Term</label>
+        <select data-nav-field="term"><option value="Long">Long</option><option value="Medium">Medium</option><option value="Short">Short</option></select>
+      </div>
+      <div class="setting-row">
+        <label>HH/LL</label>
+        <select data-nav-field="hhll">
+          <option value="None">None</option>
+          <option value="Only">Only HH/LL</option>
+          <option value="Previous">HH/LL &amp; previous H/L</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="momentumEnabled" /> Momentum Break</label>
+        <div class="inline-pair">
+          <input type="number" data-nav-field="momentumPercent" min="0" step="1" value="100" title="% of ATR" placeholder="% ATR" />
+          <input type="number" data-nav-field="momentumBars" min="1" step="1" value="14" title="ATR Bars" placeholder="ATR bars" />
+        </div>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="timeHoldEnabled" /> Time Hold Filter</label>
+        <input type="number" data-nav-field="timeHoldBars" min="1" step="1" value="2" title="Hold bars" />
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="backgroundColor" /> Background Color</label>
+        <label class="menu-row"><input type="checkbox" data-nav-field="barColor" /> Bar Color</label>
+      </div>
+    </div>
+    <div class="navigator-popup__footer">
+      <button type="button" class="btn-reset">Reset</button>
+      <button type="button" class="btn-save-default">Save as Default</button>
+      <button type="button" class="btn-ok">Ok</button>
+    </div>
+  </div>
+
+  <div id="popup-wozduh" class="popup-container navigator-popup" data-pane="wozduh" hidden>
+    <div class="navigator-popup__header">
+      <span>Trendlines — WOZDUH</span>
+      <button type="button" class="navigator-popup__close" aria-label="Close">×</button>
+    </div>
+    <div class="navigator-popup__body" data-nav-pane="wozduh">
+      <div class="setting-row">
+        <label>Trend Type</label>
+        <select data-nav-field="trendType"><option value="Wicks">Wicks</option><option value="Body">Body</option></select>
+      </div>
+      <div class="setting-row">
+        <label>Periods</label>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useLong" checked /> Long</label><input type="number" data-nav-field="longLen" min="3" max="500" value="60" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useMedium" checked /> Medium</label><input type="number" data-nav-field="mediumLen" min="3" max="500" value="30" /></div>
+        <div class="term-row"><label><input type="checkbox" data-nav-field="useShort" checked /> Short</label><input type="number" data-nav-field="shortLen" min="3" max="500" value="10" /></div>
+      </div>
+      <div class="setting-row">
+        <label>Term</label>
+        <select data-nav-field="term"><option value="Long">Long</option><option value="Medium">Medium</option><option value="Short">Short</option></select>
+      </div>
+      <div class="setting-row">
+        <label>HH/LL</label>
+        <select data-nav-field="hhll">
+          <option value="None">None</option>
+          <option value="Only">Only HH/LL</option>
+          <option value="Previous">HH/LL &amp; previous H/L</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="momentumEnabled" /> Momentum Break</label>
+        <div class="inline-pair">
+          <input type="number" data-nav-field="momentumPercent" min="0" step="1" value="100" title="% of ATR" placeholder="% ATR" />
+          <input type="number" data-nav-field="momentumBars" min="1" step="1" value="14" title="ATR Bars" placeholder="ATR bars" />
+        </div>
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="timeHoldEnabled" /> Time Hold Filter</label>
+        <input type="number" data-nav-field="timeHoldBars" min="1" step="1" value="2" title="Hold bars" />
+      </div>
+      <div class="setting-row">
+        <label class="menu-row"><input type="checkbox" data-nav-field="backgroundColor" /> Background Color</label>
+        <label class="menu-row"><input type="checkbox" data-nav-field="barColor" /> Bar Color</label>
+      </div>
+    </div>
+    <div class="navigator-popup__footer">
+      <button type="button" class="btn-reset">Reset</button>
+      <button type="button" class="btn-save-default">Save as Default</button>
+      <button type="button" class="btn-ok">Ok</button>
+    </div>
+  </div>
+
+  <div id="console-drawer" class="console-drawer" hidden>
+    <div class="console-drawer-header">
+      <span>Backtest Console</span>
+      <button type="button" class="console-drawer-close" id="console-close" aria-label="Close">×</button>
+    </div>
+    <pre id="backtest-logs">Ready. Configure parameters and click Run.</pre>
+  </div>
+
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/trendline_plugin.js"></script>
+  <script src="/trade_marker_plugin.js"></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>

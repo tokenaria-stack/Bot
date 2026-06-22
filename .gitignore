@@ -1,0 +1,10 @@
+.env
+history.db
+history.db-*
+history.db
+*.db
+*.sql
+backups/
+trading_bot
+*.db-wal
+*.db-shm

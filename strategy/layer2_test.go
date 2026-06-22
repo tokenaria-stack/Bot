@@ -1,0 +1,179 @@
+package strategy
+
+import (
+	"testing"
+
+	"trading_bot/exchange"
+)
+
+func TestDetectRedLineCrossGreenUp(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		prevRed  float64
+		prevGrn  float64
+		curRed   float64
+		curGrn   float64
+		want     bool
+	}{
+		{
+			name:    "cross up in zone",
+			prevRed: 28, prevGrn: 30, curRed: 35, curGrn: 32,
+			want: true,
+		},
+		{
+			name:    "already above green",
+			prevRed: 35, prevGrn: 30, curRed: 36, curGrn: 31,
+			want: false,
+		},
+		{
+			name:    "cross but above zone ceiling",
+			prevRed: 28, prevGrn: 30, curRed: 42, curGrn: 32,
+			want: false,
+		},
+		{
+			name:    "touch green no cross",
+			prevRed: 29, prevGrn: 30, curRed: 30, curGrn: 30,
+			want: false,
+		},
+		{
+			name:    "cross from equal",
+			prevRed: 30, prevGrn: 30, curRed: 31, curGrn: 30,
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := detectRedLineCrossGreenUp(tc.prevRed, tc.prevGrn, tc.curRed, tc.curGrn)
+			if got != tc.want {
+				t.Fatalf("detectRedLineCrossGreenUp() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDetectRedLineCrossGreenDown(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		prevRed  float64
+		prevGrn  float64
+		curRed   float64
+		curGrn   float64
+		want     bool
+	}{
+		{
+			name:    "cross down in overbought zone",
+			prevRed: 68, prevGrn: 65, curRed: 63, curGrn: 66,
+			want: true,
+		},
+		{
+			name:    "already below green",
+			prevRed: 63, prevGrn: 66, curRed: 62, curGrn: 65,
+			want: false,
+		},
+		{
+			name:    "cross but below zone floor",
+			prevRed: 68, prevGrn: 65, curRed: 58, curGrn: 66,
+			want: false,
+		},
+		{
+			name:    "cross from equal at overbought",
+			prevRed: 65, prevGrn: 65, curRed: 64, curGrn: 65,
+			want: true,
+		},
+		{
+			name:    "cross from above at floor edge",
+			prevRed: 65, prevGrn: 62, curRed: 61, curGrn: 63,
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := detectRedLineCrossGreenDown(tc.prevRed, tc.prevGrn, tc.curRed, tc.curGrn)
+			if got != tc.want {
+				t.Fatalf("detectRedLineCrossGreenDown() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDetectWozduxVolumeSpike(t *testing.T) {
+	t.Parallel()
+
+	if !detectWozduxVolumeSpikeUp(30, 50, 35) {
+		t.Fatal("expected volume spike up in oversold zone")
+	}
+	if detectWozduxVolumeSpikeUp(30, 50, 45) {
+		t.Fatal("spike up should require oversold red line")
+	}
+	if !detectWozduxVolumeSpikeDown(70, 50, 65) {
+		t.Fatal("expected volume spike down in overbought zone")
+	}
+	if detectWozduxVolumeSpikeDown(70, 50, 55) {
+		t.Fatal("spike down should require overbought red line")
+	}
+}
+
+func TestDetectADFlow(t *testing.T) {
+	t.Parallel()
+
+	rising, falling := detectADFlow(105, []float64{100})
+	if !rising || falling {
+		t.Fatalf("rising=%v falling=%v, want true/false", rising, falling)
+	}
+
+	rising, falling = detectADFlow(95, []float64{100})
+	if rising || !falling {
+		t.Fatalf("rising=%v falling=%v, want false/true", rising, falling)
+	}
+
+	rising, falling = detectADFlow(110, []float64{100, 102, 104})
+	if !rising || falling {
+		t.Fatalf("rising=%v falling=%v, want true/false vs 3-bar avg", rising, falling)
+	}
+}
+
+func TestChiefAnalyst_RedLineCrossGreenUpInReport(t *testing.T) {
+	t.Parallel()
+
+	klines := makeSyntheticKlines(60)
+	analyst := NewChiefAnalyst(klines, nil, "1m", "", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
+
+	report, err := analyst.GenerateMarketReport()
+	if err != nil {
+		t.Fatalf("GenerateMarketReport: %v", err)
+	}
+
+	if report.Falcon.GreenLine <= 0 {
+		t.Fatalf("expected dynamic GreenLine > 0, got %f", report.Falcon.GreenLine)
+	}
+	if report.JurikValue <= 0 {
+		t.Fatalf("expected JurikValue > 0, got %f", report.JurikValue)
+	}
+}
+
+func makeSyntheticKlines(n int) []exchange.Kline {
+	klines := make([]exchange.Kline, n)
+	price := 100.0
+	for i := range klines {
+		klines[i] = exchange.Kline{
+			OpenTime: int64(i),
+			Open:     price,
+			High:     price + 1,
+			Low:      price - 1,
+			Close:    price,
+			Volume:   1000,
+		}
+		price += 0.1
+	}
+	return klines
+}

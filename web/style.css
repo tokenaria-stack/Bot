@@ -1,0 +1,410 @@
+/* ── Universal indicator settings gear menu ── */
+.pane-label--interactive {
+  position: relative;
+}
+
+.indicator-settings-menu {
+  z-index: 20000;
+  min-width: 196px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: #1e222d;
+  border: 1px solid var(--tv-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  font-size: 0.72rem;
+  scrollbar-width: thin;
+  scrollbar-color: #363a45 transparent;
+}
+
+.indicator-settings-menu--floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+}
+
+.indicator-settings-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.indicator-settings-menu::-webkit-scrollbar-thumb {
+  background: #363a45;
+  border-radius: 3px;
+}
+
+.indicator-settings-menu[hidden] {
+  display: none !important;
+}
+
+.indicator-settings-menu .setting-row {
+  margin-bottom: 10px;
+}
+
+.indicator-settings-menu .setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.indicator-settings-menu .setting-row label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--tv-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
+.indicator-settings-menu .setting-row input[type="number"],
+.indicator-settings-menu .setting-row select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 2px 6px;
+  background: #131722;
+  border: 1px solid var(--tv-border);
+  border-radius: 3px;
+  color: var(--tv-text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.indicator-settings-menu .setting-row input[type="number"] {
+  -moz-appearance: auto;
+  appearance: auto;
+}
+
+.indicator-settings-menu .setting-row input[type="number"]:focus,
+.indicator-settings-menu .setting-row select:focus {
+  outline: none;
+  border-color: var(--tv-accent);
+}
+
+.indicator-settings-menu .setting-row input[type="number"]::-webkit-inner-spin-button,
+.indicator-settings-menu .setting-row input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  height: 22px;
+}
+
+.indicator-settings-menu .setting-row input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.indicator-settings-menu .menu-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  color: var(--tv-text);
+  cursor: pointer;
+}
+
+.indicator-settings-menu .menu-row:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Risk menu (header dropup) ── */
+.risk-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.risk-save-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #2962ff;
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.risk-save-btn:hover {
+  background: #1e53e5;
+}
+
+.indicator-settings-menu--dropup {
+  min-width: 220px;
+}
+
+/* ── Backtest loading indicator ── */
+.loading-dots {
+  display: inline-block;
+  margin-left: 8px;
+  font-weight: bold;
+  color: #deff9a;
+}
+
+.loading-dots span {
+  animation: blink 1.4s infinite both;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0% { opacity: 0.2; }
+  20% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── Statistics tab: resizable trade history ── */
+.trade-history-wrap {
+  resize: vertical;
+  overflow: auto;
+  min-height: 150px;
+  max-height: 80vh;
+  height: 220px;
+  border: 1px solid var(--tv-border);
+  border-top: 2px solid #333;
+  border-radius: 6px;
+  padding-bottom: 10px;
+  box-sizing: border-box;
+}
+
+/* ── Chart legends (TradingView-style) ── */
+.chart-wrap,
+.osc-wrap,
+.rsx-wrap {
+  position: relative;
+}
+
+.chart-legend {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(19, 23, 34, 0.82);
+  border: 1px solid var(--tv-border);
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--tv-muted);
+  pointer-events: auto;
+  letter-spacing: 0.02em;
+}
+
+.legend-item--child {
+  margin-left: 10px;
+  font-weight: 500;
+  color: #9598a1;
+}
+
+.legend-item--hidden .legend-name {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.legend-name {
+  white-space: nowrap;
+}
+
+.legend-btn {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--tv-muted);
+  opacity: 0.85;
+}
+
+.legend-btn:hover {
+  color: var(--tv-text);
+  opacity: 1;
+}
+
+.legend-btn--off {
+  opacity: 0.35;
+}
+
+.rsx-val-inline {
+  position: absolute;
+  top: 6px;
+  left: 120px;
+  z-index: 11;
+  font-size: 0.68rem;
+  color: var(--tv-text);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.rsx-wrap > .loading-dots {
+  position: absolute;
+  top: 8px;
+  left: 120px;
+  z-index: 11;
+}
+
+/* ── Draggable Trendlines settings popup ── */
+.navigator-popup {
+  position: fixed;
+  z-index: 25000;
+  width: 240px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #1e222d;
+  border: 1px solid var(--tv-border);
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  font-size: 0.72rem;
+  scrollbar-width: thin;
+}
+
+.navigator-popup[hidden] {
+  display: none !important;
+}
+
+.navigator-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: #131722;
+  border-bottom: 1px solid var(--tv-border);
+  cursor: move;
+  user-select: none;
+  color: var(--tv-text);
+  font-weight: 600;
+}
+
+.navigator-popup__close {
+  background: none;
+  border: none;
+  color: var(--tv-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.navigator-popup__close:hover {
+  color: var(--tv-text);
+}
+
+.navigator-popup__body {
+  padding: 10px 12px;
+}
+
+.navigator-popup .setting-row {
+  margin-bottom: 10px;
+}
+
+.navigator-popup .setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.navigator-popup .setting-row label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--tv-muted);
+  font-size: 0.68rem;
+}
+
+.navigator-popup .setting-row select,
+.navigator-popup .setting-row input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 2px 6px;
+  background: #131722;
+  border: 1px solid var(--tv-border);
+  border-radius: 3px;
+  color: var(--tv-text);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.navigator-popup .term-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.navigator-popup .term-row input[type="number"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.navigator-popup .menu-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  color: var(--tv-text);
+  cursor: pointer;
+}
+
+.navigator-popup .inline-pair {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.navigator-popup .inline-pair input[type="number"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.navigator-popup__footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--tv-border);
+  background: #131722;
+}
+
+.navigator-popup__footer button {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--tv-border);
+  background: #1e222d;
+  color: var(--tv-text);
+  font-family: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.navigator-popup__footer .btn-ok {
+  background: #2962ff;
+  border-color: #2962ff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.navigator-popup__footer .btn-ok:hover {
+  background: #1e53e5;
+}
+
+.navigator-popup__footer .btn-reset:hover,
+.navigator-popup__footer .btn-save-default:hover {
+  border-color: var(--tv-accent);
+}
