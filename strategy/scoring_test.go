@@ -36,11 +36,16 @@ func shortSignalReport() Report {
 	}
 }
 
-func TestEvaluateScalpSignal_BuyThreshold(t *testing.T) {
+func scalpDecisionFromReport(ctx context.Context, report Report) ScalpDecision {
+	result := ProcessScore(ctx, report, DefaultScalpFeeRate, nil)
+	return ScalpDecisionFromScoreResult(result, report)
+}
+
+func TestProcessScore_BuyThreshold(t *testing.T) {
 	SetScoringMatrix(allEnabledScoringMatrix())
 	t.Cleanup(ResetScoringMatrix)
 
-	decision := EvaluateScalpSignal(context.Background(), longSignalReport(), DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), longSignalReport())
 	if decision.Action != BuyAction {
 		t.Fatalf("Action = %q, want BUY (score=%d)", decision.Action, decision.Score)
 	}
@@ -49,11 +54,11 @@ func TestEvaluateScalpSignal_BuyThreshold(t *testing.T) {
 	}
 }
 
-func TestEvaluateScalpSignal_ShortThreshold(t *testing.T) {
+func TestProcessScore_ShortThreshold(t *testing.T) {
 	SetScoringMatrix(allEnabledScoringMatrix())
 	t.Cleanup(ResetScoringMatrix)
 
-	decision := EvaluateScalpSignal(context.Background(), shortSignalReport(), DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), shortSignalReport())
 	if decision.Action != SellAction {
 		t.Fatalf("Action = %q, want SELL (score=%d)", decision.Action, decision.Score)
 	}
@@ -65,7 +70,7 @@ func TestEvaluateScalpSignal_WaitBelowThreshold(t *testing.T) {
 		RSXMarker:  "L",
 		Volatility: scalpVolatilityOK(),
 	}
-	decision := EvaluateScalpSignal(context.Background(), report, DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != WaitAction {
 		t.Fatalf("Action = %q, want WAIT", decision.Action)
 	}
@@ -83,7 +88,7 @@ func TestEvaluateScalpSignal_ShortWinsOverLong(t *testing.T) {
 		AOCrossZeroUp:   true,
 		Volatility:      scalpVolatilityOK(),
 	}
-	decision := EvaluateScalpSignal(context.Background(), report, DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != SellAction {
 		t.Fatalf("Action = %q, want SELL", decision.Action)
 	}
@@ -149,7 +154,7 @@ func TestScoreShort_Components(t *testing.T) {
 	}
 }
 
-func TestEvaluateScalpSignal_FullMatrixLong(t *testing.T) {
+func TestProcessScore_FullMatrixLong(t *testing.T) {
 	SetScoringMatrix(allEnabledScoringMatrix())
 	t.Cleanup(ResetScoringMatrix)
 
@@ -168,7 +173,7 @@ func TestEvaluateScalpSignal_FullMatrixLong(t *testing.T) {
 		AccumulationRising:  true,
 		AOCrossZeroUp:       true,
 	}
-	decision := EvaluateScalpSignal(context.Background(), report, DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != BuyAction {
 		t.Fatalf("Action = %q, want BUY (score=%d)", decision.Action, decision.Score)
 	}

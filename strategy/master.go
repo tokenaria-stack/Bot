@@ -32,8 +32,9 @@ type MasterGeneral struct {
 	mu          sync.RWMutex
 	state       MasterState
 	targetSide  string
-	analysts         map[string]*ChiefAnalyst
-	entryRisk        *RiskManager
+	analysts         map[string]*Marker
+	signalAnalyst    *Analyst
+	chief            *ChiefAnalyst
 	positionSizer    *execution.RiskManager
 	exchangeClient   *exchange.BinanceExchange
 	readOnly         bool
@@ -56,8 +57,8 @@ type MasterGeneral struct {
 }
 
 func NewMasterGeneral(
-	analysts map[string]*ChiefAnalyst,
-	entryRisk *RiskManager,
+	analysts map[string]*Marker,
+	signalAnalyst *Analyst,
 	positionSizer *execution.RiskManager,
 	exchangeClient *exchange.BinanceExchange,
 	memoryStore *vector_db.MemoryStore,
@@ -68,13 +69,14 @@ func NewMasterGeneral(
 	if huntTimeframe == "" {
 		huntTimeframe = DefaultHuntTimeframe
 	}
-	if entryRisk == nil {
-		entryRisk = NewRiskManager(defaultFeeRate, memoryStore, sandboxMode)
+	if signalAnalyst == nil {
+		signalAnalyst = NewAnalyst(sandboxMode)
 	}
 	return &MasterGeneral{
 		state:          StateIdle,
 		analysts:       analysts,
-		entryRisk:      entryRisk,
+		signalAnalyst:  signalAnalyst,
+		chief:          NewChiefAnalyst(),
 		positionSizer:  positionSizer,
 		exchangeClient: exchangeClient,
 		memoryStore:    memoryStore,
@@ -241,7 +243,7 @@ func (m *MasterGeneral) setState(newState MasterState) {
 
 // evaluateMacroTrend and validateHunting removed — entry no longer gated by 15m AO.
 
-func (m *MasterGeneral) huntAnalyst() *ChiefAnalyst {
+func (m *MasterGeneral) huntAnalyst() *Marker {
 	if a, ok := m.analysts[m.huntTimeframe]; ok {
 		return a
 	}
@@ -270,16 +272,12 @@ func (m *MasterGeneral) huntForEntry() {
 		m.huntTimeframe, report.Falcon.JurikRSX, report.Falcon.RedLine, report.Falcon.GreenLine,
 		report.RSXMarker, report.Falcon.VolCrossMarker)
 
-	decision := EvaluateScalpSignal(context.Background(), *report, m.feeRate, m.memoryStore)
+	decision := m.evaluateScalpDecision(report)
 	if decision.Action != BuyAction && decision.Action != SellAction {
 		return
 	}
 
 	entrySide := string(decision.Action)
-	if err := m.entryRisk.ValidateEntry(report, entrySide); err != nil {
-		log.Printf("[Master] ⛔ Entry blocked by RiskManager: %v (%s)", err, RiskErrorLabel(err))
-		return
-	}
 
 	direction := "LONG"
 	if entrySide == "SELL" {
@@ -309,7 +307,7 @@ func (m *MasterGeneral) openLivePosition(
 	entrySide string,
 	report *Report,
 	decision ScalpDecision,
-	analyst *ChiefAnalyst,
+	analyst *Marker,
 	stopLossPrice float64,
 ) {
 	if m.exchangeClient == nil {
@@ -426,7 +424,7 @@ func (m *MasterGeneral) calculateSafePositionSize(
 	return m.positionSizer.EvaluateSignal(signal, availableBalance)
 }
 
-func barTimeFromAnalyst(analyst *ChiefAnalyst) int64 {
+func barTimeFromAnalyst(analyst *Marker) int64 {
 	if analyst == nil {
 		return time.Now().Unix()
 	}
@@ -457,7 +455,7 @@ func (m *MasterGeneral) openVirtualPosition(
 	entrySide string,
 	entryPrice, stopPrice float64,
 	decision ScalpDecision,
-	analyst *ChiefAnalyst,
+	analyst *Marker,
 ) {
 	m.fireTradeEvent(TradeEvent{
 		Side:    entrySide,
@@ -479,7 +477,7 @@ func (m *MasterGeneral) openVirtualPosition(
 		entrySide, entryPrice, stopPrice)
 }
 
-func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price float64, analyst *ChiefAnalyst) {
+func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price float64, analyst *Marker) {
 	m.mu.RLock()
 	entrySide := m.targetSide
 	m.mu.RUnlock()
@@ -510,7 +508,7 @@ func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price flo
 	m.setState(StateIdle)
 }
 
-func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, decision ScalpDecision, analyst *ChiefAnalyst) {
+func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, decision ScalpDecision, analyst *Marker) {
 	m.mu.RLock()
 	entrySide := m.targetSide
 	m.mu.RUnlock()
@@ -522,8 +520,8 @@ func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, de
 
 	m.closeVirtualPosition(exitSide, "Reverse Signal", report.Close, analyst)
 
-	if err := m.entryRisk.ValidateEntry(&report, newSide); err != nil {
-		log.Printf("[Master] ⛔ Reverse blocked by RiskManager: %v (%s)", err, RiskErrorLabel(err))
+	if err := m.signalAnalyst.AnalyzeSignals(&report, newSide); err != nil {
+		log.Printf("[Master] ⛔ Reverse blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
 		return
 	}
 
@@ -534,6 +532,7 @@ func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, de
 		return
 	}
 
+	decision = m.chief.Approve(decision, report)
 	m.openVirtualPosition(newSide, report.Close, stopLossPrice, decision, analyst)
 }
 
@@ -586,7 +585,7 @@ func (m *MasterGeneral) manageVirtualPosition(liveOnly bool) {
 		return
 	}
 
-	decision := EvaluateScalpSignal(context.Background(), *huntReport, m.feeRate, m.memoryStore)
+	decision := m.evaluateScalpDecision(huntReport)
 	switch entrySide {
 	case "BUY":
 		if decision.Action == BuyAction {
@@ -624,7 +623,7 @@ func (m *MasterGeneral) manageReversal() {
 		return
 	}
 
-	decision := EvaluateScalpSignal(context.Background(), *report, m.feeRate, m.memoryStore)
+	decision := m.evaluateScalpDecision(report)
 
 	var newSide string
 	switch entrySide {
@@ -648,8 +647,8 @@ func (m *MasterGeneral) manageReversal() {
 		return
 	}
 
-	if err := m.entryRisk.ValidateEntry(report, newSide); err != nil {
-		log.Printf("[Master] ⛔ Reverse blocked by RiskManager: %v (%s)", err, RiskErrorLabel(err))
+	if err := m.signalAnalyst.AnalyzeSignals(report, newSide); err != nil {
+		log.Printf("[Master] ⛔ Reverse blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
 		return
 	}
 
@@ -690,7 +689,20 @@ func (m *MasterGeneral) manageReversal() {
 	m.mu.Unlock()
 	m.setState(StateIdle)
 
-	m.openLivePosition(newSide, report, decision, analyst, stopLossPrice)
+	m.openLivePosition(newSide, report, m.chief.Approve(decision, *report), analyst, stopLossPrice)
+}
+
+func (m *MasterGeneral) evaluateScalpDecision(report *Report) ScalpDecision {
+	scoreResult := ProcessScore(context.Background(), *report, m.feeRate, m.memoryStore)
+	decision := ScalpDecisionFromScoreResult(scoreResult, *report)
+	if decision.Action != BuyAction && decision.Action != SellAction {
+		return decision
+	}
+	if err := m.signalAnalyst.AnalyzeSignals(report, string(decision.Action)); err != nil {
+		log.Printf("[Master] ⛔ Entry blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
+		return ScalpDecision{Action: WaitAction, Reason: "Analyst blocked"}
+	}
+	return m.chief.Approve(decision, *report)
 }
 
 func parseOrderID(response string) (int64, error) {

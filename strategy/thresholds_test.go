@@ -17,13 +17,13 @@ func TestSetScoreThresholds(t *testing.T) {
 		t.Fatalf("thresholds = %d/%d, want 101/101", LongScoreThreshold(), ShortScoreThreshold())
 	}
 
-	decision := EvaluateScalpSignal(context.Background(), longSignalReport(), DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), longSignalReport())
 	if decision.Action != WaitAction {
 		t.Fatalf("Action = %q with threshold 101, want WAIT (score=%d)", decision.Action, decision.Score)
 	}
 
 	SetScoreThresholds(70, 70)
-	decision = EvaluateScalpSignal(context.Background(), longSignalReport(), DefaultScalpFeeRate, nil)
+	decision = scalpDecisionFromReport(context.Background(), longSignalReport())
 	if decision.Action != BuyAction {
 		t.Fatalf("Action = %q with threshold 70, want BUY", decision.Action)
 	}

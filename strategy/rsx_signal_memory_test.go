@@ -1,7 +1,7 @@
 package strategy
 
 import (
-	"errors"
+	"context"
 	"testing"
 )
 
@@ -95,20 +95,20 @@ func TestEvaluateScalpSignal_RSXOnlyThreshold10(t *testing.T) {
 		RSXMarker:  "L",
 		Volatility: scalpVolatilityOK(),
 	}
-	decision := EvaluateScalpSignal(nil, report, DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != BuyAction {
 		t.Fatalf("Action = %q, want BUY (score=%d)", decision.Action, decision.LongScore)
 	}
 
 	report.RSXMarker = "LL"
-	decision = EvaluateScalpSignal(nil, report, DefaultScalpFeeRate, nil)
+	decision = scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != BuyAction || decision.Score < 45 {
 		t.Fatalf("LL: Action=%q score=%d", decision.Action, decision.Score)
 	}
 }
 
-func TestRiskManager_MacroBypassStrongRSX(t *testing.T) {
-	rm := NewRiskManager(0.0001, nil, false)
+func TestAnalyst_PassThroughStrongRSX(t *testing.T) {
+	a := NewAnalyst(false)
 	report := &Report{
 		Close: 100,
 		Volatility: VolatilityState{
@@ -119,13 +119,13 @@ func TestRiskManager_MacroBypassStrongRSX(t *testing.T) {
 		JurikIsRising: false,
 		RSXMarker:     "LL",
 	}
-	if err := rm.ValidateEntry(report, "BUY"); err != nil {
-		t.Fatalf("LL bypass: ValidateEntry() = %v, want nil", err)
+	if err := a.AnalyzeSignals(report, "BUY"); err != nil {
+		t.Fatalf("AnalyzeSignals() = %v, want nil", err)
 	}
 
 	report.RSXMarker = "L"
-	if err := rm.ValidateEntry(report, "BUY"); !errors.Is(err, ErrMacroFilter) {
-		t.Fatalf("L only: ValidateEntry() = %v, want ErrMacroFilter", err)
+	if err := a.AnalyzeSignals(report, "BUY"); err != nil {
+		t.Fatalf("AnalyzeSignals() = %v, want nil pass-through", err)
 	}
 }
 

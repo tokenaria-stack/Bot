@@ -27,8 +27,8 @@ type ChaosConfig struct {
 	AOSlowPeriod int
 }
 
-// ChiefAnalyst is the thread-safe market data layer for the analytics pipeline.
-type ChiefAnalyst struct {
+// Marker is the thread-safe market data layer for the analytics pipeline.
+type Marker struct {
 	mu                       sync.RWMutex
 	klines                   []exchange.Kline
 	db                       *vector_db.DBClient
@@ -82,12 +82,12 @@ type ChiefAnalyst struct {
 	rsxMarkers               rsxMarkerState
 }
 
-// NewChiefAnalyst loads the initial candle history into a protected store.
-func NewChiefAnalyst(history []exchange.Kline, db *vector_db.DBClient, timeframe, collection string, config ChaosConfig) *ChiefAnalyst {
+// NewMarker loads the initial candle history into a protected store.
+func NewMarker(history []exchange.Kline, db *vector_db.DBClient, timeframe, collection string, config ChaosConfig) *Marker {
 	copied := make([]exchange.Kline, len(history))
 	copy(copied, history)
 
-	a := &ChiefAnalyst{
+	a := &Marker{
 		klines:     copied,
 		db:         db,
 		timeframe:  timeframe,
@@ -100,21 +100,21 @@ func NewChiefAnalyst(history []exchange.Kline, db *vector_db.DBClient, timeframe
 }
 
 // ReapplyRSXSettings rebuilds RSX marker state and replays streaming engines after setting changes.
-func (a *ChiefAnalyst) ReapplyRSXSettings() {
+func (a *Marker) ReapplyRSXSettings() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.replayStreamingLocked()
 }
 
 // JurikRSXColor returns the TradingView-style RSX line color for the latest bar.
-func (a *ChiefAnalyst) JurikRSXColor() string {
+func (a *Marker) JurikRSXColor() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return RSXColor(a.jurikValue, a.jurikPrevBar)
 }
 
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
-func (a *ChiefAnalyst) UpdateKline(k exchange.Kline) {
+func (a *Marker) UpdateKline(k exchange.Kline) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -132,7 +132,7 @@ func (a *ChiefAnalyst) UpdateKline(k exchange.Kline) {
 }
 
 // GetKlines returns a defensive copy of the stored candles.
-func (a *ChiefAnalyst) GetKlines() []exchange.Kline {
+func (a *Marker) GetKlines() []exchange.Kline {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
@@ -142,17 +142,17 @@ func (a *ChiefAnalyst) GetKlines() []exchange.Kline {
 }
 
 // UpdateIndicators is retained for pipeline compatibility; AO is updated in the streaming path.
-func (a *ChiefAnalyst) UpdateIndicators() {}
+func (a *Marker) UpdateIndicators() {}
 
 // GetLatestAO returns the streaming Awesome Oscillator value from the latest tick.
-func (a *ChiefAnalyst) GetLatestAO() float64 {
+func (a *Marker) GetLatestAO() float64 {
 	a.mu.RLock()
 	defer a.mu.Unlock()
 	return a.latestAO
 }
 
 // BackfillHistory scans stored candles and saves historical fractal patterns to Qdrant.
-func (a *ChiefAnalyst) BackfillHistory(ctx context.Context) error {
+func (a *Marker) BackfillHistory(ctx context.Context) error {
 	klines := a.GetKlines()
 	if len(klines) < patternWindowSize {
 		return nil
@@ -196,7 +196,7 @@ func (a *ChiefAnalyst) BackfillHistory(ctx context.Context) error {
 }
 
 // CheckAndSaveFractal detects a confirmed fractal on the 3rd candle from the end and saves its embedding.
-func (a *ChiefAnalyst) CheckAndSaveFractal(ctx context.Context) error {
+func (a *Marker) CheckAndSaveFractal(ctx context.Context) error {
 	klines := a.GetKlines()
 	if len(klines) < patternWindowSize {
 		return nil
@@ -265,7 +265,7 @@ func (a *ChiefAnalyst) CheckAndSaveFractal(ctx context.Context) error {
 }
 
 // PredictNextMovement searches Qdrant for historical patterns similar to the latest 20 candles.
-func (a *ChiefAnalyst) PredictNextMovement(ctx context.Context) error {
+func (a *Marker) PredictNextMovement(ctx context.Context) error {
 	klines := a.GetKlines()
 	if len(klines) < patternWindowSize {
 		return fmt.Errorf("not enough klines for prediction: got %d, need %d", len(klines), patternWindowSize)
@@ -392,7 +392,7 @@ type Report struct {
 }
 
 // GenerateMarketReport collects current indicator values into a unified summary.
-func (a *ChiefAnalyst) GenerateMarketReport() (*Report, error) {
+func (a *Marker) GenerateMarketReport() (*Report, error) {
 	klines := a.GetKlines()
 	if len(klines) < 50 {
 		return nil, fmt.Errorf("not enough klines to generate full report: %d", len(klines))
@@ -483,7 +483,7 @@ func (a *ChiefAnalyst) GenerateMarketReport() (*Report, error) {
 
 // GenerateStreamingReport builds a Report from incremental indicator state (O(1) per call).
 // Use for backtests instead of GenerateMarketReport to avoid rescanning full history.
-func (a *ChiefAnalyst) GenerateStreamingReport() (Report, error) {
+func (a *Marker) GenerateStreamingReport() (Report, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

@@ -142,11 +142,11 @@ func TestDetectADFlow(t *testing.T) {
 	}
 }
 
-func TestChiefAnalyst_RedLineCrossGreenUpInReport(t *testing.T) {
+func TestMarker_RedLineCrossGreenUpInReport(t *testing.T) {
 	t.Parallel()
 
 	klines := makeSyntheticKlines(60)
-	analyst := NewChiefAnalyst(klines, nil, "1m", "", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
+	analyst := NewMarker(klines, nil, "1m", "", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 
 	report, err := analyst.GenerateMarketReport()
 	if err != nil {

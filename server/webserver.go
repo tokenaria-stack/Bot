@@ -63,7 +63,7 @@ func (c *WSClient) Close() error {
 
 // DashboardServer serves the trading dashboard UI and market state API.
 type DashboardServer struct {
-	analysts   map[string]*strategy.ChiefAnalyst
+	analysts   map[string]*strategy.Marker
 	rest       *exchange.BinanceExchange
 	orderFlow  *domain.OrderFlowStore
 	symbol     string
@@ -76,7 +76,7 @@ type DashboardServer struct {
 	trades     []ChartTrade
 	paperTrading bool
 	sandboxMode  bool
-	entryRisk    *strategy.RiskManager
+	signalAnalyst *strategy.Analyst
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -212,13 +212,13 @@ type historyResponse struct {
 	HasMore     bool              `json:"hasMore"`
 }
 
-// NewDashboardServer creates a dashboard server bound to ChiefAnalyst instances.
+// NewDashboardServer creates a dashboard server bound to Marker instances.
 func NewDashboardServer(
-	analysts map[string]*strategy.ChiefAnalyst,
+	analysts map[string]*strategy.Marker,
 	rest *exchange.BinanceExchange,
 	symbol string,
 	orderFlow *domain.OrderFlowStore,
-	entryRisk *strategy.RiskManager,
+	signalAnalyst *strategy.Analyst,
 	paperTrading bool,
 	sandboxMode bool,
 ) *DashboardServer {
@@ -232,7 +232,7 @@ func NewDashboardServer(
 		clientTF:     make(map[*WSClient]string),
 		paperTrading: paperTrading,
 		sandboxMode:  sandboxMode,
-		entryRisk:    entryRisk,
+		signalAnalyst: signalAnalyst,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -778,7 +778,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	engine := strategy.NewBacktestEngine(strategy.BacktestConfig{
 		Symbol:     symbol,
 		Interval:   spec.BinanceInterval,
-		EntryRisk:  d.entryRisk,
+		EntryAnalyst: d.signalAnalyst,
 		FeeRate:    strategy.DefaultScalpFeeRate,
 		Matrix:     matrix,
 		Navigator:  req.Navigator,
@@ -1217,7 +1217,7 @@ func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {
 	return klines
 }
 
-func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strategy.ChiefAnalyst, klines []exchange.Kline) {
+func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strategy.Marker, klines []exchange.Kline) {
 	if report, err := analyst.GenerateMarketReport(); err == nil {
 		state.VolatilityRegime = string(report.Volatility.Regime)
 		state.Jurik = report.JurikValue
@@ -1225,10 +1225,11 @@ func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strateg
 		state.GreenLine = report.Falcon.GreenLine
 		state.FibZones = chartFibZonesFromReport(report.FibZones)
 
-		telemetry := strategy.EvaluateScalpSignal(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
+		scoreResult := strategy.ProcessScore(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
+		telemetry := strategy.ScalpDecisionFromScoreResult(scoreResult, *report)
 		state.LongScore = telemetry.LongScore
 		state.ShortScore = telemetry.ShortScore
-		state.BrainStatus = strategy.TelemetryBrainStatus(telemetry, *report, d.entryRisk)
+		state.BrainStatus = strategy.TelemetryBrainStatus(telemetry, *report, d.signalAnalyst)
 		state.AIStatus = strategy.TelemetryAIStatus(context.Background(), *report, nil)
 		return
 	}

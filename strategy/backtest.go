@@ -75,7 +75,7 @@ func PadBacktestStartMs(binanceInterval string, startMs, endMs int64, candleCoun
 type BacktestConfig struct {
 	Symbol     string
 	Interval   string
-	EntryRisk  *RiskManager
+	EntryAnalyst *Analyst
 	FeeRate    float64
 	Matrix     *ScoringMatrix
 	Navigator  NavigatorUISettings
@@ -87,14 +87,6 @@ func (e *BacktestEngine) activeMatrix() ScoringMatrix {
 		return *e.cfg.Matrix
 	}
 	return scoringMatrixSnapshot()
-}
-
-func (e *BacktestEngine) matrixFullyDisabled() bool {
-	return ScoringMatrixFullyDisabledFor(e.activeMatrix())
-}
-
-func (e *BacktestEngine) matrixEntrySourcesEnabled() bool {
-	return ScoringMatrixEntrySourcesEnabledFor(e.activeMatrix())
 }
 
 // BacktestChartPoint is one candle + full indicator snapshot for the backtest chart.
@@ -247,109 +239,22 @@ func buildBacktestRSXMarkersMap(candles []exchange.Candle) map[int64]string {
 	return out
 }
 
-func (e *BacktestEngine) buildTrendlineEntryByCloseTime(candles []exchange.Candle) map[int64]ActionType {
-	m := e.activeMatrix()
-	if !m.UseTrendlines {
-		return nil
+func (e *BacktestEngine) evaluateBacktestDecision(report *Report, chief *ChiefAnalyst) ScalpDecision {
+	matrix := e.activeMatrix()
+	scoreResult := ProcessScoreForMatrix(*report, matrix)
+	decision := ScalpDecisionFromScoreResult(scoreResult, *report)
+	if decision.Action != BuyAction && decision.Action != SellAction {
+		return decision
 	}
 
-	n := len(candles)
-	if n == 0 {
-		return nil
+	analyst := e.cfg.EntryAnalyst
+	if analyst == nil {
+		analyst = NewAnalyst(false)
 	}
-
-	klines := make([]exchange.Kline, n)
-	rsxValues := make([]float64, n)
-	wozduhValues := make([]float64, n)
-	falcon := NewFalconEngine()
-	for i, c := range candles {
-		klines[i] = exchange.Kline{
-			OpenTime: c.OpenTime,
-			Open:     c.Open,
-			High:     c.High,
-			Low:      c.Low,
-			Close:    c.Close,
-			Volume:   c.Volume,
-		}
-		sig := falcon.Evaluate(c.High, c.Low, c.Close, c.Volume)
-		rsxValues[i] = sig.JurikRSX
-		wozduhValues[i] = sig.RsiVolSlow
+	if err := analyst.AnalyzeSignals(report, string(decision.Action)); err != nil {
+		return ScalpDecision{Action: WaitAction, Reason: "Analyst blocked"}
 	}
-
-	navigators := BuildAllNavigators(e.cfg.Navigators, klines, rsxValues, wozduhValues, e.cfg.Interval)
-	priceNav, ok := navigators["price"]
-	if !ok && e.cfg.Navigator.Enabled {
-		priceNav = BuildNavigatorResult(e.cfg.Navigator, klines, rsxValues, wozduhValues, e.cfg.Interval)
-	}
-	if len(priceNav.Markers) == 0 {
-		return nil
-	}
-
-	out := make(map[int64]ActionType)
-	for _, marker := range priceNav.Markers {
-		if marker.Type != "WickBreak" {
-			continue
-		}
-		if marker.Index < 0 || marker.Index >= n {
-			continue
-		}
-		action := SellAction
-		if marker.Color == navigatorColorWickBull {
-			action = BuyAction
-		}
-		out[candles[marker.Index].CloseTime] = action
-	}
-	return out
-}
-
-func backtestEntryDecision(m ScoringMatrix, barMarker string, trendlineAction ActionType, report *Report) ScalpDecision {
-	if !ScoringMatrixEntrySourcesEnabledFor(m) {
-		return ScalpDecision{Action: WaitAction, Reason: "Matrix entry sources disabled"}
-	}
-
-	if m.UseRSX && barMarker != "" {
-		if decision := backtestDecisionFromRSXBarMarker(barMarker); decision.Action != WaitAction {
-			return decision
-		}
-	}
-
-	if m.UseTrendlines && trendlineAction != WaitAction {
-		return ScalpDecision{
-			Action:     trendlineAction,
-			Score:      scalpBreakoutScore,
-			LongScore:  boolScore(trendlineAction == BuyAction, scalpBreakoutScore),
-			ShortScore: boolScore(trendlineAction == SellAction, scalpBreakoutScore),
-			Reason:     "Trendline wick break",
-		}
-	}
-
-	if m.UseWozduhCross && report != nil {
-		switch report.Falcon.VolCrossMarker {
-		case "lime":
-			return ScalpDecision{
-				Action:    BuyAction,
-				Score:     scalpVolCrossScore,
-				LongScore: scalpVolCrossScore,
-				Reason:    "Wozduh cross up",
-			}
-		case "red":
-			return ScalpDecision{
-				Action:     SellAction,
-				Score:      scalpVolCrossScore,
-				ShortScore: scalpVolCrossScore,
-				Reason:     "Wozduh cross down",
-			}
-		}
-	}
-
-	return ScalpDecision{Action: WaitAction, Reason: "No enabled signal"}
-}
-
-func boolScore(ok bool, score int) int {
-	if ok {
-		return score
-	}
-	return 0
+	return chief.Approve(decision, *report)
 }
 
 // Run simulates the strategy over historical candles and returns performance stats.
@@ -361,10 +266,10 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 	log.Printf("[Backtest] Processing %d candles", len(candles))
 
 	markersMap := buildBacktestRSXMarkersMap(candles)
-	trendlineEntryMap := e.buildTrendlineEntryByCloseTime(candles)
 
 	chaosCfg := ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34}
-	analyst := NewChiefAnalyst(nil, nil, e.cfg.Interval, "", chaosCfg)
+	marker := NewMarker(nil, nil, e.cfg.Interval, "", chaosCfg)
+	chief := NewChiefAnalyst()
 
 	balance := BacktestInitialCapital
 	peak := balance
@@ -406,23 +311,19 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 
 		barMarker := markersMap[candle.CloseTime]
 
-		analyst.UpdateKline(kline)
+		marker.UpdateKline(kline)
 		histKlines = append(histKlines, kline)
-		histRSX = append(histRSX, analyst.falconSignals.JurikRSX)
-		histWozduh = append(histWozduh, analyst.falconSignals.RsiVolSlow)
+		histRSX = append(histRSX, marker.falconSignals.JurikRSX)
+		histWozduh = append(histWozduh, marker.falconSignals.RsiVolSlow)
 
 		reportOK = false
 
 		if i+1 >= backtestMinBars {
 			var err error
-			report, err = analyst.GenerateStreamingReport()
+			report, err = marker.GenerateStreamingReport()
 			if err == nil {
 				reportOK = true
 			}
-		}
-
-		if barMarker != "" {
-			report.RSXMarker = barMarker
 		}
 
 		pt = BacktestChartPoint{
@@ -453,16 +354,7 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 			continue
 		}
 
-		if e.matrixFullyDisabled() || !e.matrixEntrySourcesEnabled() {
-			decision = ScalpDecision{Action: WaitAction, Reason: "Matrix disabled"}
-		} else {
-			decision = backtestEntryDecision(
-				e.activeMatrix(),
-				barMarker,
-				trendlineEntryMap[candle.CloseTime],
-				&report,
-			)
-		}
+		decision = e.evaluateBacktestDecision(&report, chief)
 
 		if pos != nil {
 			if exitPrice, hit := checkFractalStop(pos, candle); hit {
@@ -484,7 +376,7 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 						pos, candle.Close, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
 					)
 					pos = nil
-					if e.allowBacktestEntry(&report, SellAction, barMarker) {
+					if decision.Action == SellAction {
 						posSlot = e.openPosition(histKlines, i, "SELL", candle.Close, barTimeSec, report.Volatility.ATR)
 						pos = &posSlot
 					}
@@ -498,17 +390,15 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 						pos, candle.Close, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
 					)
 					pos = nil
-					if e.allowBacktestEntry(&report, BuyAction, barMarker) {
+					if decision.Action == BuyAction {
 						posSlot = e.openPosition(histKlines, i, "BUY", candle.Close, barTimeSec, report.Volatility.ATR)
 						pos = &posSlot
 					}
 				}
 			}
 		} else if decision.Action == BuyAction || decision.Action == SellAction {
-			if e.allowBacktestEntry(&report, decision.Action, barMarker) {
-				posSlot = e.openPosition(histKlines, i, string(decision.Action), candle.Close, barTimeSec, report.Volatility.ATR)
-				pos = &posSlot
-			}
+			posSlot = e.openPosition(histKlines, i, string(decision.Action), candle.Close, barTimeSec, report.Volatility.ATR)
+			pos = &posSlot
 		}
 
 		if i > 0 && i%backtestEquityEvery == 0 {
@@ -609,40 +499,6 @@ type backtestMetrics struct {
 	profitFactor   float64
 	maxDrawdown    float64
 	recoveryFactor float64
-}
-
-func backtestDecisionFromRSXBarMarker(marker string) ScalpDecision {
-	switch marker {
-	case "L", "LL":
-		return ScalpDecision{
-			Action:    BuyAction,
-			Score:     scoreRSXL,
-			LongScore: scoreRSXL,
-			Reason:    "RSX " + marker,
-		}
-	case "S", "SS":
-		return ScalpDecision{
-			Action:     SellAction,
-			Score:      scoreRSXS,
-			ShortScore: scoreRSXS,
-			Reason:     "RSX " + marker,
-		}
-	default:
-		return ScalpDecision{Action: WaitAction, Reason: "No RSX marker"}
-	}
-}
-
-func (e *BacktestEngine) allowBacktestEntry(report *Report, action ActionType, _ string) bool {
-	if action != BuyAction && action != SellAction {
-		return false
-	}
-	if e.matrixFullyDisabled() || !e.matrixEntrySourcesEnabled() {
-		return false
-	}
-	if e.cfg.EntryRisk == nil {
-		return true
-	}
-	return e.cfg.EntryRisk.ValidateEntry(report, string(action)) == nil
 }
 
 func (e *BacktestEngine) openPosition(klines []exchange.Kline, barIndex int, side string, entryPrice float64, entryTime int64, atr float64) btPosition {

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"testing"
 
 	"trading_bot/exchange"
@@ -107,52 +108,61 @@ func TestCalcPnLPct(t *testing.T) {
 	}
 }
 
-func TestBacktestDecisionFromRSXBarMarker(t *testing.T) {
-	t.Parallel()
+func TestEvaluateBacktestDecision_UsesRequestMatrix(t *testing.T) {
+	origL, origS := LongScoreThreshold(), ShortScoreThreshold()
+	t.Cleanup(func() { SetScoreThresholds(origL, origS) })
+	SetScoreThresholds(35, 35)
 
-	if d := backtestDecisionFromRSXBarMarker("L"); d.Action != BuyAction {
-		t.Fatalf("L action = %q, want BUY", d.Action)
+	matrix := ScoringMatrix{UseWozduhCross: true}
+	engine := NewBacktestEngine(BacktestConfig{Matrix: &matrix})
+	chief := NewChiefAnalyst()
+
+	report := &Report{
+		Close: 100,
+		Falcon: FalconSignals{VolCrossMarker: "red"},
+		Volatility: VolatilityState{
+			ATR:    1.0,
+			Regime: RegimeExpansion,
+		},
 	}
-	if d := backtestDecisionFromRSXBarMarker("SS"); d.Action != SellAction {
-		t.Fatalf("SS action = %q, want SELL", d.Action)
-	}
-	if d := backtestDecisionFromRSXBarMarker("P"); d.Action != WaitAction {
-		t.Fatalf("P action = %q, want WAIT", d.Action)
-	}
-}
 
-func TestBacktestEntryDecision_MatrixDisabled(t *testing.T) {
-	ResetScoringMatrix()
-	t.Cleanup(ResetScoringMatrix)
-
-	SetScoringMatrix(ScoringMatrix{})
-
-	d := backtestEntryDecision(ScoringMatrix{}, "L", BuyAction, &Report{Falcon: FalconSignals{VolCrossMarker: "lime"}})
-	if d.Action != WaitAction {
-		t.Fatalf("Action = %q, want WAIT when matrix entry sources disabled", d.Action)
+	decision := engine.evaluateBacktestDecision(report, chief)
+	if decision.Action != SellAction {
+		t.Fatalf("Action = %q, want SELL (matrix from config, not global)", decision.Action)
 	}
 }
 
-func TestBacktestEntryDecision_RSXDisabled(t *testing.T) {
-	ResetScoringMatrix()
-	t.Cleanup(ResetScoringMatrix)
+func TestEvaluateBacktestDecision_DisabledMatrix(t *testing.T) {
+	matrix := ScoringMatrix{}
+	engine := NewBacktestEngine(BacktestConfig{Matrix: &matrix})
+	chief := NewChiefAnalyst()
 
-	SetScoringMatrix(ScoringMatrix{UseWozduhCross: true})
+	report := &Report{
+		Close:      100,
+		RSXMarker:  "L",
+		Falcon:     FalconSignals{VolCrossMarker: "lime"},
+		Volatility: scalpVolatilityOK(),
+	}
 
-	d := backtestEntryDecision(ScoringMatrix{UseWozduhCross: true}, "L", WaitAction, &Report{})
-	if d.Action != WaitAction {
-		t.Fatalf("Action = %q, want WAIT when UseRSX=false", d.Action)
+	decision := engine.evaluateBacktestDecision(report, chief)
+	if decision.Action != WaitAction {
+		t.Fatalf("Action = %q, want WAIT when matrix disabled", decision.Action)
 	}
 }
 
-func TestBacktestEntryDecision_WozduhOnly(t *testing.T) {
+func TestProcessScoreForMatrix_IgnoresGlobalMatrix(t *testing.T) {
 	ResetScoringMatrix()
 	t.Cleanup(ResetScoringMatrix)
 
-	SetScoringMatrix(ScoringMatrix{UseWozduhCross: true})
+	report := longSignalReport()
+	global := ProcessScore(context.Background(), report, DefaultScalpFeeRate, nil)
+	if len(global.ActiveSignals) != 0 {
+		t.Fatalf("global matrix should be disabled by default, got %d signals", len(global.ActiveSignals))
+	}
 
-	d := backtestEntryDecision(ScoringMatrix{UseWozduhCross: true}, "", WaitAction, &Report{Falcon: FalconSignals{VolCrossMarker: "red"}})
-	if d.Action != SellAction {
-		t.Fatalf("Action = %q, want SELL from wozduh cross", d.Action)
+	enabled := allEnabledScoringMatrix()
+	local := ProcessScoreForMatrix(report, enabled)
+	if len(local.ActiveSignals) == 0 {
+		t.Fatal("expected active signals from explicit matrix")
 	}
 }

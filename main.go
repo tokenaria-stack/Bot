@@ -30,8 +30,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	analysts := make(map[string]*strategy.ChiefAnalyst)
-	timeframes := []string{"1m", "3m", "15m", "1h", "4h"}
+	analysts := make(map[string]*strategy.Marker)
+	timeframes := []string{"1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -92,7 +92,7 @@ func main() {
 			log.Printf("[Init] Analyst [%s] loaded %d historical klines", tf, len(history))
 		}
 
-		analysts[tf] = strategy.NewChiefAnalyst(
+		analysts[tf] = strategy.NewMarker(
 			history,
 			nil,
 			tf,
@@ -107,13 +107,13 @@ func main() {
 	var _ exchange.OrderFlowSink = orderFlow
 
 	rm := execution.NewRiskManager(1.0, 10)
-	entryRisk := strategy.NewRiskManager(strategy.DefaultScalpFeeRate, nil, cfg.SandboxMode)
+	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
 	master := strategy.NewMasterGeneral(
-		analysts, entryRisk, rm, restClient, nil,
+		analysts, signalAnalyst, rm, restClient, nil,
 		cfg.ReadOnly, cfg.SandboxMode, strategy.DefaultHuntTimeframe,
 	)
 
-	dashboard := server.NewDashboardServer(analysts, restClient, Symbol, orderFlow, entryRisk, cfg.ReadOnly, cfg.SandboxMode)
+	dashboard := server.NewDashboardServer(analysts, restClient, Symbol, orderFlow, signalAnalyst, cfg.ReadOnly, cfg.SandboxMode)
 	master.SetOnTick(func(k exchange.Kline, jurik, red, green, blue float64) {
 		longScore := 0
 		shortScore := 0
@@ -126,10 +126,11 @@ func main() {
 			rsxColor = analyst.JurikRSXColor()
 			if report, err := analyst.GenerateMarketReport(); err == nil {
 				rsxSignal = report.RSXSignal
-				telemetry := strategy.EvaluateScalpSignal(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
+				scoreResult := strategy.ProcessScore(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
+				telemetry := strategy.ScalpDecisionFromScoreResult(scoreResult, *report)
 				longScore = telemetry.LongScore
 				shortScore = telemetry.ShortScore
-				brainStatus = strategy.TelemetryBrainStatus(telemetry, *report, entryRisk)
+				brainStatus = strategy.TelemetryBrainStatus(telemetry, *report, signalAnalyst)
 				aiStatus = strategy.TelemetryAIStatus(context.Background(), *report, nil)
 			}
 		}

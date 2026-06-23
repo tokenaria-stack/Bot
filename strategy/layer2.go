@@ -22,7 +22,7 @@ type ZigZagState struct {
 	LastNode  indicators.ZigZagNode
 }
 
-func (a *ChiefAnalyst) resetStreamingEngines() {
+func (a *Marker) resetStreamingEngines() {
 	a.falcon = NewFalconEngine()
 	a.volEngine = NewVolatilityEngine()
 	a.divEngine = indicators.NewSmartDivergenceEngine()
@@ -65,14 +65,14 @@ func (a *ChiefAnalyst) resetStreamingEngines() {
 	a.falcon.SetRSXSignalLength(settings.SignalLength)
 }
 
-func (a *ChiefAnalyst) warmupStreaming(klines []exchange.Kline) {
+func (a *Marker) warmupStreaming(klines []exchange.Kline) {
 	a.resetStreamingEngines()
 	for i, k := range klines {
 		a.evaluateTickLocked(k, i)
 	}
 }
 
-func (a *ChiefAnalyst) replayStreamingLocked() {
+func (a *Marker) replayStreamingLocked() {
 	klines := a.klines
 	a.resetStreamingEngines()
 	for i, k := range klines {
@@ -80,7 +80,7 @@ func (a *ChiefAnalyst) replayStreamingLocked() {
 	}
 }
 
-func (a *ChiefAnalyst) evaluateTickLocked(k exchange.Kline, barIndex int) {
+func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int) {
 	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
 	curRed := a.falconSignals.RedLine
 	curGreen := a.falconSignals.GreenLine
@@ -164,7 +164,7 @@ func (a *ChiefAnalyst) evaluateTickLocked(k exchange.Kline, barIndex int) {
 	a.rsxMarkers.appendBar(k.High, k.Low, k.Close, a.falconSignals.JurikRSX)
 }
 
-func (a *ChiefAnalyst) isNewZigZagNode(upd indicators.ZigZagUpdate) bool {
+func (a *Marker) isNewZigZagNode(upd indicators.ZigZagUpdate) bool {
 	if !upd.Node.Confirmed {
 		return false
 	}

@@ -39,7 +39,7 @@ func TestScoringMatrix_DisableRSX(t *testing.T) {
 		t.Fatalf("scoreLong without RSX = %d, want 65 (wozduh+expansion+AO)", got)
 	}
 
-	decision := EvaluateScalpSignal(context.Background(), report, DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != WaitAction {
 		t.Fatalf("Action = %q, want WAIT (score=%d)", decision.Action, decision.Score)
 	}
@@ -51,7 +51,7 @@ func TestScoringMatrix_DisableAll(t *testing.T) {
 
 	SetScoringMatrix(ScoringMatrix{})
 
-	decision := EvaluateScalpSignal(context.Background(), longSignalReport(), DefaultScalpFeeRate, nil)
+	decision := scalpDecisionFromReport(context.Background(), longSignalReport())
 	if decision.Action != WaitAction || decision.Score != 0 {
 		t.Fatalf("Action = %q score = %d, want WAIT/0", decision.Action, decision.Score)
 	}
