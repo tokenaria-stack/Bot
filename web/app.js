@@ -15,20 +15,20 @@ const THRESHOLDS_KEY = 'bot_thresholds';
 const SCORING_MATRIX_KEY = 'bot_scoring_matrix';
 
 const SCORING_MATRIX_DEFAULTS = {
-  useRSX: true,
-  useWozduhCross: true,
-  useRedCross: true,
-  useGeometry: true,
-  useGeometryBounce: true,
-  useGeometryTriangle: true,
-  useTrendlines: true,
-  useDivergence: true,
-  useFib: true,
-  useExpRegime: true,
-  useJurikTrend: true,
-  useWozduhSpike: true,
-  useAD: true,
-  useAOCross: true,
+  useRSX: false,
+  useWozduhCross: false,
+  useRedCross: false,
+  useGeometry: false,
+  useGeometryBounce: false,
+  useGeometryTriangle: false,
+  useTrendlines: false,
+  useDivergence: false,
+  useFib: false,
+  useExpRegime: false,
+  useJurikTrend: false,
+  useWozduhSpike: false,
+  useAD: false,
+  useAOCross: false,
 };
 
 const SCORING_MATRIX_LABELS = [

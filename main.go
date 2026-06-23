@@ -66,6 +66,14 @@ func main() {
 	}
 	strategy.SetSandboxMode(cfg.SandboxMode)
 
+	loadedMatrix, err := strategy.LoadMatrixConfig(strategy.MatrixConfigPath)
+	if err != nil {
+		log.Printf("[Init] Failed to load scoring matrix from %s: %v — using defaults", strategy.MatrixConfigPath, err)
+		loadedMatrix = strategy.DefaultScoringMatrix()
+	}
+	strategy.SetScoringMatrix(loadedMatrix)
+	log.Printf("[Init] Loaded Scoring Matrix configuration from %s", strategy.MatrixConfigPath)
+
 	log.Println("[Init] Order Flow buffers ready (100k ticks, 1k liquidations)")
 
 	chaosCfg := strategy.ChaosConfig{

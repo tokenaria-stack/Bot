@@ -89,6 +89,9 @@ func TestRiskManager_SandboxBypass(t *testing.T) {
 }
 
 func TestTelemetryBrainStatus_RiskVeto(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	rm := NewRiskManager(0.001, nil, false)
 	report := Report{
 		Close: 100,

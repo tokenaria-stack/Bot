@@ -8,3 +8,4 @@ backups/
 trading_bot
 *.db-wal
 *.db-shm
+config/matrix.json

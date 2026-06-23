@@ -1,6 +1,15 @@
 package strategy
 
-import "sync"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+)
+
+// MatrixConfigPath is the default location for persisted scoring matrix toggles.
+const MatrixConfigPath = "config/matrix.json"
 
 // ScoringMatrix toggles individual scoring rule contributions.
 type ScoringMatrix struct {
@@ -23,26 +32,14 @@ type ScoringMatrix struct {
 // ScoringMatrixSettings is the JSON DTO name for settings.matrix from the dashboard.
 type ScoringMatrixSettings = ScoringMatrix
 
-var defaultScoringMatrix = ScoringMatrix{
-	UseRSX:              true,
-	UseWozduhCross:      true,
-	UseRedCross:         true,
-	UseGeometry:         true,
-	UseGeometryBounce:   true,
-	UseGeometryTriangle: true,
-	UseTrendlines:       true,
-	UseDivergence:       true,
-	UseFib:              true,
-	UseExpRegime:        true,
-	UseJurikTrend:       true,
-	UseWozduhSpike:      true,
-	UseAD:               true,
-	UseAOCross:          true,
+// DefaultScoringMatrix returns the conservative startup state (all rules disabled).
+func DefaultScoringMatrix() ScoringMatrix {
+	return ScoringMatrix{}
 }
 
 var (
 	scoringMatrixMu sync.RWMutex
-	scoringMatrix   = defaultScoringMatrix
+	scoringMatrix   = DefaultScoringMatrix()
 )
 
 // GetScoringMatrix returns a copy of the active scoring toggles.
@@ -65,11 +62,43 @@ func scoringMatrixSnapshot() ScoringMatrix {
 	return scoringMatrix
 }
 
-// ResetScoringMatrix restores all scoring rules to enabled.
+// ResetScoringMatrix restores the conservative default (all rules disabled).
 func ResetScoringMatrix() {
 	scoringMatrixMu.Lock()
 	defer scoringMatrixMu.Unlock()
-	scoringMatrix = defaultScoringMatrix
+	scoringMatrix = DefaultScoringMatrix()
+}
+
+// SaveMatrixConfig serializes the matrix to JSON and writes it to configPath.
+func SaveMatrixConfig(matrix ScoringMatrix, configPath string) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(matrix, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, data, 0o644)
+}
+
+// LoadMatrixConfig reads JSON from filepath into a ScoringMatrix.
+// Missing or empty files return DefaultScoringMatrix().
+func LoadMatrixConfig(configPath string) (ScoringMatrix, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultScoringMatrix(), nil
+		}
+		return ScoringMatrix{}, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return DefaultScoringMatrix(), nil
+	}
+	var matrix ScoringMatrix
+	if err := json.Unmarshal(data, &matrix); err != nil {
+		return ScoringMatrix{}, err
+	}
+	return matrix, nil
 }
 
 // ScoringMatrixFullyDisabled reports whether every matrix toggle is off (global snapshot).

@@ -19,7 +19,7 @@ func ResolveBacktestMatrix(settings *BacktestRunSettings) ScoringMatrix {
 		if ScoringMatrixEntrySourcesEnabledFor(global) {
 			return global
 		}
-		return defaultScoringMatrix
+		return DefaultScoringMatrix()
 	}
 	return m
 }

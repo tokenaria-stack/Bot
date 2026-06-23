@@ -128,9 +128,14 @@ func TestResolveBacktestMatrix_FallsBackWhenEmpty(t *testing.T) {
 	strategy.ResetScoringMatrix()
 	t.Cleanup(strategy.ResetScoringMatrix)
 
+	strategy.SetScoringMatrix(strategy.ScoringMatrix{
+		UseRSX:        true,
+		UseTrendlines: true,
+	})
+
 	empty := &strategy.BacktestRunSettings{}
 	m := strategy.ResolveBacktestMatrix(empty)
 	if !m.UseRSX || !m.UseTrendlines {
-		t.Fatalf("expected default matrix, got %+v", m)
+		t.Fatalf("expected global matrix fallback, got %+v", m)
 	}
 }

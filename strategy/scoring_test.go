@@ -37,6 +37,9 @@ func shortSignalReport() Report {
 }
 
 func TestEvaluateScalpSignal_BuyThreshold(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	decision := EvaluateScalpSignal(context.Background(), longSignalReport(), DefaultScalpFeeRate, nil)
 	if decision.Action != BuyAction {
 		t.Fatalf("Action = %q, want BUY (score=%d)", decision.Action, decision.Score)
@@ -47,6 +50,9 @@ func TestEvaluateScalpSignal_BuyThreshold(t *testing.T) {
 }
 
 func TestEvaluateScalpSignal_ShortThreshold(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	decision := EvaluateScalpSignal(context.Background(), shortSignalReport(), DefaultScalpFeeRate, nil)
 	if decision.Action != SellAction {
 		t.Fatalf("Action = %q, want SELL (score=%d)", decision.Action, decision.Score)
@@ -66,6 +72,9 @@ func TestEvaluateScalpSignal_WaitBelowThreshold(t *testing.T) {
 }
 
 func TestEvaluateScalpSignal_ShortWinsOverLong(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	report := Report{
 		Close:           100,
 		RSXMarker:       "SS",
@@ -81,6 +90,9 @@ func TestEvaluateScalpSignal_ShortWinsOverLong(t *testing.T) {
 }
 
 func TestScoreLong_Components(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	report := Report{
 		RSXMarker:             "LL",
 		Falcon:                FalconSignals{VolCrossMarker: "lime"},
@@ -108,6 +120,9 @@ func TestScoreLong_Components(t *testing.T) {
 }
 
 func TestScoreShort_Components(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	report := Report{
 		RSXMarker:               "SS",
 		Falcon:                  FalconSignals{VolCrossMarker: "red"},
@@ -135,6 +150,9 @@ func TestScoreShort_Components(t *testing.T) {
 }
 
 func TestEvaluateScalpSignal_FullMatrixLong(t *testing.T) {
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	report := Report{
 		Close:               100,
 		RedLineCrossGreenUp: true,

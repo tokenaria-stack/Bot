@@ -9,6 +9,9 @@ func TestSetScoreThresholds(t *testing.T) {
 	origL, origS := LongScoreThreshold(), ShortScoreThreshold()
 	t.Cleanup(func() { SetScoreThresholds(origL, origS) })
 
+	SetScoringMatrix(allEnabledScoringMatrix())
+	t.Cleanup(ResetScoringMatrix)
+
 	SetScoreThresholds(101, 101)
 	if LongScoreThreshold() != 101 || ShortScoreThreshold() != 101 {
 		t.Fatalf("thresholds = %d/%d, want 101/101", LongScoreThreshold(), ShortScoreThreshold())

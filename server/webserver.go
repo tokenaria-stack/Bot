@@ -511,6 +511,10 @@ func (d *DashboardServer) handleScoringMatrix(w http.ResponseWriter, r *http.Req
 
 	strategy.SetScoringMatrix(req)
 
+	if err := strategy.SaveMatrixConfig(req, strategy.MatrixConfigPath); err != nil {
+		log.Printf("[API] Failed to save scoring matrix to %s: %v", strategy.MatrixConfigPath, err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(strategy.GetScoringMatrix())
 }
