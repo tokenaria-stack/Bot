@@ -40,7 +40,7 @@ func TestComputeBacktestMetrics(t *testing.T) {
 func TestBacktestPadStartMs(t *testing.T) {
 	t.Parallel()
 
-	start := int64(90 * 24 * 60 * 60 * 1000) // 90 days epoch ms
+	start := exchange.BinanceFuturesGenesisMs + 90*24*60*60*1000 // 90 days after futures genesis
 	end := start + 30*24*60*60*1000
 
 	padded, ok := PadBacktestStartMs("1d", start, end, 31)

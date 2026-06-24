@@ -738,7 +738,12 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	log.Printf("[Backtest] run request: symbol=%s interval=%s start=%s end=%s",
 		symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
 
-	effectiveStartMs := startMs
+	effectiveStartMs := exchange.ClampFuturesHistoryStartMs(startMs)
+	if effectiveStartMs != startMs {
+		log.Printf("[Backtest] clamped start %s → %s (Binance futures genesis)",
+			time.UnixMilli(startMs).UTC().Format("2006-01-02"),
+			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"))
+	}
 	candles, err := d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
 	if err != nil {
 		log.Printf("[Backtest] fetch history failed: %v", err)
@@ -957,7 +962,11 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
+	resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(
+		klines,
+		historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars),
+		rsxLookback,
+	)
 	resp.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, endTimeMs)
 	writeJSON(w, resp)
 }
@@ -1041,7 +1050,8 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 				d.scheduleKlineGapFill(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
 			}
 			klines := dataCandlesToKlines(dbRows)
-			chartCandles, oscillators := buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
+			trim := historyWarmupTrim(len(klines), limit, indicatorWarmupBars)
+			chartCandles, oscillators := buildChartSeriesTrimmed(klines, trim, rsxLookback)
 			chartData := chartPointsFromSeries(chartCandles, oscillators)
 			hasMore := len(chartCandles) >= limit && fetchStartMs > 0
 			writeJSON(w, historyChunkResponse{
@@ -1067,7 +1077,8 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 	}
 
 	klines := candlesToKlines(candles)
-	chartCandles, oscillators := buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
+	trim := historyWarmupTrim(len(klines), limit, indicatorWarmupBars)
+	chartCandles, oscillators := buildChartSeriesTrimmed(klines, trim, rsxLookback)
 	chartData := chartPointsFromSeries(chartCandles, oscillators)
 
 	hasMore := len(chartCandles) >= limit && fetchStartMs > 0
@@ -1157,6 +1168,7 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 		klines = klines[len(klines)-windowSize:]
 	}
 
+	trimBars = historyWarmupTrim(len(klines), candleLimit, trimBars)
 	candles, oscillators := buildChartSeriesTrimmed(klines, trimBars, rsxLookback)
 
 	state := &MarketState{
@@ -1536,9 +1548,21 @@ func historyEndTimeToMs(endTimeSec int64) int64 {
 func buildChartSeriesTrimmed(klines []exchange.Kline, trim, rsxLookback int) ([]ChartCandle, []ChartOscillator) {
 	candles, oscillators := buildChartSeries(klines, rsxLookback)
 	if trim <= 0 || len(candles) <= trim {
-		return candles, []ChartOscillator{}
+		return candles, oscillators
 	}
 	return candles[trim:], oscillators[trim:]
+}
+
+// historyWarmupTrim returns 0 when SQLite/Binance returned fewer bars than requested,
+// meaning we hit the absolute start of history and must not drop leading price candles.
+func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
+	if warmupTrim <= 0 {
+		return 0
+	}
+	if gotBars < requestedBars+warmupTrim {
+		return 0
+	}
+	return warmupTrim
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

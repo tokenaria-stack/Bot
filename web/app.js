@@ -5450,7 +5450,6 @@ function renderState(data) {
   loadedCandles = candles;
   loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators || []), loadedCandles);
   historyHasMore = hasMore;
-  chartInitialized = true;
 
   applySeriesData();
   renderFibZones(data.fibZones);
@@ -5458,6 +5457,9 @@ function renderState(data) {
   if (loadedCandles.length > 0 && shouldPaintLiveChart()) {
     forceSyncChartTimeScales(liveChartData);
   }
+
+  // График полностью загружен историей, теперь WebSocket может рисовать новые тики
+  chartInitialized = true;
   updateBufferingOverlay();
   endDataUpdate();
 }
@@ -5712,12 +5714,15 @@ function handleWSMessage(event) {
 
   if (!shouldPaintLiveChart()) return;
 
+  // Игнорируем любые тики по WS, пока HTTP-запрос /api/state не принесет исторический фундамент.
+  // Бэкенд уже включает самые свежие тики в HTTP-ответ, поэтому мы ничего не теряем.
+  if (!chartInitialized) return;
+
   const bar = normalizeCandle({
     time, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume,
   });
   if (!bar) return;
 
-  chartInitialized = true;
   applyPriceBar(bar);
 
   if (tickTf === '1m') {

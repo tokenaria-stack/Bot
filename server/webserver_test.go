@@ -54,7 +54,21 @@ func TestBuildChartSeriesTrimmed(t *testing.T) {
 	if len(shortCandles) != 80 {
 		t.Fatalf("short candles len = %d, want 80", len(shortCandles))
 	}
-	if len(shortOsc) != 0 {
-		t.Fatalf("short oscillators len = %d, want 0 (warmup not trimmed)", len(shortOsc))
+	if len(shortOsc) != 80 {
+		t.Fatalf("short oscillators len = %d, want 80 (history start — no price trim)", len(shortOsc))
+	}
+}
+
+func TestHistoryWarmupTrim(t *testing.T) {
+	t.Parallel()
+
+	if got := historyWarmupTrim(149, 50, 100); got != 0 {
+		t.Fatalf("history start: got trim %d, want 0", got)
+	}
+	if got := historyWarmupTrim(150, 50, 100); got != 100 {
+		t.Fatalf("exact window: got trim %d, want 100", got)
+	}
+	if got := historyWarmupTrim(100, 50, 100); got != 0 {
+		t.Fatalf("partial window: got trim %d, want 0", got)
 	}
 }

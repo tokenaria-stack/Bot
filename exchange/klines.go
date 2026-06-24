@@ -16,6 +16,17 @@ import (
 
 const maxKlinesLimit = 1000
 
+// BinanceFuturesGenesisMs is the earliest open time for USDⓈ-M futures klines (2019-09-08 UTC).
+const BinanceFuturesGenesisMs int64 = 1567900800000
+
+// ClampFuturesHistoryStartMs floors start at Binance futures genesis to avoid empty API ranges.
+func ClampFuturesHistoryStartMs(startMs int64) int64 {
+	if startMs < BinanceFuturesGenesisMs {
+		return BinanceFuturesGenesisMs
+	}
+	return startMs
+}
+
 // Candle represents a parsed OHLCV candle ready for technical analysis.
 type Candle struct {
 	OpenTime  int64
