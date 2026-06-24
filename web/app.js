@@ -1314,7 +1314,6 @@ function createRSXChartOptions(width, height) {
 
 let liveChartData = {};
 let backtestChartData = {};
-let crosshairSyncOrigin = null;
 
 const LOGICAL_RANGE_EPS = 0.01;
 let backtestLoadedCandles = [];
@@ -1981,6 +1980,21 @@ function initIndicatorSettingsAutoUpdate() {
       persistBacktestRsxFromMenu();
       setBacktestLoading(true);
       scheduleIndicatorSettingsAutoUpdate();
+      return;
+    }
+
+    if (target.matches('.wozduh-chk')) {
+      const wrap = target.closest('.osc-wrap');
+      if (!wrap) return;
+      const context = oscContextFromWrap(wrap);
+      const menu = getWozduhSettingsMenu(wrap);
+      if (!menu) return;
+      const prefs = readWozduhPrefsFromMenu(menu);
+      saveWozduhPrefs(context, prefs);
+      applyWozduhVisibilityToChart(
+        context === 'backtest' ? backtestChartData : liveChartData,
+        context,
+      );
     }
   };
 
@@ -2494,30 +2508,43 @@ function syncChartGroupTimeRange(charts, range) {
   });
 }
 
-function syncPaneCrosshairs(chartData, sourceChart, peerTargets) {
-  if (!sourceChart || !peerTargets?.length) return;
+function syncPaneCrosshairs(chartGroups) {
+  if (!chartGroups?.length) return;
 
-  sourceChart.subscribeCrosshairMove((param) => {
-    if (isUpdatingData) return;
+  chartGroups.forEach((sourceData) => {
+    const sourceChart = sourceData?.chart;
+    if (!sourceChart || sourceChart._crosshairSyncBound) return;
+    sourceChart._crosshairSyncBound = true;
 
-    if (!param.point || !param.time) {
-      if (crosshairSyncOrigin === sourceChart) {
-        crosshairSyncOrigin = null;
-      }
-      return;
-    }
+    sourceChart.subscribeCrosshairMove((param) => {
+      if (isUpdatingData) return;
+      if (!param.sourceEvent) return;
 
-    if (crosshairSyncOrigin && crosshairSyncOrigin !== sourceChart) return;
-    crosshairSyncOrigin = sourceChart;
+      const container = sourceData.container;
+      if (!container?.matches) return;
+      if (!container.matches(':hover') && !container.matches(':active')) return;
 
-    peerTargets.forEach(({ chart, seriesGetter }) => {
-      if (!chart || chart === sourceChart) return;
-      const series = seriesGetter();
-      if (!series) return;
-      const price = seriesValueAtTime(series, param.time);
-      if (price != null) {
-        chart.setCrosshairPosition(price, param.time, series);
-      }
+      chartGroups.forEach((targetData) => {
+        const targetChart = targetData?.chart;
+        if (!targetChart || targetChart === sourceChart) return;
+
+        if (!param.point || param.time === undefined) {
+          if (typeof targetChart.clearCrosshairPosition === 'function') {
+            targetChart.clearCrosshairPosition();
+          }
+          return;
+        }
+
+        const series = typeof targetData.seriesGetter === 'function'
+          ? targetData.seriesGetter()
+          : null;
+        if (!series) return;
+
+        const price = seriesValueAtTime(series, param.time);
+        if (price != null) {
+          targetChart.setCrosshairPosition(price, param.time, series);
+        }
+      });
     });
   });
 }
@@ -2529,25 +2556,7 @@ function attachProfessionalChartSync(chartData, hooks = {}) {
   const wozduhSeriesGetter = () => chartData.wozduxSeries?.rsiPrice || chartData.wozduhUpSeries;
   const rsxSeriesGetter = () => chartData.rsxSeries;
 
-  chartData.crosshairHoverChart = null;
-
-  const chartContainers = [
-    [chartData.priceChart, chartData.elements?.chartContainer],
-    [chartData.oscChart, chartData.elements?.oscContainer],
-    [chartData.rsxChart, chartData.elements?.rsxContainer],
-  ];
-  chartContainers.forEach(([chart, container]) => {
-    if (!container || container._crosshairHoverBound) return;
-    container._crosshairHoverBound = true;
-    container.addEventListener('mouseenter', () => {
-      chartData.crosshairHoverChart = chart;
-    });
-    container.addEventListener('mouseleave', () => {
-      if (chartData.crosshairHoverChart === chart) {
-        chartData.crosshairHoverChart = null;
-      }
-    });
-  });
+  const { chartContainer, oscContainer, rsxContainer } = chartData.elements || {};
 
   chartData.allCharts.forEach((sourceChart) => {
     sourceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -2562,15 +2571,12 @@ function attachProfessionalChartSync(chartData, hooks = {}) {
   });
 
   const crosshairPeers = [
-    { chart: chartData.priceChart, seriesGetter: priceSeriesGetter },
-    { chart: chartData.oscChart, seriesGetter: wozduhSeriesGetter },
-    { chart: chartData.rsxChart, seriesGetter: rsxSeriesGetter },
-  ].filter((entry) => entry.chart);
+    { chart: chartData.priceChart, seriesGetter: priceSeriesGetter, container: chartContainer },
+    { chart: chartData.oscChart, seriesGetter: wozduhSeriesGetter, container: oscContainer },
+    { chart: chartData.rsxChart, seriesGetter: rsxSeriesGetter, container: rsxContainer },
+  ].filter((entry) => entry.chart && entry.container);
 
-  crosshairPeers.forEach((source) => {
-    const peers = crosshairPeers.filter((entry) => entry.chart !== source.chart);
-    syncPaneCrosshairs(chartData, source.chart, peers);
-  });
+  syncPaneCrosshairs(crosshairPeers);
 }
 
 function resetChartCrosshair(chart) {
@@ -3234,17 +3240,6 @@ function initWozduhSettings() {
       else menu.hidden = true;
     });
 
-    menu.querySelectorAll('.wozduh-chk').forEach((el) => {
-      el.addEventListener('change', () => {
-        const prefs = readWozduhPrefsFromMenu(menu);
-        saveWozduhPrefs(context, prefs);
-        applyWozduhVisibilityToChart(
-          context === 'backtest' ? backtestChartData : liveChartData,
-          context,
-        );
-      });
-    });
-
     menu.addEventListener('mousedown', (e) => e.stopPropagation());
     menu.addEventListener('click', (e) => e.stopPropagation());
   });
@@ -3634,7 +3629,6 @@ function wsSubscribeTf(tf) {
 
 function clearChartData() {
   beginDataUpdate();
-  crosshairSyncOrigin = null;
   loadedCandles = [];
   loadedOsc = [];
   liveNavigatorResult = null;
@@ -4984,28 +4978,41 @@ function applyBacktestIndicatorPatch(result) {
   backtestLastTrades = trades;
 
   const osc = chartPointsToOsc(result.chartData);
-  backtestLoadedOsc = mergeOsc(backtestLoadedOsc, osc);
+  backtestLoadedOsc = alignOscillatorsToCandles(
+    mergeOsc(backtestLoadedOsc, osc),
+    backtestLoadedCandles,
+  );
 
-  const mappedRSX = mapRSXData(osc);
-  if (backtestChartData.rsxSeries) {
-    backtestChartData.rsxSeries.setData(
-      mappedRSX.map(({ time, value, color }) => ({ time, value, color })),
-    );
+  const priceChart = backtestChartData.priceChart;
+  const prevRange = priceChart?.timeScale()?.getVisibleLogicalRange();
+
+  isUpdatingData = true;
+  try {
+    applyOscillatorToChart(backtestChartData, backtestLoadedOsc);
+    applyWozduhVisibilityToChart(backtestChartData, 'backtest');
+
+    const mappedRSX = mapRSXData(backtestLoadedOsc);
     const rsxMarkers = rsxMarkersFromMapped(mappedRSX);
     const chartMarkers = rsxMarkersFromChartData(result.chartData);
-    backtestChartData.rsxSeries.setMarkers(rsxMarkers.length > 0 ? rsxMarkers : chartMarkers);
-  }
-  if (backtestChartData.rsxSignalSeries) {
-    backtestChartData.rsxSignalSeries.setData(mapRSXSignalData(osc));
+    const mergedRsxMarkers = rsxMarkers.length > 0 ? rsxMarkers : chartMarkers;
+    if (backtestChartData.rsxSeries) {
+      backtestChartData.rsxSeries.setMarkers(mergedRsxMarkers);
+    }
+
+    applyNavigatorOverlays(result, backtestLoadedCandles, backtestChartData, {
+      preserveView: true,
+      updateLoadedCandles: true,
+    });
+    applyBacktestCandleMarkers(backtestChartData, trades, backtestLoadedOsc, backtestNavigatorChartMarkers);
+    applyBacktestEntryMarkers(backtestChartData, trades);
+  } finally {
+    setTimeout(() => { isUpdatingData = false; }, 0);
   }
 
-  applyNavigatorOverlays(result, backtestLoadedCandles, backtestChartData, {
-    preserveView: true,
-    updateLoadedCandles: true,
-  });
+  if (prevRange && backtestChartData.allCharts?.length) {
+    backtestChartData.allCharts.forEach((chart) => syncVisibleLogicalRange(chart, prevRange));
+  }
 
-  applyBacktestCandleMarkers(backtestChartData, trades, osc, backtestNavigatorChartMarkers);
-  applyBacktestEntryMarkers(backtestChartData, trades);
   renderChartLegends('backtest');
 }
 
@@ -5470,6 +5477,11 @@ function updateAllPriceSeries(bar) {
 
 function applySeriesData() {
   const ownLock = !isUpdatingData;
+  let prevRange = null;
+  if (shouldPaintLiveChart() && liveChartData?.priceChart) {
+    prevRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
+  }
+
   isUpdatingData = true;
   try {
     const candles = dedupeCandles(loadedCandles);
@@ -5480,6 +5492,7 @@ function applySeriesData() {
       updateVolumeLabel(candles);
       loadedOsc = alignOscillatorsToCandles(mergeOsc([], loadedOsc), candles);
       applyOscillatorToChart(liveChartData, loadedOsc);
+      applyWozduhVisibilityToChart(liveChartData, 'live');
       spikeMarkers = buildSpikeMarkers(loadedOsc);
       applyTradeMarkers();
       if (liveNavigatorResult) {
@@ -5491,6 +5504,10 @@ function applySeriesData() {
         );
       }
       updateBufferingOverlay();
+
+      if (prevRange && liveChartData.allCharts?.length) {
+        liveChartData.allCharts.forEach((chart) => syncVisibleLogicalRange(chart, prevRange));
+      }
     }
   } finally {
     if (ownLock) {
