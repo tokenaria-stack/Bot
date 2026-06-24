@@ -49,6 +49,11 @@ func resetDBConnection(path string) {
 	dbPath = path
 }
 
+// ResetDBForTest closes any open DB handle and points SQLite at path (tests only).
+func ResetDBForTest(path string) {
+	resetDBConnection(path)
+}
+
 // InitDB opens history.db and ensures schema exists.
 func InitDB() error {
 	mu.Lock()

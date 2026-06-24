@@ -68,20 +68,22 @@ func (c *WSClient) Close() error {
 
 // DashboardServer serves the trading dashboard UI and market state API.
 type DashboardServer struct {
-	analysts   map[string]*strategy.Marker
-	rest       *exchange.BinanceExchange
-	orderFlow  *domain.OrderFlowStore
-	symbol     string
-	staticDir  string
-	upgrader   websocket.Upgrader
-	clients    map[*WSClient]bool
-	clientTF   map[*WSClient]string
-	clientsMu  sync.Mutex
-	tradesMu   sync.RWMutex
-	trades     []ChartTrade
-	paperTrading bool
-	sandboxMode  bool
-	signalAnalyst *strategy.Analyst
+	analysts       map[string]*strategy.Marker
+	rest           *exchange.BinanceExchange
+	orderFlow      *domain.OrderFlowStore
+	symbol         string
+	staticDir      string
+	upgrader       websocket.Upgrader
+	clients        map[*WSClient]bool
+	clientTF       map[*WSClient]string
+	clientsMu      sync.Mutex
+	tradesMu       sync.RWMutex
+	trades         []ChartTrade
+	paperTrading   bool
+	sandboxMode    bool
+	signalAnalyst  *strategy.Analyst
+	liveNavMu      sync.RWMutex
+	liveNavigators map[string]strategy.NavigatorUISettings
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -105,7 +107,8 @@ type MarketState struct {
 	Trades           []ChartTrade        `json:"trades,omitempty"`
 	PaperTrading     bool                `json:"paperTrading,omitempty"`
 	SandboxMode      bool                `json:"sandboxMode,omitempty"`
-	HasMore          bool                `json:"hasMore,omitempty"`
+	HasMore          bool                                        `json:"hasMore,omitempty"`
+	Navigators       map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
 }
 
 // ChartTrade is a virtual or live trade marker for the price chart (time in Unix seconds).
@@ -214,8 +217,9 @@ type historyResponse struct {
 	Timeframe   string            `json:"timeframe"`
 	Candles     []ChartCandle     `json:"candles"`
 	Oscillators []ChartOscillator `json:"oscillators"`
-	Trades      []ChartTrade      `json:"trades,omitempty"`
-	HasMore     bool              `json:"hasMore"`
+	Trades      []ChartTrade                                `json:"trades,omitempty"`
+	HasMore     bool                                        `json:"hasMore"`
+	Navigators  map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
 }
 
 // NewDashboardServer creates a dashboard server bound to Marker instances.
@@ -229,16 +233,17 @@ func NewDashboardServer(
 	sandboxMode bool,
 ) *DashboardServer {
 	return &DashboardServer{
-		analysts:     analysts,
-		rest:         rest,
-		orderFlow:    orderFlow,
-		symbol:       exchange.NormalizeFuturesSymbol(symbol),
-		staticDir:    defaultStaticDir,
-		clients:      make(map[*WSClient]bool),
-		clientTF:     make(map[*WSClient]string),
-		paperTrading: paperTrading,
-		sandboxMode:  sandboxMode,
-		signalAnalyst: signalAnalyst,
+		analysts:       analysts,
+		rest:           rest,
+		orderFlow:      orderFlow,
+		symbol:         exchange.NormalizeFuturesSymbol(symbol),
+		staticDir:      defaultStaticDir,
+		clients:        make(map[*WSClient]bool),
+		clientTF:       make(map[*WSClient]string),
+		paperTrading:   paperTrading,
+		sandboxMode:    sandboxMode,
+		signalAnalyst:  signalAnalyst,
+		liveNavigators: defaultLiveNavigatorPanes(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -256,6 +261,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/matrix", d.handleScoringMatrix)
 	mux.HandleFunc("/api/settings/indicators", d.handleIndicatorSettings)
 	mux.HandleFunc("/api/settings/risk", d.handleRiskSettings)
+	mux.HandleFunc("/api/settings/navigators", d.handleNavigatorSettings)
 	mux.HandleFunc("/api/backtest/run", d.handleBacktestRun)
 	mux.HandleFunc("/ws", d.handleWS)
 
@@ -582,6 +588,76 @@ func (d *DashboardServer) handleRiskSettings(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+type navigatorSettingsRequest struct {
+	Navigators map[string]strategy.NavigatorUISettings `json:"navigators"`
+}
+
+func defaultLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
+	return map[string]strategy.NavigatorUISettings{
+		"price": {
+			Enabled:   true,
+			Source:    "Price",
+			TrendType: strategy.NavigatorTrendWicks,
+			UseLong:   true,
+			LongLen:   60,
+			UseMedium: true,
+			MediumLen: 30,
+			UseShort:  true,
+			ShortLen:  10,
+		},
+	}
+}
+
+func (d *DashboardServer) getLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
+	d.liveNavMu.RLock()
+	defer d.liveNavMu.RUnlock()
+	if len(d.liveNavigators) == 0 {
+		return defaultLiveNavigatorPanes()
+	}
+	out := make(map[string]strategy.NavigatorUISettings, len(d.liveNavigators))
+	for k, v := range d.liveNavigators {
+		out[k] = v
+	}
+	return out
+}
+
+func (d *DashboardServer) setLiveNavigatorPanes(panes map[string]strategy.NavigatorUISettings) {
+	d.liveNavMu.Lock()
+	defer d.liveNavMu.Unlock()
+	if len(panes) == 0 {
+		d.liveNavigators = defaultLiveNavigatorPanes()
+		return
+	}
+	d.liveNavigators = make(map[string]strategy.NavigatorUISettings, len(panes))
+	for k, v := range panes {
+		d.liveNavigators[k] = v
+	}
+}
+
+func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"navigators": d.getLiveNavigatorPanes()})
+		return
+	case http.MethodPost:
+		var req navigatorSettingsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		panes := strategy.ResolveBacktestNavigators(
+			&strategy.BacktestRunSettings{Navigators: req.Navigators},
+			req.Navigators,
+			strategy.NavigatorUISettings{},
+		)
+		d.setLiveNavigatorPanes(panes)
+		writeJSON(w, map[string]any{"navigators": d.getLiveNavigatorPanes()})
+		return
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
 	for _, analyst := range d.analysts {
 		if analyst != nil {
@@ -738,12 +814,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	log.Printf("[Backtest] run request: symbol=%s interval=%s start=%s end=%s",
 		symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
 
-	effectiveStartMs := exchange.ClampFuturesHistoryStartMs(startMs)
-	if effectiveStartMs != startMs {
-		log.Printf("[Backtest] clamped start %s → %s (Binance futures genesis)",
-			time.UnixMilli(startMs).UTC().Format("2006-01-02"),
-			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"))
-	}
+	effectiveStartMs := startMs
 	candles, err := d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
 	if err != nil {
 		log.Printf("[Backtest] fetch history failed: %v", err)
@@ -967,6 +1038,12 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars),
 		rsxLookback,
 	)
+	trimBars := historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars)
+	if len(resp.Candles) > 0 && spec.BinanceInterval != "" {
+		resp.Navigators = buildNavigatorsFromSeries(
+			klines, resp.Oscillators, trimBars, spec.BinanceInterval, d.getLiveNavigatorPanes(),
+		)
+	}
 	resp.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, endTimeMs)
 	writeJSON(w, resp)
 }
@@ -1044,12 +1121,12 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 	rsxLookback := parseRSXLookback(r)
 
 	if err := data.InitDB(); err == nil {
-		dbRows, loadErr := data.LoadKlines(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
-		if loadErr == nil && len(dbRows) > 0 {
-			if d.needsAsyncKlineGapFill(dbRows, fetchEndMs, intervalMs, limit) {
+		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+		if loadErr == nil && len(candles) > 0 {
+			if d.needsAsyncKlineGapFill(candles[len(candles)-1].OpenTime, len(candles), fetchEndMs, intervalMs, limit) {
 				d.scheduleKlineGapFill(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
 			}
-			klines := dataCandlesToKlines(dbRows)
+			klines := candlesToKlines(candles)
 			trim := historyWarmupTrim(len(klines), limit, indicatorWarmupBars)
 			chartCandles, oscillators := buildChartSeriesTrimmed(klines, trim, rsxLookback)
 			chartData := chartPointsFromSeries(chartCandles, oscillators)
@@ -1182,6 +1259,15 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 		PaperTrading: d.paperTrading,
 		SandboxMode:  d.sandboxMode,
 	}
+	if !IsOrderFlowTimeframe(spec) && len(candles) > 0 {
+		binanceInterval := spec.BinanceInterval
+		if spec.Kind == TFRAMOnly {
+			binanceInterval = spec.ID
+		}
+		state.Navigators = buildNavigatorsFromSeries(
+			klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(),
+		)
+	}
 	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
 		state.TickBufferLen = d.orderFlow.Ticks.Len()
 	}
@@ -1250,10 +1336,10 @@ func (d *DashboardServer) loadRESTKlinesFromStore(spec TimeframeSpec, endTimeMs 
 	}
 
 	if err := data.InitDB(); err == nil {
-		dbRows, loadErr := data.LoadKlines(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
-		if loadErr == nil && len(dbRows) > 0 {
-			klines := dataCandlesToKlines(dbRows)
-			if d.needsAsyncKlineGapFill(dbRows, endTimeMs, intervalMs, limit) {
+		candles, loadErr := exchange.LoadContinuousContractFromDB(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
+		if loadErr == nil && len(candles) > 0 {
+			klines := candlesToKlines(candles)
+			if d.needsAsyncKlineGapFill(candles[len(candles)-1].OpenTime, len(candles), endTimeMs, intervalMs, limit) {
 				d.scheduleKlineGapFill(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
 			}
 			log.Printf("[Dashboard] SQLite fast path %s %s: %d bars", d.symbol, spec.BinanceInterval, len(klines))
@@ -1278,13 +1364,12 @@ func (d *DashboardServer) loadRESTKlinesFromStore(spec TimeframeSpec, endTimeMs 
 
 // needsAsyncKlineGapFill returns true when SQLite data should be served now but
 // a background Binance fetch should refresh the cache for later requests.
-func (d *DashboardServer) needsAsyncKlineGapFill(rows []data.Candle, endTimeMs, intervalMs int64, limit int) bool {
-	if len(rows) == 0 {
+func (d *DashboardServer) needsAsyncKlineGapFill(lastOpenTimeMs int64, barCount int, endTimeMs, intervalMs int64, limit int) bool {
+	if barCount == 0 {
 		return false
 	}
-	last := rows[len(rows)-1]
-	stale := endTimeMs-last.OpenTime > intervalMs*2
-	sparse := len(rows) < limit/3
+	stale := endTimeMs-lastOpenTimeMs > intervalMs*2
+	sparse := barCount < limit/3
 	return stale || sparse
 }
 
@@ -1321,7 +1406,9 @@ func (d *DashboardServer) liveHistoryHasMore(symbol, interval string, klines []e
 
 	if err := data.InitDB(); err == nil {
 		bounds, berr := data.QueryKlineCacheBounds(symbol, interval)
-		if berr == nil && bounds.HasData && bounds.MinTime < oldestMs {
+		spotBounds, spotErr := data.QueryKlineCacheBounds(exchange.SpotStorageSymbol(symbol), interval)
+		if (berr == nil && bounds.HasData && bounds.MinTime < oldestMs) ||
+			(spotErr == nil && spotBounds.HasData && spotBounds.MinTime < oldestMs) {
 			return true
 		}
 	}
@@ -1563,6 +1650,40 @@ func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
 		return 0
 	}
 	return warmupTrim
+}
+
+func buildNavigatorsFromSeries(
+	klines []exchange.Kline,
+	oscillators []ChartOscillator,
+	trimBars int,
+	interval string,
+	panes map[string]strategy.NavigatorUISettings,
+) map[string]strategy.NavigatorResultDTO {
+	if len(klines) == 0 || len(oscillators) == 0 || len(panes) == 0 {
+		return nil
+	}
+
+	navKlines := klines
+	if trimBars > 0 && len(navKlines) > trimBars {
+		navKlines = navKlines[trimBars:]
+	}
+	if len(navKlines) > len(oscillators) {
+		navKlines = navKlines[len(navKlines)-len(oscillators):]
+	} else if len(oscillators) > len(navKlines) {
+		oscillators = oscillators[len(oscillators)-len(navKlines):]
+	}
+	if len(navKlines) == 0 {
+		return nil
+	}
+
+	rsxVals := make([]float64, len(oscillators))
+	wozVals := make([]float64, len(oscillators))
+	for i, o := range oscillators {
+		rsxVals[i] = o.RSX
+		wozVals[i] = o.RsiVolSlow
+	}
+
+	return strategy.BuildAllNavigators(panes, navKlines, rsxVals, wozVals, interval)
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

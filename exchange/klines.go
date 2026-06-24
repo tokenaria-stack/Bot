@@ -19,13 +19,8 @@ const maxKlinesLimit = 1000
 // BinanceFuturesGenesisMs is the earliest open time for USDⓈ-M futures klines (2019-09-08 UTC).
 const BinanceFuturesGenesisMs int64 = 1567900800000
 
-// ClampFuturesHistoryStartMs floors start at Binance futures genesis to avoid empty API ranges.
-func ClampFuturesHistoryStartMs(startMs int64) int64 {
-	if startMs < BinanceFuturesGenesisMs {
-		return BinanceFuturesGenesisMs
-	}
-	return startMs
-}
+// BinanceSpotGenesisMs is the earliest open time for BTCUSDT spot klines (2017-08-17 UTC).
+const BinanceSpotGenesisMs int64 = 1502928000000
 
 // Candle represents a parsed OHLCV candle ready for technical analysis.
 type Candle struct {
@@ -123,8 +118,9 @@ type klineTimeRange struct {
 // Unified data layer: SQLite first, interval-aware gap detection, per-gap REST fetch,
 // forward-fill synthetic fallback when the API is unavailable.
 func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTimeMs, endTimeMs int64) ([]Candle, error) {
-	if startTimeMs <= 0 || endTimeMs <= 0 || endTimeMs <= startTimeMs {
-		return nil, fmt.Errorf("invalid time range: start=%d end=%d", startTimeMs, endTimeMs)
+	startTimeMs, endTimeMs, ok := normalizeContinuousContractRange(startTimeMs, endTimeMs)
+	if !ok {
+		return nil, nil
 	}
 
 	symbol = NormalizeFuturesSymbol(symbol)
@@ -133,21 +129,20 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 		return nil, stepErr
 	}
 
-	bounds, boundsErr := data.QueryKlineCacheBounds(symbol, interval)
-	if boundsErr != nil {
-		log.Printf("[Klines] cache bounds query failed for %s %s: %v", symbol, interval, boundsErr)
-	} else if bounds.HasData {
-		log.Printf("[Klines] cache bounds %s %s: count=%d min=%d max=%d request=[%d..%d]",
+	bounds := queryContinuousContractCacheBounds(symbol, interval, startTimeMs, endTimeMs)
+	if bounds.HasData {
+		log.Printf("[Klines] continuous cache bounds %s %s: count=%d min=%d max=%d request=[%d..%d]",
 			symbol, interval, bounds.Count, bounds.MinTime, bounds.MaxTime, startTimeMs, endTimeMs)
 	}
 
-	log.Printf("[Klines] loading SQLite: %s %s [%d .. %d]", symbol, interval, startTimeMs, endTimeMs)
-	dbKlines, err := data.LoadKlines(symbol, interval, startTimeMs, endTimeMs)
+	log.Printf("[Klines] loading SQLite (continuous): %s %s [%d .. %d]", symbol, interval, startTimeMs, endTimeMs)
+	dbCandles, err := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs)
 	if err != nil {
-		log.Printf("[Klines] cache read failed for %s %s: %v", symbol, interval, err)
-		dbKlines = nil
+		log.Printf("[Klines] continuous cache read failed for %s %s: %v", symbol, interval, err)
+		dbCandles = nil
 	}
-	log.Printf("[Klines] SQLite returned %d bars for requested range", len(dbKlines))
+	dbKlines := candlesToData(dbCandles)
+	log.Printf("[Klines] SQLite returned %d stitched bars for requested range", len(dbKlines))
 
 	gaps := detectKlineGaps(dbKlines, startTimeMs, endTimeMs, bounds, stepMs)
 	if len(gaps) == 0 {
@@ -162,52 +157,77 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 	for i, gap := range gaps {
 		log.Printf("[Klines] gap %d/%d: %s %s [%d .. %d]", i+1, len(gaps), symbol, interval, gap.start, gap.end)
 
+		segments := splitRangeAtGenesis(gap.start, gap.end)
 		var chunk []Candle
 		apiOK := false
-		if b.client != nil {
-			var fetchErr error
-			chunk, fetchErr = b.fetchHistoricalKlinesFromAPI(symbol, interval, gap.start, gap.end)
-			if fetchErr != nil {
-				log.Printf("[Warning] API failed for gap %d-%d. Falling back to synthetic klines. (%v)",
-					gap.start, gap.end, fetchErr)
-			} else {
-				apiOK = true
-			}
-		} else {
-			log.Printf("[Warning] API failed for gap %d-%d. Falling back to synthetic klines. (futures client not configured)",
-				gap.start, gap.end)
-		}
 
-		if !apiOK {
-			seed, hasSeed := seedCandleForGap(merged, fetched, gap.start)
-			chunk = synthesizeForwardFillGap(gap, stepMs, seed, hasSeed)
+		for _, seg := range segments {
+			storageSym := storageSymbolForSegment(symbol, seg)
+			market := "futures"
+			if seg.spotStorage {
+				market = "spot"
+			}
+			log.Printf("[Klines] gap segment %s %s %s [%d .. %d]", market, storageSym, interval, seg.start, seg.end)
+
+			var segChunk []Candle
+			segOK := false
+			if seg.spotStorage || b.client != nil {
+				var fetchErr error
+				segChunk, fetchErr = b.fetchGapSegment(symbol, interval, seg)
+				if fetchErr != nil {
+					if seg.spotStorage {
+						log.Printf("[Warning] spot API failed (api.binance.com) for %s %s gap [%d..%d]: %v",
+							symbol, interval, seg.start, seg.end, fetchErr)
+					} else {
+						log.Printf("[Warning] %s API failed for gap segment [%d..%d]: %v", market, seg.start, seg.end, fetchErr)
+					}
+				} else {
+					segOK = true
+				}
+			} else {
+				log.Printf("[Warning] futures client not configured for gap segment [%d..%d]", seg.start, seg.end)
+			}
+
+			if !segOK {
+				seed, hasSeed := seedCandleForGap(merged, append(fetched, chunk...), seg.start)
+				segChunk = synthesizeForwardFillGap(klineTimeRange{start: seg.start, end: seg.end}, stepMs, seed, hasSeed)
+			}
+
+			if len(segChunk) == 0 {
+				log.Printf("[Warning] API returned exactly 0 bars for %s %s gap [%d..%d]. Ignoring.", market, interval, seg.start, seg.end)
+				continue
+			}
+
+			if segOK {
+				if saveErr := data.SaveKlines(storageSym, interval, candlesToData(segChunk)); saveErr != nil {
+					log.Printf("[Klines] cache save failed for %s %s: %v", storageSym, interval, saveErr)
+				} else {
+					log.Printf("[Klines] cached %d %s bars for %s %s", len(segChunk), market, storageSym, interval)
+				}
+			} else {
+				log.Printf("[Klines] synthesized %d forward-fill bars for %s segment [%d .. %d]", len(segChunk), market, seg.start, seg.end)
+			}
+
+			chunk = append(chunk, segChunk...)
+			apiOK = apiOK || segOK
 		}
 
 		if len(chunk) == 0 {
 			continue
 		}
 
-		if apiOK {
-			fetched = append(fetched, chunk...)
-			if saveErr := data.SaveKlines(symbol, interval, candlesToData(chunk)); saveErr != nil {
-				log.Printf("[Klines] cache save failed for %s %s: %v", symbol, interval, saveErr)
-			} else {
-				log.Printf("[Klines] cached %d bars from gap fill for %s %s", len(chunk), symbol, interval)
-			}
-		} else {
-			fetched = append(fetched, chunk...)
-			log.Printf("[Klines] synthesized %d forward-fill bars for gap [%d .. %d]", len(chunk), gap.start, gap.end)
-		}
+		chunk = dedupeCandlesByOpenTime(chunk)
+		fetched = append(fetched, chunk...)
 		merged = mergeDataAndExchangeCandles(candlesToData(merged), chunk)
 	}
 
 	if len(fetched) > 0 {
-		reloaded, reloadErr := data.LoadKlines(symbol, interval, startTimeMs, endTimeMs)
+		reloaded, reloadErr := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs)
 		if reloadErr != nil {
-			log.Printf("[Klines] cache reload failed for %s %s: %v", symbol, interval, reloadErr)
+			log.Printf("[Klines] continuous cache reload failed for %s %s: %v", symbol, interval, reloadErr)
 		} else {
-			dbKlines = reloaded
-			log.Printf("[Klines] reloaded %d bars from SQLite after gap fill", len(dbKlines))
+			dbKlines = candlesToData(reloaded)
+			log.Printf("[Klines] reloaded %d stitched bars from SQLite after gap fill", len(dbKlines))
 			merged = mergeDataAndExchangeCandles(dbKlines, fetched)
 		}
 	}

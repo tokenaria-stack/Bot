@@ -59,6 +59,40 @@ func TestBuildChartSeriesTrimmed(t *testing.T) {
 	}
 }
 
+func TestBuildNavigatorsFromSeries(t *testing.T) {
+	t.Parallel()
+
+	klines := make([]exchange.Kline, 500)
+	base := int64(1_700_000_000_000)
+	for i := range klines {
+		price := 50000.0 + float64(i)
+		klines[i] = exchange.Kline{
+			OpenTime: base + int64(i)*60_000,
+			Open:     price,
+			High:     price + 10,
+			Low:      price - 10,
+			Close:    price + 5,
+			Volume:   100,
+		}
+	}
+
+	candles, oscillators := buildChartSeriesTrimmed(klines, 100, strategy.RSXLookbackDefault)
+	if len(candles) == 0 {
+		t.Fatal("expected trimmed oscillators")
+	}
+
+	panes := defaultLiveNavigatorPanes()
+	nav := buildNavigatorsFromSeries(klines, oscillators, 100, "15m", panes)
+	if nav == nil {
+		t.Fatal("expected navigators map")
+	}
+	priceNav, ok := nav["price"]
+	if !ok {
+		t.Fatal("expected price navigator key")
+	}
+	_ = priceNav // line count depends on pivot geometry in synthetic data
+}
+
 func TestHistoryWarmupTrim(t *testing.T) {
 	t.Parallel()
 

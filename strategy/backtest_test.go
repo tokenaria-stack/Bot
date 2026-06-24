@@ -57,6 +57,21 @@ func TestBacktestPadStartMs(t *testing.T) {
 	}
 }
 
+func TestBacktestPadStartMs_AllowsPreGenesis(t *testing.T) {
+	t.Parallel()
+
+	start := exchange.BinanceFuturesGenesisMs + 10*24*60*60*1000
+	end := start + 30*24*60*60*1000
+
+	padded, ok := PadBacktestStartMs("1d", start, end, 10)
+	if !ok {
+		t.Fatal("expected padding")
+	}
+	if padded >= exchange.BinanceFuturesGenesisMs {
+		t.Fatalf("padded start %d should be before futures genesis for continuous contract", padded)
+	}
+}
+
 func TestBacktestPadStartDays(t *testing.T) {
 	t.Parallel()
 

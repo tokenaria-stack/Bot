@@ -2,9 +2,82 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июнь 2026):** Layer 1 LOCKED + **Layer 2 WIRED** + **Layer 3 SCALPER BRAIN** + **Paper/Sandbox** + **Dashboard Terminal** + **Dynamic Thresholds** + **Signal Matrix Toggles** + **Backtest Engine** + **SQLite Kline Cache (WAL)** + **Binance Vision Bulk Downloader (futures)** + **Dashboard Frontend Stable Architecture** (Live/Backtest isolation, Safe Mode patching, WS thread-safe broadcast) + **LuxAlgo Trendlines Navigator** (multi-pane, index-based internal math + time DTO export, **full 1:1 chart export**). **Mainnet** USD-M Futures. Dashboard: Live Chart | **Statistics** | **Backtester**. **Read-Only** → virtual paper; **Sandbox** (`HYPER_SCALP_TEST=true`) — vetoes bypassed.
+> **Снэпшот MEMORY (июнь 2026):** Layer 1 LOCKED + **Layer 2 WIRED** + **Layer 3 SCALPER BRAIN** + **Paper/Sandbox** + **Dashboard Terminal** + **Dynamic Thresholds** + **Signal Matrix Toggles** + **Backtest Engine** + **SQLite Kline Cache (WAL)** + **Binance Vision Bulk Downloader (futures)** + **Dashboard Frontend Stable Architecture** (Live/Backtest isolation, Safe Mode patching, WS thread-safe broadcast, **chartInitialized HTTP-first gate**, **no live prefetch/fitContent**) + **LuxAlgo Trendlines Navigator** (multi-pane, index-based internal math + time DTO export, **full 1:1 chart export**). **Mainnet** USD-M Futures. Dashboard: Live Chart | **Statistics** | **Backtester**. **Read-Only** → virtual paper; **Sandbox** (`HYPER_SCALP_TEST=true`) — vetoes bypassed.
 
 ## Changelog / Статус (июнь 2026)
+
+### [Live Chart Stability + History Genesis — Phase 5.36–5.41 — сессия]
+
+#### [Phase 5.36 — Удаление fitContent и авто-префетча (frontend) — ✅]
+**Проблема:** принудительный `fitContent` и фоновый `scheduleHistoryPrefetch` вызывали DDoS `/api/history`, визуальные глитчи и скачки viewport.
+
+**Fix (`web/app.js`):**
+| Изменение | Детали |
+|-----------|--------|
+| **`renderState`** | Убран автоматический `fitProfessionalChart(liveChartData)`; при `loadedCandles.length > 0` — только `applySeriesData()` + `forceSyncChartTimeScales()` |
+| **Prefetch** | Удалены `scheduleHistoryPrefetch()`, `historyPrefetchTimer`, `isInitialPrefetch` и все вызовы |
+| **`maybeLoadHistory`** | Только ручной скролл (`range.from < 10`); после merge — `applySeriesData()` + сдвиг logical range; **без** `fitContent` / `forceSyncChartTimeScales` |
+| **`fitProfessionalChart`** | Функция **оставлена** — используется в backtest full reload |
+
+**Константы:** `LIVE_STATE_CANDLE_LIMIT = 3000` (только initial `/api/state`); `LIVE_HISTORY_CHUNK_LIMIT = 5000` (scroll pagination, без cap 3000).
+
+#### [Phase 5.37 — Thundering Herd gap-fill (backend) — ✅]
+**Проблема:** параллельные HTTP-запросы до завершения первого gap fill спавнили десятки горутин `FetchHistoricalKlines`.
+
+**Fix (`server/webserver.go`):**
+```go
+var activeGapFills sync.Map // key: symbol_interval
+```
+`scheduleKlineGapFill` — `LoadOrStore(taskKey)` перед `go func()`; `defer activeGapFills.Delete(taskKey)` в горутине.
+
+#### [Phase 5.38 — Data Lock при setData (frontend) — ✅]
+**Проблема:** Lightweight Charts синхронно вызывает `onVisibleLogicalRangeChanged` во время `setData` → фантомные запросы истории.
+
+**Fix (`applySeriesData` в `web/app.js`):**
+- `isUpdatingData = true` на весь блок `setData`
+- `finally`: `setTimeout(() => { isUpdatingData = false; }, 0)` — флаг снимается после внутренних microtasks библиотеки
+- `attachProfessionalChartSync` — guard `if (isUpdatingData || !range) return`
+
+#### [Phase 5.39 — WS/HTTP race + микро-массив guard (frontend) — ✅]
+**Проблема:** при смене ТФ `clearChartData()` очищал график, но WS-тики через `applyPriceBar` → `setData([1 bar])` рисовали «растянутую» свечу до прихода `/api/state`.
+
+**Fix (`web/app.js`):**
+
+| Механизм | Поведение |
+|----------|-----------|
+| **`handleWSMessage`** | `if (!chartInitialized) return` после `shouldPaintLiveChart()`; **удалён** `chartInitialized = true` перед `applyPriceBar` |
+| **`renderState`** | `chartInitialized = true` **только после** `applySeriesData()` + `forceSyncChartTimeScales()` |
+| **`clearChartData` / `switchLiveTimeframe`** | `chartInitialized = false` — WS «глухнет» до нового `renderState` |
+| **Микро-массив guard** | Если `candles.length < 20 && hasMore` → `setTimeout(loadDashboard, 500)` + `return` (не кормить график live-буфером во время gap fill) |
+
+**Правило:** HTTP `/api/state` — единственный источник «исторического фундамента»; WS рисует только **после** инициализации. Буфера WS-очереди **нет** — тики применяются синхронно в `onmessage`.
+
+**Stale HTTP guard:** `currentLiveRequestId` в `loadDashboard()` — игнор устаревших ответов при быстрых кликах по ТФ.
+
+#### [Phase 5.40 — Отмена warmup-trim на абсолютном старте истории (backend) — ✅]
+**Проблема:** `indicatorWarmupBars = 100` на старших TF (1W, 1M) отрезал годы ценовых свечей (`candles[trim:]`).
+
+**Fix (`server/webserver.go`):**
+```go
+func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
+    if gotBars < requestedBars+warmupTrim { return 0 } // уперлись в genesis
+    return warmupTrim
+}
+```
+Применяется в: `buildMarketState`, `handleHistory`, `handleHistoryChunk` (SQLite + REST paths).
+
+**`buildChartSeriesTrimmed`:** при `trim <= 0` или `len(candles) <= trim` — возвращает **все** свечи и **все** осцилляторы (раньше oscillators обнулялись). Индикаторы на первых барах — нулевые/сырые значения Falcon (без паники).
+
+#### [Phase 5.41 — Binance Futures Genesis clamp (backtest) — ✅]
+**`exchange/klines.go`:**
+```go
+const BinanceFuturesGenesisMs int64 = 1567900800000 // 2019-09-08 UTC
+func ClampFuturesHistoryStartMs(startMs int64) int64
+```
+- `handleBacktestRun` — `effectiveStartMs = ClampFuturesHistoryStartMs(startMs)` до `FetchHistoricalKlines`
+- `PadBacktestStartMs` — padding не уходит раньше genesis
+
+**Правило:** на абсолютном старте истории **не обрезать** price candles ради warmup; на промежуточных чанках trim=100 сохраняется для выравнивания осцилляторов.
 
 ### [Data Layer + Navigator Export — Phase 5.31–5.35 — сессия]
 
@@ -275,7 +348,10 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 
 #### [Chart UX — `web/app.js`]
 - Sync time scale + crosshair **внутри одного контекста** (Live: 3 панели; Backtest: 3 панели) — **не между Live и Backtest**
-- **Data Lock** (`isUpdatingData`); poll → `.update()` only
+- **Data Lock** (`isUpdatingData`); `applySeriesData` — `setTimeout(0)` defer; poll → `.update()` only
+- **`chartInitialized` gate:** WS-тики игнорируются до успешного `renderState` (HTTP-first); сброс в `clearChartData`
+- **Нет live prefetch** — история только по ручному скроллу (`maybeLoadHistory`, `range.from < 10`)
+- **Нет auto `fitContent`** на live — только `forceSyncChartTimeScales`; `fitProfessionalChart` — backtest only
 - `minBarSpacing: 0.001`
 
 #### [Trade markers — price chart]
@@ -370,7 +446,9 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 - **Mainnet:** Binance USD-M Futures (`https://fapi.binance.com`, `wss://fstream.binance.com`).
 - **`/api/state`**, **`/api/history`**, **`POST /api/settings/thresholds`**, **`POST /api/settings/matrix`**, **`GET/POST /api/settings/indicators`**, **`GET/POST /api/settings/risk`**, **`POST /api/backtest/run`**, **`/ws`**.
 - **SQLite cache:** `history.db` — klines для backtest (см. `data/history_db.go`).
-- `/api/history` lazy load + `indicatorWarmupBars = 100` для бесшовных осцилляторов.
+- `/api/history` lazy load + `indicatorWarmupBars = 100` для бесшовных осцилляторов (**trim отменяется** на абсолютном старте истории через `historyWarmupTrim`).
+- **`activeGapFills sync.Map`** — дедупликация фоновых gap-fill горутин per `symbol_interval`.
+- **`BinanceFuturesGenesisMs`** (`exchange/klines.go`) — floor start date для backtest (2019-09-08).
 - Фильтрация `Close == 0`, NaN/Inf; dedupe по `time`; `endTime` sec→ms для Binance.
 - **Order Flow:** `domain.TickBuffer` (100k aggTrades), `LiquidationBuffer` (1k), WS `@aggTrade` + `@forceOrder`, `SynthesizeMicroCandles` для tick/second TF.
 - **RSX chart series:** `BuildRSXChart` → `ChartOscillator{color, marker, rsx}`; pivot markers + classic divergence adapter.
@@ -399,6 +477,7 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 | **localStorage** | `dashboard_rsx_settings_live` / `dashboard_rsx_settings_backtest` (ключи `LS_RSX_SETTINGS_LIVE_KEY` / `LS_RSX_SETTINGS_BACKTEST_KEY`) |
 | **RSX UI** | Live: `#rsx-wrap`; Backtest: `#bt-rsx-wrap` — floating/fixed меню независимы |
 | **TF toolbar** | `getActiveTf()` / `switchTimeframe(tf, event)` маршрутизирует в `switchLiveTimeframe` или `switchBacktestTimeframe` по активной вкладке |
+| **Live init gate** | `chartInitialized` — WS блокируется до `renderState`; сброс в `clearChartData` при смене TF |
 | **Tab switch → Live** | При возврате на Live: `pushRsxSettingsToServer(liveRsxSettings)` — восстановление live-настроек на сервере (сервер хранит RSX как singleton) |
 | **Tab switch → Backtest** | Backtest использует свои сохранённые настройки; перед run/pipeline — push backtest RSX на сервер |
 
@@ -548,6 +627,9 @@ gorilla/websocket: **один writer** на connection; нарушение → p
 10. Восстановление жёлтой SL line series на графике (удалена намеренно)
 11. Downsampling / truncation `chartData` в backtest API (`backtestChartStep`, `backtestMaxChartPoints`) — ломает navigator index↔candle alignment
 12. Смешивание spot и futures klines в `historical_klines` для одного symbol
+13. **`chartInitialized = true` в `handleWSMessage`** — WS не должен рисовать до HTTP `renderState`
+14. **`scheduleHistoryPrefetch` / auto `fitContent` на live** — вызывают DDoS и viewport glitches
+15. **Warmup trim price candles** на genesis chunk (`candles[trim:]` когда `len < limit+warmup`)
 
 ---
 

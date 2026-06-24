@@ -57,15 +57,11 @@ func BacktestPadStartDays(binanceInterval string, have, need int) int {
 // PadBacktestStartMs shifts start backward when coarse intervals lack enough candles.
 // Returns new start ms and whether padding was applied.
 func PadBacktestStartMs(binanceInterval string, startMs, endMs int64, candleCount int) (int64, bool) {
-	startMs = exchange.ClampFuturesHistoryStartMs(startMs)
 	padDays := BacktestPadStartDays(binanceInterval, candleCount, backtestMinBars)
 	if padDays <= 0 {
 		return startMs, false
 	}
 	newStart := startMs - int64(padDays)*24*time.Hour.Milliseconds()
-	if newStart < exchange.BinanceFuturesGenesisMs {
-		newStart = exchange.BinanceFuturesGenesisMs
-	}
 	if newStart < 0 {
 		newStart = 0
 	}

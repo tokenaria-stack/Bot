@@ -49,6 +49,7 @@ const SCORING_MATRIX_LABELS = [
 ];
 
 const LS_NAV_SETTINGS_PREFIX = 'dashboard_nav_settings_';
+const LS_NAV_SETTINGS_LIVE_PREFIX = 'dashboard_nav_settings_live_';
 const LS_NAV_POPUP_POS_PREFIX = 'dashboard_nav_popup_pos_';
 const LS_NAV_DEFAULTS_PREFIX = 'nav_defaults_';
 
@@ -100,9 +101,14 @@ function defaultNavigatorPaneSettings(pane = 'price') {
   };
 }
 
-function loadNavigatorPaneSettings(pane) {
+function navigatorSettingsStorageKey(pane, context = 'backtest') {
+  const prefix = context === 'live' ? LS_NAV_SETTINGS_LIVE_PREFIX : LS_NAV_SETTINGS_PREFIX;
+  return `${prefix}${pane}`;
+}
+
+function loadNavigatorPaneSettings(pane, context = 'backtest') {
   try {
-    const raw = localStorage.getItem(`${LS_NAV_SETTINGS_PREFIX}${pane}`);
+    const raw = localStorage.getItem(navigatorSettingsStorageKey(pane, context));
     if (raw) return { ...defaultNavigatorPaneSettings(pane), ...JSON.parse(raw) };
   } catch {
     /* defaults */
@@ -110,8 +116,21 @@ function loadNavigatorPaneSettings(pane) {
   return defaultNavigatorPaneSettings(pane);
 }
 
-function saveNavigatorPaneSettings(pane, settings) {
-  localStorage.setItem(`${LS_NAV_SETTINGS_PREFIX}${pane}`, JSON.stringify(settings));
+function saveNavigatorPaneSettings(pane, settings, context = 'backtest') {
+  localStorage.setItem(navigatorSettingsStorageKey(pane, context), JSON.stringify(settings));
+}
+
+/** Navigator UI context: 'live' | 'backtest' (active dashboard tab). */
+function getNavigatorContext() {
+  return isBacktestTabActive() ? 'backtest' : 'live';
+}
+
+function getNavigatorChartData(context = getNavigatorContext()) {
+  return context === 'backtest' ? backtestChartData : liveChartData;
+}
+
+function getNavigatorSettingsPrefix(context = getNavigatorContext()) {
+  return context === 'live' ? LS_NAV_SETTINGS_LIVE_PREFIX : LS_NAV_SETTINGS_PREFIX;
 }
 
 function loadNavigatorDefaults(pane) {
@@ -220,14 +239,14 @@ function getNavigatorPopup(pane) {
     || document.querySelector(`.navigator-popup[data-pane="${pane}"]`);
 }
 
-function getNavigatorPaneSettingsFromUI(pane) {
+function getNavigatorPaneSettingsFromUI(pane, context = getNavigatorContext()) {
   const safePane = pane || 'price';
   try {
     const popup = getNavigatorPopup(safePane);
-    if (popup) {
+    if (popup && !popup.hidden) {
       return normalizeNavigatorPaneSettings(readNavigatorSettingsFromPopup(popup, safePane), safePane);
     }
-    return normalizeNavigatorPaneSettings(loadNavigatorPaneSettings(safePane), safePane);
+    return normalizeNavigatorPaneSettings(loadNavigatorPaneSettings(safePane, context), safePane);
   } catch (err) {
     console.warn(`getNavigatorPaneSettingsFromUI(${safePane}) failed:`, err);
     return defaultNavigatorPaneSettings(safePane);
@@ -238,8 +257,8 @@ function navigatorSourceForPane(pane) {
   return NAVIGATOR_SOURCE_MAP[pane] || 'Price';
 }
 
-function isNavigatorPaneEnabled(pane) {
-  const nav = getNavigatorSettingsFromUI(pane);
+function isNavigatorPaneEnabled(pane, context = getNavigatorContext()) {
+  const nav = getNavigatorSettingsFromUI(pane, context);
   return nav.enabled === true;
 }
 
@@ -251,12 +270,12 @@ function navigatorPaneEnabledFlag(pane, priceUI) {
 }
 
 /** API-shaped navigator settings for backend (always returns an object, never null). */
-function getNavigatorSettingsFromUI(pane) {
+function getNavigatorSettingsFromUI(pane, context = getNavigatorContext()) {
   const safePane = pane || 'price';
   const source = NAVIGATOR_SOURCE_MAP[safePane] || 'Price';
   try {
-    const ui = getNavigatorPaneSettingsFromUI(safePane);
-    const priceUI = safePane === 'price' ? ui : getNavigatorPaneSettingsFromUI('price');
+    const ui = getNavigatorPaneSettingsFromUI(safePane, context);
+    const priceUI = safePane === 'price' ? ui : getNavigatorPaneSettingsFromUI('price', context);
     return navigatorSettingsToAPI(
       ui,
       source,
@@ -272,12 +291,53 @@ function getNavigatorSettingsFromUI(pane) {
   }
 }
 
-function buildNavigatorPayloadFromUI() {
+function buildNavigatorPayloadFromUI(context = getNavigatorContext()) {
   return {
-    price: getNavigatorSettingsFromUI('price'),
-    rsx: getNavigatorSettingsFromUI('rsx'),
-    wozduh: getNavigatorSettingsFromUI('wozduh'),
+    price: getNavigatorSettingsFromUI('price', context),
+    rsx: getNavigatorSettingsFromUI('rsx', context),
+    wozduh: getNavigatorSettingsFromUI('wozduh', context),
   };
+}
+
+async function syncLiveNavigatorSettingsToServer() {
+  const navigators = buildNavigatorPayloadFromUI('live');
+  const resp = await fetch('/api/settings/navigators', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ navigators }),
+  });
+  if (!resp.ok) {
+    throw new Error(`navigator settings sync failed: ${resp.status}`);
+  }
+  return resp.json().catch(() => ({}));
+}
+
+let navigatorAutoUpdateTimer = null;
+
+async function triggerNavigatorAutoUpdate() {
+  const context = getNavigatorContext();
+  if (context === 'live') {
+    await syncLiveNavigatorSettingsToServer();
+    await loadDashboard();
+    return;
+  }
+  await flushIndicatorSettingsAutoUpdate();
+}
+
+function scheduleNavigatorAutoUpdate() {
+  clearTimeout(navigatorAutoUpdateTimer);
+  navigatorAutoUpdateTimer = setTimeout(() => {
+    navigatorAutoUpdateTimer = null;
+    triggerNavigatorAutoUpdate().catch((err) => {
+      console.error('[UI] Navigator auto-update failed:', err);
+    });
+  }, 500);
+}
+
+function flushNavigatorAutoUpdate() {
+  clearTimeout(navigatorAutoUpdateTimer);
+  navigatorAutoUpdateTimer = null;
+  return triggerNavigatorAutoUpdate();
 }
 
 function getMatrixSettingsFromUI() {
@@ -372,13 +432,18 @@ function readMatrixCheckbox(key) {
 
 function injectBacktestPayloadFromPaneUI(pane) {
   const safePane = pane || 'price';
+  const context = getNavigatorContext();
   const popup = getNavigatorPopup(safePane);
   if (popup) {
     const uiSettings = normalizeNavigatorPaneSettings(
       readNavigatorSettingsFromPopup(popup, safePane),
       safePane,
     );
-    saveNavigatorPaneSettings(safePane, uiSettings);
+    saveNavigatorPaneSettings(safePane, uiSettings, context);
+  }
+
+  if (context === 'live') {
+    return buildNavigatorPayloadFromUI('live');
   }
 
   const finalPayload = buildFinalBacktestPayload();
@@ -409,15 +474,16 @@ function initNavigatorPopupOkHandlers() {
     try {
       injectBacktestPayloadFromPaneUI(pane);
 
-      if (pane === 'price') {
-        renderChartLegends('backtest');
-        renderChartLegends('live');
-      }
+      renderChartLegends('backtest');
+      renderChartLegends('live');
 
       popup.hidden = true;
       if (openNavigatorPopupEl === popup) openNavigatorPopupEl = null;
 
-      flushIndicatorSettingsAutoUpdate().catch((err) => {
+      if (getNavigatorContext() === 'backtest') {
+        setBacktestLoading(true);
+      }
+      flushNavigatorAutoUpdate().catch((err) => {
         console.error('[UI] Navigator Ok pipeline failed:', err);
       });
     } catch (err) {
@@ -513,9 +579,9 @@ function toggleLegendVisibility(context, pane, legendId) {
   } else if (legendId === 'trendlines') {
     const plugin = getNavigatorPluginForPane(chartData, pane);
     plugin?.setLinesVisible(visible);
-    const paneSettings = loadNavigatorPaneSettings(pane);
+    const paneSettings = loadNavigatorPaneSettings(pane, context);
     paneSettings.linesVisible = visible;
-    saveNavigatorPaneSettings(pane, paneSettings);
+    saveNavigatorPaneSettings(pane, paneSettings, context);
   } else if (legendId === 'trades') {
     chartData.tradeMarkerPlugin?.setVisible(visible);
   }
@@ -624,7 +690,7 @@ function applyNavigatorSettingsToPopup(popup, settings) {
 
 function readNavigatorSettingsFromPopup(popup, pane) {
   if (!popup) return defaultNavigatorPaneSettings(pane);
-  const base = loadNavigatorPaneSettings(pane);
+  const base = loadNavigatorPaneSettings(pane, getNavigatorContext());
   const chk = (field, fallback = false) => {
     const val = getNavPopupField(popup, field, 'checkbox');
     return val == null ? fallback : val;
@@ -766,7 +832,7 @@ function openNavigatorPopup(pane, anchorEl) {
     popup.innerHTML = buildNavigatorPopupHTML(pane);
     bindNavigatorPopupChrome(popup, pane);
   }
-  applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane));
+  applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane, getNavigatorContext()));
 
   const saved = loadNavigatorPopupPos(pane);
   if (saved?.x != null && saved?.y != null) {
@@ -835,12 +901,12 @@ function renderChartLegends(context) {
       legendEl.appendChild(renderLegendItem(context, pane, def, false));
     });
 
-    // Trendlines legend + gear always visible in backtest (never hide based on enabled/target flags).
-    if (context === 'backtest' && NAVIGATOR_PANES.includes(pane)) {
+    // Trendlines legend + gear on live and backtest (never hide based on enabled/target flags).
+    if (NAVIGATOR_PANES.includes(pane)) {
       const tlDef = { id: 'trendlines', label: 'Trendlines', kind: 'trendlines' };
-      const tlState = loadNavigatorPaneSettings(pane);
+      const tlState = loadNavigatorPaneSettings(pane, context);
       chartLegendState[context][pane].trendlines = { visible: tlState.linesVisible !== false };
-      legendEl.appendChild(renderLegendItem(context, pane, tlDef, true));
+      legendEl.appendChild(renderLegendItem(context, pane, tlDef, false));
     }
 
     if (context === 'backtest' && pane === 'price') {
@@ -854,7 +920,7 @@ function initChartLegends() {
   initNavigatorPopupOkHandlers();
   ['price', 'rsx', 'wozduh'].forEach((pane) => {
     const popup = ensureNavigatorPopup(pane);
-    applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane));
+    applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane, 'backtest'));
   });
   renderChartLegends('live');
   renderChartLegends('backtest');
@@ -1254,6 +1320,9 @@ const LOGICAL_RANGE_EPS = 0.01;
 let backtestLoadedCandles = [];
 let backtestNavigatorChartLines = [];
 let backtestNavigatorChartMarkers = [];
+let liveNavigatorResult = null;
+let liveNavigatorChartLines = [];
+let liveNavigatorChartMarkers = [];
 let backtestTf = '15m';
 let equityChart;
 let equitySeries;
@@ -1539,7 +1608,7 @@ function oscContextFromWrap(wrap) {
 }
 
 function getActiveUiContext() {
-  return isBacktestTabActive() ? 'backtest' : 'live';
+  return getNavigatorContext();
 }
 
 function getRsxSettingsState(context = 'live') {
@@ -1890,18 +1959,21 @@ function initIndicatorSettingsAutoUpdate() {
     if (navPopup) {
       const pane = navPopup.dataset.pane || navPopup.id?.replace(/^popup-/, '') || '';
       if (!pane) return;
+      const context = getNavigatorContext();
       try {
         const settings = normalizeNavigatorPaneSettings(
           readNavigatorSettingsFromPopup(navPopup, pane),
           pane,
         );
-        saveNavigatorPaneSettings(pane, settings);
+        saveNavigatorPaneSettings(pane, settings, context);
         injectBacktestPayloadFromPaneUI(pane);
       } catch (err) {
         console.warn('[UI] Navigator settings persist failed:', err);
       }
-      setBacktestLoading(true);
-      scheduleIndicatorSettingsAutoUpdate();
+      if (context === 'backtest') {
+        setBacktestLoading(true);
+      }
+      scheduleNavigatorAutoUpdate();
       return;
     }
 
@@ -2641,6 +2713,7 @@ function initCharts() {
 
   liveChartData = initProfessionalChart('live-chart-container', {
     selectors: LIVE_CHART_SELECTORS,
+    navigatorPlugin: true,
   }) || {};
   if (!liveChartData.chart) return false;
 
@@ -3391,6 +3464,10 @@ function cancelBacktestAutoUpdatePipeline() {
     clearTimeout(settingsUpdateTimeout);
     settingsUpdateTimeout = null;
   }
+  if (navigatorAutoUpdateTimer) {
+    clearTimeout(navigatorAutoUpdateTimer);
+    navigatorAutoUpdateTimer = null;
+  }
   window.__isSettingsUpdating = false;
 }
 
@@ -3560,6 +3637,9 @@ function clearChartData() {
   crosshairSyncOrigin = null;
   loadedCandles = [];
   loadedOsc = [];
+  liveNavigatorResult = null;
+  liveNavigatorChartLines = [];
+  liveNavigatorChartMarkers = [];
   sessionTrades = [];
   tradeMarkers = [];
   spikeMarkers = [];
@@ -3581,6 +3661,7 @@ function clearChartData() {
   });
   if (liveChartData.wozduxSeries.rsiVolSlow) liveChartData.wozduxSeries.rsiVolSlow.setMarkers([]);
   liveChartData.candleSeries.setMarkers([]);
+  clearNavigatorOverlays(liveChartData);
   clearFibLines();
   resetRuler();
   updateBufferingOverlay();
@@ -4465,7 +4546,7 @@ function filterNavigatorLinesByTerm(lines, pane) {
 }
 
 function filterNavigatorMarkersByHHLL(markers, pane) {
-  const mode = loadNavigatorPaneSettings(pane).hhll || 'None';
+  const mode = loadNavigatorPaneSettings(pane, getNavigatorContext()).hhll || 'None';
   if (mode === 'None') return [];
   if (mode === 'Only') {
     return (markers || []).filter((m) => {
@@ -4702,9 +4783,10 @@ function clearNavigatorOverlays(chartData = backtestChartData) {
 function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, options = {}) {
   if (!chartData) return [];
 
+  const context = options.context || (chartData === liveChartData ? 'live' : 'backtest');
   const plugin = getNavigatorPluginForPane(chartData, pane);
-  const paneEnabled = isNavigatorPaneEnabled(pane);
-  const settings = getNavigatorPaneSettingsFromUI(pane);
+  const paneEnabled = isNavigatorPaneEnabled(pane, context);
+  const settings = getNavigatorPaneSettingsFromUI(pane, context);
   const hasLines = navigatorData?.lines?.length > 0;
   const hasZones = navigatorData?.backgroundZones?.length > 0;
 
@@ -4756,18 +4838,22 @@ function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, opti
 }
 
 function applyNavigatorOverlays(result, candles, chartData = backtestChartData, options = {}) {
+  const context = options.context || (chartData === liveChartData ? 'live' : 'backtest');
   const navigators = resolveNavigatorResults(result);
   const allNavMarkers = [];
 
   NAVIGATOR_PANES.forEach((pane) => {
     const navData = navigators[pane] || null;
-    const markers = applyNavigatorPaneOverlay(pane, navData, candles, chartData, options);
+    const markers = applyNavigatorPaneOverlay(pane, navData, candles, chartData, { ...options, context });
     if (pane === 'price') {
-      if (isNavigatorPaneEnabled('price') && navData?.lines?.length) {
-        backtestNavigatorChartLines = filterNavigatorLinesByTerm(
-          mapNavigatorLinesForChart(navData.lines, candles),
-          pane,
-        );
+      const lines = (isNavigatorPaneEnabled('price', context) && navData?.lines?.length)
+        ? filterNavigatorLinesByTerm(mapNavigatorLinesForChart(navData.lines, candles), pane)
+        : [];
+      if (context === 'live') {
+        liveNavigatorChartLines = lines;
+        liveNavigatorChartMarkers = markers;
+      } else if (isNavigatorPaneEnabled('price', context) && navData?.lines?.length) {
+        backtestNavigatorChartLines = lines;
         backtestNavigatorChartMarkers = markers;
       } else {
         backtestNavigatorChartLines = [];
@@ -5396,6 +5482,14 @@ function applySeriesData() {
       applyOscillatorToChart(liveChartData, loadedOsc);
       spikeMarkers = buildSpikeMarkers(loadedOsc);
       applyTradeMarkers();
+      if (liveNavigatorResult) {
+        applyNavigatorOverlays(
+          { navigators: liveNavigatorResult },
+          loadedCandles,
+          liveChartData,
+          { context: 'live', updateLoadedCandles: false },
+        );
+      }
       updateBufferingOverlay();
     }
   } finally {
@@ -5450,6 +5544,7 @@ function renderState(data) {
   loadedCandles = candles;
   loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators || []), loadedCandles);
   historyHasMore = hasMore;
+  liveNavigatorResult = data.navigators || null;
 
   applySeriesData();
   renderFibZones(data.fibZones);
@@ -5527,8 +5622,18 @@ async function pollLatestState() {
   }
 }
 
+let liveNavigatorSettingsSynced = false;
+
 async function loadDashboard() {
   const reqId = ++currentLiveRequestId;
+  if (!liveNavigatorSettingsSynced && shouldPaintLiveChart()) {
+    liveNavigatorSettingsSynced = true;
+    try {
+      await syncLiveNavigatorSettingsToServer();
+    } catch (err) {
+      console.warn('live navigator settings sync:', err);
+    }
+  }
   try {
     const { warmingUp, data } = await fetchState();
     if (reqId !== currentLiveRequestId) return;
