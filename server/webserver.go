@@ -25,16 +25,21 @@ import (
 )
 
 const (
-	defaultTimeframe      = "1m"
-	maxCandlesInState     = 500
-	historyFetchLimit     = 1000
-	indicatorWarmupBars   = 100
-	orderFlowWarmupBars   = 0
-	binanceMaxKlinesLimit = 1000
-	defaultStaticDir      = "web"
+	defaultTimeframe        = "1m"
+	maxCandlesInState       = 500 // legacy default; overridden by limit query param
+	defaultStateCandleLimit = 3000
+	maxStateCandleLimit     = 10000
+	maxBacktestChunkLimit   = 50000
+	historyFetchLimit       = 1000
+	indicatorWarmupBars     = 100
+	orderFlowWarmupBars     = 0
+	binanceMaxKlinesLimit   = 1000
+	defaultStaticDir        = "web"
 )
 
 var errWarmingUp = errors.New("warming_up")
+
+var activeGapFills sync.Map // key: symbol_interval, value: bool
 
 // WSClient wraps a WebSocket connection with a per-connection write mutex.
 // gorilla/websocket permits only one concurrent writer per connection.
@@ -100,6 +105,7 @@ type MarketState struct {
 	Trades           []ChartTrade        `json:"trades,omitempty"`
 	PaperTrading     bool                `json:"paperTrading,omitempty"`
 	SandboxMode      bool                `json:"sandboxMode,omitempty"`
+	HasMore          bool                `json:"hasMore,omitempty"`
 }
 
 // ChartTrade is a virtual or live trade marker for the price chart (time in Unix seconds).
@@ -270,7 +276,7 @@ func ChartCandleFromDomain(c domain.Candle) (ChartCandle, bool) {
 		return ChartCandle{}, false
 	}
 	return ChartCandle{
-		Time:   c.OpenTime / 1000,
+		Time:   exchange.ChartTimeSec(c.OpenTime),
 		Open:   c.Open,
 		High:   c.High,
 		Low:    c.Low,
@@ -425,6 +431,20 @@ func parseRSXLookback(_ *http.Request) int {
 	return strategy.GetRSXSettings().DivLookback
 }
 
+func parseCandleLimit(r *http.Request, defaultLimit, maxLimit int) int {
+	if r == nil {
+		return defaultLimit
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		return defaultLimit
+	}
+	if limit > maxLimit {
+		return maxLimit
+	}
+	return limit
+}
+
 func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -446,7 +466,7 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := d.buildMarketState(spec, parseRSXLookback(r))
+	state, err := d.buildMarketState(spec, parseRSXLookback(r), parseCandleLimit(r, defaultStateCandleLimit, maxStateCandleLimit))
 	if errors.Is(err, errWarmingUp) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -911,9 +931,10 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	}
 
 	rsxLookback := parseRSXLookback(r)
+	candleLimit := parseCandleLimit(r, historyFetchLimit, maxStateCandleLimit)
 
 	if IsOrderFlowTimeframe(spec) {
-		fetchLimit := historyFetchLimit
+		fetchLimit := candleLimit
 		klines := d.loadOrderFlowKlines(spec, endTimeSec, fetchLimit)
 		resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(klines, orderFlowWarmupBars, rsxLookback)
 		resp.HasMore = len(klines) >= historyFetchLimit
@@ -929,27 +950,27 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if d.rest == nil {
-		http.Error(w, "REST client unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	endTimeMs := historyEndTimeToMs(endTimeSec)
-	fetchLimit := historyFetchLimit + indicatorWarmupBars
-	if fetchLimit > binanceMaxKlinesLimit {
-		fetchLimit = binanceMaxKlinesLimit
-	}
-
-	candles, err := d.rest.GetKlinesBefore(d.symbol, spec.BinanceInterval, fetchLimit, endTimeMs)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+	klines := d.loadRESTKlinesFromStore(spec, endTimeMs, candleLimit)
+	if len(klines) == 0 {
+		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
 		return
 	}
 
-	klines := candlesToKlines(candles)
 	resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
-	resp.HasMore = len(klines) >= fetchLimit
+	resp.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, endTimeMs)
 	writeJSON(w, resp)
+}
+
+func parseHistoryChunkLimit(r *http.Request) int {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 {
+		limit = historyFetchLimit
+	}
+	if limit > maxBacktestChunkLimit {
+		limit = maxBacktestChunkLimit
+	}
+	return limit
 }
 
 func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Request) {
@@ -969,13 +990,7 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		interval = r.URL.Query().Get("tf")
 	}
 	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 {
-		limit = historyFetchLimit
-	}
-	if limit > binanceMaxKlinesLimit {
-		limit = binanceMaxKlinesLimit
-	}
+	limit := parseHistoryChunkLimit(r)
 
 	symbol := r.URL.Query().Get("symbol")
 	if symbol == "" {
@@ -1000,11 +1015,6 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if d.rest == nil {
-		http.Error(w, "REST client unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	intervalMs, err := data.IntervalDurationMs(spec.BinanceInterval)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1022,6 +1032,33 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		fetchStartMs = 0
 	}
 
+	rsxLookback := parseRSXLookback(r)
+
+	if err := data.InitDB(); err == nil {
+		dbRows, loadErr := data.LoadKlines(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+		if loadErr == nil && len(dbRows) > 0 {
+			if d.needsAsyncKlineGapFill(dbRows, fetchEndMs, intervalMs, limit) {
+				d.scheduleKlineGapFill(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+			}
+			klines := dataCandlesToKlines(dbRows)
+			chartCandles, oscillators := buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
+			chartData := chartPointsFromSeries(chartCandles, oscillators)
+			hasMore := len(chartCandles) >= limit && fetchStartMs > 0
+			writeJSON(w, historyChunkResponse{
+				ChartData: chartData,
+				HasMore:   hasMore,
+			})
+			return
+		}
+	} else {
+		log.Printf("[HistoryChunk] DB init failed: %v", err)
+	}
+
+	if d.rest == nil {
+		http.Error(w, "REST client unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	candles, err := d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
 	if err != nil {
 		log.Printf("[HistoryChunk] fetch failed: %v", err)
@@ -1030,7 +1067,6 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 	}
 
 	klines := candlesToKlines(candles)
-	rsxLookback := parseRSXLookback(r)
 	chartCandles, oscillators := buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
 	chartData := chartPointsFromSeries(chartCandles, oscillators)
 
@@ -1087,8 +1123,11 @@ func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator)
 	return out
 }
 
-func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int) (*MarketState, error) {
-	klines := d.loadKlines(spec)
+func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, candleLimit int) (*MarketState, error) {
+	if candleLimit <= 0 {
+		candleLimit = defaultStateCandleLimit
+	}
+	klines := d.loadKlines(spec, candleLimit)
 	if (spec.Kind == TFRAMOnly || IsOrderFlowTimeframe(spec)) && len(klines) == 0 {
 		state := &MarketState{
 			Status:       "ready",
@@ -1108,10 +1147,10 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int) 
 		return nil, errWarmingUp
 	}
 
-	windowSize := maxCandlesInState + indicatorWarmupBars
+	windowSize := candleLimit + indicatorWarmupBars
 	trimBars := indicatorWarmupBars
 	if IsOrderFlowTimeframe(spec) {
-		windowSize = maxCandlesInState
+		windowSize = candleLimit
 		trimBars = orderFlowWarmupBars
 	}
 	if len(klines) > windowSize {
@@ -1141,33 +1180,190 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int) 
 		d.enrichFromAnalyst(state, analyst, klines)
 	}
 
+	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" && len(klines) > 0 {
+		state.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, time.Now().UnixMilli())
+	}
+
 	return state, nil
 }
 
-func (d *DashboardServer) loadKlines(spec TimeframeSpec) []exchange.Kline {
+func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int) []exchange.Kline {
+	if limit <= 0 {
+		limit = defaultStateCandleLimit
+	}
 	if IsOrderFlowTimeframe(spec) {
-		return d.loadOrderFlowKlines(spec, 0, maxCandlesInState)
+		return d.loadOrderFlowKlines(spec, 0, limit)
 	}
 	if spec.Kind == TFRAMOnly {
 		return d.ramKlines(spec.ID)
 	}
+	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
+		klines := d.loadRESTKlinesFromStore(spec, 0, limit)
+		klines = mergeKlinesByOpenTime(klines, d.analystKlines(spec))
+		if len(klines) > 0 {
+			return klines
+		}
+	}
+	return d.analystKlines(spec)
+}
 
+func (d *DashboardServer) analystKlines(spec TimeframeSpec) []exchange.Kline {
 	if analyst, ok := d.analysts[spec.ID]; ok {
 		return analyst.GetKlines()
 	}
 	if analyst, ok := d.analysts[spec.BinanceInterval]; ok {
 		return analyst.GetKlines()
 	}
+	return nil
+}
+
+func (d *DashboardServer) loadRESTKlinesFromStore(spec TimeframeSpec, endTimeMs int64, limit int) []exchange.Kline {
+	if spec.BinanceInterval == "" {
+		return nil
+	}
+	if endTimeMs <= 0 {
+		endTimeMs = time.Now().UnixMilli()
+	}
+
+	intervalMs, err := data.IntervalDurationMs(spec.BinanceInterval)
+	if err != nil {
+		log.Printf("[Dashboard] interval duration %s: %v", spec.BinanceInterval, err)
+		return nil
+	}
+
+	wantBars := limit + indicatorWarmupBars
+	startTimeMs := endTimeMs - intervalMs*int64(wantBars)
+	if startTimeMs < 0 {
+		startTimeMs = 0
+	}
+
+	if err := data.InitDB(); err == nil {
+		dbRows, loadErr := data.LoadKlines(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
+		if loadErr == nil && len(dbRows) > 0 {
+			klines := dataCandlesToKlines(dbRows)
+			if d.needsAsyncKlineGapFill(dbRows, endTimeMs, intervalMs, limit) {
+				d.scheduleKlineGapFill(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
+			}
+			log.Printf("[Dashboard] SQLite fast path %s %s: %d bars", d.symbol, spec.BinanceInterval, len(klines))
+			return klines
+		}
+	} else {
+		log.Printf("[Dashboard] SQLite init: %v", err)
+	}
+
 	if d.rest == nil {
 		return nil
 	}
 
-	candles, err := d.rest.GetKlines(d.symbol, spec.BinanceInterval, maxCandlesInState+indicatorWarmupBars)
+	candles, err := d.rest.FetchHistoricalKlines(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
 	if err != nil {
-		log.Printf("[Dashboard] REST klines %s: %v", spec.BinanceInterval, err)
+		log.Printf("[Dashboard] FetchHistoricalKlines %s %s: %v", d.symbol, spec.BinanceInterval, err)
 		return nil
 	}
+	log.Printf("[Dashboard] unified klines %s %s: %d bars", d.symbol, spec.BinanceInterval, len(candles))
 	return candlesToKlines(candles)
+}
+
+// needsAsyncKlineGapFill returns true when SQLite data should be served now but
+// a background Binance fetch should refresh the cache for later requests.
+func (d *DashboardServer) needsAsyncKlineGapFill(rows []data.Candle, endTimeMs, intervalMs int64, limit int) bool {
+	if len(rows) == 0 {
+		return false
+	}
+	last := rows[len(rows)-1]
+	stale := endTimeMs-last.OpenTime > intervalMs*2
+	sparse := len(rows) < limit/3
+	return stale || sparse
+}
+
+// scheduleKlineGapFill runs FetchHistoricalKlines in the background (SQLite writes only).
+func (d *DashboardServer) scheduleKlineGapFill(symbol, interval string, startTimeMs, endTimeMs int64) {
+	rest := d.rest
+	if rest == nil {
+		return
+	}
+
+	taskKey := symbol + "_" + interval
+	if _, alreadyRunning := activeGapFills.LoadOrStore(taskKey, true); alreadyRunning {
+		return
+	}
+
+	go func(sym, ivl string, start, end int64) {
+		defer activeGapFills.Delete(taskKey)
+
+		candles, err := rest.FetchHistoricalKlines(sym, ivl, start, end)
+		if err != nil {
+			log.Printf("[Dashboard] background gap fill %s %s [%d..%d]: %v", sym, ivl, start, end, err)
+			return
+		}
+		log.Printf("[Dashboard] background gap fill %s %s: merged %d bars into cache", sym, ivl, len(candles))
+	}(symbol, interval, startTimeMs, endTimeMs)
+}
+
+// liveHistoryHasMore is true when SQLite (or the requested window) indicates older bars exist.
+func (d *DashboardServer) liveHistoryHasMore(symbol, interval string, klines []exchange.Kline, candleLimit int, endTimeMs int64) bool {
+	if len(klines) == 0 || interval == "" {
+		return false
+	}
+	oldestMs := klines[0].OpenTime
+
+	if err := data.InitDB(); err == nil {
+		bounds, berr := data.QueryKlineCacheBounds(symbol, interval)
+		if berr == nil && bounds.HasData && bounds.MinTime < oldestMs {
+			return true
+		}
+	}
+
+	intervalMs, err := data.IntervalDurationMs(interval)
+	if err != nil {
+		return false
+	}
+	wantBars := candleLimit + indicatorWarmupBars
+	if len(klines) >= wantBars {
+		startTimeMs := endTimeMs - intervalMs*int64(wantBars)
+		if startTimeMs > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func dataCandlesToKlines(rows []data.Candle) []exchange.Kline {
+	out := make([]exchange.Kline, len(rows))
+	for i, c := range rows {
+		out[i] = exchange.NormalizeKline(exchange.Kline{
+			OpenTime:  c.OpenTime,
+			CloseTime: c.CloseTime,
+			Open:      c.Open,
+			High:      c.High,
+			Low:       c.Low,
+			Close:     c.Close,
+			Volume:    c.Volume,
+		})
+	}
+	return out
+}
+
+func mergeKlinesByOpenTime(primary, live []exchange.Kline) []exchange.Kline {
+	if len(live) == 0 {
+		return primary
+	}
+	if len(primary) == 0 {
+		return live
+	}
+	merged := make(map[int64]exchange.Kline, len(primary)+len(live))
+	for _, k := range primary {
+		merged[k.OpenTime] = exchange.NormalizeKline(k)
+	}
+	for _, k := range live {
+		merged[k.OpenTime] = exchange.NormalizeKline(k)
+	}
+	out := make([]exchange.Kline, 0, len(merged))
+	for _, k := range merged {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OpenTime < out[j].OpenTime })
+	return out
 }
 
 func (d *DashboardServer) ramKlines(tfID string) []exchange.Kline {
@@ -1340,7 +1536,7 @@ func historyEndTimeToMs(endTimeSec int64) int64 {
 func buildChartSeriesTrimmed(klines []exchange.Kline, trim, rsxLookback int) ([]ChartCandle, []ChartOscillator) {
 	candles, oscillators := buildChartSeries(klines, rsxLookback)
 	if trim <= 0 || len(candles) <= trim {
-		return candles, oscillators
+		return candles, []ChartOscillator{}
 	}
 	return candles[trim:], oscillators[trim:]
 }
@@ -1348,14 +1544,15 @@ func buildChartSeriesTrimmed(klines []exchange.Kline, trim, rsxLookback int) ([]
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {
 	klines := make([]exchange.Kline, len(candles))
 	for i, c := range candles {
-		klines[i] = exchange.Kline{
-			OpenTime: c.OpenTime,
-			Open:     c.Open,
-			High:     c.High,
-			Low:      c.Low,
-			Close:    c.Close,
-			Volume:   c.Volume,
-		}
+		klines[i] = exchange.NormalizeKline(exchange.Kline{
+			OpenTime:  c.OpenTime,
+			CloseTime: c.CloseTime,
+			Open:      c.Open,
+			High:      c.High,
+			Low:       c.Low,
+			Close:     c.Close,
+			Volume:    c.Volume,
+		})
 	}
 	return klines
 }

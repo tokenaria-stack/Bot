@@ -53,9 +53,6 @@ var canonicalTF = map[string]TimeframeSpec{
 	"1d":  {ID: "1d", Label: "1 day", BinanceInterval: "1d", Kind: TFBinanceREST},
 	"1w":  {ID: "1w", Label: "1 week", BinanceInterval: "1w", Kind: TFBinanceREST},
 	"1M":  {ID: "1M", Label: "1 month", BinanceInterval: "1M", Kind: TFBinanceREST},
-	"3M":  {ID: "3M", Label: "3 months", Kind: TFRAMOnly},
-	"6M":  {ID: "6M", Label: "6 months", Kind: TFRAMOnly},
-	"12M": {ID: "12M", Label: "12 months", Kind: TFRAMOnly},
 }
 
 var customTFRe = regexp.MustCompile(`(?i)^(\d+)\s*(tick|ticks|t|s|sec|second|seconds|m|min|minute|minutes|h|hour|hours|d|day|days|w|week|weeks|M|month|months)?$`)
@@ -88,16 +85,17 @@ func ResolveBacktestInterval(raw string) (TimeframeSpec, error) {
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
 		return spec, nil
 	}
-	switch spec.ID {
-	case "3M", "6M", "12M":
-		return canonicalTF["1M"], nil
-	}
 	return TimeframeSpec{}, fmt.Errorf("interval %q not supported for backtest", raw)
 }
 
 func normalizeTFKey(raw string) string {
 	k := strings.TrimSpace(raw)
 	lower := strings.ToLower(k)
+
+	switch k {
+	case "3M", "6M", "12M":
+		return k
+	}
 
 	switch lower {
 	case "1h", "1hour":
@@ -116,18 +114,8 @@ func normalizeTFKey(raw string) string {
 		return "1m"
 	case "1M", "M":
 		return "1M"
-	case "3M", "3m":
-		if k == "3M" || strings.Contains(lower, "month") {
-			return "3M"
-		}
+	case "3m":
 		return "3m"
-	case "6M", "6m":
-		if k == "6M" || strings.Contains(lower, "month") {
-			return "6M"
-		}
-		return "6m"
-	case "12M":
-		return "12M"
 	case "m":
 		return "1m"
 	case "month":
@@ -172,12 +160,13 @@ func parseCustomTimeframe(raw string) (TimeframeSpec, error) {
 		label = fmt.Sprintf("%s second(s)", n)
 	case "m", "min", "minute", "minutes":
 		if strings.HasSuffix(strings.TrimSpace(raw), "M") {
-			id = n + "M"
-			label = fmt.Sprintf("%s month(s)", n)
-			if iv, ok := binanceIntervals[id]; ok {
-				binance = iv
-				kind = TFBinanceREST
+			if n != "1" {
+				return TimeframeSpec{}, fmt.Errorf("unsupported month timeframe %q", raw)
 			}
+			id = "1M"
+			label = "1 month"
+			binance = "1M"
+			kind = TFBinanceREST
 			break
 		}
 		id = n + "m"
@@ -208,12 +197,13 @@ func parseCustomTimeframe(raw string) (TimeframeSpec, error) {
 			kind = TFBinanceREST
 		}
 	case "month", "months":
-		id = n + "M"
-		label = fmt.Sprintf("%s month(s)", n)
-		if iv, ok := binanceIntervals[id]; ok {
-			binance = iv
-			kind = TFBinanceREST
+		if n != "1" {
+			return TimeframeSpec{}, fmt.Errorf("unsupported month timeframe %q", raw)
 		}
+		id = "1M"
+		label = "1 month"
+		binance = "1M"
+		kind = TFBinanceREST
 	default:
 		return TimeframeSpec{}, fmt.Errorf("unrecognized unit in %q", raw)
 	}
@@ -233,6 +223,6 @@ func MenuTimeframes() map[string][]TimeframeSpec {
 		"SECONDS":  {canonicalTF["1s"], canonicalTF["5s"], canonicalTF["10s"], canonicalTF["15s"], canonicalTF["30s"], canonicalTF["45s"]},
 		"MINUTES":  {canonicalTF["1m"], canonicalTF["2m"], canonicalTF["3m"], canonicalTF["5m"], canonicalTF["10m"], canonicalTF["15m"], canonicalTF["30m"], canonicalTF["45m"]},
 		"HOURS":    {canonicalTF["1h"], canonicalTF["2h"], canonicalTF["3h"], canonicalTF["4h"]},
-		"DAYS":     {canonicalTF["1d"], canonicalTF["1w"], canonicalTF["1M"], canonicalTF["3M"], canonicalTF["6M"], canonicalTF["12M"]},
+		"DAYS":     {canonicalTF["1d"], canonicalTF["1w"], canonicalTF["1M"]},
 	}
 }

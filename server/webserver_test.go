@@ -48,4 +48,13 @@ func TestBuildChartSeriesTrimmed(t *testing.T) {
 	if candles[0].Time >= candles[len(candles)-1].Time {
 		t.Fatal("candles not in ascending time order")
 	}
+
+	shortKlines := klines[:80]
+	shortCandles, shortOsc := buildChartSeriesTrimmed(shortKlines, 100, strategy.RSXLookbackDefault)
+	if len(shortCandles) != 80 {
+		t.Fatalf("short candles len = %d, want 80", len(shortCandles))
+	}
+	if len(shortOsc) != 0 {
+		t.Fatalf("short oscillators len = %d, want 0 (warmup not trimmed)", len(shortOsc))
+	}
 }

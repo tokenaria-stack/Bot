@@ -35,11 +35,11 @@ func TestScoringMatrix_DisableRSX(t *testing.T) {
 	SetScoringMatrix(m)
 
 	report := longSignalReport()
-	if got := scoreLong(report); got != 65 {
-		t.Fatalf("scoreLong without RSX = %d, want 65 (wozduh+expansion+AO)", got)
+	decision := scalpDecisionFromReport(context.Background(), report)
+	if got := decision.LongScore; got != 65 {
+		t.Fatalf("LongScore without RSX = %d, want 65 (wozduh+expansion+AO)", got)
 	}
 
-	decision := scalpDecisionFromReport(context.Background(), report)
 	if decision.Action != WaitAction {
 		t.Fatalf("Action = %q, want WAIT (score=%d)", decision.Action, decision.Score)
 	}

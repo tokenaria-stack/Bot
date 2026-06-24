@@ -16,7 +16,7 @@ func TestResolveBacktestInterval(t *testing.T) {
 		{"1W", "1w", false},
 		{"W", "1w", false},
 		{"1M", "1M", false},
-		{"3M", "1M", false},
+		{"3M", "", true},
 		{"35m", "", true},
 	}
 	for _, tc := range cases {
@@ -52,7 +52,6 @@ func TestResolveTimeframe(t *testing.T) {
 		{"3m", "3m", TFBinanceREST},
 		{"35m", "35m", TFRAMOnly},
 		{"1h", "1h", TFBinanceREST},
-		{"3M", "3M", TFRAMOnly},
 	}
 
 	for _, tc := range cases {

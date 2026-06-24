@@ -241,8 +241,6 @@ func (m *MasterGeneral) setState(newState MasterState) {
 	}
 }
 
-// evaluateMacroTrend and validateHunting removed — entry no longer gated by 15m AO.
-
 func (m *MasterGeneral) huntAnalyst() *Marker {
 	if a, ok := m.analysts[m.huntTimeframe]; ok {
 		return a
@@ -805,7 +803,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 					continue
 				}
 
-				analyst.UpdateKline(tick.Kline)
+				analyst.UpdateKlineTick(tick.Kline, tick.IsClosed)
 
 				m.mu.RLock()
 				klineCB := m.onKlineBar

@@ -863,7 +863,7 @@ function initChartLegends() {
 const TF_DISPLAY = {
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
   '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H',
-  '1d': 'D', '1w': 'W', '1M': 'M', '3M': '3M', '6M': '6M', '12M': '12M',
+  '1d': 'D', '1w': 'W', '1M': 'M',
   '1tick': '1 tick', '10ticks': '10 ticks', '100ticks': '100 ticks', '1000ticks': '1000 ticks',
   '1s': '1s', '5s': '5s', '10s': '10s', '15s': '15s', '30s': '30s', '45s': '45s',
 };
@@ -890,8 +890,7 @@ const TF_MENU = {
   ],
   DAYS: [
     { id: '1d', label: '1 day' }, { id: '1w', label: '1 week' },
-    { id: '1M', label: '1 month' }, { id: '3M', label: '3 months' },
-    { id: '6M', label: '6 months' }, { id: '12M', label: '12 months' },
+    { id: '1M', label: '1 month' },
   ],
 };
 
@@ -907,6 +906,8 @@ const WOZDUH_PREFS_LIVE_KEY = 'wozduh_visibility_prefs_live';
 const WOZDUH_PREFS_BACKTEST_KEY = 'wozduh_visibility_prefs_backtest';
 const WOZDUH_PREFS_KEY = 'wozduh_visibility_prefs';
 const DEFAULT_FAVS = ['1m', '3m', '15m', '1h', '4h', '1d', '1w', '1M'];
+const LIVE_STATE_CANDLE_LIMIT = 3000;
+const LIVE_HISTORY_CHUNK_LIMIT = 5000;
 const DEFAULT_RSX_LOOKBACK = 90;
 const DEFAULT_RSX_SIGNAL_LENGTH = 9;
 const DEFAULT_RSX_LENGTH = 14;
@@ -1247,6 +1248,9 @@ function createRSXChartOptions(width, height) {
 
 let liveChartData = {};
 let backtestChartData = {};
+let crosshairSyncOrigin = null;
+
+const LOGICAL_RANGE_EPS = 0.01;
 let backtestLoadedCandles = [];
 let backtestNavigatorChartLines = [];
 let backtestNavigatorChartMarkers = [];
@@ -1268,6 +1272,7 @@ let tfFavorites = [];
 let refreshTimer = null;
 let historyLoading = false;
 let historyHasMore = true;
+let currentLiveRequestId = 0;
 let chartInitialized = false;
 let chartType = 'candles';
 let dashboardSocket = null;
@@ -1310,7 +1315,7 @@ let currentBacktestPayload = null;
 if (typeof window !== 'undefined') {
   window.currentBacktestPayload = window.currentBacktestPayload || null;
 }
-const backtestHistoryChunkLimit = 1000;
+const BACKTEST_HISTORY_CHUNK_LIMIT = 50000;
 const LS_RISK_SETTINGS_KEY = 'dashboard_risk_settings';
 
 const ruler = { active: false, state: RULER_IDLE, p1: null, p2: null, chartData: null };
@@ -1353,7 +1358,37 @@ function getActiveTfFromToolbar() {
 }
 
 function normalizeTf(tf) {
-  return String(tf || '').trim();
+  return resolveTf(tf);
+}
+
+/** Client-side TF resolver (mirrors server/timeframes.go aliases). */
+function resolveTf(tf) {
+  const raw = String(tf || '').trim();
+  if (!raw) return '';
+
+  const lower = raw.toLowerCase();
+  const alias = {
+    '1min': '1m', '1minute': '1m', m: '1m',
+    '1hour': '1h', h: '1h',
+    d: '1d', day: '1d',
+    w: '1w', week: '1w',
+    month: '1M',
+  };
+  if (alias[lower]) return alias[lower];
+  if (TF_DISPLAY[raw]) return raw;
+
+  const all = Object.values(TF_MENU).flat();
+  const hit = all.find((item) => item.id === raw || item.id.toLowerCase() === lower);
+  if (hit) return hit.id;
+
+  if (/^\d+s$/i.test(raw)) return lower;
+  if (/^\d+tick(s)?$/i.test(lower)) return lower === '1tick' ? '1tick' : lower;
+  if (/^\d+M$/.test(raw)) return raw;
+  if (/^\d+m$/i.test(raw) && raw !== 'M') return lower;
+  if (/^\d+h$/i.test(lower)) return lower;
+  if (/^\d+d$/i.test(lower)) return lower;
+
+  return raw;
 }
 
 function parseBacktestDateInput(value) {
@@ -1448,8 +1483,8 @@ function tfLabel(id) {
 }
 
 function tfSortKey(id) {
-  if (id === '1M' || id === '3M' || id === '6M' || id === '12M') {
-    return 5000 + (parseInt(id, 10) || 1);
+  if (id === '1M') {
+    return 5001;
   }
   const s = id.toLowerCase();
   if (s.includes('tick')) return 100 + (parseInt(s, 10) || 1);
@@ -1713,9 +1748,10 @@ async function reloadRsxChartFromServer() {
     if (warmingUp || !data?.oscillators?.length) return;
 
     beginDataUpdate();
-    loadedOsc = mergeOsc([], data.oscillators);
+    loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators), loadedCandles);
     applyRsxData(loadedOsc, liveChartData);
     endDataUpdate();
+    forceSyncChartTimeScales(liveChartData);
   } catch (err) {
     console.warn('Failed to reload RSX chart:', err);
   }
@@ -1897,7 +1933,10 @@ async function refreshBacktestIndicatorSeries() {
   const interval = getBacktestInterval();
   const intervalMs = estimateCandleIntervalSec(backtestLoadedCandles) * 1000;
   const endTimeMs = (lastTime < 1e12 ? lastTime * 1000 : lastTime) + intervalMs * 2;
-  const limit = backtestLoadedCandles.length + 300;
+  const limit = Math.min(
+    BACKTEST_HISTORY_CHUNK_LIMIT,
+    backtestLoadedCandles.length + 300,
+  );
 
   const params = new URLSearchParams({
     symbol,
@@ -1946,8 +1985,16 @@ function apiQueryParams(extra = {}) {
   return {
     tf: currentTf,
     rsxLookback: liveRsxSettings.div_lookback,
+    limit: LIVE_STATE_CANDLE_LIMIT,
     ...extra,
   };
+}
+
+function setTfDropdownOpen(open) {
+  const dd = document.getElementById('tf-dropdown');
+  if (!dd) return;
+  dd.hidden = !open;
+  dd.classList.toggle('open', open);
 }
 
 function beginDataUpdate() {
@@ -2338,56 +2385,68 @@ function initProfessionalChart(containerId, options = {}) {
   return result;
 }
 
-function syncPaneCrosshairs(chartData, chartA, chartB, seriesGetterA, seriesGetterB) {
-  if (!chartA || !chartB) return;
+function logicalRangesEqual(a, b, eps = LOGICAL_RANGE_EPS) {
+  if (!a || !b) return false;
+  return Math.abs(a.from - b.from) < eps && Math.abs(a.to - b.to) < eps;
+}
 
-  let isSyncing = false;
+function syncVisibleLogicalRange(targetChart, range) {
+  if (!targetChart?.timeScale || !range) return;
+  const timeScale = targetChart.timeScale();
+  const currentRange = timeScale.getVisibleLogicalRange();
+  if (logicalRangesEqual(currentRange, range)) return;
+  timeScale.setVisibleLogicalRange(range);
+}
 
-  const syncTarget = (targetChart, targetSeriesGetter, param) => {
-    if (!param.point || param.time == null) {
-      targetChart.clearCrosshairPosition();
-      return;
-    }
-    const series = targetSeriesGetter();
-    if (!series) return;
-    const price = seriesValueAtTime(series, param.time);
-    if (price != null) {
-      targetChart.setCrosshairPosition(price, param.time, series);
-    }
-  };
+function syncVisibleTimeRange(targetChart, range) {
+  if (!targetChart?.timeScale || !range) return;
+  const timeScale = targetChart.timeScale();
+  const currentRange = timeScale.getVisibleRange();
+  if (logicalRangesEqual(currentRange, range)) return;
+  timeScale.setVisibleRange(range);
+}
 
-  chartA.subscribeCrosshairMove((param) => {
-    if (isSyncing || isUpdatingData || chartData.syncingTimeScale) return;
-
-    isSyncing = true;
-    try {
-      syncTarget(chartB, seriesGetterB, param);
-
-      if (chartA === chartData.priceChart) {
-        if (!param.point) {
-          chartData.crosshairPriceAnchor = null;
-        } else if (param.time != null) {
-          const series = seriesGetterA();
-          const price = series?.coordinateToPrice(param.point.y);
-          if (price != null && series) {
-            chartData.crosshairPriceAnchor = { time: param.time, price, series };
-          }
-        }
-      }
-    } finally {
-      isSyncing = false;
+function syncChartGroupLogicalRange(charts, sourceChart, range) {
+  if (!range || !charts?.length) return;
+  charts.forEach((targetChart) => {
+    if (targetChart !== sourceChart) {
+      syncVisibleLogicalRange(targetChart, range);
     }
   });
+}
 
-  chartB.subscribeCrosshairMove((param) => {
-    if (isSyncing || isUpdatingData || chartData.syncingTimeScale) return;
+function syncChartGroupTimeRange(charts, range) {
+  if (!range || !charts?.length) return;
+  charts.forEach((chart) => {
+    syncVisibleTimeRange(chart, range);
+  });
+}
 
-    isSyncing = true;
-    try {
-      syncTarget(chartA, seriesGetterA, param);
-    } finally {
-      isSyncing = false;
+function syncPaneCrosshairs(chartData, sourceChart, peerTargets) {
+  if (!sourceChart || !peerTargets?.length) return;
+
+  sourceChart.subscribeCrosshairMove((param) => {
+    if (isUpdatingData) return;
+
+    if (!param.point || !param.time) {
+      if (crosshairSyncOrigin === sourceChart) {
+        crosshairSyncOrigin = null;
+      }
+      return;
     }
+
+    if (crosshairSyncOrigin && crosshairSyncOrigin !== sourceChart) return;
+    crosshairSyncOrigin = sourceChart;
+
+    peerTargets.forEach(({ chart, seriesGetter }) => {
+      if (!chart || chart === sourceChart) return;
+      const series = seriesGetter();
+      if (!series) return;
+      const price = seriesValueAtTime(series, param.time);
+      if (price != null) {
+        chart.setCrosshairPosition(price, param.time, series);
+      }
+    });
   });
 }
 
@@ -2399,7 +2458,6 @@ function attachProfessionalChartSync(chartData, hooks = {}) {
   const rsxSeriesGetter = () => chartData.rsxSeries;
 
   chartData.crosshairHoverChart = null;
-  chartData.crosshairPriceAnchor = null;
 
   const chartContainers = [
     [chartData.priceChart, chartData.elements?.chartContainer],
@@ -2421,15 +2479,9 @@ function attachProfessionalChartSync(chartData, hooks = {}) {
 
   chartData.allCharts.forEach((sourceChart) => {
     sourceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (isUpdatingData || chartData.syncingTimeScale || !range) return;
+      if (isUpdatingData || !range) return;
 
-      chartData.syncingTimeScale = true;
-      chartData.allCharts.forEach((targetChart) => {
-        if (targetChart !== sourceChart) {
-          targetChart.timeScale().setVisibleLogicalRange(range);
-        }
-      });
-      chartData.syncingTimeScale = false;
+      syncChartGroupLogicalRange(chartData.allCharts, sourceChart, range);
 
       if (typeof hooks.onVisibleRangeChange === 'function') {
         hooks.onVisibleRangeChange(range);
@@ -2437,57 +2489,15 @@ function attachProfessionalChartSync(chartData, hooks = {}) {
     });
   });
 
-  syncPaneCrosshairs(
-    chartData,
-    chartData.priceChart,
-    chartData.oscChart,
-    priceSeriesGetter,
-    wozduhSeriesGetter,
-  );
-  syncPaneCrosshairs(
-    chartData,
-    chartData.priceChart,
-    chartData.rsxChart,
-    priceSeriesGetter,
-    rsxSeriesGetter,
-  );
-  syncPaneCrosshairs(
-    chartData,
-    chartData.oscChart,
-    chartData.rsxChart,
-    wozduhSeriesGetter,
-    rsxSeriesGetter,
-  );
+  const crosshairPeers = [
+    { chart: chartData.priceChart, seriesGetter: priceSeriesGetter },
+    { chart: chartData.oscChart, seriesGetter: wozduhSeriesGetter },
+    { chart: chartData.rsxChart, seriesGetter: rsxSeriesGetter },
+  ].filter((entry) => entry.chart);
 
-  chartData.restoreCrosshairAfterUpdate = () => {
-    const anchor = chartData.crosshairPriceAnchor;
-    if (!anchor || chartData.crosshairHoverChart !== chartData.priceChart) return;
-
-    const wozduhSeries = wozduhSeriesGetter();
-    const rsxSeries = rsxSeriesGetter();
-    chartData.priceChart.setCrosshairPosition(anchor.price, anchor.time, anchor.series);
-    if (wozduhSeries) {
-      const wPrice = seriesValueAtTime(wozduhSeries, anchor.time);
-      if (wPrice != null) {
-        chartData.oscChart.setCrosshairPosition(wPrice, anchor.time, wozduhSeries);
-      }
-    }
-    if (rsxSeries) {
-      const rPrice = seriesValueAtTime(rsxSeries, anchor.time);
-      if (rPrice != null) {
-        chartData.rsxChart.setCrosshairPosition(rPrice, anchor.time, rsxSeries);
-      }
-    }
-  };
-}
-
-function scheduleCrosshairRestore(chartData) {
-  if (!chartData?.restoreCrosshairAfterUpdate) return;
-  if (chartData._crosshairRestoreScheduled) return;
-  chartData._crosshairRestoreScheduled = true;
-  requestAnimationFrame(() => {
-    chartData._crosshairRestoreScheduled = false;
-    chartData.restoreCrosshairAfterUpdate();
+  crosshairPeers.forEach((source) => {
+    const peers = crosshairPeers.filter((entry) => entry.chart !== source.chart);
+    syncPaneCrosshairs(chartData, source.chart, peers);
   });
 }
 
@@ -2555,8 +2565,9 @@ function handleResize() {
 }
 
 function fitChartInstance(chartData) {
-  if (!chartData?.allCharts?.length) return;
-  chartData.allCharts.forEach((c) => c.timeScale().fitContent());
+  if (!chartData?.priceChart?.timeScale) return;
+  chartData.priceChart.timeScale().fitContent();
+  forceSyncChartTimeScales(chartData);
 }
 
 function fitProfessionalChart(chartData) {
@@ -2572,15 +2583,39 @@ function fitProfessionalChart(chartData) {
   fitChartInstance(chartData);
 }
 
-function syncTimeScaleToAll(sourceChart, range) {
-  if (!range || !liveChartData.allCharts) return;
-  liveChartData.syncingTimeScale = true;
-  liveChartData.allCharts.forEach((targetChart) => {
-    if (targetChart !== sourceChart) {
-      targetChart.timeScale().setVisibleLogicalRange(range);
-    }
+function forceSyncChartTimeScales(chartData) {
+  if (!chartData?.priceChart?.timeScale || !chartData?.allCharts?.length) return;
+  if (isUpdatingData) return;
+
+  const applyRange = () => {
+    if (isUpdatingData) return false;
+    const range = chartData.priceChart.timeScale().getVisibleLogicalRange();
+    if (!range || range.from == null || range.to == null) return false;
+
+    chartData.allCharts.forEach((chart) => {
+      syncVisibleLogicalRange(chart, range);
+    });
+    return true;
+  };
+
+  if (!applyRange()) {
+    requestAnimationFrame(() => {
+      applyRange();
+      requestAnimationFrame(applyRange);
+    });
+    return;
+  }
+  requestAnimationFrame(applyRange);
+}
+
+function syncTimeScaleToAll(_sourceChart, range) {
+  if (!range || !liveChartData?.allCharts) return;
+  if (isUpdatingData) return;
+
+  liveChartData.allCharts.forEach((chart) => {
+    syncVisibleLogicalRange(chart, range);
   });
-  liveChartData.syncingTimeScale = false;
+  requestAnimationFrame(() => forceSyncChartTimeScales(liveChartData));
 }
 
 function seriesValueAtTime(series, time) {
@@ -2730,25 +2765,10 @@ function initPaneResize() {
 
 function initControls() {
   loadFavorites();
-  currentTf = localStorage.getItem(LS_TF_KEY) || '1m';
+  currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
   renderTfBar();
   renderTfMenu();
-
-  document.getElementById('tf-current-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const dd = document.getElementById('tf-dropdown');
-    dd.hidden = !dd.hidden;
-  });
-
-  document.getElementById('tf-custom-add').addEventListener('click', applyCustomTf);
-  document.getElementById('tf-custom-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') applyCustomTf();
-  });
-
-  document.addEventListener('click', () => {
-    document.getElementById('tf-dropdown').hidden = true;
-  });
-  document.getElementById('tf-dropdown').addEventListener('click', (e) => e.stopPropagation());
+  initTfBarInteraction();
 
   const toggles = {
     'tog-jurik': () => [liveChartData.rsxSeries],
@@ -3222,19 +3242,82 @@ function applyCustomTf() {
   if (!val) return;
   input.value = '';
   switchTimeframe(val);
-  document.getElementById('tf-dropdown').hidden = true;
+  setTfDropdownOpen(false);
+}
+
+function initTfBarInteraction() {
+  if (window.__tfBarInteractionBound) return;
+
+  const tfBar = document.getElementById('tf-bar');
+  const tfDropdown = document.getElementById('tf-dropdown');
+  const tfCurrentBtn = document.getElementById('tf-current-btn');
+  if (!tfBar || !tfDropdown || !tfCurrentBtn) return;
+
+  window.__tfBarInteractionBound = true;
+
+  const handleTfBarClick = (e) => {
+    console.log('TF Menu Clicked', e.target);
+
+    if (e.target.closest('#tf-current-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setTfDropdownOpen(tfDropdown.hidden);
+      return;
+    }
+
+    const favBtn = e.target.closest('.tf-btn');
+    if (favBtn?.dataset?.tf) {
+      e.preventDefault();
+      e.stopPropagation();
+      switchTimeframe(favBtn.dataset.tf, e);
+      return;
+    }
+
+    const menuBtn = e.target.closest('.tf-menu-name');
+    if (menuBtn?.dataset?.tf) {
+      e.preventDefault();
+      e.stopPropagation();
+      switchTimeframe(menuBtn.dataset.tf, e);
+      setTfDropdownOpen(false);
+      return;
+    }
+
+    const starBtn = e.target.closest('.tf-star');
+    if (starBtn?.dataset?.tf) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFavorite(starBtn.dataset.tf);
+    }
+  };
+
+  tfBar.addEventListener('click', handleTfBarClick, true);
+
+  document.getElementById('tf-custom-add')?.addEventListener('click', (e) => {
+    console.log('TF Menu Clicked', e.target);
+    applyCustomTf();
+  });
+
+  document.getElementById('tf-custom-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyCustomTf();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#tf-bar')) return;
+    setTfDropdownOpen(false);
+  });
 }
 
 function renderTfBar() {
   const favEl = document.getElementById('tf-favorites');
+  if (!favEl) return;
   const activeTf = getActiveTf();
   favEl.innerHTML = '';
   tfFavorites.forEach((id) => {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'tf-btn' + (id === activeTf ? ' active' : '');
     btn.textContent = tfLabel(id);
     btn.dataset.tf = id;
-    btn.addEventListener('click', (e) => switchTimeframe(id, e));
     favEl.appendChild(btn);
   });
   const tfBtn = document.getElementById('tf-current-btn');
@@ -3245,6 +3328,7 @@ function renderTfBar() {
 
 function renderTfMenu() {
   const body = document.getElementById('tf-menu-body');
+  if (!body) return;
   const activeTf = getActiveTf();
   body.innerHTML = '';
 
@@ -3258,22 +3342,18 @@ function renderTfMenu() {
       const row = document.createElement('div');
       row.className = 'tf-menu-item' + (item.id === activeTf ? ' selected' : '');
 
-      const name = document.createElement('span');
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'tf-menu-name';
       name.textContent = item.label;
-      name.addEventListener('click', (e) => {
-        switchTimeframe(item.id, e);
-        document.getElementById('tf-dropdown').hidden = true;
-      });
+      name.dataset.tf = item.id;
 
       const star = document.createElement('button');
       star.type = 'button';
       star.className = 'tf-star' + (isFavorite(item.id) ? ' fav' : '');
       star.textContent = '★';
       star.title = 'Add to favorites';
-      star.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleFavorite(item.id);
-      });
+      star.dataset.tf = item.id;
 
       row.appendChild(name);
       row.appendChild(star);
@@ -3287,7 +3367,7 @@ function switchTimeframe(tf, event) {
     event.preventDefault();
     event.stopPropagation();
   }
-  const nextTf = normalizeTf(tf);
+  const nextTf = resolveTf(tf);
   if (!nextTf) return;
 
   if (isBacktestTfContext()) {
@@ -3338,6 +3418,15 @@ function resetBacktestClientCacheForTfChange() {
   }
   if (backtestChartData?.tradeMarkerPlugin) {
     backtestChartData.tradeMarkerPlugin.setData([]);
+  }
+  if (backtestChartData?.wozduxSeries) {
+    Object.values(backtestChartData.wozduxSeries).forEach((series) => series.setData([]));
+  }
+  if (backtestChartData?.volumeSeries) {
+    backtestChartData.volumeSeries.setData([]);
+  }
+  if (backtestChartData?.entryMarkerSeries) {
+    backtestChartData.entryMarkerSeries.setData([]);
   }
 }
 
@@ -3394,22 +3483,28 @@ function initBacktestIntervalHandler() {
 }
 
 function switchLiveTimeframe(tf) {
-  if (tf === currentTf) return;
-  currentTf = tf;
-  localStorage.setItem(LS_TF_KEY, tf);
+  const resolved = resolveTf(tf);
+  if (!resolved) return;
+
+  const changed = resolved !== currentTf;
+  currentTf = resolved;
+  localStorage.setItem(LS_TF_KEY, resolved);
   historyHasMore = true;
 
-  renderTfBar();
-  renderTfMenu();
-  clearChartData();
+  syncToolbarToActiveContext();
+
+  if (changed) {
+    clearChartData();
+    chartInitialized = false;
+  }
+
   loadDashboard();
 
   if (refreshTimer) clearInterval(refreshTimer);
   if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);
-  chartInitialized = false;
-  wsSubscribeTf(tf);
+  wsSubscribeTf(resolved);
   refreshTimer = setInterval(pollLatestState, pollIntervalForTf());
-  if (isOrderFlowTf(tf)) {
+  if (isOrderFlowTf(resolved)) {
     orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
     applyOrderFlowTimeScale(true);
   } else {
@@ -3449,11 +3544,9 @@ function updateBufferingOverlay() {
 }
 
 function wsSubscribeTf(tf) {
-  if (!shouldPaintLiveChart()) return;
-
   const send = () => {
     if (dashboardSocket && dashboardSocket.readyState === WebSocket.OPEN) {
-      dashboardSocket.send(JSON.stringify({ type: 'subscribe', tf }));
+      dashboardSocket.send(JSON.stringify({ type: 'subscribe', tf: resolveTf(tf) || currentTf }));
     }
   };
   send();
@@ -3464,12 +3557,18 @@ function wsSubscribeTf(tf) {
 
 function clearChartData() {
   beginDataUpdate();
+  crosshairSyncOrigin = null;
   loadedCandles = [];
   loadedOsc = [];
+  sessionTrades = [];
   tradeMarkers = [];
   spikeMarkers = [];
   historyLoading = false;
   chartInitialized = false;
+  if (!liveChartData?.candleSeries) {
+    endDataUpdate();
+    return;
+  }
   liveChartData.candleSeries.setData([]);
   liveChartData.barSeries.setData([]);
   liveChartData.lineSeries.setData([]);
@@ -3595,6 +3694,17 @@ function dedupeCandles(candles) {
   const data = Array.from(map.values());
   data.sort((a, b) => a.time - b.time);
   return data;
+}
+
+/** Keep oscillator points on the same time axis as price candles (drops warmup-only bars). */
+function alignOscillatorsToCandles(osc, candles) {
+  const bars = dedupeCandles(candles);
+  if (!bars.length) return [];
+  const allowed = new Set(bars.map((c) => c.time));
+  return (osc || [])
+    .map((p) => normalizeOscPoint(p))
+    .filter((p) => p && allowed.has(p.time))
+    .sort((a, b) => a.time - b.time);
 }
 
 function mergeCandles(existing, incoming) {
@@ -4133,11 +4243,13 @@ function switchTab(targetId) {
     handleResize();
 
     if (targetId === 'tab-live' && liveChartData.chart) {
-      fitChartInstance(liveChartData);
+      wsSubscribeTf(currentTf);
       if (!chartInitialized) {
         loadDashboard();
       } else {
         applySeriesData();
+        fitChartInstance(liveChartData);
+        forceSyncChartTimeScales(liveChartData);
         pollLatestState();
       }
     } else if (targetId === 'tab-backtest' && backtestChartData.chart) {
@@ -4436,15 +4548,13 @@ function applyNavigatorBarColors(chartData, barColors, candles, enabled, options
     const range = { from: savedRange.from, to: savedRange.to };
     const restore = () => {
       if (!chartData?.allCharts?.length) return;
-      chartData.syncingTimeScale = true;
       chartData.allCharts.forEach((chart) => {
         try {
-          chart.timeScale().setVisibleRange(range);
+          syncVisibleTimeRange(chart, range);
         } catch {
           /* noop */
         }
       });
-      chartData.syncingTimeScale = false;
     };
     requestAnimationFrame(restore);
     setTimeout(restore, 10);
@@ -4757,11 +4867,9 @@ function restoreBacktestChartView(view, options = {}) {
   const range = { from: timeRange.from, to: timeRange.to };
   const applyRange = () => {
     if (!backtestChartData?.allCharts?.length) return;
-    backtestChartData.syncingTimeScale = true;
     backtestChartData.allCharts.forEach((chart) => {
-      chart.timeScale().setVisibleRange(range);
+      syncVisibleTimeRange(chart, range);
     });
-    backtestChartData.syncingTimeScale = false;
   };
 
   if (options.immediate) {
@@ -4836,7 +4944,7 @@ function applyBacktestResultToChart(result, options = {}) {
   }
 
   const candles = chartPointsToCandles(result.chartData);
-  const osc = chartPointsToOsc(result.chartData);
+  const osc = alignOscillatorsToCandles(chartPointsToOsc(result.chartData), candles);
   backtestLoadedCandles = candles;
   backtestLoadedOsc = osc;
   backtestLastTrades = result.trades || [];
@@ -5272,27 +5380,29 @@ function updateAllPriceSeries(bar) {
     });
     updateVolumeLabel(loadedCandles.length ? loadedCandles : [normalized]);
   }
-  scheduleCrosshairRestore(liveChartData);
 }
 
 function applySeriesData() {
   const ownLock = !isUpdatingData;
-  if (ownLock) beginDataUpdate();
+  isUpdatingData = true;
+  try {
+    const candles = dedupeCandles(loadedCandles);
+    loadedCandles = candles;
 
-  const candles = dedupeCandles(loadedCandles);
-  loadedCandles = candles;
-
-  if (shouldPaintLiveChart()) {
-    applyPriceToChart(liveChartData, candles);
-    updateVolumeLabel(candles);
-    loadedOsc = mergeOsc([], loadedOsc);
-    applyOscillatorToChart(liveChartData, loadedOsc);
-    spikeMarkers = buildSpikeMarkers(loadedOsc);
-    applyTradeMarkers();
-    updateBufferingOverlay();
+    if (shouldPaintLiveChart()) {
+      applyPriceToChart(liveChartData, candles);
+      updateVolumeLabel(candles);
+      loadedOsc = alignOscillatorsToCandles(mergeOsc([], loadedOsc), candles);
+      applyOscillatorToChart(liveChartData, loadedOsc);
+      spikeMarkers = buildSpikeMarkers(loadedOsc);
+      applyTradeMarkers();
+      updateBufferingOverlay();
+    }
+  } finally {
+    if (ownLock) {
+      setTimeout(() => { isUpdatingData = false; }, 0);
+    }
   }
-
-  if (ownLock) endDataUpdate();
 }
 
 function applyLatestOscPoint(pt) {
@@ -5325,20 +5435,28 @@ function renderState(data) {
   }
   mergeSessionTrades(data.trades);
 
+  const candles = dedupeCandles(toCandles(data.candles));
+  const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
+
+  if (candles.length > 0 && candles.length < 20 && hasMore) {
+    // Бэкенд отдал слишком мало свечей (вероятно, только live-буфер), потому что в фоне
+    // прямо сейчас идет скачивание истории (gap fill). Одна свеча растянется на весь экран.
+    setTimeout(() => loadDashboard(), 500);
+    updateBufferingOverlay();
+    return;
+  }
+
   beginDataUpdate();
-  loadedCandles = dedupeCandles(toCandles(data.candles));
-  loadedOsc = mergeOsc([], data.oscillators || []);
-  applySeriesData();
-  renderFibZones(data.fibZones);
-  historyHasMore = loadedCandles.length > 0;
+  loadedCandles = candles;
+  loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators || []), loadedCandles);
+  historyHasMore = hasMore;
   chartInitialized = true;
 
+  applySeriesData();
+  renderFibZones(data.fibZones);
+
   if (loadedCandles.length > 0 && shouldPaintLiveChart()) {
-    fitProfessionalChart(liveChartData);
-    syncTimeScaleToAll(
-      liveChartData.priceChart,
-      liveChartData.priceChart.timeScale().getVisibleLogicalRange(),
-    );
+    forceSyncChartTimeScales(liveChartData);
   }
   updateBufferingOverlay();
   endDataUpdate();
@@ -5362,6 +5480,7 @@ async function pollOrderFlowState() {
     loadedOsc = mergeOsc([], data.oscillators || []);
     applySeriesData();
     chartInitialized = true;
+    forceSyncChartTimeScales(liveChartData);
   } catch (err) {
     console.error('pollOrderFlowState:', err);
   }
@@ -5407,15 +5526,21 @@ async function pollLatestState() {
 }
 
 async function loadDashboard() {
+  const reqId = ++currentLiveRequestId;
   try {
     const { warmingUp, data } = await fetchState();
+    if (reqId !== currentLiveRequestId) return;
     if (warmingUp) {
       setTimeout(loadDashboard, 2000);
       return;
     }
     if (!data.candles || data.candles.length === 0) {
       if (data.status === 'ready') {
-        renderState(data);
+        renderState({ ...data, candles: data.candles || [], oscillators: data.oscillators || [] });
+        if (isOrderFlowTf(currentTf)) {
+          chartInitialized = true;
+          updateBufferingOverlay();
+        }
         return;
       }
       setTimeout(loadDashboard, 2000);
@@ -5423,7 +5548,14 @@ async function loadDashboard() {
     }
     renderState(data);
   } catch (err) {
+    if (reqId !== currentLiveRequestId) return;
     console.error('loadDashboard:', err);
+    if (isOrderFlowTf(currentTf)) {
+      clearChartData();
+      chartInitialized = true;
+      updateBufferingOverlay();
+      return;
+    }
     setTimeout(loadDashboard, 3000);
   }
 }
@@ -5447,7 +5579,7 @@ async function maybeLoadBacktestHistory(range) {
       symbol,
       interval,
       endTime: String(endTimeMs),
-      limit: String(backtestHistoryChunkLimit),
+      limit: String(BACKTEST_HISTORY_CHUNK_LIMIT),
     });
     const resp = await fetch(`/api/history/chunk?${params.toString()}`, { cache: 'no-store' });
     const data = await resp.json().catch(() => ({}));
@@ -5462,7 +5594,10 @@ async function maybeLoadBacktestHistory(range) {
     const oldLen = backtestLoadedCandles.length;
 
     backtestLoadedCandles = mergeCandles(backtestLoadedCandles, newCandles);
-    backtestLoadedOsc = mergeOsc(backtestLoadedOsc, newOsc);
+    backtestLoadedOsc = alignOscillatorsToCandles(
+      mergeOsc(backtestLoadedOsc, newOsc),
+      backtestLoadedCandles,
+    );
     const added = backtestLoadedCandles.length - oldLen;
 
     applyPriceToChart(backtestChartData, backtestLoadedCandles);
@@ -5482,11 +5617,9 @@ async function maybeLoadBacktestHistory(range) {
 
     if (prevRange && added > 0) {
       const newRange = { from: prevRange.from + added, to: prevRange.to + added };
-      backtestChartData.syncingTimeScale = true;
       backtestChartData.allCharts.forEach((c) => {
-        c.timeScale().setVisibleLogicalRange(newRange);
+        syncVisibleLogicalRange(c, newRange);
       });
-      backtestChartData.syncingTimeScale = false;
     }
 
     backtestHistoryHasMore = data.hasMore !== false && newCandles.length > 0;
@@ -5498,8 +5631,9 @@ async function maybeLoadBacktestHistory(range) {
 }
 
 async function maybeLoadHistory(range) {
+  if (historyLoading || !historyHasMore) return Promise.resolve();
   if (!shouldPaintLiveChart()) return;
-  if (!range || historyLoading || !historyHasMore || loadedCandles.length === 0) return;
+  if (!range || loadedCandles.length === 0) return;
   if (range.from >= 10) return;
 
   const firstTime = loadedCandles[0].time;
@@ -5507,7 +5641,10 @@ async function maybeLoadHistory(range) {
 
   try {
     const resp = await fetch(
-      apiFetchUrl('/api/history', apiQueryParams({ endTime: firstTime })),
+      apiFetchUrl('/api/history', apiQueryParams({
+        endTime: firstTime,
+        limit: LIVE_HISTORY_CHUNK_LIMIT,
+      })),
       { cache: 'no-store' }
     );
     const data = await resp.json().catch(() => ({}));
@@ -5532,17 +5669,18 @@ async function maybeLoadHistory(range) {
 
       if (prevRange && added > 0) {
         const newRange = { from: prevRange.from + added, to: prevRange.to + added };
-        liveChartData.syncingTimeScale = true;
         liveChartData.allCharts.forEach((c) => {
-          c.timeScale().setVisibleLogicalRange(newRange);
+          syncVisibleLogicalRange(c, newRange);
         });
-        liveChartData.syncingTimeScale = false;
       }
     } finally {
       endDataUpdate();
     }
 
-    historyHasMore = data.hasMore !== false && newCandles.length > 0;
+    historyHasMore = data.hasMore === true;
+    if (added === 0) {
+      historyHasMore = false;
+    }
     updateBufferingOverlay();
   } catch (err) {
     console.error('lazy history:', err);
@@ -5740,6 +5878,7 @@ function onRulerClick(param, chartData) {
 
 function onRulerMove(param, chartData) {
   if (!ruler.active || chartData !== getRulerChartData()) return;
+  if (isUpdatingData) return;
   if (ruler.state !== RULER_MEASURING || !param.point) return;
 
   const series = rulerPriceSeries(chartData);
@@ -5825,10 +5964,12 @@ function updateRulerOverlay(chartData) {
 }
 
 function boot() {
+  initTfBarInteraction();
   if (!initCharts()) {
     setTimeout(boot, 500);
     return;
   }
+  initTfBarInteraction();
   initTabs();
   initThresholdInputs();
   initScoringMatrix();

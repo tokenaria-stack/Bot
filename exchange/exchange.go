@@ -2,14 +2,15 @@ package exchange
 
 import "context"
 
-// Kline represents a single OHLCV candle.
+// Kline represents a single OHLCV candle (OpenTime/CloseTime in Unix milliseconds).
 type Kline struct {
-	OpenTime int64
-	Open     float64
-	High     float64
-	Low      float64
-	Close    float64
-	Volume   float64
+	OpenTime  int64
+	CloseTime int64
+	Open      float64
+	High      float64
+	Low       float64
+	Close     float64
+	Volume    float64
 }
 
 // Exchange describes common operations supported by cryptocurrency exchanges.

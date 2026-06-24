@@ -192,14 +192,15 @@ func main() {
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {
 	klines := make([]exchange.Kline, len(candles))
 	for i, c := range candles {
-		klines[i] = exchange.Kline{
-			OpenTime: c.OpenTime,
-			Open:     c.Open,
-			High:     c.High,
-			Low:      c.Low,
-			Close:    c.Close,
-			Volume:   c.Volume,
-		}
+		klines[i] = exchange.NormalizeKline(exchange.Kline{
+			OpenTime:  c.OpenTime,
+			CloseTime: c.CloseTime,
+			Open:      c.Open,
+			High:      c.High,
+			Low:       c.Low,
+			Close:     c.Close,
+			Volume:    c.Volume,
+		})
 	}
 	return klines
 }

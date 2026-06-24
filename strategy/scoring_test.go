@@ -114,13 +114,13 @@ func TestScoreLong_Components(t *testing.T) {
 		AccumulationRising:    true,
 		AOCrossZeroUp:         true,
 	}
-	got := scoreLong(report)
+	got := scalpDecisionFromReport(context.Background(), report).LongScore
 	want := scoreRSXLL + scalpVolCrossScore + scalpRedCrossScore + scalpBreakoutScore +
 		20 + scalpFib618Score + scalpExpansionScore + scalpJurikBullScore +
 		scalpWozduxVolumeScore + scalpGeometryBounceScore + scalpGeometryTriangleScore +
 		scalpAccumulationScore + scalpAOCrossScore
 	if got != want {
-		t.Fatalf("scoreLong = %d, want %d", got, want)
+		t.Fatalf("LongScore = %d, want %d", got, want)
 	}
 }
 
@@ -144,13 +144,13 @@ func TestScoreShort_Components(t *testing.T) {
 		DistributionFalling:     true,
 		AOCrossZeroDown:         true,
 	}
-	got := scoreShort(report)
+	got := scalpDecisionFromReport(context.Background(), report).ShortScore
 	want := scoreRSXSS + scalpVolCrossScore + scalpRedCrossScore + scalpBreakoutScore +
 		25 + scalpFib618Score + scalpExpansionScore + scalpJurikBearScore +
 		scalpWozduxVolumeScore + scalpGeometryBounceScore + scalpGeometryTriangleScore +
 		scalpAccumulationScore + scalpAOCrossScore
 	if got != want {
-		t.Fatalf("scoreShort = %d, want %d", got, want)
+		t.Fatalf("ShortScore = %d, want %d", got, want)
 	}
 }
 

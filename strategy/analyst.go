@@ -8,6 +8,7 @@ import (
 
 	"github.com/qdrant/go-client/qdrant"
 
+	"trading_bot/data"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 	"trading_bot/vector_db"
@@ -115,20 +116,45 @@ func (a *Marker) JurikRSXColor() string {
 
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
 func (a *Marker) UpdateKline(k exchange.Kline) {
+	a.UpdateKlineTick(k, false)
+}
+
+// UpdateKlineTick ingests a live or historical bar; isClosed is Binance k.x (bar finalized).
+func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
+	k = exchange.NormalizeKline(k)
+	if k.CloseTime <= 0 && k.OpenTime > 0 && a.timeframe != "" {
+		if dur, err := data.IntervalDurationMs(a.timeframe); err == nil {
+			k.CloseTime = k.OpenTime + dur - 1
+		}
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if len(a.klines) == 0 || k.OpenTime > a.klines[len(a.klines)-1].OpenTime {
+	if len(a.klines) == 0 {
+		a.klines = append(a.klines, k)
+		a.evaluateTickLocked(k, 0)
+		return
+	}
+
+	lastIdx := len(a.klines) - 1
+	last := a.klines[lastIdx]
+
+	if k.OpenTime == last.OpenTime {
+		a.klines[lastIdx] = k
+		a.evaluateTickLocked(k, lastIdx)
+		_ = isClosed
+		return
+	}
+
+	if k.OpenTime > last.OpenTime {
 		a.klines = append(a.klines, k)
 		a.evaluateTickLocked(k, len(a.klines)-1)
 		return
 	}
 
-	lastIdx := len(a.klines) - 1
-	if k.OpenTime == a.klines[lastIdx].OpenTime {
-		a.klines[lastIdx] = k
-		a.replayStreamingLocked()
-	}
+	// Out-of-order tick for an earlier period — drop.
+	_ = isClosed
 }
 
 // GetKlines returns a defensive copy of the stored candles.

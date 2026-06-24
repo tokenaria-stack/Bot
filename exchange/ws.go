@@ -29,6 +29,7 @@ type wsStreamEnvelope struct {
 type wsKlinePayload struct {
 	Kline struct {
 		StartTime int64      `json:"t"`
+		CloseTime int64      `json:"T"`
 		Interval  string     `json:"i"`
 		Open      flexString `json:"o"`
 		Close     flexString `json:"c"`
@@ -187,14 +188,15 @@ func (c *WsClient) handleKline(ctx context.Context, raw json.RawMessage) {
 	tick := WsTick{
 		Timeframe: kdata.Interval,
 		IsClosed:  kdata.IsClosed,
-		Kline: Kline{
-			OpenTime: kdata.StartTime,
-			Open:     open,
-			High:     high,
-			Low:      low,
-			Close:    closePrice,
-			Volume:   volume,
-		},
+		Kline: NormalizeKline(Kline{
+			OpenTime:  kdata.StartTime,
+			CloseTime: kdata.CloseTime,
+			Open:      open,
+			High:      high,
+			Low:       low,
+			Close:     closePrice,
+			Volume:    volume,
+		}),
 	}
 
 	select {

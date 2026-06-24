@@ -214,7 +214,9 @@
       background: rgba(30, 34, 45, 0.95);
       flex-shrink: 0;
       flex-wrap: nowrap;
-      overflow-x: auto;
+      position: relative;
+      z-index: 9999;
+      overflow: visible;
     }
 
     .toolbar-symbol {
@@ -236,6 +238,8 @@
       align-items: center;
       gap: 6px;
       position: relative;
+      z-index: 9999;
+      overflow: visible;
     }
 
     .tf-favorites {
@@ -244,7 +248,11 @@
       align-items: center;
     }
 
-    .tf-picker { position: relative; }
+    .tf-picker {
+      position: relative;
+      z-index: 10000;
+      overflow: visible;
+    }
 
     .tf-current-btn {
       background: rgba(41,98,255,0.25);
@@ -261,17 +269,22 @@
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
-      z-index: 100;
+      z-index: 10001;
       width: 280px;
       max-height: 70vh;
       overflow-y: auto;
+      overflow-x: visible;
       background: #1e222d;
       border: 1px solid var(--tv-border);
       border-radius: 6px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
 
-    .tf-dropdown[hidden] { display: none; }
+    .tf-dropdown[hidden]:not(.open) { display: none; }
+
+    .tf-dropdown.open {
+      display: block;
+    }
 
     .tf-custom {
       display: flex;
@@ -320,6 +333,18 @@
 
     .tf-menu-item:hover { background: rgba(255,255,255,0.05); }
     .tf-menu-item.selected { background: rgba(255,255,255,0.1); }
+
+    .tf-menu-name {
+      flex: 1;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
 
     .tf-star {
       background: none;

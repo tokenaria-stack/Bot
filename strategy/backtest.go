@@ -308,10 +308,11 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 		kline.Low = candle.Low
 		kline.Close = candle.Close
 		kline.Volume = candle.Volume
+		kline = exchange.NormalizeKline(kline)
 
 		barMarker := markersMap[candle.CloseTime]
 
-		marker.UpdateKline(kline)
+		marker.UpdateKlineTick(kline, false)
 		histKlines = append(histKlines, kline)
 		histRSX = append(histRSX, marker.falconSignals.JurikRSX)
 		histWozduh = append(histWozduh, marker.falconSignals.RsiVolSlow)
@@ -326,6 +327,10 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 			}
 		}
 
+		if !reportOK {
+			continue
+		}
+
 		pt = BacktestChartPoint{
 			Time:   barTimeSec,
 			Open:   candle.Open,
@@ -334,25 +339,19 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 			Close:  candle.Close,
 			Volume: candle.Volume,
 		}
-		if reportOK {
-			populateBacktestPointFromReport(&pt, report, prevBlue, prevBlueReady)
-			if prevRSXReady {
-				pt.Color = RSXColor(pt.RSX, prevRSX)
-			}
-			pt.Marker = barMarker
-			if pt.Marker == "" {
-				pt.Marker = report.RSXMarker
-			}
-			prevRSX = pt.RSX
-			prevRSXReady = true
-			prevBlue = report.Falcon.BlueLine
-			prevBlueReady = true
+		populateBacktestPointFromReport(&pt, report, prevBlue, prevBlueReady)
+		if prevRSXReady {
+			pt.Color = RSXColor(pt.RSX, prevRSX)
 		}
+		pt.Marker = barMarker
+		if pt.Marker == "" {
+			pt.Marker = report.RSXMarker
+		}
+		prevRSX = pt.RSX
+		prevRSXReady = true
+		prevBlue = report.Falcon.BlueLine
+		prevBlueReady = true
 		chartData = append(chartData, pt)
-
-		if !reportOK {
-			continue
-		}
 
 		decision = e.evaluateBacktestDecision(&report, chief)
 
