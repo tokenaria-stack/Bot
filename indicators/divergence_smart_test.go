@@ -101,5 +101,36 @@ func TestAnalyzeMicroCombined(t *testing.T) {
 	}
 }
 
+func TestSmartDivergenceEngine_SaveRestore_IntraBarMicroTicks(t *testing.T) {
+	t.Parallel()
+
+	engine := indicators.NewSmartDivergenceEngine()
+	engine.UpdateMicroTick(40, 38)
+	engine.UpdateMicroTick(41, 39)
+	engine.UpdateMicroTick(42, 40)
+	engine.SaveState()
+
+	const microTicks = 10
+	finalOrange, finalRed := 45.0, 43.0
+	for i := 0; i < microTicks; i++ {
+		engine.UpdateMicroTick(20+float64(i), 18+float64(i))
+	}
+
+	engine.RestoreState()
+	engine.UpdateMicroTick(finalOrange, finalRed)
+	got := engine.AnalyzeMicroCombined()
+
+	ref := indicators.NewSmartDivergenceEngine()
+	ref.UpdateMicroTick(40, 38)
+	ref.UpdateMicroTick(41, 39)
+	ref.UpdateMicroTick(42, 40)
+	ref.UpdateMicroTick(finalOrange, finalRed)
+	want := ref.AnalyzeMicroCombined()
+
+	if got != want {
+		t.Fatalf("restored micro score = %d, want %d after %d intra-bar micro ticks", got, want, microTicks)
+	}
+}
+
 const saucerScore = 15
 const vSpikeScore = 20

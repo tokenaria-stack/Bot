@@ -1212,7 +1212,6 @@
           <option value="4h">4h</option>
           <option value="1d">D</option>
           <option value="1w">W</option>
-          <option value="1M">M</option>
         </select>
       </div>
       <div class="bt-inline">
@@ -1268,6 +1267,8 @@
       <button type="button" class="seg-btn active" data-scale="log">Log</button>
       <button type="button" class="seg-btn" data-scale="auto">Auto</button>
     </div>
+
+    <button type="button" id="btn-clear-cache" class="tool-btn" title="Очистить серверный кэш HTF и Истории">🗑️ Cache</button>
 
     <div class="seg-group" id="chart-type-group">
       <button type="button" class="seg-btn active" data-chart="candles">Candles</button>
@@ -1519,12 +1520,21 @@
     </div>
     <div class="navigator-popup__body" data-nav-pane="price">
       <div class="setting-row">
-        <label>Period</label>
-        <select data-nav-field="period">
-          <option value="">Chart TF</option>
-          <option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option>
-          <option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option>
-        </select>
+        <label>Periods (MTF)</label>
+        <div class="period-checkboxes" data-nav-field="periods">
+          <label><input type="checkbox" value="1m" /> 1m</label>
+          <label><input type="checkbox" value="3m" /> 3m</label>
+          <label><input type="checkbox" value="5m" /> 5m</label>
+          <label><input type="checkbox" value="15m" /> 15m</label>
+          <label><input type="checkbox" value="30m" /> 30m</label>
+          <label><input type="checkbox" value="1h" /> 1h</label>
+          <label><input type="checkbox" value="4h" /> 4h</label>
+          <label><input type="checkbox" value="1d" /> 1d</label>
+          <label><input type="checkbox" value="1w" /> 1w</label>
+        </div>
+      </div>
+      <div class="menu-group" id="trendlines-sync-group">
+        <h4>Синхронизация ТФ (MTF)</h4>
       </div>
       <div class="setting-row">
         <label class="menu-row"><input type="checkbox" data-nav-field="targetPrice" checked /> Price</label>
@@ -1583,6 +1593,20 @@
     </div>
     <div class="navigator-popup__body" data-nav-pane="rsx">
       <div class="setting-row">
+        <label>Periods (MTF)</label>
+        <div class="period-checkboxes" data-nav-field="periods">
+          <label><input type="checkbox" value="1m" /> 1m</label>
+          <label><input type="checkbox" value="3m" /> 3m</label>
+          <label><input type="checkbox" value="5m" /> 5m</label>
+          <label><input type="checkbox" value="15m" /> 15m</label>
+          <label><input type="checkbox" value="30m" /> 30m</label>
+          <label><input type="checkbox" value="1h" /> 1h</label>
+          <label><input type="checkbox" value="4h" /> 4h</label>
+          <label><input type="checkbox" value="1d" /> 1d</label>
+          <label><input type="checkbox" value="1w" /> 1w</label>
+        </div>
+      </div>
+      <div class="setting-row">
         <label>Trend Type</label>
         <select data-nav-field="trendType"><option value="Wicks">Wicks</option><option value="Body">Body</option></select>
       </div>
@@ -1633,6 +1657,20 @@
       <button type="button" class="navigator-popup__close" aria-label="Close">×</button>
     </div>
     <div class="navigator-popup__body" data-nav-pane="wozduh">
+      <div class="setting-row">
+        <label>Periods (MTF)</label>
+        <div class="period-checkboxes" data-nav-field="periods">
+          <label><input type="checkbox" value="1m" /> 1m</label>
+          <label><input type="checkbox" value="3m" /> 3m</label>
+          <label><input type="checkbox" value="5m" /> 5m</label>
+          <label><input type="checkbox" value="15m" /> 15m</label>
+          <label><input type="checkbox" value="30m" /> 30m</label>
+          <label><input type="checkbox" value="1h" /> 1h</label>
+          <label><input type="checkbox" value="4h" /> 4h</label>
+          <label><input type="checkbox" value="1d" /> 1d</label>
+          <label><input type="checkbox" value="1w" /> 1w</label>
+        </div>
+      </div>
       <div class="setting-row">
         <label>Trend Type</label>
         <select data-nav-field="trendType"><option value="Wicks">Wicks</option><option value="Body">Body</option></select>
@@ -1689,6 +1727,7 @@
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="/trendline_plugin.js"></script>
   <script src="/trade_marker_plugin.js"></script>
+  <script src="/viewport.js"></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

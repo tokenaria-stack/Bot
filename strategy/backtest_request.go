@@ -1,5 +1,7 @@
 package strategy
 
+import "strings"
+
 // BacktestRunSettings is the settings object sent by the dashboard (POST /api/backtest/run).
 // JSON keys must match web/app.js buildFinalBacktestPayload() exactly.
 type BacktestRunSettings struct {
@@ -45,4 +47,42 @@ func ResolveBacktestNavigators(settings *BacktestRunSettings, topLevel map[strin
 		out[pane] = normalizeNavigatorUISettings(ui)
 	}
 	return out
+}
+
+// ApplyMtfOptionsToNavigators toggles higher-TF periods on the price navigator from mtfOptions.
+func ApplyMtfOptionsToNavigators(navs map[string]NavigatorUISettings, mtfOptions map[string]bool) {
+	if len(navs) == 0 || len(mtfOptions) == 0 {
+		return
+	}
+	ui, ok := navs["price"]
+	if !ok {
+		return
+	}
+	periodSet := make(map[string]struct{}, len(ui.Periods)+len(mtfOptions))
+	for _, p := range ui.Periods {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			periodSet[p] = struct{}{}
+		}
+	}
+	for tf, enabled := range mtfOptions {
+		tf = strings.TrimSpace(tf)
+		if tf == "" {
+			continue
+		}
+		if enabled {
+			periodSet[tf] = struct{}{}
+		} else {
+			delete(periodSet, tf)
+		}
+	}
+	if len(periodSet) == 0 {
+		ui.Periods = nil
+	} else {
+		ui.Periods = make([]string, 0, len(periodSet))
+		for p := range periodSet {
+			ui.Periods = append(ui.Periods, p)
+		}
+	}
+	navs["price"] = ui
 }

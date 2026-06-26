@@ -71,6 +71,10 @@ type FalconEngine struct {
 	prevWt11    float64
 	prevWt22    float64
 	prevWtReady bool
+
+	snapPrevWt11    float64
+	snapPrevWt22    float64
+	snapPrevWtReady bool
 }
 
 // NewFalconEngine creates a FalconEngine with default Wozdux/Jurik parameters.
@@ -111,6 +115,66 @@ func DetectVolCross(prevWt11, prevWt22, wt11, wt22 float64, ready bool) string {
 		return "red"
 	}
 	return ""
+}
+
+// SaveState stores indicator state at the last closed bar boundary.
+func (e *FalconEngine) SaveState() {
+	if e == nil {
+		return
+	}
+	e.rsx.SaveState()
+	e.rsxSignal.SaveState()
+	e.redRsi.SaveState()
+	e.orangeRsi.SaveState()
+	e.greenEma.SaveState()
+	e.rsiOfRsi.SaveState()
+	e.blackRsi.SaveState()
+	e.blackMacd.SaveState()
+	e.volVwap.SaveState()
+	e.volRsi.SaveState()
+	e.wt11Ema.SaveState()
+	e.wt22Ema.SaveState()
+	e.navyVwp.SaveState()
+	e.navyRsi.SaveState()
+	e.wt22SMA.SaveState()
+	e.wt22Stdev.SaveState()
+	e.priceSMA.SaveState()
+	e.priceStdev.SaveState()
+	e.ad.SaveState()
+	e.adRsi.SaveState()
+	e.snapPrevWt11 = e.prevWt11
+	e.snapPrevWt22 = e.prevWt22
+	e.snapPrevWtReady = e.prevWtReady
+}
+
+// RestoreState rolls back to the last SaveState snapshot (before open-bar mutation).
+func (e *FalconEngine) RestoreState() {
+	if e == nil {
+		return
+	}
+	e.rsx.RestoreState()
+	e.rsxSignal.RestoreState()
+	e.redRsi.RestoreState()
+	e.orangeRsi.RestoreState()
+	e.greenEma.RestoreState()
+	e.rsiOfRsi.RestoreState()
+	e.blackRsi.RestoreState()
+	e.blackMacd.RestoreState()
+	e.volVwap.RestoreState()
+	e.volRsi.RestoreState()
+	e.wt11Ema.RestoreState()
+	e.wt22Ema.RestoreState()
+	e.navyVwp.RestoreState()
+	e.navyRsi.RestoreState()
+	e.wt22SMA.RestoreState()
+	e.wt22Stdev.RestoreState()
+	e.priceSMA.RestoreState()
+	e.priceStdev.RestoreState()
+	e.ad.RestoreState()
+	e.adRsi.RestoreState()
+	e.prevWt11 = e.snapPrevWt11
+	e.prevWt22 = e.snapPrevWt22
+	e.prevWtReady = e.snapPrevWtReady
 }
 
 // Evaluate updates all streaming indicators and returns the current dashboard.

@@ -82,7 +82,7 @@ func TestBuildNavigatorsFromSeries(t *testing.T) {
 	}
 
 	panes := defaultLiveNavigatorPanes()
-	nav := buildNavigatorsFromSeries(klines, oscillators, 100, "15m", panes)
+	nav := buildNavigatorsFromSeries("BTCUSDT", klines, oscillators, 100, "15m", panes, nil)
 	if nav == nil {
 		t.Fatal("expected navigators map")
 	}

@@ -108,12 +108,13 @@ func main() {
 
 	rm := execution.NewRiskManager(1.0, 10)
 	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
+	htfProvider := exchange.NewHTFProvider()
 	master := strategy.NewMasterGeneral(
-		analysts, signalAnalyst, rm, restClient, nil,
+		analysts, signalAnalyst, rm, restClient, htfProvider, nil,
 		cfg.ReadOnly, cfg.SandboxMode, strategy.DefaultHuntTimeframe,
 	)
 
-	dashboard := server.NewDashboardServer(analysts, restClient, Symbol, orderFlow, signalAnalyst, cfg.ReadOnly, cfg.SandboxMode)
+	dashboard := server.NewDashboardServer(analysts, restClient, Symbol, orderFlow, signalAnalyst, htfProvider, cfg.ReadOnly, cfg.SandboxMode)
 	master.SetOnTick(func(k exchange.Kline, jurik, red, green, blue float64) {
 		longScore := 0
 		shortScore := 0

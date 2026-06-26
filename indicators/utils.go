@@ -73,6 +73,13 @@ type RollingStDev struct {
 	sum    float64
 	sumSq  float64
 	value  float64
+
+	snapIdx   int
+	snapCount int
+	snapSum   float64
+	snapSumSq float64
+	snapValue float64
+	snapBuf   []float64
 }
 
 // NewRollingStDev creates a rolling standard deviation indicator.
@@ -117,6 +124,28 @@ func (r *RollingStDev) Update(val float64) float64 {
 
 func (r *RollingStDev) Value() float64 {
 	return r.value
+}
+
+func (r *RollingStDev) SaveState() {
+	r.snapIdx = r.idx
+	r.snapCount = r.count
+	r.snapSum = r.sum
+	r.snapSumSq = r.sumSq
+	r.snapValue = r.value
+	if cap(r.snapBuf) < len(r.buf) {
+		r.snapBuf = make([]float64, len(r.buf))
+	}
+	r.snapBuf = r.snapBuf[:len(r.buf)]
+	copy(r.snapBuf, r.buf)
+}
+
+func (r *RollingStDev) RestoreState() {
+	r.idx = r.snapIdx
+	r.count = r.snapCount
+	r.sum = r.snapSum
+	r.sumSq = r.snapSumSq
+	r.value = r.snapValue
+	copy(r.buf, r.snapBuf)
 }
 
 var (

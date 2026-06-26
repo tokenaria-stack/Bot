@@ -36,6 +36,14 @@ func (s *RSXSignalLine) Reconfigure(period int) {
 	s.sma = NewSMA(period)
 }
 
+func (s *RSXSignalLine) SaveState() {
+	s.sma.SaveState()
+}
+
+func (s *RSXSignalLine) RestoreState() {
+	s.sma.RestoreState()
+}
+
 // JurikRSX is Mark Jurik's Relative Strength Quality Index — a noise-free RSI
 // with minimal lag. Feed median price (hlc3) or any scalar stream via Update.
 type JurikRSX struct {
@@ -56,6 +64,27 @@ type JurikRSX struct {
 	prevF90 float64
 
 	value float64
+
+	snap jurikRSXSnapshot
+}
+
+type jurikRSXSnapshot struct {
+	prevF8  float64
+	f28     float64
+	f30     float64
+	f38     float64
+	f40     float64
+	f48     float64
+	f50     float64
+	f58     float64
+	f60     float64
+	f68     float64
+	f70     float64
+	f78     float64
+	f80     float64
+	prevF88 float64
+	prevF90 float64
+	value   float64
 }
 
 // NewJurikRSX creates a Jurik RSX indicator (default length 14).
@@ -167,6 +196,46 @@ func (j *JurikRSX) Reconfigure(length int) {
 
 func (j *JurikRSX) Value() float64 {
 	return j.value
+}
+
+func (j *JurikRSX) SaveState() {
+	j.snap = jurikRSXSnapshot{
+		prevF8:  j.prevF8,
+		f28:     j.f28,
+		f30:     j.f30,
+		f38:     j.f38,
+		f40:     j.f40,
+		f48:     j.f48,
+		f50:     j.f50,
+		f58:     j.f58,
+		f60:     j.f60,
+		f68:     j.f68,
+		f70:     j.f70,
+		f78:     j.f78,
+		f80:     j.f80,
+		prevF88: j.prevF88,
+		prevF90: j.prevF90,
+		value:   j.value,
+	}
+}
+
+func (j *JurikRSX) RestoreState() {
+	j.prevF8 = j.snap.prevF8
+	j.f28 = j.snap.f28
+	j.f30 = j.snap.f30
+	j.f38 = j.snap.f38
+	j.f40 = j.snap.f40
+	j.f48 = j.snap.f48
+	j.f50 = j.snap.f50
+	j.f58 = j.snap.f58
+	j.f60 = j.snap.f60
+	j.f68 = j.snap.f68
+	j.f70 = j.snap.f70
+	j.f78 = j.snap.f78
+	j.f80 = j.snap.f80
+	j.prevF88 = j.snap.prevF88
+	j.prevF90 = j.snap.prevF90
+	j.value = j.snap.value
 }
 
 func clampRSX(v float64) float64 {

@@ -57,6 +57,14 @@ type SmartDivergenceEngine struct {
 	redTicks    [maxMicroTicks]float64
 	tickIdx     int
 	tickCount   int
+
+	savedSnapshots  [maxDivSnapshots]Snapshot
+	savedSnapIdx    int
+	savedSnapCount  int
+	savedOrangeTicks [maxMicroTicks]float64
+	savedRedTicks    [maxMicroTicks]float64
+	savedTickIdx     int
+	savedTickCount   int
 }
 
 // NewSmartDivergenceEngine creates an empty divergence engine.
@@ -81,6 +89,34 @@ func (e *SmartDivergenceEngine) UpdateMicroTick(orangeRSI, redRSI float64) {
 	if e.tickCount < maxMicroTicks {
 		e.tickCount++
 	}
+}
+
+// SaveState stores ring-buffer indices and contents at the last closed bar boundary.
+func (e *SmartDivergenceEngine) SaveState() {
+	if e == nil {
+		return
+	}
+	e.savedSnapshots = e.snapshots
+	e.savedSnapIdx = e.snapIdx
+	e.savedSnapCount = e.snapCount
+	e.savedOrangeTicks = e.orangeTicks
+	e.savedRedTicks = e.redTicks
+	e.savedTickIdx = e.tickIdx
+	e.savedTickCount = e.tickCount
+}
+
+// RestoreState rolls back to the last SaveState snapshot (before open-bar mutation).
+func (e *SmartDivergenceEngine) RestoreState() {
+	if e == nil {
+		return
+	}
+	e.snapshots = e.savedSnapshots
+	e.snapIdx = e.savedSnapIdx
+	e.snapCount = e.savedSnapCount
+	e.orangeTicks = e.savedOrangeTicks
+	e.redTicks = e.savedRedTicks
+	e.tickIdx = e.savedTickIdx
+	e.tickCount = e.savedTickCount
 }
 
 // AnalyzeMacro scans stored snapshots for multi-indicator divergence confluence.

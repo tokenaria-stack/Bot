@@ -21,6 +21,27 @@ type rsxMarkerState struct {
 	tvHasMin       bool
 	tvMaxCloseHist []float64
 	tvMinCloseHist []float64
+
+	snap rsxMarkerSnapshot
+}
+
+type rsxMarkerSnapshot struct {
+	prices         []float64
+	rsx            []float64
+	markers        map[int]string
+	latest         string
+	lastPivotHigh  int
+	lastPivotLow   int
+	tvCloses       []float64
+	tvRSX          []float64
+	tvMaxClose     float64
+	tvMaxRSX       float64
+	tvMinClose     float64
+	tvMinRSX       float64
+	tvHasMax       bool
+	tvHasMin       bool
+	tvMaxCloseHist []float64
+	tvMinCloseHist []float64
 }
 
 func newRSXMarkerState(lookback int) rsxMarkerState {
@@ -111,4 +132,48 @@ func (s *rsxMarkerState) recentTradingMarker(memoryBars int) string {
 
 func (s *rsxMarkerState) markerAt(barIndex int) string {
 	return s.markers[barIndex]
+}
+
+func (s *rsxMarkerState) SaveState() {
+	s.snap.prices = append([]float64(nil), s.prices...)
+	s.snap.rsx = append([]float64(nil), s.rsx...)
+	s.snap.markers = make(map[int]string, len(s.markers))
+	for k, v := range s.markers {
+		s.snap.markers[k] = v
+	}
+	s.snap.latest = s.latest
+	s.snap.lastPivotHigh = s.lastPivotHigh
+	s.snap.lastPivotLow = s.lastPivotLow
+	s.snap.tvCloses = append([]float64(nil), s.tvCloses...)
+	s.snap.tvRSX = append([]float64(nil), s.tvRSX...)
+	s.snap.tvMaxClose = s.tvMaxClose
+	s.snap.tvMaxRSX = s.tvMaxRSX
+	s.snap.tvMinClose = s.tvMinClose
+	s.snap.tvMinRSX = s.tvMinRSX
+	s.snap.tvHasMax = s.tvHasMax
+	s.snap.tvHasMin = s.tvHasMin
+	s.snap.tvMaxCloseHist = append([]float64(nil), s.tvMaxCloseHist...)
+	s.snap.tvMinCloseHist = append([]float64(nil), s.tvMinCloseHist...)
+}
+
+func (s *rsxMarkerState) RestoreState() {
+	s.prices = append([]float64(nil), s.snap.prices...)
+	s.rsx = append([]float64(nil), s.snap.rsx...)
+	s.markers = make(map[int]string, len(s.snap.markers))
+	for k, v := range s.snap.markers {
+		s.markers[k] = v
+	}
+	s.latest = s.snap.latest
+	s.lastPivotHigh = s.snap.lastPivotHigh
+	s.lastPivotLow = s.snap.lastPivotLow
+	s.tvCloses = append([]float64(nil), s.snap.tvCloses...)
+	s.tvRSX = append([]float64(nil), s.snap.tvRSX...)
+	s.tvMaxClose = s.snap.tvMaxClose
+	s.tvMaxRSX = s.snap.tvMaxRSX
+	s.tvMinClose = s.snap.tvMinClose
+	s.tvMinRSX = s.snap.tvMinRSX
+	s.tvHasMax = s.snap.tvHasMax
+	s.tvHasMin = s.snap.tvHasMin
+	s.tvMaxCloseHist = append([]float64(nil), s.snap.tvMaxCloseHist...)
+	s.tvMinCloseHist = append([]float64(nil), s.snap.tvMinCloseHist...)
 }

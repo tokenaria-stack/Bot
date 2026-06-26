@@ -8,6 +8,12 @@ type SMA struct {
 	count  int
 	sum    float64
 	value  float64
+
+	snapIdx   int
+	snapCount int
+	snapSum   float64
+	snapValue float64
+	snapBuf   []float64
 }
 
 // NewSMA creates an SMA indicator for the given window size.
@@ -44,12 +50,35 @@ func (s *SMA) Value() float64 {
 	return s.value
 }
 
+func (s *SMA) SaveState() {
+	s.snapIdx = s.idx
+	s.snapCount = s.count
+	s.snapSum = s.sum
+	s.snapValue = s.value
+	if cap(s.snapBuf) < len(s.buf) {
+		s.snapBuf = make([]float64, len(s.buf))
+	}
+	s.snapBuf = s.snapBuf[:len(s.buf)]
+	copy(s.snapBuf, s.buf)
+}
+
+func (s *SMA) RestoreState() {
+	s.idx = s.snapIdx
+	s.count = s.snapCount
+	s.sum = s.snapSum
+	s.value = s.snapValue
+	copy(s.buf, s.snapBuf)
+}
+
 // EMA is an Exponential Moving Average with O(1) memory.
 type EMA struct {
 	period      int
 	alpha       float64
 	initialized bool
 	value       float64
+
+	snapInitialized bool
+	snapValue       float64
 }
 
 // NewEMA creates an EMA indicator (alpha = 2 / (N + 1)).
@@ -78,12 +107,25 @@ func (e *EMA) Value() float64 {
 	return e.value
 }
 
+func (e *EMA) SaveState() {
+	e.snapInitialized = e.initialized
+	e.snapValue = e.value
+}
+
+func (e *EMA) RestoreState() {
+	e.initialized = e.snapInitialized
+	e.value = e.snapValue
+}
+
 // RMA is Wilder's Running Moving Average (alpha = 1 / N), used by TradingView RSI.
 type RMA struct {
 	period      int
 	alpha       float64
 	initialized bool
 	value       float64
+
+	snapInitialized bool
+	snapValue       float64
 }
 
 // NewRMA creates an RMA indicator (alpha = 1 / N).
@@ -110,6 +152,16 @@ func (r *RMA) Update(val float64) float64 {
 
 func (r *RMA) Value() float64 {
 	return r.value
+}
+
+func (r *RMA) SaveState() {
+	r.snapInitialized = r.initialized
+	r.snapValue = r.value
+}
+
+func (r *RMA) RestoreState() {
+	r.initialized = r.snapInitialized
+	r.value = r.snapValue
 }
 
 var (

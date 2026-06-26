@@ -384,13 +384,13 @@ func TestBuildNavigatorData_disabledAndRouting(t *testing.T) {
 	rsx := []float64{55, 56}
 	woz := []float64{40, 41}
 
-	if got := strategy.BuildNavigatorData(strategy.NavigatorUISettings{}, klines, rsx, woz, ""); len(got.Lines) != 0 {
+	if got := strategy.BuildNavigatorData(strategy.NavigatorUISettings{}, klines, rsx, woz, "", nil, nil); len(got.Lines) != 0 {
 		t.Fatalf("disabled navigator should be empty, got %+v", got)
 	}
 
 	price := strategy.BuildNavigatorData(strategy.NavigatorUISettings{
 		Enabled: true, Source: "Price", UseLong: true, LongLen: 1,
-	}, klines, rsx, woz, "15m")
+	}, klines, rsx, woz, "15m", nil, nil)
 	if len(price.Lines) == 0 && len(price.Markers) == 0 {
 		// short series may produce no pivots — still exercises routing without panic
 		t.Log("price navigator empty on 2 bars (expected)")
@@ -398,12 +398,12 @@ func TestBuildNavigatorData_disabledAndRouting(t *testing.T) {
 
 	rsxNav := strategy.BuildNavigatorData(strategy.NavigatorUISettings{
 		Enabled: true, Source: "RSX", UseShort: true, ShortLen: 1,
-	}, klines, rsx, woz, "15m")
+	}, klines, rsx, woz, "15m", nil, nil)
 	_ = rsxNav
 
 	wozNav := strategy.BuildNavigatorData(strategy.NavigatorUISettings{
 		Enabled: true, Source: "Wozduh", UseShort: true, ShortLen: 1,
-	}, klines, rsx, woz, "15m")
+	}, klines, rsx, woz, "15m", nil, nil)
 	_ = wozNav
 }
 
@@ -596,7 +596,7 @@ func TestBuildNavigatorResult_timeAnchoredVisuals(t *testing.T) {
 		BarColor:        true,
 		BackgroundColor: true,
 	}
-	got := strategy.BuildNavigatorResult(ui, klines, nil, nil, "15m")
+	got := strategy.BuildNavigatorResult(ui, klines, nil, nil, "15m", nil, nil)
 
 	if len(got.BarColors) == 0 {
 		t.Fatal("expected time-keyed bar colors map")
@@ -706,6 +706,50 @@ func TestSanitizeSlope(t *testing.T) {
 	}
 	if got := strategy.SanitizeSlopeForTest(1e9); got != 100000 {
 		t.Fatalf("huge slope = %v, want 100000", got)
+	}
+}
+
+func TestClipNavigatorLinesToChartWindow(t *testing.T) {
+	t.Parallel()
+
+	klines := []exchange.Kline{
+		{OpenTime: 1_000_000, CloseTime: 1_900_000, Close: 100},
+		{OpenTime: 2_000_000, CloseTime: 2_900_000, Close: 110},
+	}
+	lines := []strategy.NavigatorLineDTO{
+		{Time1: 500_000, Time2: 1_500_000, Y1: 90, Y2: 105},
+		{Time1: 500_000, Time2: 800_000, Y1: 90, Y2: 95},
+		{Time1: 1_500_000, Time2: 2_500_000, Y1: 105, Y2: 115},
+	}
+	clipped := strategy.ClipNavigatorLinesToChartWindow(lines, klines)
+	if len(clipped) != 2 {
+		t.Fatalf("len = %d, want 2 (drop fully-before + keep clipped + keep in-window)", len(clipped))
+	}
+	if clipped[0].Time1 != 1_000_000 {
+		t.Fatalf("clipped start Time1 = %d, want 1000000", clipped[0].Time1)
+	}
+	if clipped[0].Y1 <= 90 || clipped[0].Y1 >= 105 {
+		t.Fatalf("clipped Y1 = %g, want between 90 and 105", clipped[0].Y1)
+	}
+	if clipped[1].Time1 != 1_500_000 {
+		t.Fatalf("in-window line Time1 = %d, want 1500000", clipped[1].Time1)
+	}
+}
+
+func TestRunNavigatorAggregator_TagsInterval(t *testing.T) {
+	t.Parallel()
+
+	highs := []float64{10, 11, 12, 13, 14, 15}
+	lows := []float64{9, 9, 9, 9, 9, 9}
+	closes := highs
+	barTimes := strategy.SynthesizeBarTimesMS(len(highs), 4*60*60*1000)
+	out := strategy.RunNavigatorAggregator(highs, lows, closes, barTimes, strategy.NavigatorUISettings{
+		Enabled: true, UseLong: true, LongLen: 2,
+	}, "4h")
+	for _, line := range out.Lines {
+		if line.Interval != "4h" {
+			t.Fatalf("line interval = %q, want 4h", line.Interval)
+		}
 	}
 }
 

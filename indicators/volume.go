@@ -4,6 +4,9 @@ package indicators
 type AD struct {
 	total float64
 	value float64
+
+	snapTotal float64
+	snapValue float64
 }
 
 // NewAD creates an Accumulation/Distribution indicator.
@@ -23,6 +26,16 @@ func (a *AD) UpdateCandle(high, low, close float64) float64 {
 
 func (a *AD) Value() float64 {
 	return a.value
+}
+
+func (a *AD) SaveState() {
+	a.snapTotal = a.total
+	a.snapValue = a.value
+}
+
+func (a *AD) RestoreState() {
+	a.total = a.snapTotal
+	a.value = a.snapValue
 }
 
 var _ CandleIndicator = (*AD)(nil)
@@ -53,6 +66,8 @@ type VolumeWeightedEMA struct {
 	pvEMA *EMA
 	vEMA  *EMA
 	value float64
+
+	snapValue float64
 }
 
 // NewVolumeWeightedEMA creates a volume-weighted EMA indicator.
@@ -78,4 +93,16 @@ func (v *VolumeWeightedEMA) Update(price, volume float64) float64 {
 
 func (v *VolumeWeightedEMA) Value() float64 {
 	return v.value
+}
+
+func (v *VolumeWeightedEMA) SaveState() {
+	v.snapValue = v.value
+	v.pvEMA.SaveState()
+	v.vEMA.SaveState()
+}
+
+func (v *VolumeWeightedEMA) RestoreState() {
+	v.value = v.snapValue
+	v.pvEMA.RestoreState()
+	v.vEMA.RestoreState()
 }

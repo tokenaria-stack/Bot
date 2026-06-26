@@ -68,7 +68,7 @@ func (a *Marker) resetStreamingEngines() {
 func (a *Marker) warmupStreaming(klines []exchange.Kline) {
 	a.resetStreamingEngines()
 	for i, k := range klines {
-		a.evaluateTickLocked(k, i)
+		a.evaluateTickLocked(k, i, true)
 	}
 }
 
@@ -76,12 +76,137 @@ func (a *Marker) replayStreamingLocked() {
 	klines := a.klines
 	a.resetStreamingEngines()
 	for i, k := range klines {
-		a.evaluateTickLocked(k, i)
+		a.evaluateTickLocked(k, i, true)
 	}
 }
 
-func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int) {
+// layer2StreamingSnapshot holds Marker-level Layer 2 state between closed bars.
+type layer2StreamingSnapshot struct {
+	adHistory             []float64
+	prevAO                float64
+	prevAOReady           bool
+	latestAO              float64
+	prevJurik             float64
+	jurikPrevBar          float64
+	jurikValue            float64
+	jurikIsRising         bool
+	prevFalconRed         float64
+	prevFalconGreen       float64
+	prevFalconBlue        float64
+	redLineCrossGreenUp   bool
+	redLineCrossGreenDown bool
+	wozduxVolumeSpikeUp   bool
+	wozduxVolumeSpikeDown bool
+	accumulationRising    bool
+	distributionFalling   bool
+	aoCrossZeroUp         bool
+	aoCrossZeroDown       bool
+	volatilityState       VolatilityState
+	divSignal             indicators.DivSignal
+}
+
+func (a *Marker) restoreLayer2StreamingState() {
+	if a.volEngine != nil {
+		a.volEngine.RestoreState()
+	}
+	if a.orangeRsi != nil {
+		a.orangeRsi.RestoreState()
+	}
+	if a.ad != nil {
+		a.ad.RestoreState()
+	}
+	if a.stoch != nil {
+		a.stoch.RestoreState()
+	}
+	if a.ao != nil {
+		a.ao.RestoreState()
+	}
+	if a.divEngine != nil {
+		a.divEngine.RestoreState()
+	}
+	a.rsxMarkers.RestoreState()
+
+	s := a.layer2Snap
+	a.adHistory = append(a.adHistory[:0], s.adHistory...)
+	a.prevAO = s.prevAO
+	a.prevAOReady = s.prevAOReady
+	a.latestAO = s.latestAO
+	a.prevJurik = s.prevJurik
+	a.jurikPrevBar = s.jurikPrevBar
+	a.jurikValue = s.jurikValue
+	a.jurikIsRising = s.jurikIsRising
+	a.prevFalconRed = s.prevFalconRed
+	a.prevFalconGreen = s.prevFalconGreen
+	a.prevFalconBlue = s.prevFalconBlue
+	a.redLineCrossGreenUp = s.redLineCrossGreenUp
+	a.redLineCrossGreenDown = s.redLineCrossGreenDown
+	a.wozduxVolumeSpikeUp = s.wozduxVolumeSpikeUp
+	a.wozduxVolumeSpikeDown = s.wozduxVolumeSpikeDown
+	a.accumulationRising = s.accumulationRising
+	a.distributionFalling = s.distributionFalling
+	a.aoCrossZeroUp = s.aoCrossZeroUp
+	a.aoCrossZeroDown = s.aoCrossZeroDown
+	a.volatilityState = s.volatilityState
+	a.divSignal = s.divSignal
+}
+
+func (a *Marker) saveLayer2StreamingState() {
+	if a.volEngine != nil {
+		a.volEngine.SaveState()
+	}
+	if a.orangeRsi != nil {
+		a.orangeRsi.SaveState()
+	}
+	if a.ad != nil {
+		a.ad.SaveState()
+	}
+	if a.stoch != nil {
+		a.stoch.SaveState()
+	}
+	if a.ao != nil {
+		a.ao.SaveState()
+	}
+	if a.divEngine != nil {
+		a.divEngine.SaveState()
+	}
+	a.rsxMarkers.SaveState()
+
+	a.layer2Snap = layer2StreamingSnapshot{
+		adHistory:             append([]float64(nil), a.adHistory...),
+		prevAO:                a.prevAO,
+		prevAOReady:           a.prevAOReady,
+		latestAO:              a.latestAO,
+		prevJurik:             a.prevJurik,
+		jurikPrevBar:          a.jurikPrevBar,
+		jurikValue:            a.jurikValue,
+		jurikIsRising:         a.jurikIsRising,
+		prevFalconRed:         a.prevFalconRed,
+		prevFalconGreen:       a.prevFalconGreen,
+		prevFalconBlue:        a.prevFalconBlue,
+		redLineCrossGreenUp:   a.redLineCrossGreenUp,
+		redLineCrossGreenDown: a.redLineCrossGreenDown,
+		wozduxVolumeSpikeUp:   a.wozduxVolumeSpikeUp,
+		wozduxVolumeSpikeDown: a.wozduxVolumeSpikeDown,
+		accumulationRising:    a.accumulationRising,
+		distributionFalling:   a.distributionFalling,
+		aoCrossZeroUp:         a.aoCrossZeroUp,
+		aoCrossZeroDown:       a.aoCrossZeroDown,
+		volatilityState:       a.volatilityState,
+		divSignal:             a.divSignal,
+	}
+}
+
+func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, isClosed bool) {
+	a.falcon.RestoreState()
 	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
+	if isClosed {
+		a.falcon.SaveState()
+	}
+}
+
+func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
+	a.restoreLayer2StreamingState()
+	a.evaluateFalconSignalsLocked(k, isClosed)
 	curRed := a.falconSignals.RedLine
 	curGreen := a.falconSignals.GreenLine
 	a.redLineCrossGreenUp = detectRedLineCrossGreenUp(a.prevFalconRed, a.prevFalconGreen, curRed, curGreen)
@@ -162,6 +287,10 @@ func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int) {
 	a.geometryTriangle = a.geometryState.TriangleKind != ""
 	a.divSignal = combineDivSignals(a.divEngine.AnalyzeMacro(), a.divEngine.AnalyzeMicroCombined())
 	a.rsxMarkers.appendBar(k.High, k.Low, k.Close, a.falconSignals.JurikRSX)
+
+	if isClosed {
+		a.saveLayer2StreamingState()
+	}
 }
 
 func (a *Marker) isNewZigZagNode(upd indicators.ZigZagUpdate) bool {

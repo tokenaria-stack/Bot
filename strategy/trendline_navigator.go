@@ -3,6 +3,7 @@ package strategy
 import (
 	"log"
 	"math"
+	"strings"
 
 	"trading_bot/exchange"
 )
@@ -117,6 +118,7 @@ type NavigatorLineDTO struct {
 	Y2       float64 `json:"y2"`
 	Time1    int64   `json:"time1"`
 	Time2    int64   `json:"time2"`
+	Interval string  `json:"interval,omitempty"` // chart or HTF period (e.g. 15m, 4h, 1d)
 	Color    string  `json:"color"`
 	Style    string  `json:"style"`
 	IsActive bool    `json:"isActive,omitempty"`
@@ -155,6 +157,7 @@ type NavigatorUISettings struct {
 	Source    string `json:"source"`    // Price, RSX, Wozduh
 	TrendType string `json:"trendType"` // Wicks, Body
 	Term      string `json:"term"`      // Long, Medium, Short — trend source for bar/background
+	Periods   []string `json:"periods"` // MTF sync targets (e.g. 4h, 1d); empty = chart TF only
 	UseLong   bool   `json:"useLong"`
 	LongLen   int    `json:"longLen"`
 	UseMedium bool   `json:"useMedium"`
@@ -238,11 +241,24 @@ func RunNavigatorAggregator(highs, lows, closes []float64, barTimes []int64, ui 
 		}
 		runLayer(shortLen, NavigatorStyleDotted)
 	}
-	return out
+	return tagNavigatorResultInterval(out, interval)
+}
+
+func tagNavigatorResultInterval(dto NavigatorResultDTO, interval string) NavigatorResultDTO {
+	interval = normalizeNavigatorInterval(interval)
+	if interval == "" {
+		return dto
+	}
+	for i := range dto.Lines {
+		dto.Lines[i].Interval = interval
+	}
+	return dto
 }
 
 // BuildNavigatorData routes source series and runs the multi-engine aggregator when enabled.
-func BuildNavigatorData(ui NavigatorUISettings, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string) NavigatorResultDTO {
+// htfData holds preloaded higher-TF klines keyed by period (strictly closed before chart end time).
+func BuildNavigatorData(ui NavigatorUISettings, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string, htf *exchange.HTFProvider, htfData map[string][]exchange.Kline) NavigatorResultDTO {
+	_ = htf
 	ui = normalizeNavigatorUISettings(ui)
 	if !ui.Enabled {
 		return NavigatorResultDTO{}
@@ -263,7 +279,46 @@ func BuildNavigatorData(ui NavigatorUISettings, klines []exchange.Kline, rsxValu
 		closes = ExtractCloses(klines)
 	}
 	barTimes := ExtractBarTimes(klines)
-	return RunNavigatorAggregator(highs, lows, closes, barTimes, ui, interval)
+	out := RunNavigatorAggregator(highs, lows, closes, barTimes, ui, interval)
+	return mergeHTFNavigatorLayers(out, ui, interval, klines, htfData)
+}
+
+func mergeHTFNavigatorLayers(base NavigatorResultDTO, ui NavigatorUISettings, chartInterval string, chartKlines []exchange.Kline, htfData map[string][]exchange.Kline) NavigatorResultDTO {
+	if len(htfData) == 0 {
+		return base
+	}
+	trendType := ui.TrendType
+	if trendType == "" {
+		trendType = NavigatorTrendWicks
+	}
+	for _, period := range ui.Periods {
+		period = strings.TrimSpace(period)
+		if period == "" || navigatorIntervalsEqual(period, chartInterval) {
+			continue
+		}
+		htfKlines := htfData[period]
+		if len(htfKlines) < 3 {
+			continue
+		}
+		var hHighs, hLows, hCloses []float64
+		switch normalizeNavigatorSource(ui.Source) {
+		case navigatorSourceRSX, navigatorSourceWozduh:
+			// HTF oscillator series are not pre-aggregated — MTF merge applies to price TLs only.
+			continue
+		default:
+			hHighs, hLows, _ = ExtractTrendlineData(htfKlines, trendType)
+			hCloses = ExtractCloses(htfKlines)
+		}
+		hBarTimes := ExtractBarTimes(htfKlines)
+		htfLayer := RunNavigatorAggregator(hHighs, hLows, hCloses, hBarTimes, ui, period)
+		if len(chartKlines) > 0 {
+			htfLayer.Lines = ClipNavigatorLinesToChartWindow(htfLayer.Lines, chartKlines)
+			htfLayer.Markers = clipNavigatorMarkersToChartWindow(htfLayer.Markers, chartKlines)
+		}
+		base.Lines = append(base.Lines, htfLayer.Lines...)
+		base.Markers = append(base.Markers, htfLayer.Markers...)
+	}
+	return base
 }
 
 func normalizeNavigatorUISettings(ui NavigatorUISettings) NavigatorUISettings {
@@ -288,8 +343,12 @@ func normalizeNavigatorUISettings(ui NavigatorUISettings) NavigatorUISettings {
 }
 
 // BuildNavigatorResult runs the aggregator and optionally attaches bar/background visuals.
-func BuildNavigatorResult(ui NavigatorUISettings, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string) NavigatorResultDTO {
-	dto := BuildNavigatorData(ui, klines, rsxValues, wozduhValues, interval)
+func BuildNavigatorResult(ui NavigatorUISettings, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string, htf *exchange.HTFProvider, htfData map[string][]exchange.Kline) NavigatorResultDTO {
+	dto := BuildNavigatorData(ui, klines, rsxValues, wozduhValues, interval, htf, htfData)
+	if len(klines) > 0 {
+		dto.Lines = ClipNavigatorLinesToChartWindow(dto.Lines, klines)
+		dto.Markers = clipNavigatorMarkersToChartWindow(dto.Markers, klines)
+	}
 	if !ui.BarColor && !ui.BackgroundColor {
 		return dto
 	}
@@ -314,6 +373,78 @@ func navigatorMinLineStartTime(lines []NavigatorLineDTO) int64 {
 		}
 	}
 	return min
+}
+
+// ClipNavigatorLinesToChartWindow trims MTF/chart lines to the loaded chart kline window.
+// Lines starting before the first chart bar are clipped in time/price; lines entirely before the window are dropped.
+func ClipNavigatorLinesToChartWindow(lines []NavigatorLineDTO, klines []exchange.Kline) []NavigatorLineDTO {
+	if len(klines) == 0 || len(lines) == 0 {
+		return lines
+	}
+	minMs := navigatorChartStartMs(klines)
+	maxMs := navigatorChartEndMs(klines)
+	out := make([]NavigatorLineDTO, 0, len(lines))
+	for _, line := range lines {
+		clipped, keep := clipNavigatorLineToWindow(line, minMs, maxMs)
+		if keep {
+			out = append(out, clipped)
+		}
+	}
+	return out
+}
+
+func navigatorChartEndMs(klines []exchange.Kline) int64 {
+	if len(klines) == 0 {
+		return 0
+	}
+	last := klines[len(klines)-1]
+	if last.CloseTime > 0 {
+		return last.CloseTime
+	}
+	return last.OpenTime
+}
+
+func clipNavigatorLineToWindow(line NavigatorLineDTO, minMs, maxMs int64) (NavigatorLineDTO, bool) {
+	t1, t2 := line.Time1, line.Time2
+	if t1 <= 0 || t2 <= 0 {
+		return line, true
+	}
+	if t2 < minMs || t1 > maxMs {
+		return line, false
+	}
+	if t1 < minMs {
+		line.Y1 = navigatorLinePriceAtTime(line, minMs)
+		line.Time1 = minMs
+	}
+	if t2 > maxMs {
+		line.Y2 = navigatorLinePriceAtTime(line, maxMs)
+		line.Time2 = maxMs
+	}
+	return line, true
+}
+
+func navigatorLinePriceAtTime(line NavigatorLineDTO, tMs int64) float64 {
+	t1, t2 := line.Time1, line.Time2
+	if t2 == t1 {
+		return sanitizeFloat(line.Y1)
+	}
+	y := line.Y1 + (line.Y2-line.Y1)*float64(tMs-t1)/float64(t2-t1)
+	return sanitizeFloat(y)
+}
+
+func clipNavigatorMarkersToChartWindow(markers []NavigatorMarkerDTO, klines []exchange.Kline) []NavigatorMarkerDTO {
+	if len(klines) == 0 || len(markers) == 0 {
+		return markers
+	}
+	minMs := navigatorChartStartMs(klines)
+	out := make([]NavigatorMarkerDTO, 0, len(markers))
+	for _, m := range markers {
+		if m.Time > 0 && m.Time < minMs {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func clipNavigatorZonesFromTime(zones []NavigatorZoneDTO, fromMs int64) []NavigatorZoneDTO {
@@ -347,18 +478,99 @@ func clipNavigatorBarColorsFromTime(bars map[int64]string, fromMs int64) map[int
 }
 
 // BuildAllNavigators runs enabled pane configs (price, rsx, wozduh keys).
-func BuildAllNavigators(panes map[string]NavigatorUISettings, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string) map[string]NavigatorResultDTO {
+func BuildAllNavigators(panes map[string]NavigatorUISettings, symbol string, klines []exchange.Kline, rsxValues, wozduhValues []float64, interval string, htf *exchange.HTFProvider) map[string]NavigatorResultDTO {
 	out := make(map[string]NavigatorResultDTO)
 	if len(panes) == 0 {
 		return out
 	}
+	startMs := navigatorChartStartMs(klines)
+	maxTimeSec := navigatorMaxCloseTimeSec(klines)
 	for pane, ui := range panes {
 		if !ui.Enabled {
 			continue
 		}
 		ui.Source = navigatorPaneToSource(pane)
-		out[pane] = BuildNavigatorResult(ui, klines, rsxValues, wozduhValues, interval)
+		htfData := loadNavigatorHTFData(htf, symbol, interval, startMs, maxTimeSec, ui.Periods)
+		out[pane] = BuildNavigatorResult(ui, klines, rsxValues, wozduhValues, interval, htf, htfData)
 	}
+	return out
+}
+
+func navigatorMaxCloseTimeSec(klines []exchange.Kline) int64 {
+	if len(klines) == 0 {
+		return 0
+	}
+	last := klines[len(klines)-1]
+	if last.CloseTime > 0 {
+		return last.CloseTime / 1000
+	}
+	return last.OpenTime / 1000
+}
+
+func navigatorChartStartMs(klines []exchange.Kline) int64 {
+	if len(klines) == 0 {
+		return 0
+	}
+	return klines[0].OpenTime
+}
+
+func normalizeNavigatorInterval(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "1M" {
+		return "1M"
+	}
+	return strings.ToLower(raw)
+}
+
+func navigatorIntervalsEqual(a, b string) bool {
+	return normalizeNavigatorInterval(a) == normalizeNavigatorInterval(b)
+}
+
+func loadNavigatorHTFData(htf *exchange.HTFProvider, symbol, chartInterval string, startMs, maxTimeSec int64, periods []string) map[string][]exchange.Kline {
+	if htf == nil || symbol == "" || len(periods) == 0 {
+		return nil
+	}
+	out := make(map[string][]exchange.Kline)
+	for _, period := range periods {
+		period = strings.TrimSpace(period)
+		if period == "" || navigatorIntervalsEqual(period, chartInterval) {
+			continue
+		}
+		periodKlines, err := htf.GetKlines(symbol, period, startMs)
+		if err != nil || len(periodKlines) == 0 {
+			continue
+		}
+		if maxTimeSec > 0 {
+			if strict := htf.GetCandlesStrictlyBefore(symbol, period, maxTimeSec); len(strict) > 0 {
+				periodKlines = strict
+			}
+		}
+		periodKlines = sliceNavigatorKlinesFrom(periodKlines, startMs)
+		if len(periodKlines) == 0 {
+			continue
+		}
+		htf.PinKlines(symbol, period)
+		out[period] = periodKlines
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sliceNavigatorKlinesFrom(klines []exchange.Kline, startMs int64) []exchange.Kline {
+	if startMs <= 0 || len(klines) == 0 {
+		return klines
+	}
+	i := 0
+	for i < len(klines) && klines[i].OpenTime < startMs {
+		i++
+	}
+	if i >= len(klines) {
+		return nil
+	}
+	out := make([]exchange.Kline, len(klines)-i)
+	copy(out, klines[i:])
 	return out
 }
 
@@ -805,7 +1017,7 @@ func BuildNavigatorPriceFromKlines(klines []exchange.Kline) NavigatorResultDTO {
 		TrendType: NavigatorTrendWicks,
 		UseLong:   true,
 		LongLen:   10,
-	}, klines, nil, nil, "")
+	}, klines, nil, nil, "", nil, nil)
 }
 
 func (e *NavigatorEngine) resetRun() {

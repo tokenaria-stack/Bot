@@ -37,6 +37,7 @@ type MasterGeneral struct {
 	chief            *ChiefAnalyst
 	positionSizer    *execution.RiskManager
 	exchangeClient   *exchange.BinanceExchange
+	htfProvider      *exchange.HTFProvider
 	readOnly         bool
 	sandboxMode      bool
 	huntTimeframe    string
@@ -61,6 +62,7 @@ func NewMasterGeneral(
 	signalAnalyst *Analyst,
 	positionSizer *execution.RiskManager,
 	exchangeClient *exchange.BinanceExchange,
+	htfProvider *exchange.HTFProvider,
 	memoryStore *vector_db.MemoryStore,
 	readOnly bool,
 	sandboxMode bool,
@@ -79,6 +81,7 @@ func NewMasterGeneral(
 		chief:          NewChiefAnalyst(),
 		positionSizer:  positionSizer,
 		exchangeClient: exchangeClient,
+		htfProvider:    htfProvider,
 		memoryStore:    memoryStore,
 		readOnly:       readOnly,
 		sandboxMode:    sandboxMode,
@@ -87,6 +90,11 @@ func NewMasterGeneral(
 		TickHuntCh:     make(chan struct{}, 100),
 		TickLiveCh:     make(chan struct{}, 1000),
 	}
+}
+
+// HTFProvider returns the shared higher-timeframe data hub (may be nil).
+func (m *MasterGeneral) HTFProvider() *exchange.HTFProvider {
+	return m.htfProvider
 }
 
 // SetOnTick registers a callback invoked after each 1m kline update with live oscillator values.

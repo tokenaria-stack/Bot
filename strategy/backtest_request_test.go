@@ -139,3 +139,33 @@ func TestResolveBacktestMatrix_FallsBackWhenEmpty(t *testing.T) {
 		t.Fatalf("expected global matrix fallback, got %+v", m)
 	}
 }
+
+func TestApplyMtfOptionsToNavigators(t *testing.T) {
+	navs := map[string]strategy.NavigatorUISettings{
+		"price": {
+			Enabled: true,
+			Periods: []string{"15m"},
+		},
+	}
+	strategy.ApplyMtfOptionsToNavigators(navs, map[string]bool{"4h": true, "1d": true})
+	periods := navs["price"].Periods
+	if len(periods) != 3 {
+		t.Fatalf("periods = %v, want 3 entries", periods)
+	}
+	seen := map[string]bool{}
+	for _, p := range periods {
+		seen[p] = true
+	}
+	if !seen["15m"] || !seen["4h"] || !seen["1d"] {
+		t.Fatalf("missing expected periods: %v", periods)
+	}
+
+	strategy.ApplyMtfOptionsToNavigators(navs, map[string]bool{"4h": false})
+	seen = map[string]bool{}
+	for _, p := range navs["price"].Periods {
+		seen[p] = true
+	}
+	if seen["4h"] {
+		t.Fatalf("4h should be removed after disable: %v", navs["price"].Periods)
+	}
+}

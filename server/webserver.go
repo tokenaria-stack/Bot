@@ -30,6 +30,7 @@ const (
 	defaultStateCandleLimit = 3000
 	maxStateCandleLimit     = 10000
 	maxBacktestChunkLimit   = 50000
+	maxBacktestBars         = 100000
 	historyFetchLimit       = 1000
 	indicatorWarmupBars     = 100
 	orderFlowWarmupBars     = 0
@@ -82,6 +83,7 @@ type DashboardServer struct {
 	paperTrading   bool
 	sandboxMode    bool
 	signalAnalyst  *strategy.Analyst
+	htfProvider    *exchange.HTFProvider
 	liveNavMu      sync.RWMutex
 	liveNavigators map[string]strategy.NavigatorUISettings
 }
@@ -229,6 +231,7 @@ func NewDashboardServer(
 	symbol string,
 	orderFlow *domain.OrderFlowStore,
 	signalAnalyst *strategy.Analyst,
+	htfProvider *exchange.HTFProvider,
 	paperTrading bool,
 	sandboxMode bool,
 ) *DashboardServer {
@@ -243,6 +246,7 @@ func NewDashboardServer(
 		paperTrading:   paperTrading,
 		sandboxMode:    sandboxMode,
 		signalAnalyst:  signalAnalyst,
+		htfProvider:    htfProvider,
 		liveNavigators: defaultLiveNavigatorPanes(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
@@ -263,6 +267,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/risk", d.handleRiskSettings)
 	mux.HandleFunc("/api/settings/navigators", d.handleNavigatorSettings)
 	mux.HandleFunc("/api/backtest/run", d.handleBacktestRun)
+	mux.HandleFunc("/api/cache/clear", d.handleCacheClear)
 	mux.HandleFunc("/ws", d.handleWS)
 
 	webRoot, err := filepath.Abs(d.staticDir)
@@ -472,7 +477,8 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := d.buildMarketState(spec, parseRSXLookback(r), parseCandleLimit(r, defaultStateCandleLimit, maxStateCandleLimit))
+	endTimeMs := parseStateEndTime(r)
+	state, err := d.buildMarketState(spec, parseRSXLookback(r), parseCandleLimit(r, defaultStateCandleLimit, maxStateCandleLimit), endTimeMs)
 	if errors.Is(err, errWarmingUp) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -675,6 +681,7 @@ type BacktestRequest struct {
 	Settings   *strategy.BacktestRunSettings         `json:"settings"`
 	Navigator  strategy.NavigatorUISettings          `json:"navigator,omitempty"`
 	Navigators map[string]strategy.NavigatorUISettings `json:"navigators,omitempty"`
+	MtfOptions map[string]bool                       `json:"mtfOptions,omitempty"`
 }
 
 // ChartPoint is one candle with full indicator values for the backtest chart.
@@ -754,6 +761,27 @@ func truncateLogBody(b []byte, max int) string {
 	return string(b[:max]) + "...(truncated)"
 }
 
+func (d *DashboardServer) handleCacheClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	removed := 0
+	if d.htfProvider != nil {
+		removed = d.htfProvider.ClearCache(true)
+	}
+
+	activeGapFills.Range(func(key, _ any) bool {
+		activeGapFills.Delete(key)
+		return true
+	})
+
+	log.Printf("[Dashboard] cache cleared: htf entries=%d", removed)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Cache cleared"))
+}
+
 func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -801,6 +829,21 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		log.Printf("[Backtest] bad date range start=%q end=%q: %v", req.StartDate, req.EndDate, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	intervalMs, intervalErr := data.IntervalDurationMs(spec.BinanceInterval)
+	if intervalErr == nil && intervalMs > 0 {
+		expectedBars := (endMs - startMs) / intervalMs
+		if expectedBars > maxBacktestBars {
+			errMsg := fmt.Sprintf(
+				"Слишком большой период. Ожидается ~%d свечей. Максимально разрешено %d. Уменьшите период дат или выберите старший таймфрейм.",
+				expectedBars, maxBacktestBars,
+			)
+			log.Printf("[Backtest] %s: symbol=%s interval=%s start=%s end=%s",
+				errMsg, req.Symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
+		}
 	}
 
 	symbol := req.Symbol
@@ -858,6 +901,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	matrixSnapshot := strategy.ResolveBacktestMatrix(req.Settings)
 	matrix := &matrixSnapshot
 	navigators := strategy.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
+	strategy.ApplyMtfOptionsToNavigators(navigators, req.MtfOptions)
 
 	if req.Settings != nil && req.Settings.Risk != nil {
 		strategy.UpdateRiskSettings(*req.Settings.Risk)
@@ -879,6 +923,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		Matrix:     matrix,
 		Navigator:  req.Navigator,
 		Navigators: navigators,
+		HTF:        d.htfProvider,
 	})
 	runResult, err := engine.Run(candles)
 	if err != nil {
@@ -1041,7 +1086,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	trimBars := historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars)
 	if len(resp.Candles) > 0 && spec.BinanceInterval != "" {
 		resp.Navigators = buildNavigatorsFromSeries(
-			klines, resp.Oscillators, trimBars, spec.BinanceInterval, d.getLiveNavigatorPanes(),
+			d.symbol, klines, resp.Oscillators, trimBars, spec.BinanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 		)
 	}
 	resp.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, endTimeMs)
@@ -1211,11 +1256,11 @@ func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator)
 	return out
 }
 
-func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, candleLimit int) (*MarketState, error) {
+func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, candleLimit int, endTimeMs int64) (*MarketState, error) {
 	if candleLimit <= 0 {
 		candleLimit = defaultStateCandleLimit
 	}
-	klines := d.loadKlines(spec, candleLimit)
+	klines := d.loadKlines(spec, candleLimit, endTimeMs)
 	if (spec.Kind == TFRAMOnly || IsOrderFlowTimeframe(spec)) && len(klines) == 0 {
 		state := &MarketState{
 			Status:       "ready",
@@ -1265,7 +1310,7 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 			binanceInterval = spec.ID
 		}
 		state.Navigators = buildNavigatorsFromSeries(
-			klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(),
+			d.symbol, klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 		)
 	}
 	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
@@ -1279,13 +1324,17 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 	}
 
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" && len(klines) > 0 {
-		state.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, time.Now().UnixMilli())
+		hasMoreEndMs := endTimeMs
+		if hasMoreEndMs <= 0 {
+			hasMoreEndMs = time.Now().UnixMilli()
+		}
+		state.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, hasMoreEndMs)
 	}
 
 	return state, nil
 }
 
-func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int) []exchange.Kline {
+func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int, endTimeMs int64) []exchange.Kline {
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
 	}
@@ -1296,7 +1345,7 @@ func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int) []exchange.K
 		return d.ramKlines(spec.ID)
 	}
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
-		klines := d.loadRESTKlinesFromStore(spec, 0, limit)
+		klines := d.loadRESTKlinesFromStore(spec, endTimeMs, limit)
 		klines = mergeKlinesByOpenTime(klines, d.analystKlines(spec))
 		if len(klines) > 0 {
 			return klines
@@ -1620,6 +1669,19 @@ func buildChartSeries(klines []exchange.Kline, rsxLookback int) ([]ChartCandle, 
 	return candles, oscillators
 }
 
+// parseStateEndTime reads optional endTime from GET /api/state (seconds or milliseconds).
+func parseStateEndTime(r *http.Request) int64 {
+	endTimeStr := r.URL.Query().Get("endTime")
+	if endTimeStr == "" {
+		return 0
+	}
+	val, err := strconv.ParseInt(endTimeStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return historyEndTimeToMs(val)
+}
+
 // historyEndTimeToMs converts Lightweight Charts endTime (Unix seconds) to Binance milliseconds.
 func historyEndTimeToMs(endTimeSec int64) int64 {
 	if endTimeSec <= 0 {
@@ -1653,11 +1715,13 @@ func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
 }
 
 func buildNavigatorsFromSeries(
+	symbol string,
 	klines []exchange.Kline,
 	oscillators []ChartOscillator,
 	trimBars int,
 	interval string,
 	panes map[string]strategy.NavigatorUISettings,
+	htf *exchange.HTFProvider,
 ) map[string]strategy.NavigatorResultDTO {
 	if len(klines) == 0 || len(oscillators) == 0 || len(panes) == 0 {
 		return nil
@@ -1683,7 +1747,7 @@ func buildNavigatorsFromSeries(
 		wozVals[i] = o.RsiVolSlow
 	}
 
-	return strategy.BuildAllNavigators(panes, navKlines, rsxVals, wozVals, interval)
+	return strategy.BuildAllNavigators(panes, symbol, navKlines, rsxVals, wozVals, interval, htf)
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

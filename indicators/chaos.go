@@ -17,6 +17,8 @@ type AO struct {
 	fastSMA *SMA
 	slowSMA *SMA
 	value   float64
+
+	snapValue float64
 }
 
 // NewAO creates an Awesome Oscillator indicator.
@@ -43,6 +45,18 @@ func (a *AO) Update(hl2 float64) float64 {
 
 func (a *AO) Value() float64 {
 	return a.value
+}
+
+func (a *AO) SaveState() {
+	a.fastSMA.SaveState()
+	a.slowSMA.SaveState()
+	a.snapValue = a.value
+}
+
+func (a *AO) RestoreState() {
+	a.fastSMA.RestoreState()
+	a.slowSMA.RestoreState()
+	a.value = a.snapValue
 }
 
 var _ Indicator = (*AO)(nil)

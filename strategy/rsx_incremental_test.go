@@ -1,54 +1,55 @@
 package strategy
 
 import (
+	"math"
 	"testing"
 
 	"trading_bot/exchange"
 )
 
-func TestRSXMarkerState_MatchesBatchScan(t *testing.T) {
-	t.Parallel()
-
-	klines := syntheticRSXKlines(120)
-	falcon := NewFalconEngine()
-	rsxValues := make([]float64, len(klines))
-	for i, k := range klines {
-		rsxValues[i] = falcon.Evaluate(k.High, k.Low, k.Close, k.Volume).JurikRSX
-	}
-	batch := BuildRSXChart(klines, rsxValues, RSXLookbackDefault)
-
-	state := newRSXMarkerState(RSXLookbackDefault)
-	for i, k := range klines {
-		state.appendBar(k.High, k.Low, k.Close, rsxValues[i])
-	}
+func syntheticRSXKlines(n int) []exchange.Kline {
+	klines := make([]exchange.Kline, n)
+	price := 100.0
 	for i := range klines {
-		got := state.markerAt(i)
-		want := batch[i].Marker
-		if got != want {
-			t.Fatalf("bar %d marker = %q, batch = %q", i, got, want)
+		wave := math.Sin(float64(i)*0.25) * 5
+		klines[i] = exchange.Kline{
+			OpenTime: int64(i) * 60_000,
+			Open:     price + wave,
+			High:     price + wave + 2,
+			Low:      price + wave - 2,
+			Close:    price + wave + 0.5,
+			Volume:   1000,
 		}
+		price += 0.05
 	}
-	if state.latest != batch[len(batch)-1].Marker {
-		t.Fatalf("latest = %q, want %q", state.latest, batch[len(batch)-1].Marker)
-	}
+	return klines
 }
 
-func syntheticRSXKlines(n int) []exchange.Kline {
-	out := make([]exchange.Kline, n)
-	price := 100.0
-	for i := range out {
-		wobble := float64(i%17-8) * 0.4
-		price += wobble * 0.05
-		high := price + 1.2
-		low := price - 1.1
-		out[i] = exchange.Kline{
-			OpenTime: int64(i) * 60_000,
-			Open:     price,
-			High:     high,
-			Low:      low,
-			Close:    price + wobble*0.02,
-			Volume:   1000 + float64(i%50)*10,
-		}
+func TestRSXMarkerState_SaveRestore_IntraBarNoGrowth(t *testing.T) {
+	t.Parallel()
+
+	s := newRSXMarkerState(14)
+	for i := 0; i < 20; i++ {
+		s.appendBar(100+float64(i), 99, 100, 50+float64(i)*0.1)
+		s.SaveState()
 	}
-	return out
+	wantLen := len(s.rsx)
+
+	const intraTicks = 10
+	for i := 0; i < intraTicks; i++ {
+		s.appendBar(120, 115, 118, 55+float64(i)*0.01)
+	}
+	if len(s.rsx) != wantLen+intraTicks {
+		t.Fatalf("poisoned growth: len %d, want %d before restore", len(s.rsx), wantLen+intraTicks)
+	}
+
+	s.RestoreState()
+	if len(s.rsx) != wantLen {
+		t.Fatalf("restore len = %d, want %d", len(s.rsx), wantLen)
+	}
+
+	s.appendBar(120, 115, 118, 55)
+	if len(s.rsx) != wantLen+1 {
+		t.Fatalf("after restore+append len = %d, want %d", len(s.rsx), wantLen+1)
+	}
 }

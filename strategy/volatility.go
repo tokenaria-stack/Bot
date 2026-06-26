@@ -101,3 +101,23 @@ func isClimax(atr, baselineATR, volume, baselineVol, osc float64) bool {
 		volume > baselineVol*climaxVolMult &&
 		(osc > climaxOscHigh || osc < climaxOscLow)
 }
+
+// SaveState stores volatility indicator state at the last closed bar boundary.
+func (e *VolatilityEngine) SaveState() {
+	if e == nil {
+		return
+	}
+	e.atr.SaveState()
+	e.atrSma.SaveState()
+	e.volSma.SaveState()
+}
+
+// RestoreState rolls back to the last SaveState snapshot (before open-bar mutation).
+func (e *VolatilityEngine) RestoreState() {
+	if e == nil {
+		return
+	}
+	e.atr.RestoreState()
+	e.atrSma.RestoreState()
+	e.volSma.RestoreState()
+}

@@ -81,6 +81,7 @@ type Marker struct {
 	prevZigNode              indicators.ZigZagNode
 	prevZigHas               bool
 	rsxMarkers               rsxMarkerState
+	layer2Snap               layer2StreamingSnapshot
 }
 
 // NewMarker loads the initial candle history into a protected store.
@@ -133,7 +134,7 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 	if len(a.klines) == 0 {
 		a.klines = append(a.klines, k)
-		a.evaluateTickLocked(k, 0)
+		a.evaluateTickLocked(k, 0, isClosed)
 		return
 	}
 
@@ -142,14 +143,15 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 	if k.OpenTime == last.OpenTime {
 		a.klines[lastIdx] = k
-		a.evaluateTickLocked(k, lastIdx)
-		_ = isClosed
+		a.evaluateTickLocked(k, lastIdx, isClosed)
 		return
 	}
 
 	if k.OpenTime > last.OpenTime {
+		// Commit the previous bar into streaming snapshots before opening a new one.
+		a.evaluateTickLocked(last, lastIdx, true)
 		a.klines = append(a.klines, k)
-		a.evaluateTickLocked(k, len(a.klines)-1)
+		a.evaluateTickLocked(k, len(a.klines)-1, isClosed)
 		return
 	}
 

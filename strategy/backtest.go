@@ -80,6 +80,7 @@ type BacktestConfig struct {
 	Matrix     *ScoringMatrix
 	Navigator  NavigatorUISettings
 	Navigators map[string]NavigatorUISettings
+	HTF        *exchange.HTFProvider
 }
 
 func (e *BacktestEngine) activeMatrix() ScoringMatrix {
@@ -447,7 +448,7 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 
 	applyBacktestRSXMarkers(chartData, histKlines, histRSX)
 
-	navigators := BuildAllNavigators(e.cfg.Navigators, histKlines, histRSX, histWozduh, e.cfg.Interval)
+	navigators := BuildAllNavigators(e.cfg.Navigators, e.cfg.Symbol, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF)
 	navData := NavigatorResultDTO{}
 	if len(navigators) > 0 {
 		if priceNav, ok := navigators["price"]; ok {
@@ -459,7 +460,10 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 			}
 		}
 	} else if e.cfg.Navigator.Enabled {
-		navData = BuildNavigatorResult(e.cfg.Navigator, histKlines, histRSX, histWozduh, e.cfg.Interval)
+		startMs := navigatorChartStartMs(histKlines)
+		maxTimeSec := navigatorMaxCloseTimeSec(histKlines)
+		htfData := loadNavigatorHTFData(e.cfg.HTF, e.cfg.Symbol, e.cfg.Interval, startMs, maxTimeSec, e.cfg.Navigator.Periods)
+		navData = BuildNavigatorResult(e.cfg.Navigator, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF, htfData)
 		navigators = map[string]NavigatorResultDTO{"price": navData}
 	}
 

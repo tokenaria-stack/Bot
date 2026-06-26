@@ -10,6 +10,10 @@ type RSI struct {
 	prevVal float64
 	hasPrev bool
 	value   float64
+
+	snapPrevVal float64
+	snapHasPrev bool
+	snapValue   float64
 }
 
 // NewRSI creates a streaming RSI indicator.
@@ -64,6 +68,22 @@ func (r *RSI) Value() float64 {
 	return r.value
 }
 
+func (r *RSI) SaveState() {
+	r.snapPrevVal = r.prevVal
+	r.snapHasPrev = r.hasPrev
+	r.snapValue = r.value
+	r.upRMA.SaveState()
+	r.downRMA.SaveState()
+}
+
+func (r *RSI) RestoreState() {
+	r.prevVal = r.snapPrevVal
+	r.hasPrev = r.snapHasPrev
+	r.value = r.snapValue
+	r.upRMA.RestoreState()
+	r.downRMA.RestoreState()
+}
+
 // MACD is a streaming MACD with fast/slow EMA and signal EMA.
 type MACD struct {
 	fastEMA    *EMA
@@ -115,6 +135,18 @@ func (m *MACD) Histogram() float64 {
 	return m.hist
 }
 
+func (m *MACD) SaveState() {
+	m.fastEMA.SaveState()
+	m.slowEMA.SaveState()
+	m.signalEMA.SaveState()
+}
+
+func (m *MACD) RestoreState() {
+	m.fastEMA.RestoreState()
+	m.slowEMA.RestoreState()
+	m.signalEMA.RestoreState()
+}
+
 type stochCandle struct {
 	high  float64
 	low   float64
@@ -134,6 +166,13 @@ type Stochastic struct {
 	d           float64
 	slowKSMA    *SMA
 	dSMA        *SMA
+
+	snapIdx   int
+	snapCount int
+	snapRawK  float64
+	snapK     float64
+	snapD     float64
+	snapRing  []stochCandle
 }
 
 // NewStochastic creates a streaming Stochastic oscillator.
@@ -213,6 +252,32 @@ func (s *Stochastic) K() float64 {
 // D returns the current %D value (SMA of %K).
 func (s *Stochastic) D() float64 {
 	return s.d
+}
+
+func (s *Stochastic) SaveState() {
+	s.snapIdx = s.idx
+	s.snapCount = s.count
+	s.snapRawK = s.rawK
+	s.snapK = s.k
+	s.snapD = s.d
+	if cap(s.snapRing) < len(s.ring) {
+		s.snapRing = make([]stochCandle, len(s.ring))
+	}
+	s.snapRing = s.snapRing[:len(s.ring)]
+	copy(s.snapRing, s.ring)
+	s.slowKSMA.SaveState()
+	s.dSMA.SaveState()
+}
+
+func (s *Stochastic) RestoreState() {
+	s.idx = s.snapIdx
+	s.count = s.snapCount
+	s.rawK = s.snapRawK
+	s.k = s.snapK
+	s.d = s.snapD
+	copy(s.ring, s.snapRing)
+	s.slowKSMA.RestoreState()
+	s.dSMA.RestoreState()
 }
 
 var (

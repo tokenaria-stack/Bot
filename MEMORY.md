@@ -2,9 +2,200 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июнь 2026):** Layer 1 LOCKED + **Layer 2 WIRED** + **Layer 3 SCALPER BRAIN** + **Paper/Sandbox** + **Dashboard Terminal** + **Dynamic Thresholds** + **Signal Matrix Toggles** + **Backtest Engine** + **SQLite Kline Cache (WAL)** + **Binance Vision Bulk Downloader (futures)** + **Dashboard Frontend Stable Architecture** (Live/Backtest isolation, Safe Mode patching, WS thread-safe broadcast, **chartInitialized HTTP-first gate**, **no live prefetch/fitContent**) + **LuxAlgo Trendlines Navigator** (multi-pane, index-based internal math + time DTO export, **full 1:1 chart export**). **Mainnet** USD-M Futures. Dashboard: Live Chart | **Statistics** | **Backtester**. **Read-Only** → virtual paper; **Sandbox** (`HYPER_SCALP_TEST=true`) — vetoes bypassed.
+> **Снэпшот MEMORY (июнь 2026):** … + **MTF Navigator (5.54)** + **P0 Live indicator fix Go (5.55):** intra-bar `replayAndEvaluateBarLocked`. Опционально: полный osc в WS + `mergeOsc` на клиенте.
 
 ## Changelog / Статус (июнь 2026)
+
+### [Live Viewport TradingView-style + HTF Hub — Phase 5.46–5.48 — сессия]
+
+#### [Phase 5.46 — Live Viewport: стабилизация + удаление 1M — ✅]
+**Проблемы:** бесконечный цикл lazy-load на Live; зависание viewport при смене ТФ; нерабочий ТФ `1M`.
+
+**Fix (`web/app.js` + `web/index.html`):**
+| Изменение | Детали |
+|-----------|--------|
+| **Удалён 1M** | UI/JS: `#bt-interval`, navigator MTF checkboxes, `TF_DISPLAY`, `TF_MENU.DAYS`, `DEFAULT_FAVS`, `resolveTf(month)`, `tfSortKey`; миграция localStorage `1M`→`1w` |
+| **`isLoadingHistory`** | Guard в `maybeLoadHistory`: `isLoadingHistory \|\| isUpdatingData`; порог `range.from >= 50`; сброс в `finally` после `applySeriesData` |
+| **`applyLiveViewportAfterData`** | Единая точка `setVisibleLogicalRange` после `setData` |
+| **Tab switch Live** | Убран `fitChartInstance(liveChartData)` — viewport через `applySeriesData` |
+
+**Константы:** `LIVE_DEFAULT_VISIBLE_BARS = 1000` (первая загрузка / fallback зума).
+
+#### [Phase 5.47 — Live Viewport: сохранение зума при смене ТФ — ✅]
+**Цель:** как TradingView — при смене ТФ сохранять **количество видимых баров** и режим позиционирования.
+
+**`switchLiveTimeframe` → `window.__pendingAnchor`:**
+```javascript
+visibleBars = logicalRange.to - logicalRange.from
+// right edge (within 5 bars of last candle):
+{ type: 'right', visibleBars, rightOffset }
+// scrolled into history:
+{ type: 'center', targetTime, visibleBars }  // center from getVisibleRange()
+```
+
+**`applyLiveViewportAfterData` приоритет:**
+1. **prepend** — shift по `oldTotal`: `shift = total - prependPrevRange.oldTotal`
+2. **`__pendingAnchor`** — center или right с `visibleBars`
+3. **incremental** — restore `prevRange` (poll / tab switch)
+4. **default** — последние `LIVE_DEFAULT_VISIBLE_BARS` баров
+
+**Удалено:** `window.__pendingTimeAnchor`, хелперы `getChartVisibleTimeRange` / `findLogicalIndexByTime` / `setLiveVisibleLogicalWindow`.
+
+#### [Phase 5.48 — Live Edge Right Offset — ✅]
+**Нюанс:** режим `right` не только прижимает к последней свече, но сохраняет **пустое пространство** справа.
+
+```javascript
+rightOffset = logicalRange.to - lastIndex   // capture
+targetTo = (total - 1) + rightOffset      // apply
+targetFrom = targetTo - windowSize
+```
+
+**Правило:** `getVisibleRange()` (не logical) для center time; `series.data().length - 1` для lastIndex.
+
+#### [Phase 5.46b — HTFProvider + MTF periods UI (prefetch only) — ⚠️ PARTIAL]
+**`exchange/htf_provider.go`:** `GetKlines`, `PinKlines`, `ClearCache`, `CleanupIdle`; cache keyed `symbol_interval`.
+
+**Wiring:** DI в `main.go` → `MasterGeneral` + `DashboardServer`; `BuildAllNavigators` → `loadNavigatorHTFData(htf, symbol, interval, startMs, ui.Periods)`.
+
+**Frontend:** `periods[]` checkboxes в navigator popups; `coerceNavigatorPeriods`, `navigatorSettingsToAPI({ periods })`.
+
+**🔴 ДОЛГ (устарело):** ~~`BuildNavigatorData` игнорирует htfData~~ — **✅ закрыто в 5.54** (см. ниже).
+
+#### [Phase 5.54 — MTF Navigator: strict slice + clipping + universal overlay — ✅]
+**Backend (`exchange/htf_provider.go`, `strategy/trendline_navigator.go`):**
+| Компонент | Поведение |
+|-----------|-----------|
+| **`GetCandlesStrictlyBefore`** | HTF klines полностью закрытые до `maxTimeSec` (без look-ahead за конец симуляции) |
+| **`mergeHTFNavigatorLayers`** | Линии старших TF мержатся с chart TF; `Interval` в DTO |
+| **`ClipNavigatorLinesToChartWindow`** | Обрезка по `OpenTime` первой свечи графика; пересчёт Y1 |
+| **`ApplyMtfOptionsToNavigators`** | `mtfOptions` из UI → `periods` price navigator |
+
+**Frontend (`web/app.js`, `web/viewport.js`, `web/index.html`):**
+| Компонент | Поведение |
+|-----------|-----------|
+| **`createMTFOverlaySeries`** | `autoscaleInfoProvider: () => null` для всех overlay-слоёв |
+| **`mtfNavigatorLayers[pane][tf]`** | Anchor series + `TrendlinePrimitive` на каждый активный period |
+| **`refreshLiveNavigatorFromServer`** | MTF toggle без полного `setData` свечей |
+| **`lockPriceAutoScaleDuring`** | Viewport + plugin update без прыжка Y |
+| **`MTF_SYNC_QUICK_PERIODS`** | Динамические чекбоксы 4h/1d/1w (не хардкод в логике) |
+
+**Остаётся открытым (MTF):** walk-forward per-bar (честность середины графика); RSX/Wozduh HTF merge; background zones по time при lazy prepend.
+
+#### [Phase 5.56 — Falcon Snapshot/Rollback (P0 refactor) — ✅]
+**Паттерн:** `SaveState`/`RestoreState` на `RMA`, `EMA`, `SMA`, `RSI`, `MACD`, `Stochastic`, `JurikRSX`, `RSXSignalLine`, `AD`, `VolumeWeightedEMA`, `RollingStDev` + `FalconEngine`.
+
+**Live tick flow (`UpdateKlineTick`):**
+1. `falcon.RestoreState()` перед каждым `Evaluate`
+2. `falcon.SaveState()` при `isClosed` или при переходе на новый бар (commit предыдущей)
+3. Удалён O(n) `replayAndEvaluateBarLocked`
+
+**Остаётся:** layer2 non-Falcon engines (ZigZag, Volatility, AO) всё ещё мутируют на intra-bar — отдельный долг при необходимости.
+
+#### [Phase 5.49 — Unified Viewport Engine (Live + Backtest) — ✅]
+**`web/viewport.js`:** `Viewport.captureViewport(chart, series)` → `{ visibleBars, centerTime, isAtRight, rightOffset? }`; `restoreViewportToCharts`; `computeLogicalRange`; default **1000** bars.
+
+**Live:** `switchLiveTimeframe` + `applyLiveViewportAfterData` → `window.Viewport`.
+
+**Backtest:** `runBacktest` захватывает anchor **до** POST; `applyBacktestResultToChart` → `restoreViewportToCharts` (без `fitProfessionalChart`); `handleBacktestIntervalChange` без `preserveView: false`; tab switch backtest — без `fitContent`.
+
+### [Live Viewport + Guards + Cache — Phase 5.50–5.53 — сессия]
+
+#### [Phase 5.50 — Viewport hardening + Live atomic render + microscope `endTime` — ✅]
+**Проблемы:** vertical squeeze (negative logical range); микроскоп уезжал на live edge; моргание Live при TF switch; латентный `centerTime` NaN (BusinessDay).
+
+**`web/viewport.js`:** `normalizeTime`; cap `visibleBars`; ранний clamp `from >= 0` / `safeRightOffset` (заменён Smart Zoom в 5.52).
+
+**`web/app.js`:**
+- `apiQueryParams`: `endTime` при `anchor.type === 'center'` → `centerMs + (LIVE_STATE_CANDLE_LIMIT/2) * getIntervalMs(tf)`, clamp `Date.now()`
+- `renderState`: атомарный `isUpdatingData` → `applySeriesData` → `syncLiveChartPanesFromPrice`
+- `applySeriesData` — без own lock; lock снаружи (`renderState`, `maybeLoadHistory`, tab switch)
+
+#### [Phase 5.51 — Time-gap guard + Backtest OOM — ✅]
+- `isLiveTickGapTooLarge` — gap > `5 * getIntervalMs(currentTf)` в `applyPriceBar` + `pollLatestState`
+- `maxBacktestBars = 100000` в `handleBacktestRun` (RU error message)
+- `resetBacktestRunUi()` + `alert` в `runBacktest`
+
+#### [Phase 5.52 — Smart Zoom + Clear Cache — ✅]
+**`computeLogicalRange`:** `MIN_ZOOM=50`, `MAX_ZOOM=max(50, total*2)`, отрицательный `from` разрешён (LWC margin).
+
+**Cache:** `#btn-clear-cache` → `POST /api/cache/clear` → `htfProvider.ClearCache(true)` + `activeGapFills` reset.
+
+**1M backend:** сохранён для будущей агрегации (UI: миграция `1M`→`1w`).
+
+#### [Phase 5.53 — Аудит Live indicators (фикс НЕ сделан) — 🔴]
+**Симптом:** Wozduh/RSX на live edge скачут 0↔100 на каждый WS-тик.
+
+**Корень (Go):** `strategy/layer2.go:84` — `a.falcon.Evaluate(...)` на каждый тик **открытого** бара → `indicators/oscillators.go:34` RSI `Update` компаундит шаги внутри минуты.
+
+**Чистый путь:** `buildChartSeries` — один `Evaluate` на бар.
+
+**Фронт (усугубление):** `tickPayload` без полного Wozduh; `handleWSMessage` алиасы `rsiPrice ?? redLine`; нет `mergeOsc` на WS; dual channel WS vs `pollLatestState`.
+
+**План фикса:** intra-bar re-eval без накопления; полный osc в WS; `mergeOsc` на клиенте.
+
+### [🔜 OPEN DEBTS — приоритет]
+
+| # | Долг | Файлы | Статус |
+|---|------|-------|--------|
+| **0** | **Live indicator poisoning** — intra-bar replay fix (5.55) ✅ Go; WS payload / JS merge — вторично | `strategy/analyst.go`, `layer2.go` | 🟡 Go fixed |
+| 1 | ~~**Navigator MTF math**~~ | `strategy/trendline_navigator.go` | ✅ 5.54 |
+| 2 | **Navigator background zones** — index-based `startIndex/endIndex` дрейфуют при lazy prepend | DTO + `web/trendline_plugin.js` | 🟡 |
+| 3 | ~~**Backtest viewport** — timestamp anchor при смене TF~~ | `web/viewport.js` + `web/app.js` | ✅ 5.49 |
+| 4 | **Backend 1M** — сохранён для агрегации; UI миграция `1M`→`1w` | `server/`, `main.go` | 🟢 by design |
+| 5 | **Microscope `endTime` на старших ТФ** — clamp к `now` ломает глубокую историю на 1W+ | `web/app.js` `apiQueryParams` | 🟡 |
+| 6 | **Forward lazy load** — нет подгрузки вправо при `range.to > total - 50` | `web/app.js` | 🟡 |
+| 7 | **SQLite clear в Cache button** — только HTF + gap-fill flags; `history.db` не чистится | `server/webserver.go`, `data/` | 🟡 |
+| 8 | **Qdrant in main** + trade outcome logging | `main.go`, `vector_db/` | 🔜 |
+| 9 | **expose `masterState`** в `/api/state` | `server/webserver.go` | 🔜 |
+
+### [Continuous Contract + Crosshair + Safe Mode Wozduh — Phase 5.42–5.45 — сессия]
+
+#### [Phase 5.42 — Continuous Contract (Spot↔Futures stitch) — ✅]
+**Цель:** бэктест и lazy history до 2017 через spot-эпоху без смешивания данных в SQLite.
+
+**`exchange/continuous_contract.go` + `exchange/klines.go`:**
+| Компонент | Поведение |
+|-----------|-----------|
+| **`BinanceFuturesGenesisMs`** | `1567900800000` (2019-09-08) — граница futures |
+| **`BinanceSpotGenesisMs`** | `1502928000000` (2017-08-17) — floor spot fetch |
+| **`SpotStorageSymbol`** | `BTCUSDT` → `BTCUSDT_SPOT` в SQLite |
+| **`LoadContinuousContractFromDB`** | split range → load spot + futures → dedupe stitch |
+| **`FetchHistoricalKlines`** | gap fill: spot gaps → `api.binance.com/api/v3/klines`; futures → fapi |
+| **`normalizeContinuousContractRange` / `normalizeSpotRange`** | clamp `start=0` → spot genesis; тихий `nil,nil` если окно пустое |
+
+**Удалено:** `ClampFuturesHistoryStartMs` — бэктест может запрашивать даты до 2017; маршрутизатор сам тянет spot.
+
+**`server/webserver.go`:** fast path SQLite через `LoadContinuousContractFromDB`; `liveHistoryHasMore` проверяет bounds и futures, и `_SPOT`.
+
+#### [Phase 5.43 — Spot gap fill: пагинация + anti-silent-failure — ✅]
+**`fetchSpotHistoricalKlinesFromAPI`:** цикл пагинации 1000 баров (как futures); `cursor = lastCloseTime + 1`.
+
+**Логирование:**
+- `[Spot API] Fetched total N bars...` / `ERROR ... api.binance.com/api/v3/klines`
+- `[Warning] API returned exactly 0 bars for spot|futures gap [...]` в `FetchHistoricalKlines`
+
+#### [Phase 5.44 — Wozduh bypass удалён (Safe Mode patch) — ✅]
+**Было:** `applyBacktestIndicatorPatch` обновлял только RSX (`rsxSeries.setData`), Wozduh пропускался («wozduh bypass»).
+
+**Стало (`web/app.js`):**
+- Patch вызывает **`applyOscillatorToChart`** (Wozduh + RSX + areas) на `backtestLoadedOsc`
+- `applyWozduhVisibilityToChart` после осцилляторов
+- Viewport: `getVisibleLogicalRange` → `isUpdatingData` → patch → restore на всех панелях
+- **Live `applySeriesData`:** тот же pattern — `prevRange` + restore после `setData`
+
+**Unified UI pipe:** `#popup-wozduh` → `scheduleNavigatorAutoUpdate`; Wozduh visibility checkboxes → document delegation (localStorage).
+
+#### [Phase 5.45 — Crosshair: DOM Hover + SourceEvent — ✅]
+**Удалено:** `globalCrosshairSyncing`, `crosshairHoverChart`, `mouseenter`/`mouseleave` трекинг.
+
+**`syncPaneCrosshairs(chartGroups)` — аппаратная изоляция:**
+1. `if (isUpdatingData) return` — блок во время `setData`
+2. `if (!param.sourceEvent) return` — игнор синтетики при скролле (LW Charts 4.2)
+3. `if (!container.matches(':hover') && !container.matches(':active')) return` — источник только панель под курсором
+
+**`attachProfessionalChartSync`:** `crosshairPeers` включают `{ chart, seriesGetter, container }` — `chartContainer` / `oscContainer` / `rsxContainer` из `chartData.elements`.
+
+**Правило:** `setCrosshairPosition` **не** эмитит `subscribeCrosshairMove` (by design LW Charts) — ping-pong лечится фильтрами, не логическим мьютексом.
 
 ### [Live Chart Stability + History Genesis — Phase 5.36–5.41 — сессия]
 
@@ -16,7 +207,7 @@
 |-----------|--------|
 | **`renderState`** | Убран автоматический `fitProfessionalChart(liveChartData)`; при `loadedCandles.length > 0` — только `applySeriesData()` + `forceSyncChartTimeScales()` |
 | **Prefetch** | Удалены `scheduleHistoryPrefetch()`, `historyPrefetchTimer`, `isInitialPrefetch` и все вызовы |
-| **`maybeLoadHistory`** | Только ручной скролл (`range.from < 10`); после merge — `applySeriesData()` + сдвиг logical range; **без** `fitContent` / `forceSyncChartTimeScales` |
+| **`maybeLoadHistory`** | Только ручной скролл (`range.from < 50`); `isLoadingHistory` guard; после merge — `applySeriesData` + shift через `prependPrevRange.oldTotal`; **без** `fitContent` |
 | **`fitProfessionalChart`** | Функция **оставлена** — используется в backtest full reload |
 
 **Константы:** `LIVE_STATE_CANDLE_LIMIT = 3000` (только initial `/api/state`); `LIVE_HISTORY_CHUNK_LIMIT = 5000` (scroll pagination, без cap 3000).
@@ -68,16 +259,10 @@ func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
 
 **`buildChartSeriesTrimmed`:** при `trim <= 0` или `len(candles) <= trim` — возвращает **все** свечи и **все** осцилляторы (раньше oscillators обнулялись). Индикаторы на первых барах — нулевые/сырые значения Falcon (без паники).
 
-#### [Phase 5.41 — Binance Futures Genesis clamp (backtest) — ✅]
-**`exchange/klines.go`:**
-```go
-const BinanceFuturesGenesisMs int64 = 1567900800000 // 2019-09-08 UTC
-func ClampFuturesHistoryStartMs(startMs int64) int64
-```
-- `handleBacktestRun` — `effectiveStartMs = ClampFuturesHistoryStartMs(startMs)` до `FetchHistoricalKlines`
-- `PadBacktestStartMs` — padding не уходит раньше genesis
+#### [Phase 5.41 — Binance Futures Genesis clamp — ⚠️ SUPERSEDED by 5.42]
+~~`ClampFuturesHistoryStartMs`~~ удалён. Genesis-граница теперь в **Continuous Contract** router: spot до `BinanceFuturesGenesisMs`, futures после. Padding бэктеста (`PadBacktestStartMs`) может уходить в spot-эпоху.
 
-**Правило:** на абсолютном старте истории **не обрезать** price candles ради warmup; на промежуточных чанках trim=100 сохраняется для выравнивания осцилляторов.
+**Сохранено из 5.41:** `historyWarmupTrim` / `buildChartSeriesTrimmed` — не обрезать price candles на абсолютном старте истории.
 
 ### [Data Layer + Navigator Export — Phase 5.31–5.35 — сессия]
 
@@ -200,13 +385,13 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 #### [High-Performance Safe Mode — `web/app.js`]
 - **`window.__isSettingsUpdating`** — state lock: блокирует `maybeLoadBacktestHistory` и `restoreBacktestChartView` во время конвейера (защита от спама lazy loader).
 - **Lean pipeline:** debounce 500ms → `POST /api/settings/indicators` → `POST /api/backtest/run` с **`patchIndicatorsOnly: true`** (без лишнего GET `/api/history/chunk`).
-- **`applyBacktestIndicatorPatch()`** — surgical update: только RSX + trade markers + SL overlay series; **не** вызывает `candleSeries.setData()` / `applyPriceToChart()` если свечи уже на графике.
+- **`applyBacktestIndicatorPatch()`** — patch без `candleSeries.setData()`; вызывает **`applyOscillatorToChart`** (Wozduh + RSX) + navigators + trade markers; viewport через `getVisibleLogicalRange` + restore.
 - **`canPatchBacktestIndicatorsOnly()`** — определяет режим patch vs full reload.
 
 #### [Chart alignment + crosshair — `web/app.js`]
 - **`CHART_PRICE_SCALE_MIN_WIDTH = 70`** — `minimumWidth` на right price scale всех панелей (Price / Wozduh / RSX) для вертикального выравнивания.
-- **`syncPaneCrosshairs()`** — локальная bidirectional sync курсора **внутри** одного контекста (Price↔Wozduh↔RSX); Live и Backtest **не связаны**.
-- Viewport restore: `getVisibleRange()` + deferred `setVisibleRange` (rAF + 10ms/50ms); при Safe Mode patch — **без** `setVisibleRange` / `fitContent`.
+- **`syncPaneCrosshairs(chartGroups)`** — sync **внутри** одного контекста (Price↔Wozduh↔RSX); Live и Backtest **не связаны**. Фильтры: `isUpdatingData`, `param.sourceEvent`, `container.matches(':hover'|:active')`. Peers: `{ chart, seriesGetter, container }`.
+- Viewport restore: `getVisibleLogicalRange()` при patch/full reload; при Safe Mode patch — restore после `applyOscillatorToChart`, без `fitContent`.
 
 #### [Settings menus UX — `web/app.js`, `web/index.html`]
 - Закрытие по **`mousedown`** вне меню (не `click`) — fix drag-to-select в input.
@@ -268,15 +453,16 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 - **`SaveKlines`** — транзакция + `INSERT OR IGNORE`; **`LoadKlines`** — SELECT по диапазону ms.
 - **`ExpectedKlineCount`** — оценка полноты кэша.
 
-#### [Smart fetch — `exchange/klines.go`]
-- **`FetchHistoricalKlines`:** load SQLite range → **`detectKlineGaps`** (interval-aware step) → per-gap **fapi/v1/klines** fetch + `SaveKlines` → merge.
+#### [Smart fetch — `exchange/klines.go` + `exchange/continuous_contract.go`]
+- **`FetchHistoricalKlines`:** Continuous Contract — SQLite stitch (`LoadContinuousContractFromDB`) → **`detectKlineGaps`** → per-gap REST (spot **или** fapi по эпохе) + `SaveKlines` (`_SPOT` suffix для spot) → merge.
+- Spot REST: `fetchSpotHistoricalKlinesFromAPI` — paginated 1000, `api.binance.com/api/v3/klines`.
 - On API failure for a gap: forward-fill synthetic bars (logged, **not** saved to DB); backtest continues.
-- Логи: `[Klines] loading SQLite`, `[Klines] gap N/M`, `[Warning] API failed for gap`.
+- Логи: `[Klines]`, `[Spot API]`, `[Warning] API returned exactly 0 bars`.
 
 #### [Bulk history import — `cmd/history_sync/main.go`]
 - Binance Vision monthly ZIPs → CSV → `data.SaveKlines`
 - **Default market: futures** (`-market=futures`); spot только явно (`-market=spot`)
-- **Не смешивать** spot и futures klines для одного symbol в `historical_klines`
+- **Не смешивать** spot и futures klines для одного symbol в `historical_klines` — spot хранится как **`SYMBOL_SPOT`** (Continuous Contract, Phase 5.42)
 
 ### [Signal Matrix Toggles — сессия]
 
@@ -350,8 +536,8 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 - Sync time scale + crosshair **внутри одного контекста** (Live: 3 панели; Backtest: 3 панели) — **не между Live и Backtest**
 - **Data Lock** (`isUpdatingData`); `applySeriesData` — `setTimeout(0)` defer; poll → `.update()` only
 - **`chartInitialized` gate:** WS-тики игнорируются до успешного `renderState` (HTTP-first); сброс в `clearChartData`
-- **Нет live prefetch** — история только по ручному скроллу (`maybeLoadHistory`, `range.from < 10`)
-- **Нет auto `fitContent`** на live — только `forceSyncChartTimeScales`; `fitProfessionalChart` — backtest only
+- **Нет live prefetch** — история только по ручному скроллу (`maybeLoadHistory`, `range.from >= 50`, `isLoadingHistory`)
+- **Нет auto `fitContent`** на live — viewport через `applyLiveViewportAfterData` (`__pendingAnchor`, default 1000 bars); `fitProfessionalChart` — backtest only
 - `minBarSpacing: 0.001`
 
 #### [Trade markers — price chart]
@@ -378,10 +564,14 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 
 ### [🔜 NEXT]
 
-1. Expose `masterState` в `/api/state` для `#bot-status` (сейчас — derive из trades)
-2. Qdrant in main + trade outcome logging
-3. Backtest: progress streaming / partial cache fill для неполных диапазонов
-4. Backtest: commission/slippage model
+1. **🔴 Live indicator fix** — Go: не компаундить `FalconEngine` на intra-bar ticks; WS: полный osc payload; JS: `mergeOsc` на WS (см. Phase 5.53)
+2. **Navigator MTF math** — wire `htfData` into `BuildNavigatorData` (см. OPEN DEBTS #1)
+3. **Forward lazy load** — `maybeLoadForward` при просмотре глубокой истории
+4. **Microscope endTime** — формула без clamp к `now` на старших ТФ
+5. Expose `masterState` в `/api/state` для `#bot-status`
+6. Qdrant in main + trade outcome logging
+7. Backtest: progress streaming / partial cache fill
+8. Backtest: commission/slippage model
 
 ### [Dashboard Session — WS, Order Flow, RSX, UI fixes] *(исторический снэпшот)*
 
@@ -478,6 +668,7 @@ LuxAlgo Trendlines Navigator: три независимых движка (Long/M
 | **RSX UI** | Live: `#rsx-wrap`; Backtest: `#bt-rsx-wrap` — floating/fixed меню независимы |
 | **TF toolbar** | `getActiveTf()` / `switchTimeframe(tf, event)` маршрутизирует в `switchLiveTimeframe` или `switchBacktestTimeframe` по активной вкладке |
 | **Live init gate** | `chartInitialized` — WS блокируется до `renderState`; сброс в `clearChartData` при смене TF |
+| **Live TF switch viewport** | `window.__pendingAnchor`: `{ type, visibleBars, rightOffset? \| targetTime? }` — zoom + center/right edge preserve |
 | **Tab switch → Live** | При возврате на Live: `pushRsxSettingsToServer(liveRsxSettings)` — восстановление live-настроек на сервере (сервер хранит RSX как singleton) |
 | **Tab switch → Backtest** | Backtest использует свои сохранённые настройки; перед run/pipeline — push backtest RSX на сервер |
 
@@ -528,13 +719,12 @@ switchBacktestTimeframe(tf, event) → preventDefault + stopPropagation
 
 ### 3. Viewport Preservation + Chart Alignment
 
-| ✅ Разрешено | ❌ Запрещено при Safe Mode patch |
+| ✅ Разрешено при Safe Mode patch | ❌ Запрещено при Safe Mode patch |
 |-------------|----------------------------------|
-| Не вызывать `candleSeries.setData()` | `applyPriceToChart` / `applyOscillatorToChart` (Wozduh) |
-| `getVisibleRange()` для full reload | `getVisibleTimeRange()` |
-| `minimumWidth: 70` на все price scales | `fitContent()` при settings patch |
-| `syncPaneCrosshairs()` внутри контекста | `setVisibleRange()` при `__isSettingsUpdating` |
-| Deferred restore (rAF + 10ms) только при **full** reload | `reinitBacktestChart()` при RSX change |
+| `applyOscillatorToChart` (Wozduh + RSX) | `applyPriceToChart` / `candleSeries.setData()` |
+| `getVisibleLogicalRange()` + restore | `fitContent()` |
+| `syncPaneCrosshairs` (с sourceEvent + :hover) | `reinitBacktestChart()` при settings change |
+| `minimumWidth: 70` на все price scales | `setVisibleRange()` при `__isSettingsUpdating` |
 
 **Time scale sync** внутри контекста: `subscribeVisibleLogicalRangeChange` → sync all 3 panes (Price/Wozduh/RSX).
 
@@ -617,8 +807,8 @@ gorilla/websocket: **один writer** на connection; нарушение → p
 
 1. Глобальная sync Live↔Backtest charts
 2. `getVisibleTimeRange()` 
-3. `fitContent()` / `setVisibleRange()` при Safe Mode patch (`patchIndicatorsOnly`)
-4. `candleSeries.setData()` при RSX settings change (только patch RSX + markers)
+3. `fitContent()` при Safe Mode patch (`patchIndicatorsOnly`)
+4. `candleSeries.setData()` при settings patch (только patch oscillators + markers)
 5. POST RSX settings со string-числами
 6. TF click без `stopPropagation` → переход на Stats tab
 7. `runBacktest(true)` / `switchTab: true` при auto-update RSX
@@ -1381,7 +1571,7 @@ GetFuturesBalance("USDT") → EvaluateSignal → OrderRequest → ChangeLeverage
 | ✅ Paper/Sandbox | Virtual fills (readOnly) + sandbox badge + trade markers in API |
 | ✅ Dashboard Terminal | Tabs + slim-header + mini bars + thresholds + Signal Matrix |
 | ✅ Backtest Engine | Real historical replay + RSX marker entries + Statistics UI + equity curve |
-| ✅ Dashboard Frontend | Live/Backtest isolation + Safe Mode patch + crosshair sync + trade markers + **Navigator Trendlines (time-anchored)** |
+| ✅ Dashboard Frontend | Live/Backtest isolation + Safe Mode patch (**full Wozduh**) + **DOM crosshair sync** + trade markers + **Navigator Trendlines (time-anchored)** + **Continuous Contract UI** |
 | ✅ Dashboard WS | Thread-safe `WSClient` broadcast (`server/webserver.go`) |
 | ✅ SQLite Kline Cache | `history.db` (WAL) + gap-aware `FetchHistoricalKlines` + Vision bulk import (`cmd/history_sync`) |
 | ✅ LuxAlgo Navigator | `trendline_navigator.go` — multi-engine Long/Medium/Short + absolute time DTO |
@@ -1440,7 +1630,7 @@ GetFuturesBalance("USDT") → EvaluateSignal → OrderRequest → ChangeLeverage
 - `strategy/volatility.go` — **только** regime + SafeStopDist + LotModifier (`VolatilityEngine`); без FSM и ордеров.
 - `indicators/geometry.go`, `indicators/divergence.go` — **только** математика паттернов; без торговых решений.
 - `exchange/ws.go` — **только** WebSocket Producer; **запрещён** импорт `strategy` (анти-цикл).
-- **`web/app.js`** — Live/Backtest **изолированы**; Safe Mode pipeline + Viewport rules + **Navigator overlays (time-anchored)**; **запрещена** cross-tab chart sync и `candleSeries.setData` при RSX patch.
+- **`web/app.js`** — Live/Backtest **изолированы**; Safe Mode pipeline + Viewport rules + **full oscillator patch** + **Navigator overlays (time-anchored)** + **crosshair: sourceEvent + :hover**; **запрещена** cross-tab chart sync и `candleSeries.setData` при indicator patch.
 - **`web/trendline_plugin.js`** — canvas primitive для trendlines; координаты **только по time**, не index.
 - **`server/webserver.go`** — dashboard HTTP + **WSClient** thread-safe broadcast; **не** писать в `*websocket.Conn` напрямую из нескольких goroutines.
 - `strategy/master.go` — **эксклюзивно**: FSM, `RecoverState`, `StartDataFeed`, `Run`, `TradeSignal`, `execution.RiskManager`, исполнение ордеров, live trailing.

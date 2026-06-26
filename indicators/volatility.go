@@ -7,6 +7,8 @@ type BollingerBands struct {
 	multUp float64
 	multDn float64
 	middle float64
+
+	snapMiddle float64
 }
 
 // NewBollingerBands creates a Bollinger Bands indicator.
@@ -47,6 +49,18 @@ func (b *BollingerBands) Bands() (upper, middle, lower float64) {
 	return upper, middle, lower
 }
 
+func (b *BollingerBands) SaveState() {
+	b.sma.SaveState()
+	b.stdev.SaveState()
+	b.snapMiddle = b.middle
+}
+
+func (b *BollingerBands) RestoreState() {
+	b.sma.RestoreState()
+	b.stdev.RestoreState()
+	b.middle = b.snapMiddle
+}
+
 var _ Indicator = (*BollingerBands)(nil)
 
 // BollingerBandsValues calculates Bollinger Bands over a price series (batch wrapper).
@@ -75,6 +89,10 @@ type ATR struct {
 	prevClose float64
 	hasPrev   bool
 	value     float64
+
+	snapPrevClose float64
+	snapHasPrev   bool
+	snapValue     float64
 }
 
 // NewATR creates an ATR indicator for the given period.
@@ -103,6 +121,20 @@ func (a *ATR) UpdateCandle(high, low, close float64) float64 {
 
 func (a *ATR) Value() float64 {
 	return a.value
+}
+
+func (a *ATR) SaveState() {
+	a.rma.SaveState()
+	a.snapPrevClose = a.prevClose
+	a.snapHasPrev = a.hasPrev
+	a.snapValue = a.value
+}
+
+func (a *ATR) RestoreState() {
+	a.rma.RestoreState()
+	a.prevClose = a.snapPrevClose
+	a.hasPrev = a.snapHasPrev
+	a.value = a.snapValue
 }
 
 var _ CandleIndicator = (*ATR)(nil)
