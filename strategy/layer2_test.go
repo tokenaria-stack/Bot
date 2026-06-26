@@ -142,22 +142,17 @@ func TestDetectADFlow(t *testing.T) {
 	}
 }
 
-func TestMarker_RedLineCrossGreenUpInReport(t *testing.T) {
+func TestMarker_RedLineCrossGreenUpInMarker(t *testing.T) {
 	t.Parallel()
 
 	klines := makeSyntheticKlines(60)
 	analyst := NewMarker(klines, nil, "1m", "", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
-
-	report, err := analyst.GenerateMarketReport()
-	if err != nil {
-		t.Fatalf("GenerateMarketReport: %v", err)
+	falcon := analyst.FalconSnapshot()
+	if falcon.GreenLine <= 0 {
+		t.Fatalf("expected dynamic GreenLine > 0, got %f", falcon.GreenLine)
 	}
-
-	if report.Falcon.GreenLine <= 0 {
-		t.Fatalf("expected dynamic GreenLine > 0, got %f", report.Falcon.GreenLine)
-	}
-	if report.JurikValue <= 0 {
-		t.Fatalf("expected JurikValue > 0, got %f", report.JurikValue)
+	if falcon.JurikRSX <= 0 {
+		t.Fatalf("expected JurikRSX > 0, got %f", falcon.JurikRSX)
 	}
 }
 

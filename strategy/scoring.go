@@ -5,35 +5,34 @@ import (
 	"fmt"
 	"strings"
 
+	"trading_bot/indicators"
 	"trading_bot/vector_db"
 )
 
 const (
-	scalpFeeMultiplier  = 3
-	DefaultScalpFeeRate = 0.0012
+	DefaultFeeRate = 0.0012
 
-	// RSX chart pivot / divergence markers
 	scoreRSXL  = 35
 	scoreRSXLL = 45
 	scoreRSXS  = 35
 	scoreRSXSS = 45
 
-	// Wozduh wt11×wt22 cross dots
-	scalpVolCrossScore = 35
-
-	// Legacy Layer 3 scoring matrix
-	scalpRedCrossScore         = 35
-	scalpBreakoutScore         = 30
-	scalpFib618Score           = 20
-	scalpExpansionScore        = 15
-	scalpJurikBullScore        = 20
-	scalpJurikBearScore        = 20
-	scalpJurikRecoveryScore    = 15
-	scalpWozduxVolumeScore     = 15
-	scalpGeometryBounceScore   = 25
-	scalpGeometryTriangleScore = 10
-	scalpAccumulationScore     = 20
-	scalpAOCrossScore          = 15
+	scoreWozduhCross      = 35
+	scoreRedCross         = 35
+	scoreBreakout         = 30
+	scoreFib618           = 20
+	scoreExpansion        = 15
+	scoreJurikBull        = 20
+	scoreJurikBear        = 20
+	scoreJurikRecovery    = 15
+	scoreWozduhVolume     = 15
+	scoreGeometryBounce   = 25
+	scoreGeometryTriangle = 10
+	scoreAccumulation     = 20
+	scoreAOCross          = 15
+	scoreMTFTrendline     = 25
+	scoreHTFRSX           = 20
+	scoreHTFWozduhRegime  = 15
 
 	virtualTPRiskMultiple = 2.0
 )
@@ -56,26 +55,6 @@ const (
 	aiSearchLimit      = 5
 )
 
-// ActionType is the scalp entry verdict.
-type ActionType string
-
-const (
-	BuyAction  ActionType = "BUY"
-	SellAction ActionType = "SELL"
-	WaitAction ActionType = "WAIT"
-)
-
-// ScalpDecision is the Layer 3 verdict produced from a market Report.
-type ScalpDecision struct {
-	Action     ActionType
-	Score      int
-	LongScore  int
-	ShortScore int
-	LotMod     float64
-	StopDist   float64
-	Reason     string
-}
-
 // TradeEvent notifies dashboard listeners about entry or exit fills.
 type TradeEvent struct {
 	Side    string
@@ -85,210 +64,361 @@ type TradeEvent struct {
 	Kind    string // "entry" or "exit"
 }
 
-// scalpMemory provides optional AI win-rate lookups (legacy telemetry).
-type scalpMemory interface {
+type scoreMemory interface {
 	PredictWinRate(ctx context.Context, snapshot vector_db.ReportSnapshot, k uint64) (float64, int, error)
 }
 
-// SignalInfo describes one active scoring factor that passed matrix and threshold checks.
-type SignalInfo struct {
-	Name      string     `json:"name"`
-	Direction ActionType `json:"direction"`
-	Score     int        `json:"score"`
-	Reason    string     `json:"reason,omitempty"`
+type markerScoreSnapshot struct {
+	close           float64
+	barTimeMs       int64
+	falcon          FalconSignals
+	volatility      VolatilityState
+	divergenceScore int
+	geometry        GeometryState
+	fibZones        []indicators.FibZone
+	rsxMarker       string
+	redCrossUp      bool
+	redCrossDown    bool
+	jurikValue      float64
+	jurikRising     bool
+	wozduxSpikeUp   bool
+	wozduxSpikeDown bool
+	geomBounceUp    bool
+	geomBounceDown  bool
+	geomTriangle    bool
+	adRising        bool
+	adFalling       bool
+	aoCrossUp       bool
+	aoCrossDown     bool
 }
 
-// ScoreResult is the per-signal output of ProcessScore (no aggregated score).
-type ScoreResult struct {
-	ActiveSignals []SignalInfo `json:"activeSignals"`
-	LotMod        float64      `json:"lotMod"`
-	StopDist      float64      `json:"stopDist"`
+const minScoreBars = 50
+
+func (a *Marker) scoreSnapshot() (markerScoreSnapshot, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.klines) < minScoreBars {
+		return markerScoreSnapshot{}, false
+	}
+	last := a.klines[len(a.klines)-1]
+	return markerScoreSnapshot{
+		close:           last.Close,
+		barTimeMs:       last.OpenTime,
+		falcon:          a.falconSignals,
+		volatility:      a.volatilityState,
+		divergenceScore: a.divSignal.Score,
+		geometry:        a.geometryState,
+		fibZones:        append([]indicators.FibZone(nil), a.fibZones...),
+		rsxMarker:       a.rsxMarkers.recentTradingMarker(RSXSignalMemoryBars),
+		redCrossUp:      a.redLineCrossGreenUp,
+		redCrossDown:    a.redLineCrossGreenDown,
+		jurikValue:      a.jurikValue,
+		jurikRising:     a.jurikIsRising,
+		wozduxSpikeUp:   a.wozduxVolumeSpikeUp,
+		wozduxSpikeDown: a.wozduxVolumeSpikeDown,
+		geomBounceUp:    a.geometryBounceUp,
+		geomBounceDown:  a.geometryBounceDown,
+		geomTriangle:    a.geometryTriangle,
+		adRising:        a.accumulationRising,
+		adFalling:       a.distributionFalling,
+		aoCrossUp:       a.aoCrossZeroUp,
+		aoCrossDown:     a.aoCrossZeroDown,
+	}, true
 }
 
-// ProcessScore evaluates each scoring factor against the live global ScoringMatrix.
-func ProcessScore(_ context.Context, report Report, _ float64, _ scalpMemory) ScoreResult {
-	return ProcessScoreForMatrix(report, scoringMatrixSnapshot())
-}
-
-// ProcessScoreForMatrix evaluates factors against an explicit matrix (e.g. backtest config).
-func ProcessScoreForMatrix(report Report, matrix ScoringMatrix) ScoreResult {
-	if ScoringMatrixFullyDisabledFor(matrix) {
-		return ScoreResult{}
+// Calculate evaluates Marker state against the scoring matrix and returns a decision.
+func (e *ScoreEngine) Calculate(marker *Marker, matrix ScoringMatrix) ScoreDecision {
+	decision := ScoreDecision{
+		RawAction:   WaitAction,
+		FinalAction: WaitAction,
+		Factors:     make(map[string]ScoreFactor),
+	}
+	if e == nil || marker == nil || ScoringMatrixFullyDisabledFor(matrix) {
+		return decision
 	}
 
-	result := ScoreResult{
-		ActiveSignals: collectActiveSignalsFor(report, matrix),
-		LotMod:        report.Volatility.LotModifier,
-		StopDist:      report.Volatility.SafeStopDist,
+	snap, ok := marker.scoreSnapshot()
+	if !ok {
+		return decision
 	}
-	if result.LotMod <= 0 {
-		result.LotMod = 1.0
-	}
-	if result.StopDist <= 0 {
-		result.StopDist = report.ATR
-	}
-	if result.StopDist <= 0 {
-		result.StopDist = report.Close * 0.002
-	}
-	return result
-}
 
-// ScalpDecisionFromScoreResult adapts ScoreResult to legacy ScalpDecision for execution compatibility.
-func ScalpDecisionFromScoreResult(result ScoreResult, report Report) ScalpDecision {
-	longScore := 0
-	shortScore := 0
-	for _, sig := range result.ActiveSignals {
-		switch sig.Direction {
-		case BuyAction:
-			longScore += sig.Score
-		case SellAction:
-			shortScore += sig.Score
+	decision.LotMod = snap.volatility.LotModifier
+	decision.StopDist = snap.volatility.SafeStopDist
+	if decision.LotMod <= 0 {
+		decision.LotMod = 1.0
+	}
+	if decision.StopDist <= 0 {
+		decision.StopDist = snap.volatility.ATR
+	}
+	if decision.StopDist <= 0 {
+		decision.StopDist = snap.close * 0.002
+	}
+
+	collectScoreFactors(&decision, snap, matrix)
+	if matrix.UseTrendlines {
+		for key, factor := range scoreMTFFactors(marker, snap.close, snap.barTimeMs) {
+			addScoreFactor(&decision, key, factor)
 		}
 	}
-
-	bestScore := longScore
-	if shortScore > bestScore {
-		bestScore = shortScore
+	if matrix.UseHTFOscillators {
+		mergeHTFFactors(&decision, scoreHTFOscillatorFactors(marker))
 	}
 
-	decision := ScalpDecision{
-		LongScore:  longScore,
-		ShortScore: shortScore,
-		LotMod:     result.LotMod,
-		StopDist:   result.StopDist,
+	for _, factor := range decision.Factors {
+		switch factor.Direction {
+		case BuyAction:
+			decision.LongScore += factor.Score
+		case SellAction:
+			decision.ShortScore += factor.Score
+		}
 	}
-
 	longTh := LongScoreThreshold()
 	shortTh := ShortScoreThreshold()
-
-	if longScore >= longTh && longScore > shortScore {
-		decision.Action = BuyAction
-		decision.Score = longScore
-		decision.Reason = longReason(report)
+	if decision.LongScore >= longTh && decision.LongScore > decision.ShortScore {
+		decision.RawAction = BuyAction
+		decision.FinalAction = BuyAction
+		decision.Reason = decisionReason(decision, true)
+		return decision
+	}
+	if decision.ShortScore >= shortTh && decision.ShortScore > decision.LongScore {
+		decision.RawAction = SellAction
+		decision.FinalAction = SellAction
+		decision.Reason = decisionReason(decision, false)
 		return decision
 	}
 
-	if shortScore >= shortTh && shortScore > longScore {
-		decision.Action = SellAction
-		decision.Score = shortScore
-		decision.Reason = shortReason(report)
-		return decision
-	}
-
-	decision.Action = WaitAction
-	decision.Score = bestScore
+	decision.RawAction = WaitAction
+	decision.FinalAction = WaitAction
 	decision.Reason = "No clear signal"
 	return decision
 }
 
-func collectActiveSignalsFor(report Report, m ScoringMatrix) []SignalInfo {
-	var signals []SignalInfo
+// CalculateScore is a convenience wrapper around DefaultScoreEngine.Calculate.
+func CalculateScore(marker *Marker, matrix ScoringMatrix) ScoreDecision {
+	return DefaultScoreEngine.Calculate(marker, matrix)
+}
 
-	add := func(name string, dir ActionType, score int, reason string) {
-		if score >= minScoreThreshold {
-			signals = append(signals, SignalInfo{
-				Name:      name,
-				Direction: dir,
-				Score:     score,
-				Reason:    reason,
-			})
-		}
+// CalculateScoreGlobal uses the live global ScoringMatrix snapshot.
+func CalculateScoreGlobal(marker *Marker) ScoreDecision {
+	return DefaultScoreEngine.Calculate(marker, scoringMatrixSnapshot())
+}
+
+func addScoreFactor(decision *ScoreDecision, key string, factor ScoreFactor) {
+	if factor.Score < minScoreThreshold {
+		return
+	}
+	decision.Factors[key] = factor
+}
+
+func collectScoreFactors(decision *ScoreDecision, snap markerScoreSnapshot, m ScoringMatrix) {
+	add := func(key string, factor ScoreFactor) {
+		addScoreFactor(decision, key, factor)
 	}
 
 	if m.UseRSX {
-		switch report.RSXMarker {
+		switch snap.rsxMarker {
 		case "LL":
-			add("RSX LL", BuyAction, scoreRSXLL, "RSX LL")
+			add("RSX", ScoreFactor{Name: "RSX LL", Direction: BuyAction, Score: scoreRSXLL, Reason: "RSX LL"})
 		case "L":
-			add("RSX L", BuyAction, scoreRSXL, "RSX L")
+			add("RSX", ScoreFactor{Name: "RSX L", Direction: BuyAction, Score: scoreRSXL, Reason: "RSX L"})
 		case "SS":
-			add("RSX SS", SellAction, scoreRSXSS, "RSX SS")
+			add("RSX", ScoreFactor{Name: "RSX SS", Direction: SellAction, Score: scoreRSXSS, Reason: "RSX SS"})
 		case "S":
-			add("RSX S", SellAction, scoreRSXS, "RSX S")
+			add("RSX", ScoreFactor{Name: "RSX S", Direction: SellAction, Score: scoreRSXS, Reason: "RSX S"})
 		}
 	}
-	if m.UseWozduhCross && report.Falcon.VolCrossMarker == "lime" {
-		add("Wozduh cross", BuyAction, scalpVolCrossScore, "Wozduh cross")
+	if m.UseWozduhCross && snap.falcon.VolCrossMarker == "lime" {
+		add("WozduhCross", ScoreFactor{Name: "Wozduh cross", Direction: BuyAction, Score: scoreWozduhCross, Reason: "Wozduh cross"})
 	}
-	if m.UseWozduhCross && report.Falcon.VolCrossMarker == "red" {
-		add("Wozduh cross", SellAction, scalpVolCrossScore, "Wozduh cross")
+	if m.UseWozduhCross && snap.falcon.VolCrossMarker == "red" {
+		add("WozduhCross", ScoreFactor{Name: "Wozduh cross", Direction: SellAction, Score: scoreWozduhCross, Reason: "Wozduh cross"})
 	}
-	if m.UseRedCross && report.RedLineCrossGreenUp {
-		add("Red×Green", BuyAction, scalpRedCrossScore, "Red×Green")
+	if m.UseRedCross && snap.redCrossUp {
+		add("RedCross", ScoreFactor{Name: "Red×Green", Direction: BuyAction, Score: scoreRedCross, Reason: "Red×Green"})
 	}
-	if m.UseRedCross && report.RedLineCrossGreenDown {
-		add("Red×Green", SellAction, scalpRedCrossScore, "Red×Green")
+	if m.UseRedCross && snap.redCrossDown {
+		add("RedCross", ScoreFactor{Name: "Red×Green", Direction: SellAction, Score: scoreRedCross, Reason: "Red×Green"})
 	}
-	if m.UseGeometry && report.Geometry.IsBullishBreakout {
-		add("Breakout", BuyAction, scalpBreakoutScore, "Breakout")
+	if m.UseGeometry && snap.geometry.IsBullishBreakout {
+		add("Breakout", ScoreFactor{Name: "Breakout", Direction: BuyAction, Score: scoreBreakout, Reason: "Breakout"})
 	}
-	if m.UseGeometry && report.Geometry.IsBearishBreakout {
-		add("Breakout", SellAction, scalpBreakoutScore, "Breakout")
+	if m.UseGeometry && snap.geometry.IsBearishBreakout {
+		add("Breakout", ScoreFactor{Name: "Breakout", Direction: SellAction, Score: scoreBreakout, Reason: "Breakout"})
 	}
-	if m.UseDivergence && report.Divergence.Score > 0 {
-		add("Divergence", BuyAction, report.Divergence.Score, "Divergence")
+	if m.UseDivergence && snap.divergenceScore > 0 {
+		add("Divergence", ScoreFactor{Name: "Divergence", Direction: BuyAction, Score: snap.divergenceScore, Reason: "Divergence"})
 	}
-	if m.UseDivergence && report.Divergence.Score < 0 {
-		add("Divergence", SellAction, -report.Divergence.Score, "Divergence")
+	if m.UseDivergence && snap.divergenceScore < 0 {
+		add("Divergence", ScoreFactor{Name: "Divergence", Direction: SellAction, Score: -snap.divergenceScore, Reason: "Divergence"})
 	}
-	if m.UseFib && fib618Active(report) {
-		add("Fib 0.618", BuyAction, scalpFib618Score, "Fib 0.618")
-		add("Fib 0.618", SellAction, scalpFib618Score, "Fib 0.618")
+	if m.UseFib && fib618Active(snap.fibZones) {
+		add("Fib618_L", ScoreFactor{Name: "Fib 0.618", Direction: BuyAction, Score: scoreFib618, Reason: "Fib 0.618"})
+		add("Fib618_S", ScoreFactor{Name: "Fib 0.618", Direction: SellAction, Score: scoreFib618, Reason: "Fib 0.618"})
 	}
-	if m.UseExpRegime && report.Volatility.Regime == RegimeExpansion {
-		add("Expansion", BuyAction, scalpExpansionScore, "Expansion")
-		add("Expansion", SellAction, scalpExpansionScore, "Expansion")
+	if m.UseExpRegime && snap.volatility.Regime == RegimeExpansion {
+		add("Expansion_L", ScoreFactor{Name: "Expansion", Direction: BuyAction, Score: scoreExpansion, Reason: "Expansion"})
+		add("Expansion_S", ScoreFactor{Name: "Expansion", Direction: SellAction, Score: scoreExpansion, Reason: "Expansion"})
 	}
 	if m.UseJurikTrend {
-		if report.JurikIsRising && report.JurikValue > 50 {
-			add("Jurik bull", BuyAction, scalpJurikBullScore, "Jurik bull")
-		} else if report.JurikIsRising && report.JurikValue <= 20 {
-			add("Jurik recovery", BuyAction, scalpJurikRecoveryScore, "Jurik recovery")
-		} else if !report.JurikIsRising && report.JurikValue < 50 {
-			add("Jurik bear", SellAction, scalpJurikBearScore, "Jurik bear")
+		if snap.jurikRising && snap.jurikValue > 50 {
+			add("JurikBull", ScoreFactor{Name: "Jurik bull", Direction: BuyAction, Score: scoreJurikBull, Reason: "Jurik bull"})
+		} else if snap.jurikRising && snap.jurikValue <= 20 {
+			add("JurikRecovery", ScoreFactor{Name: "Jurik recovery", Direction: BuyAction, Score: scoreJurikRecovery, Reason: "Jurik recovery"})
+		} else if !snap.jurikRising && snap.jurikValue < 50 {
+			add("JurikBear", ScoreFactor{Name: "Jurik bear", Direction: SellAction, Score: scoreJurikBear, Reason: "Jurik bear"})
 		}
 	}
-	if m.UseWozduhSpike && report.WozduxVolumeSpikeUp {
-		add("Wozduh spike", BuyAction, scalpWozduxVolumeScore, "Wozduh spike")
+	if m.UseWozduhSpike && snap.wozduxSpikeUp {
+		add("WozduhSpike", ScoreFactor{Name: "Wozduh spike", Direction: BuyAction, Score: scoreWozduhVolume, Reason: "Wozduh spike"})
 	}
-	if m.UseWozduhSpike && report.WozduxVolumeSpikeDown {
-		add("Wozduh spike", SellAction, scalpWozduxVolumeScore, "Wozduh spike")
+	if m.UseWozduhSpike && snap.wozduxSpikeDown {
+		add("WozduhSpike", ScoreFactor{Name: "Wozduh spike", Direction: SellAction, Score: scoreWozduhVolume, Reason: "Wozduh spike"})
 	}
-	if m.UseGeometryBounce && report.GeometryBounceUp {
-		add("Geometry bounce", BuyAction, scalpGeometryBounceScore, "Geometry bounce")
+	if m.UseGeometryBounce && snap.geomBounceUp {
+		add("GeomBounce", ScoreFactor{Name: "Geometry bounce", Direction: BuyAction, Score: scoreGeometryBounce, Reason: "Geometry bounce"})
 	}
-	if m.UseGeometryBounce && report.GeometryBounceDown {
-		add("Geometry bounce", SellAction, scalpGeometryBounceScore, "Geometry bounce")
+	if m.UseGeometryBounce && snap.geomBounceDown {
+		add("GeomBounce", ScoreFactor{Name: "Geometry bounce", Direction: SellAction, Score: scoreGeometryBounce, Reason: "Geometry bounce"})
 	}
-	if m.UseGeometryTriangle && report.GeometryTriangle {
-		add("Geometry triangle", BuyAction, scalpGeometryTriangleScore, "Geometry triangle")
-		add("Geometry triangle", SellAction, scalpGeometryTriangleScore, "Geometry triangle")
+	if m.UseGeometryTriangle && snap.geomTriangle {
+		add("GeomTri_L", ScoreFactor{Name: "Geometry triangle", Direction: BuyAction, Score: scoreGeometryTriangle, Reason: "Geometry triangle"})
+		add("GeomTri_S", ScoreFactor{Name: "Geometry triangle", Direction: SellAction, Score: scoreGeometryTriangle, Reason: "Geometry triangle"})
 	}
-	if m.UseAD && report.AccumulationRising {
-		add("Accumulation", BuyAction, scalpAccumulationScore, "Accumulation")
+	if m.UseAD && snap.adRising {
+		add("Accumulation", ScoreFactor{Name: "Accumulation", Direction: BuyAction, Score: scoreAccumulation, Reason: "Accumulation"})
 	}
-	if m.UseAD && report.DistributionFalling {
-		add("Distribution", SellAction, scalpAccumulationScore, "Distribution")
+	if m.UseAD && snap.adFalling {
+		add("Distribution", ScoreFactor{Name: "Distribution", Direction: SellAction, Score: scoreAccumulation, Reason: "Distribution"})
 	}
-	if m.UseAOCross && report.AOCrossZeroUp {
-		add("AO cross up", BuyAction, scalpAOCrossScore, "AO cross up")
+	if m.UseAOCross && snap.aoCrossUp {
+		add("AOCross", ScoreFactor{Name: "AO cross up", Direction: BuyAction, Score: scoreAOCross, Reason: "AO cross up"})
 	}
-	if m.UseAOCross && report.AOCrossZeroDown {
-		add("AO cross down", SellAction, scalpAOCrossScore, "AO cross down")
+	if m.UseAOCross && snap.aoCrossDown {
+		add("AOCross", ScoreFactor{Name: "AO cross down", Direction: SellAction, Score: scoreAOCross, Reason: "AO cross down"})
 	}
-
-	return signals
 }
 
-func scoringBelowThreshold(decision ScalpDecision) bool {
-	if decision.LongScore >= decision.ShortScore {
-		return decision.LongScore > 0 && decision.LongScore < LongScoreThreshold()
+func scoreMTFFactors(marker *Marker, close float64, barTimeMs int64) map[string]ScoreFactor {
+	states := marker.MTFStates()
+	if len(states) == 0 {
+		return nil
 	}
-	return decision.ShortScore > 0 && decision.ShortScore < ShortScoreThreshold()
+	out := make(map[string]ScoreFactor)
+	for tf, st := range states {
+		if st == nil {
+			continue
+		}
+		for i, line := range st.TrendLines {
+			if !line.IsActive {
+				continue
+			}
+			linePrice := navigatorLinePriceAtTime(line, barTimeMs)
+			if linePrice <= 0 {
+				continue
+			}
+			key := fmt.Sprintf("MTF_%s_%d", tf, i)
+			if isBullNavigatorColor(line.Color) && close >= linePrice {
+				out[key] = ScoreFactor{
+					Name:      "MTF " + tf + " support",
+					Direction: BuyAction,
+					Score:     scoreMTFTrendline,
+					Reason:    "HTF support hold",
+				}
+			}
+			if isBearNavigatorColor(line.Color) && close <= linePrice {
+				out[key] = ScoreFactor{
+					Name:      "MTF " + tf + " resistance",
+					Direction: SellAction,
+					Score:     scoreMTFTrendline,
+					Reason:    "HTF resistance",
+				}
+			}
+		}
+	}
+	return out
 }
 
-func fib618Active(report Report) bool {
-	for _, zone := range report.FibZones {
+func scoreHTFOscillatorFactors(marker *Marker) map[string]ScoreFactor {
+	states := marker.MTFStates()
+	if len(states) == 0 {
+		return nil
+	}
+	out := make(map[string]ScoreFactor)
+	for tf, st := range states {
+		if st == nil {
+			continue
+		}
+
+		rsxKey := "RSX_" + tf
+		rsxFactor := ScoreFactor{
+			Name:      "HTF RSX " + tf,
+			Direction: WaitAction,
+			Score:     0,
+			Reason:    fmt.Sprintf("HTF (%s) RSX %.1f — neutral zone", tf, st.RSXValue),
+		}
+		if st.RSXValue < 30 && st.RSXColor == "green" {
+			rsxFactor.Direction = BuyAction
+			rsxFactor.Score = scoreHTFRSX
+			rsxFactor.Reason = fmt.Sprintf("Oversold HTF (%s) turning up", tf)
+		} else if st.RSXValue > 70 && st.RSXColor == "red" {
+			rsxFactor.Direction = SellAction
+			rsxFactor.Score = scoreHTFRSX
+			rsxFactor.Reason = fmt.Sprintf("Overbought HTF (%s) turning down", tf)
+		}
+		out[rsxKey] = rsxFactor
+
+		wozKey := "Wozduh_" + tf
+		if st.WozduhUp > 0 && st.WozduhDown > 0 {
+			if st.WozduhUp > st.WozduhDown {
+				out[wozKey] = ScoreFactor{
+					Name:      "HTF Wozduh " + tf,
+					Direction: BuyAction,
+					Score:     scoreHTFWozduhRegime,
+					Reason:    fmt.Sprintf("HTF (%s) Wozduh Bullish Regime", tf),
+				}
+			} else if st.WozduhDown > st.WozduhUp {
+				out[wozKey] = ScoreFactor{
+					Name:      "HTF Wozduh " + tf,
+					Direction: SellAction,
+					Score:     scoreHTFWozduhRegime,
+					Reason:    fmt.Sprintf("HTF (%s) Wozduh Bearish Regime", tf),
+				}
+			} else {
+				out[wozKey] = ScoreFactor{
+					Name:      "HTF Wozduh " + tf,
+					Direction: WaitAction,
+					Score:     0,
+					Reason:    fmt.Sprintf("HTF (%s) Wozduh neutral (%.1f / %.1f)", tf, st.WozduhUp, st.WozduhDown),
+				}
+			}
+		}
+	}
+	return out
+}
+
+// mergeHTFFactors adds HTF telemetry factors without the generic min-score gate (score may be 0).
+func mergeHTFFactors(decision *ScoreDecision, factors map[string]ScoreFactor) {
+	if decision == nil || len(factors) == 0 {
+		return
+	}
+	if decision.Factors == nil {
+		decision.Factors = make(map[string]ScoreFactor, len(factors))
+	}
+	for key, factor := range factors {
+		decision.Factors[key] = factor
+	}
+}
+
+func isBullNavigatorColor(color string) bool {
+	return strings.Contains(strings.ToLower(color), "089981") || strings.Contains(strings.ToLower(color), "085def")
+}
+
+func isBearNavigatorColor(color string) bool {
+	return strings.Contains(strings.ToLower(color), "f23645") || strings.Contains(strings.ToLower(color), "ff5d00")
+}
+
+func fib618Active(zones []indicators.FibZone) bool {
+	for _, zone := range zones {
 		if zone.Ratio == 0.618 && zone.IsActive {
 			return true
 		}
@@ -296,49 +426,17 @@ func fib618Active(report Report) bool {
 	return false
 }
 
-func longReason(report Report) string {
-	return signalReason("LONG", report, true)
-}
-
-func shortReason(report Report) string {
-	return signalReason("SHORT", report, false)
-}
-
-func signalReason(direction string, report Report, long bool) string {
-	parts := []string{}
+func decisionReason(decision ScoreDecision, long bool) string {
+	direction := "SHORT"
+	want := SellAction
 	if long {
-		appendRSXReason(&parts, report.RSXMarker, "L", "LL")
-		if report.Falcon.VolCrossMarker == "lime" {
-			parts = append(parts, "Wozduh cross")
-		}
-		if report.RedLineCrossGreenUp {
-			parts = append(parts, "Red×Green")
-		}
-		if report.Geometry.IsBullishBreakout {
-			parts = append(parts, "Breakout")
-		}
-		if report.Divergence.Score > 0 {
-			parts = append(parts, "Divergence")
-		}
-		if report.AOCrossZeroUp {
-			parts = append(parts, "AO cross up")
-		}
-	} else {
-		appendRSXReason(&parts, report.RSXMarker, "S", "SS")
-		if report.Falcon.VolCrossMarker == "red" {
-			parts = append(parts, "Wozduh cross")
-		}
-		if report.RedLineCrossGreenDown {
-			parts = append(parts, "Red×Green")
-		}
-		if report.Geometry.IsBearishBreakout {
-			parts = append(parts, "Breakout")
-		}
-		if report.Divergence.Score < 0 {
-			parts = append(parts, "Divergence")
-		}
-		if report.AOCrossZeroDown {
-			parts = append(parts, "AO cross down")
+		direction = "LONG"
+		want = BuyAction
+	}
+	var parts []string
+	for _, f := range decision.Factors {
+		if f.Direction == want && f.Name != "" {
+			parts = append(parts, f.Name)
 		}
 	}
 	if len(parts) == 0 {
@@ -347,23 +445,22 @@ func signalReason(direction string, report Report, long bool) string {
 	return direction + ": " + strings.Join(parts, " + ")
 }
 
-func appendRSXReason(parts *[]string, marker, single, strong string) {
-	switch marker {
-	case strong, single:
-		*parts = append(*parts, "RSX "+marker)
+func scoringBelowThreshold(decision ScoreDecision) bool {
+	if decision.LongScore >= decision.ShortScore {
+		return decision.LongScore > 0 && decision.LongScore < LongScoreThreshold()
 	}
+	return decision.ShortScore > 0 && decision.ShortScore < ShortScoreThreshold()
 }
 
 // TelemetryAIStatus reports Qdrant memory readiness for the dashboard.
-func TelemetryAIStatus(ctx context.Context, report Report, memory scalpMemory) string {
-	if memory == nil {
+func TelemetryAIStatus(ctx context.Context, marker *Marker, memory scoreMemory) string {
+	if memory == nil || marker == nil {
 		return "Offline"
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	winRate, count, err := memory.PredictWinRate(ctx, report.VectorSnapshot(), aiSearchLimit)
+	winRate, count, err := memory.PredictWinRate(ctx, marker.VectorSnapshot(), aiSearchLimit)
 	if err != nil {
 		return "Error"
 	}
@@ -395,3 +492,6 @@ func VirtualTakeProfitPrice(entrySide string, entryPrice, stopPrice float64) flo
 func FormatExitReason(trigger string, side string) string {
 	return fmt.Sprintf("Virtual Exit (%s): %s", side, trigger)
 }
+
+// DefaultScalpFeeRate is kept as an alias for backward compatibility in backtest config.
+const DefaultScalpFeeRate = DefaultFeeRate

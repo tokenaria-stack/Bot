@@ -80,12 +80,16 @@ type DashboardServer struct {
 	clientsMu      sync.Mutex
 	tradesMu       sync.RWMutex
 	trades         []ChartTrade
-	paperTrading   bool
-	sandboxMode    bool
-	signalAnalyst  *strategy.Analyst
+	tradeHistory   *domain.TradeHistoryStore
+	paperTrading      bool
+	sandboxMode       bool
+	tradingTimeframe  string
+	signalAnalyst     *strategy.Analyst
 	htfProvider    *exchange.HTFProvider
 	liveNavMu      sync.RWMutex
 	liveNavigators map[string]strategy.NavigatorUISettings
+	master         *strategy.MasterGeneral
+	backtestRuns   *backtestRunManager
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -93,14 +97,20 @@ type MarketState struct {
 	Status           string              `json:"status,omitempty"`
 	Symbol           string              `json:"symbol"`
 	Timeframe        string              `json:"timeframe"`
+	TradingTimeframe string              `json:"tradingTimeframe"`
 	UpdatedAt        int64               `json:"updatedAt"`
 	VolatilityRegime string              `json:"volatilityRegime"`
 	Jurik            float64             `json:"jurik"`
 	RedLine          float64             `json:"redLine"`
 	GreenLine        float64             `json:"greenLine"`
-	LongScore        int                 `json:"longScore"`
-	ShortScore       int                 `json:"shortScore"`
-	BrainStatus      string              `json:"brainStatus"`
+	LongScore        int                            `json:"longScore"`
+	ShortScore       int                            `json:"shortScore"`
+	RawAction        string                         `json:"rawAction,omitempty"`
+	FinalAction      string                         `json:"finalAction,omitempty"`
+	IsVetoed         bool                           `json:"isVetoed,omitempty"`
+	VetoReason       string                         `json:"vetoReason,omitempty"`
+	Factors          map[string]strategy.ScoreFactor `json:"factors"`
+	BrainStatus      string                         `json:"brainStatus"`
 	AIStatus         string              `json:"aiStatus"`
 	TickBufferLen    int                 `json:"tickBufferLen,omitempty"`
 	Candles          []ChartCandle       `json:"candles"`
@@ -195,9 +205,14 @@ type tickPayload struct {
 	RedLine     float64 `json:"redLine"`
 	GreenLine   float64 `json:"greenLine"`
 	BlueLine    float64 `json:"blueLine"`
-	LongScore   int     `json:"longScore"`
-	ShortScore  int     `json:"shortScore"`
-	BrainStatus string  `json:"brainStatus"`
+	LongScore   int                            `json:"longScore"`
+	ShortScore  int                            `json:"shortScore"`
+	RawAction   string                         `json:"rawAction,omitempty"`
+	FinalAction string                         `json:"finalAction,omitempty"`
+	IsVetoed    bool                           `json:"isVetoed,omitempty"`
+	VetoReason  string                         `json:"vetoReason,omitempty"`
+	Factors     map[string]strategy.ScoreFactor `json:"factors"`
+	BrainStatus string                         `json:"brainStatus"`
 	AIStatus    string  `json:"aiStatus"`
 }
 
@@ -234,20 +249,27 @@ func NewDashboardServer(
 	htfProvider *exchange.HTFProvider,
 	paperTrading bool,
 	sandboxMode bool,
+	tradingTimeframe string,
 ) *DashboardServer {
+	if tradingTimeframe == "" {
+		tradingTimeframe = defaultTimeframe
+	}
 	return &DashboardServer{
-		analysts:       analysts,
-		rest:           rest,
-		orderFlow:      orderFlow,
-		symbol:         exchange.NormalizeFuturesSymbol(symbol),
-		staticDir:      defaultStaticDir,
-		clients:        make(map[*WSClient]bool),
-		clientTF:       make(map[*WSClient]string),
-		paperTrading:   paperTrading,
-		sandboxMode:    sandboxMode,
-		signalAnalyst:  signalAnalyst,
-		htfProvider:    htfProvider,
-		liveNavigators: defaultLiveNavigatorPanes(),
+		analysts:         analysts,
+		rest:             rest,
+		orderFlow:        orderFlow,
+		symbol:           exchange.NormalizeFuturesSymbol(symbol),
+		staticDir:        defaultStaticDir,
+		clients:          make(map[*WSClient]bool),
+		clientTF:         make(map[*WSClient]string),
+		tradeHistory:     domain.NewTradeHistoryStore(),
+		backtestRuns:     newBacktestRunManager(),
+		paperTrading:     paperTrading,
+		sandboxMode:      sandboxMode,
+		tradingTimeframe: tradingTimeframe,
+		signalAnalyst:    signalAnalyst,
+		htfProvider:      htfProvider,
+		liveNavigators:   defaultLiveNavigatorPanes(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -267,6 +289,8 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/risk", d.handleRiskSettings)
 	mux.HandleFunc("/api/settings/navigators", d.handleNavigatorSettings)
 	mux.HandleFunc("/api/backtest/run", d.handleBacktestRun)
+	mux.HandleFunc("/api/backtest/stop", d.handleBacktestStop)
+	mux.HandleFunc("/api/stats", d.handleStats)
 	mux.HandleFunc("/api/cache/clear", d.handleCacheClear)
 	mux.HandleFunc("/ws", d.handleWS)
 
@@ -313,20 +337,24 @@ func validOHLC(open, high, low, closePrice float64) bool {
 
 // BroadcastTick pushes a live candle + oscillator + brain telemetry update to all dashboard clients.
 func (d *DashboardServer) BroadcastTick(
+	timeframe string,
 	candle domain.Candle,
 	jurik, rsxSignal, redLine, greenLine, blueLine float64,
 	rsxColor string,
-	longScore, shortScore int,
+	decision strategy.ScoreDecision,
 	brainStatus, aiStatus string,
 ) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
 		return
 	}
+	if timeframe == "" {
+		timeframe = d.tradingTimeframe
+	}
 	d.broadcast(wsEnvelope{
 		Type: "tick",
 		Data: tickPayload{
-			Timeframe:   "1m",
+			Timeframe:   timeframe,
 			Time:        chart.Time,
 			Open:        chart.Open,
 			High:        chart.High,
@@ -340,8 +368,13 @@ func (d *DashboardServer) BroadcastTick(
 			RedLine:     redLine,
 			GreenLine:   greenLine,
 			BlueLine:    blueLine,
-			LongScore:   longScore,
-			ShortScore:  shortScore,
+			LongScore:   decision.LongScore,
+			ShortScore:  decision.ShortScore,
+			RawAction:   string(decision.RawAction),
+			FinalAction: string(decision.FinalAction),
+			IsVetoed:    decision.IsVetoed,
+			VetoReason:  decision.VetoReason,
+			Factors:     decision.Factors,
 			BrainStatus: brainStatus,
 			AIStatus:    aiStatus,
 		},
@@ -404,6 +437,39 @@ func (d *DashboardServer) sessionTrades() []ChartTrade {
 	return out
 }
 
+// RecordClosedTrade appends a completed round-trip to live or paper history.
+func (d *DashboardServer) RecordClosedTrade(trade domain.ClosedTrade, isVirtual bool) {
+	if d == nil || d.tradeHistory == nil {
+		return
+	}
+	if isVirtual {
+		d.tradeHistory.AppendVirtual(trade)
+		return
+	}
+	d.tradeHistory.AppendReal(trade)
+}
+
+func (d *DashboardServer) handleStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	mode := r.URL.Query().Get("mode")
+	switch mode {
+	case "live", "paper":
+	default:
+		http.Error(w, "query param mode must be live or paper", http.StatusBadRequest)
+		return
+	}
+
+	if d.tradeHistory == nil {
+		writeJSON(w, domain.SessionStats{Mode: mode})
+		return
+	}
+	writeJSON(w, d.tradeHistory.StatsForMode(mode))
+}
+
 func (d *DashboardServer) broadcast(msg wsEnvelope) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
@@ -464,7 +530,7 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 
 	tf := r.URL.Query().Get("tf")
 	if tf == "" {
-		tf = defaultTimeframe
+		tf = d.tradingTimeframe
 	}
 	spec, err := ResolveTimeframe(tf)
 	if err != nil {
@@ -599,19 +665,20 @@ type navigatorSettingsRequest struct {
 }
 
 func defaultLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
-	return map[string]strategy.NavigatorUISettings{
-		"price": {
-			Enabled:   true,
-			Source:    "Price",
-			TrendType: strategy.NavigatorTrendWicks,
-			UseLong:   true,
-			LongLen:   60,
-			UseMedium: true,
-			MediumLen: 30,
-			UseShort:  true,
-			ShortLen:  10,
-		},
+	return strategy.DefaultLiveNavigatorPanes()
+}
+
+// BindMaster wires live execution for navigator-driven MTF updates.
+func (d *DashboardServer) BindMaster(m *strategy.MasterGeneral) {
+	d.master = m
+	d.syncMasterNavigatorPanes()
+}
+
+func (d *DashboardServer) syncMasterNavigatorPanes() {
+	if d.master == nil {
+		return
 	}
+	d.master.SetNavigatorPanes(d.getLiveNavigatorPanes())
 }
 
 func (d *DashboardServer) getLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
@@ -657,6 +724,7 @@ func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http
 			strategy.NavigatorUISettings{},
 		)
 		d.setLiveNavigatorPanes(panes)
+		d.syncMasterNavigatorPanes()
 		writeJSON(w, map[string]any{"navigators": d.getLiveNavigatorPanes()})
 		return
 	default:
@@ -715,8 +783,15 @@ type ChartPoint struct {
 	Marker          string  `json:"marker,omitempty"`
 	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
 	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
-	WozduhUp        float64 `json:"wozduh_up,omitempty"`
-	WozduhDown      float64 `json:"wozduh_down,omitempty"`
+	WozduhUp        float64                         `json:"wozduh_up,omitempty"`
+	WozduhDown      float64                         `json:"wozduh_down,omitempty"`
+	LongScore       int                             `json:"longScore,omitempty"`
+	ShortScore      int                             `json:"shortScore,omitempty"`
+	RawAction       string                          `json:"rawAction,omitempty"`
+	FinalAction     string                          `json:"finalAction,omitempty"`
+	IsVetoed        bool                            `json:"isVetoed,omitempty"`
+	VetoReason      string                          `json:"vetoReason,omitempty"`
+	Factors         map[string]strategy.ScoreFactor `json:"factors,omitempty"`
 }
 
 // BacktestTrade is a single simulated trade in a backtest result.
@@ -746,6 +821,7 @@ type BacktestResult struct {
 	ProfitFactor   float64         `json:"profitFactor"`
 	MaxDrawdown    float64         `json:"maxDrawdown"`
 	RecoveryFactor float64         `json:"recoveryFactor"`
+	Cancelled      bool            `json:"cancelled,omitempty"`
 	Trades         []BacktestTrade `json:"trades"`
 	EquityCurve    []EquityPoint   `json:"equityCurve"`
 	ChartData      []ChartPoint                           `json:"chartData"`
@@ -915,25 +991,34 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 			pane, ui.Enabled, ui.Source, ui.UseLong, ui.LongLen)
 	}
 
+	ctx, endRun := d.backtestRuns.begin(r.Context())
+	defer endRun()
+
 	engine := strategy.NewBacktestEngine(strategy.BacktestConfig{
-		Symbol:     symbol,
-		Interval:   spec.BinanceInterval,
+		Symbol:       symbol,
+		Interval:     spec.BinanceInterval,
 		EntryAnalyst: d.signalAnalyst,
-		FeeRate:    strategy.DefaultScalpFeeRate,
-		Matrix:     matrix,
-		Navigator:  req.Navigator,
-		Navigators: navigators,
-		HTF:        d.htfProvider,
+		FeeRate:      strategy.DefaultScalpFeeRate,
+		SlippagePct:  strategy.ResolveBacktestSlippage(req.Settings),
+		Matrix:       matrix,
+		Navigator:    req.Navigator,
+		Navigators:   navigators,
+		HTF:          d.htfProvider,
 	})
-	runResult, err := engine.Run(candles)
+	runResult, err := engine.Run(ctx, candles)
 	if err != nil {
 		log.Printf("[Backtest] simulation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[Backtest] complete: trades=%d net=%.2f%% winRate=%.1f%% chartPoints=%d candles=%d",
-		runResult.TotalTrades, runResult.NetProfit, runResult.WinRate, len(runResult.ChartData), len(candles))
+	if runResult.Cancelled {
+		log.Printf("[Backtest] stopped early: trades=%d chartPoints=%d candles=%d/%d",
+			runResult.TotalTrades, len(runResult.ChartData), len(runResult.ChartData), len(candles))
+	} else {
+		log.Printf("[Backtest] complete: trades=%d net=%.2f%% winRate=%.1f%% chartPoints=%d candles=%d",
+			runResult.TotalTrades, runResult.NetProfit, runResult.WinRate, len(runResult.ChartData), len(candles))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	result := backtestResultFromStrategy(runResult)
@@ -946,6 +1031,19 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	if _, err := w.Write(respBytes); err != nil {
 		log.Printf("[ERROR] backtest response write failed: %v", err)
 	}
+}
+
+func (d *DashboardServer) handleBacktestStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	stopped := false
+	if d.backtestRuns != nil {
+		stopped = d.backtestRuns.stop()
+	}
+	log.Printf("[Backtest] stop requested: stopped=%v", stopped)
+	writeJSON(w, map[string]any{"stopped": stopped})
 }
 
 func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult {
@@ -1007,6 +1105,13 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 			VolumeSpikeDown: p.VolumeSpikeDown,
 			WozduhUp:        p.WozduhUp,
 			WozduhDown:      p.WozduhDown,
+			LongScore:       p.LongScore,
+			ShortScore:      p.ShortScore,
+			RawAction:       p.RawAction,
+			FinalAction:     p.FinalAction,
+			IsVetoed:        p.IsVetoed,
+			VetoReason:      p.VetoReason,
+			Factors:         p.Factors,
 		}
 	}
 
@@ -1017,6 +1122,7 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 		ProfitFactor:   run.ProfitFactor,
 		MaxDrawdown:    run.MaxDrawdown,
 		RecoveryFactor: run.RecoveryFactor,
+		Cancelled:      run.Cancelled,
 		Trades:         trades,
 		EquityCurve:    equity,
 		ChartData:      chartData,
@@ -1263,10 +1369,11 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 	klines := d.loadKlines(spec, candleLimit, endTimeMs)
 	if (spec.Kind == TFRAMOnly || IsOrderFlowTimeframe(spec)) && len(klines) == 0 {
 		state := &MarketState{
-			Status:       "ready",
-			Symbol:       d.symbol,
-			Timeframe:    spec.ID,
-			UpdatedAt:    time.Now().Unix(),
+			Status:           "ready",
+			Symbol:           d.symbol,
+			Timeframe:        spec.ID,
+			TradingTimeframe: d.tradingTimeframe,
+			UpdatedAt:        time.Now().Unix(),
 			Trades:       d.sessionTrades(),
 			PaperTrading: d.paperTrading,
 			SandboxMode:  d.sandboxMode,
@@ -1294,10 +1401,11 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 	candles, oscillators := buildChartSeriesTrimmed(klines, trimBars, rsxLookback)
 
 	state := &MarketState{
-		Status:       "ready",
-		Symbol:       d.symbol,
-		Timeframe:    spec.ID,
-		UpdatedAt:    time.Now().Unix(),
+		Status:           "ready",
+		Symbol:           d.symbol,
+		Timeframe:        spec.ID,
+		TradingTimeframe: d.tradingTimeframe,
+		UpdatedAt:        time.Now().Unix(),
 		Candles:      candles,
 		Oscillators:  oscillators,
 		Trades:       d.sessionTrades(),
@@ -1443,6 +1551,9 @@ func (d *DashboardServer) scheduleKlineGapFill(symbol, interval string, startTim
 			return
 		}
 		log.Printf("[Dashboard] background gap fill %s %s: merged %d bars into cache", sym, ivl, len(candles))
+		if d.master != nil {
+			d.master.NotifyKlineGapFillComplete(sym, ivl)
+		}
 	}(symbol, interval, startTimeMs, endTimeMs)
 }
 
@@ -1561,32 +1672,50 @@ func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {
 	return klines
 }
 
+func applyScoreTelemetryToMarketState(state *MarketState, decision strategy.ScoreDecision) {
+	state.LongScore = decision.LongScore
+	state.ShortScore = decision.ShortScore
+	state.RawAction = string(decision.RawAction)
+	state.FinalAction = string(decision.FinalAction)
+	state.IsVetoed = decision.IsVetoed
+	state.VetoReason = decision.VetoReason
+	state.Factors = decision.Factors
+}
+
+func (d *DashboardServer) scoreDecisionForAnalyst(analyst *strategy.Marker) strategy.ScoreDecision {
+	if d.master != nil {
+		return d.master.ScoreDecisionForTelemetry(analyst)
+	}
+	decision := strategy.CalculateScoreGlobal(analyst)
+	return strategy.ApplyExecutionVetoes(decision, analyst, d.signalAnalyst, strategy.NewChiefAnalyst())
+}
+
 func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strategy.Marker, klines []exchange.Kline) {
-	if report, err := analyst.GenerateMarketReport(); err == nil {
-		state.VolatilityRegime = string(report.Volatility.Regime)
-		state.Jurik = report.JurikValue
-		state.RedLine = report.Falcon.RedLine
-		state.GreenLine = report.Falcon.GreenLine
-		state.FibZones = chartFibZonesFromReport(report.FibZones)
+	decision := d.scoreDecisionForAnalyst(analyst)
+	applyScoreTelemetryToMarketState(state, decision)
+	state.BrainStatus = strategy.TelemetryBrainStatus(decision, d.signalAnalyst)
+	state.AIStatus = strategy.TelemetryAIStatus(context.Background(), analyst, nil)
 
-		scoreResult := strategy.ProcessScore(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
-		telemetry := strategy.ScalpDecisionFromScoreResult(scoreResult, *report)
-		state.LongScore = telemetry.LongScore
-		state.ShortScore = telemetry.ShortScore
-		state.BrainStatus = strategy.TelemetryBrainStatus(telemetry, *report, d.signalAnalyst)
-		state.AIStatus = strategy.TelemetryAIStatus(context.Background(), *report, nil)
+	if !analyst.HasMinBars(strategy.BacktestMinBars()) {
+		if len(klines) == 0 {
+			return
+		}
+		falcon := strategy.NewFalconEngine()
+		last := klines[len(klines)-1]
+		sig := falcon.Evaluate(last.High, last.Low, last.Close, last.Volume)
+		state.Jurik = sig.JurikRSX
+		state.RedLine = sig.RedLine
+		state.GreenLine = sig.GreenLine
 		return
 	}
 
-	if len(klines) == 0 {
-		return
-	}
-	falcon := strategy.NewFalconEngine()
-	last := klines[len(klines)-1]
-	sig := falcon.Evaluate(last.High, last.Low, last.Close, last.Volume)
-	state.Jurik = sig.JurikRSX
-	state.RedLine = sig.RedLine
-	state.GreenLine = sig.GreenLine
+	vol := analyst.VolatilityStateSnapshot()
+	falcon := analyst.FalconSnapshot()
+	state.VolatilityRegime = string(vol.Regime)
+	state.Jurik = falcon.JurikRSX
+	state.RedLine = falcon.RedLine
+	state.GreenLine = falcon.GreenLine
+	state.FibZones = chartFibZonesFromFib(analyst.FibZonesSnapshot())
 }
 
 func buildChartSeries(klines []exchange.Kline, rsxLookback int) ([]ChartCandle, []ChartOscillator) {
@@ -1772,7 +1901,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func chartFibZonesFromReport(zones []indicators.FibZone) []ChartFibZone {
+func chartFibZonesFromFib(zones []indicators.FibZone) []ChartFibZone {
 	if len(zones) == 0 {
 		return nil
 	}
@@ -1801,7 +1930,7 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	d.clientsMu.Lock()
 	d.clients[client] = true
-	d.clientTF[client] = defaultTimeframe
+	d.clientTF[client] = d.tradingTimeframe
 	d.clientsMu.Unlock()
 
 	defer func() {

@@ -9,7 +9,7 @@ func scanRSXTVMarkers(closes, rsx []float64, lookback int) map[int]string {
 		return markers
 	}
 	if lookback <= 0 {
-		lookback = GetRSXSettings().DivLookback
+		lookback = RSXLookbackDefault
 	}
 
 	maxCloseHist := make([]float64, n)
@@ -110,10 +110,7 @@ func (s *rsxMarkerState) appendBarTV(close, rsxVal float64) {
 	s.tvRSX = append(s.tvRSX, rsxVal)
 
 	i := len(s.tvRSX) - 1
-	lookback := s.lookback
-	if lookback <= 0 {
-		lookback = GetRSXSettings().DivLookback
-	}
+	lookback := s.cfg.lookback
 
 	hb := highestBarsAgo(s.tvRSX, i, lookback)
 	lb := lowestBarsAgo(s.tvRSX, i, lookback)

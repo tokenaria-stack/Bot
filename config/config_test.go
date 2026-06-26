@@ -48,6 +48,12 @@ func TestLoadConfig_readsBinanceCredentials(t *testing.T) {
 	if cfg.ReadOnly {
 		t.Fatal("ReadOnly = true, want false when keys are set")
 	}
+	if cfg.Symbol != "BTCUSDT" {
+		t.Errorf("Symbol = %q, want BTCUSDT default", cfg.Symbol)
+	}
+	if cfg.Timeframe != "1m" {
+		t.Errorf("Timeframe = %q, want 1m default", cfg.Timeframe)
+	}
 }
 
 func TestLoadConfig_allowsEmptyKeysForReadOnly(t *testing.T) {

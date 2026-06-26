@@ -22,6 +22,7 @@ const SCORING_MATRIX_DEFAULTS = {
   useGeometryBounce: false,
   useGeometryTriangle: false,
   useTrendlines: false,
+  useHTFOscillators: false,
   useDivergence: false,
   useFib: false,
   useExpRegime: false,
@@ -39,6 +40,7 @@ const SCORING_MATRIX_LABELS = [
   { key: 'useGeometryBounce', label: 'Geometry bounce (+25)' },
   { key: 'useGeometryTriangle', label: 'Geometry triangle (+10)' },
   { key: 'useTrendlines', label: 'Trendlines breakout signals' },
+  { key: 'useHTFOscillators', label: 'HTF RSX & Wozduh (walk-forward MTF, +20)' },
   { key: 'useDivergence', label: 'Divergence score (±)' },
   { key: 'useFib', label: 'Fib 0.618 active (+20)' },
   { key: 'useExpRegime', label: 'Regime EXPANSION (+15)' },
@@ -1636,6 +1638,11 @@ let liveNavigatorChartMarkers = [];
 let backtestTf = '15m';
 let equityChart;
 let equitySeries;
+let lastBacktestResult = null;
+let statsMode = 'backtest';
+let lastTelemetrySignature = '';
+let backtestAbortController = null;
+let backtestRunActive = false;
 
 let wozduxPriceLines = [];
 let rsxPriceLines = [];
@@ -1647,12 +1654,15 @@ let lastFibZones = [];
 let loadedCandles = [];
 let loadedOsc = [];
 let currentTf = '1m';
+let backendTradingTimeframe = null;
+let tradingTimeframeSynced = false;
 let tfFavorites = [];
 let refreshTimer = null;
 let historyLoading = false;
 let historyHasMore = true;
 let currentLiveRequestId = 0;
 let chartInitialized = false;
+let isAppInitialized = false;
 let chartType = 'candles';
 let dashboardSocket = null;
 let lastTickBufferLen = 0;
@@ -1660,6 +1670,7 @@ let orderFlowPollTimer = null;
 let isUpdatingData = false;
 let isLoadingHistory = false;
 let lastScoringData = null;
+let liveScoringData = null;
 let cachedSandboxMode = false;
 
 if (typeof window !== 'undefined') {
@@ -1693,6 +1704,9 @@ let backtestLoadedOsc = [];
 let backtestHistoryHasMore = true;
 let backtestHistoryLoading = false;
 let backtestLastTrades = [];
+let backtestChartPointsByTime = new Map();
+let backtestTradeMarkerTimes = new Set();
+let lockedHistoricalData = null;
 let currentBacktestPayload = null;
 if (typeof window !== 'undefined') {
   window.currentBacktestPayload = window.currentBacktestPayload || null;
@@ -1809,6 +1823,26 @@ function applyBacktestDateRangeLimits(interval) {
   if (startEl && clamped.startDate) startEl.value = clamped.startDate;
   if (endEl && clamped.endDate) endEl.value = clamped.endDate;
   return clamped;
+}
+
+function syncTradingTimeframeFromState(data) {
+  const tf = resolveTf(data?.tradingTimeframe);
+  if (!tf || tf === '1M') return false;
+  backendTradingTimeframe = tf;
+  if (tradingTimeframeSynced || isBacktestTabActive()) return false;
+
+  tradingTimeframeSynced = true;
+  if (tf === currentTf) {
+    syncToolbarToActiveContext();
+    return false;
+  }
+
+  currentTf = tf;
+  localStorage.setItem(LS_TF_KEY, tf);
+  historyHasMore = true;
+  syncToolbarToActiveContext();
+  wsSubscribeTf(tf);
+  return true;
 }
 
 function getActiveTf() {
@@ -2618,6 +2652,7 @@ function reinitBacktestChart() {
     },
   });
   attachRulerToChart(backtestChartData);
+  attachBacktestScoringCrosshair(backtestChartData);
   renderChartLegends('backtest');
   return backtestChartData;
 }
@@ -3194,7 +3229,6 @@ function initCharts() {
     });
   }
 
-  initControls();
   initRsxSettings();
   initWozduhSettings();
   initChartLegends();
@@ -3278,12 +3312,15 @@ function initPaneResize() {
   });
 }
 
-function initControls() {
+function initControls(options = {}) {
+  const { useServerTf = false } = options;
   loadFavorites();
-  currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
-  if (currentTf === '1M') {
-    currentTf = '1w';
-    localStorage.setItem(LS_TF_KEY, currentTf);
+  if (!useServerTf) {
+    currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
+    if (currentTf === '1M') {
+      currentTf = '1w';
+      localStorage.setItem(LS_TF_KEY, currentTf);
+    }
   }
   renderTfBar();
   renderTfMenu();
@@ -3923,6 +3960,9 @@ function cancelBacktestAutoUpdatePipeline() {
 function resetBacktestClientCacheForTfChange() {
   backtestLoadedCandles = [];
   backtestLoadedOsc = [];
+  backtestChartPointsByTime = new Map();
+  backtestTradeMarkerTimes = new Set();
+  lockedHistoricalData = null;
   backtestNavigatorChartLines = [];
   backtestNavigatorChartMarkers = [];
   backtestLastTrades = [];
@@ -4718,9 +4758,319 @@ function getScoreThreshold(side) {
   return Number.isFinite(val) && val > 0 ? val : 70;
 }
 
-function updateScoringUI(data) {
+function resetScoringTelemetryPlaceholder() {
+  lastTelemetrySignature = '';
+  const line = document.getElementById('telemetry-compact-line');
+  if (line) line.innerHTML = '<span class="telemetry-idle">—</span>';
+}
+
+function buildTelemetrySignature(data) {
+  if (!data) return '';
+  const factorKeys = data.factors && typeof data.factors === 'object'
+    ? Object.keys(data.factors).sort().join(',')
+    : '';
+  return [
+    data.longScore,
+    data.shortScore,
+    data.rawAction,
+    data.finalAction,
+    data.isVetoed,
+    data.vetoReason,
+    factorKeys,
+  ].join('|');
+}
+
+function topTelemetryFactors(factors, limit = 4) {
+  if (!factors || typeof factors !== 'object') return [];
+  return Object.entries(factors)
+    .map(([key, factor]) => ({
+      key,
+      name: factor?.name || key,
+      score: Number(factor?.score) || 0,
+      direction: (factor?.direction || 'WAIT').toUpperCase(),
+    }))
+    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
+    .slice(0, limit);
+}
+
+function buildCompactTelemetryHTML(data, options = {}) {
+  if (!data) {
+    return '<span class="telemetry-idle">—</span>';
+  }
+
+  const long = Number(data.longScore) || 0;
+  const short = Number(data.shortScore) || 0;
+  const raw = (data.rawAction || 'WAIT').toUpperCase();
+  const final = (data.finalAction || 'WAIT').toUpperCase();
+  const action = data.isVetoed ? `${raw}→${final}` : final;
+  const actionClass = data.isVetoed ? 'telemetry-vetoed' : (
+    final === 'BUY' ? 'telemetry-buy' : final === 'SELL' ? 'telemetry-sell' : 'telemetry-wait'
+  );
+
+  const factorChips = topTelemetryFactors(data.factors).map((f) => {
+    const pts = f.score > 0 ? `+${f.score}` : f.score < 0 ? String(f.score) : '·';
+    return `<span class="telemetry-chip" title="${f.name}">${f.name} ${pts}</span>`;
+  }).join('');
+
+  const veto = data.isVetoed
+    ? `<span class="telemetry-veto">⛔ ${data.vetoReason || 'Veto'}</span>`
+    : '';
+
+  if (!factorChips && action === 'WAIT' && long === 0 && short === 0) {
+    return options.locked
+      ? '<span class="telemetry-lock-badge">🔍 History</span><span class="telemetry-sep">·</span><span class="telemetry-idle">No signal data</span>'
+      : '<span class="telemetry-idle">WAIT — no signal</span>';
+  }
+
+  const lockPrefix = options.locked
+    ? `<span class="telemetry-lock-badge">🔍 History${data.inspectLabel ? ` · ${data.inspectLabel}` : ''}</span><span class="telemetry-sep">·</span>`
+    : '';
+
+  return `
+    ${lockPrefix}
+    <span class="telemetry-score">L <strong>${long}</strong></span>
+    <span class="telemetry-sep">·</span>
+    <span class="telemetry-score">S <strong>${short}</strong></span>
+    <span class="telemetry-sep">·</span>
+    <span class="telemetry-action ${actionClass}">${action}</span>
+    ${factorChips ? `<span class="telemetry-sep">·</span><span class="telemetry-factors">${factorChips}</span>` : ''}
+    ${veto}
+  `;
+}
+
+function renderCompactTelemetry(data, options = {}) {
+  if (lockedHistoricalData && !options.force) return;
+
+  const line = document.getElementById('telemetry-compact-line');
+  const card = document.getElementById('scoring-telemetry-card');
+  if (!line) return;
+
+  const signature = buildTelemetrySignature(data);
+  if (signature === lastTelemetrySignature) return;
+  lastTelemetrySignature = signature;
+
+  card?.classList.remove('telemetry-locked');
+  line.innerHTML = buildCompactTelemetryHTML(data);
+}
+
+function chartPointToScoringData(point) {
+  if (!point) return null;
+  return {
+    longScore: point.longScore,
+    shortScore: point.shortScore,
+    rawAction: point.rawAction,
+    finalAction: point.finalAction,
+    isVetoed: point.isVetoed,
+    vetoReason: point.vetoReason,
+    factors: point.factors,
+    inspectTime: chartTime(point.time),
+    inspectLabel: null,
+  };
+}
+
+function isInspectableChartPoint(point) {
+  if (!point) return false;
+  const hasFactors = point.factors && typeof point.factors === 'object' && Object.keys(point.factors).length > 0;
+  const hasScores = (Number(point.longScore) || 0) > 0 || (Number(point.shortScore) || 0) > 0;
+  const raw = (point.rawAction || 'WAIT').toUpperCase();
+  const final = (point.finalAction || 'WAIT').toUpperCase();
+  const hasAction = raw !== 'WAIT' || final !== 'WAIT';
+  return hasFactors || hasScores || hasAction || !!point.isVetoed;
+}
+
+function rebuildBacktestTradeMarkerTimes(trades) {
+  backtestTradeMarkerTimes = new Set();
+  (trades || []).forEach((trade) => {
+    const entryT = chartTime(trade.entryTime || trade.EntryTime);
+    const exitT = chartTime(trade.time || trade.Time);
+    if (entryT != null) backtestTradeMarkerTimes.add(entryT);
+    if (exitT != null) backtestTradeMarkerTimes.add(exitT);
+  });
+}
+
+function findBacktestTradeAtTime(t) {
+  return (backtestLastTrades || []).find((trade) => {
+    const entryT = chartTime(trade.entryTime || trade.EntryTime);
+    const exitT = chartTime(trade.time || trade.Time);
+    return t === entryT || t === exitT;
+  }) || null;
+}
+
+function formatTradeInspectLabel(trade, t) {
+  const entryT = chartTime(trade.entryTime || trade.EntryTime);
+  const side = String(trade.side || trade.Side || '—').toUpperCase();
+  if (t === entryT) return `Entry ${side}`;
+  return `Exit ${side}`;
+}
+
+function resolveInspectablePointAtTime(t) {
+  if (t == null) return null;
+
+  const point = backtestChartPointsByTime.get(t);
+  const onTradeMarker = backtestTradeMarkerTimes.has(t);
+
+  if (isInspectableChartPoint(point)) {
+    return { point, tradeHint: onTradeMarker };
+  }
+  if (onTradeMarker && point) {
+    return { point, tradeHint: true };
+  }
+  return null;
+}
+
+function renderLockedTelemetry() {
+  const line = document.getElementById('telemetry-compact-line');
+  const card = document.getElementById('scoring-telemetry-card');
+  if (!line || !lockedHistoricalData) return;
+
+  lastTelemetrySignature = `locked|${lockedHistoricalData.inspectTime}|${buildTelemetrySignature(lockedHistoricalData)}`;
+  card?.classList.add('telemetry-locked');
+  line.innerHTML = buildCompactTelemetryHTML(lockedHistoricalData, { locked: true });
+}
+
+function getDefaultBacktestTelemetryData() {
+  const chartData = lastBacktestResult?.chartData;
+  if (!Array.isArray(chartData) || chartData.length === 0) return null;
+  return chartPointToScoringData(chartData[chartData.length - 1]);
+}
+
+function refreshTelemetryAfterUnlock() {
+  if (isBacktestTabActive()) {
+    const endData = getDefaultBacktestTelemetryData();
+    if (endData) {
+      updateScoringUI(endData, { source: 'backtest', force: true });
+      return;
+    }
+  }
+  if (liveScoringData) {
+    updateScoringUI(liveScoringData, { force: true });
+    return;
+  }
+  resetScoringTelemetryPlaceholder();
+}
+
+function clearHistoricalInspection(refresh = true) {
+  if (!lockedHistoricalData) return;
+  lockedHistoricalData = null;
+  document.getElementById('scoring-telemetry-card')?.classList.remove('telemetry-locked');
+  lastTelemetrySignature = '';
+  if (refresh) refreshTelemetryAfterUnlock();
+}
+
+function lockHistoricalInspection(data) {
   if (!data) return;
+  lockedHistoricalData = data;
+  renderLockedTelemetry();
+}
+
+function handleBacktestInspectorClick(param) {
+  if (!isBacktestTabActive() || isUpdatingData) return;
+  if (ruler.active) return;
+
+  if (param.time == null) {
+    clearHistoricalInspection();
+    return;
+  }
+
+  const t = chartTime(param.time);
+  const resolved = resolveInspectablePointAtTime(t);
+  if (!resolved) {
+    clearHistoricalInspection();
+    return;
+  }
+
+  if (lockedHistoricalData?.inspectTime === t) {
+    clearHistoricalInspection();
+    return;
+  }
+
+  const data = chartPointToScoringData(resolved.point);
+  if (!data) {
+    clearHistoricalInspection();
+    return;
+  }
+
+  if (resolved.tradeHint) {
+    const trade = findBacktestTradeAtTime(t);
+    if (trade) data.inspectLabel = formatTradeInspectLabel(trade, t);
+  }
+
+  lockHistoricalInspection(data);
+}
+
+function ensureCrosshairScoringHint(chartData) {
+  const wrap = chartData?.elements?.priceWrap;
+  if (!wrap || chartData.crosshairScoringHint) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'crosshair-scoring-hint';
+  hint.hidden = true;
+  wrap.appendChild(hint);
+  chartData.crosshairScoringHint = hint;
+}
+
+function updateCrosshairScoringHint(chartData, param, point) {
+  ensureCrosshairScoringHint(chartData);
+  const hint = chartData?.crosshairScoringHint;
+  if (!hint) return;
+
+  if (!point || !param?.point || param.time == null) {
+    hint.hidden = true;
+    return;
+  }
+
+  const long = Number(point.longScore) || 0;
+  const short = Number(point.shortScore) || 0;
+  const final = (point.finalAction || 'WAIT').toUpperCase();
+  const veto = point.isVetoed ? ` · ⛔ ${point.vetoReason || 'Veto'}` : '';
+  hint.textContent = `L ${long} · S ${short} · ${final}${veto}`;
+  hint.hidden = false;
+
+  const wrap = chartData.elements?.priceWrap;
+  if (!wrap) return;
+  const x = Math.min(Math.max(8, param.point.x + 12), wrap.clientWidth - 180);
+  const y = Math.max(8, param.point.y - 28);
+  hint.style.left = `${x}px`;
+  hint.style.top = `${y}px`;
+}
+
+function attachBacktestScoringCrosshair(chartData) {
+  if (!chartData?.priceChart || chartData._scoringCrosshairBound) return;
+  chartData._scoringCrosshairBound = true;
+  ensureCrosshairScoringHint(chartData);
+
+  chartData.priceChart.subscribeCrosshairMove((param) => {
+    if (!isBacktestTabActive() || isUpdatingData) return;
+
+    if (param.time == null) {
+      updateCrosshairScoringHint(chartData, param, null);
+      return;
+    }
+
+    const t = chartTime(param.time);
+    if (t == null) {
+      updateCrosshairScoringHint(chartData, param, null);
+      return;
+    }
+    const point = backtestChartPointsByTime.get(t);
+    updateCrosshairScoringHint(chartData, param, point);
+  });
+
+  chartData.priceChart.subscribeClick((param) => {
+    if (chartData !== backtestChartData) return;
+    handleBacktestInspectorClick(param);
+  });
+}
+
+function updateScoringUI(data, options = {}) {
+  if (!data || options.source === 'crosshair') return;
+  if (lockedHistoricalData && !options.force) return;
+
   lastScoringData = data;
+  if (options.source !== 'backtest') {
+    liveScoringData = data;
+  }
+  renderCompactTelemetry(data, options);
   const long = Number(data.longScore) || 0;
   const short = Number(data.shortScore) || 0;
   const longThreshold = getScoreThreshold('long');
@@ -4764,6 +5114,10 @@ function updateScoringUI(data) {
 }
 
 function switchTab(targetId) {
+  const prevTab = document.querySelector('.tab-content.active')?.id || 'tab-live';
+  if (prevTab !== targetId) {
+    clearHistoricalInspection(false);
+  }
   const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
   const panels = document.querySelectorAll('.tab-content');
   tabs.forEach((b) => b.classList.toggle('active', b.dataset.tab === targetId));
@@ -4776,6 +5130,19 @@ function switchTab(targetId) {
   const backtestControls = document.getElementById('backtest-controls');
   if (backtestControls) {
     backtestControls.classList.toggle('visible', targetId === 'tab-backtest');
+  }
+
+  const telemetryWrap = document.querySelector('.telemetry-bar-wrap');
+  if (telemetryWrap) {
+    telemetryWrap.classList.toggle('is-hidden', targetId === 'tab-stats');
+  }
+
+  if (targetId === 'tab-live' && prevTab !== 'tab-live') {
+    if (liveScoringData) {
+      updateScoringUI(liveScoringData);
+    } else {
+      resetScoringTelemetryPlaceholder();
+    }
   }
 
   if (ruler.active) {
@@ -4816,9 +5183,14 @@ function switchTab(targetId) {
       }
     } else if (targetId === 'tab-backtest' && backtestChartData.chart) {
       forceSyncChartTimeScales(backtestChartData);
+      if (!lockedHistoricalData) {
+        const endData = getDefaultBacktestTelemetryData();
+        if (endData) updateScoringUI(endData, { source: 'backtest', force: true });
+      }
     } else if (targetId === 'tab-stats') {
       resizeEquityChart();
       equityChart?.timeScale().fitContent();
+      refreshStatsForMode(statsMode);
     }
   });
 }
@@ -5496,6 +5868,7 @@ function applyBacktestIndicatorPatch(result) {
 
   const trades = result.trades || [];
   backtestLastTrades = trades;
+  indexBacktestChartPoints(result.chartData);
 
   const osc = chartPointsToOsc(result.chartData);
   backtestLoadedOsc = alignOscillatorsToCandles(
@@ -5563,6 +5936,7 @@ function applyBacktestResultToChart(result, options = {}, viewportAnchor = null)
   backtestLoadedCandles = candles;
   backtestLoadedOsc = osc;
   backtestLastTrades = result.trades || [];
+  indexBacktestChartPoints(result.chartData);
   backtestHistoryHasMore = true;
   backtestHistoryLoading = false;
 
@@ -5661,19 +6035,57 @@ function setStatValue(id, value, digits = 2, colorize = false) {
   else if (n < 0) el.classList.add('negative');
 }
 
-function renderBacktestStats(result) {
-  if (!result) return;
+function formatStatTime(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  return new Date(n * 1000).toLocaleString();
+}
 
-  setStatValue('stat-total-trades', result.totalTrades, 0, false);
-  setStatValue('stat-win-rate', result.winRate, 2, false);
-  setStatValue('stat-net-profit', result.netProfit, 2, true);
-  setStatValue('stat-profit-factor', result.profitFactor, 2, false);
-  setStatValue('stat-max-drawdown', result.maxDrawdown, 2, false);
-  setStatValue('stat-recovery-factor', result.recoveryFactor, 2, false);
+function normalizeTradeRow(t) {
+  const pnl = Number(t.pnl ?? 0);
+  return {
+    entryTime: t.entryTime ?? 0,
+    exitTime: t.exitTime ?? t.time ?? 0,
+    side: t.side || '—',
+    entryPrice: t.entryPrice,
+    exitPrice: t.exitPrice,
+    fee: t.fee,
+    slippagePct: t.slippagePct,
+    pnl,
+    exitReason: t.exitReason || t.reason || '—',
+    duration: t.duration,
+  };
+}
 
-  if (equitySeries && Array.isArray(result.equityCurve)) {
+function renderStatsDashboard(data, mode) {
+  if (!data) {
+    setStatValue('stat-total-trades', 0, 0, false);
+    setStatValue('stat-win-rate', 0, 2, false);
+    setStatValue('stat-net-profit', 0, 2, true);
+    setStatValue('stat-profit-factor', 0, 2, false);
+    setStatValue('stat-max-drawdown', 0, 2, false);
+    setStatValue('stat-recovery-factor', 0, 2, false);
+    if (equitySeries) equitySeries.setData([]);
+    const tbody = document.getElementById('trade-history-body');
+    if (tbody) {
+      const hint = mode === 'backtest'
+        ? 'Run a backtest to populate statistics'
+        : 'No trades yet';
+      tbody.innerHTML = `<tr><td colspan="8" class="stats-empty">${hint}</td></tr>`;
+    }
+    return;
+  }
+
+  setStatValue('stat-total-trades', data.totalTrades, 0, false);
+  setStatValue('stat-win-rate', data.winRate, 2, false);
+  setStatValue('stat-net-profit', data.netProfit, 2, true);
+  setStatValue('stat-profit-factor', data.profitFactor, 2, false);
+  setStatValue('stat-max-drawdown', data.maxDrawdown, 2, false);
+  setStatValue('stat-recovery-factor', data.recoveryFactor, 2, false);
+
+  if (equitySeries && Array.isArray(data.equityCurve)) {
     equitySeries.setData(
-      result.equityCurve.map((p) => ({ time: p.time, value: p.value })),
+      data.equityCurve.map((p) => ({ time: p.time, value: p.value })),
     );
     equityChart?.timeScale().fitContent();
   }
@@ -5681,25 +6093,84 @@ function renderBacktestStats(result) {
   const tbody = document.getElementById('trade-history-body');
   if (!tbody) return;
 
-  const trades = result.trades || [];
+  const trades = (data.trades || []).map(normalizeTradeRow);
   if (trades.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color: var(--tv-muted);">No trades yet</td></tr>';
+    const hint = mode === 'backtest'
+      ? 'Run a backtest to populate statistics'
+      : 'No trades yet';
+    tbody.innerHTML = `<tr><td colspan="8" class="stats-empty">${hint}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = trades.map((t) => {
     const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
     const pnlSign = t.pnl >= 0 ? '+' : '';
-    const timeStr = new Date(t.time * 1000).toLocaleString();
+    const feeParts = [];
+    if (Number.isFinite(t.fee) && t.fee > 0) feeParts.push(`$${formatStatNum(t.fee, 2)}`);
+    if (Number.isFinite(t.slippagePct) && t.slippagePct > 0) {
+      feeParts.push(`${formatStatNum(t.slippagePct, 3)}% slip`);
+    }
+    const feeCell = feeParts.length ? feeParts.join(' / ') : '—';
     return `<tr>
-      <td>${timeStr}</td>
-      <td>${t.side || '—'}</td>
+      <td>${formatStatTime(t.entryTime)}</td>
+      <td>${formatStatTime(t.exitTime)}</td>
+      <td>${t.side}</td>
       <td>${formatStatNum(t.entryPrice, 2)}</td>
       <td>${formatStatNum(t.exitPrice, 2)}</td>
+      <td>${feeCell}</td>
       <td class="${pnlClass}">${pnlSign}${formatStatNum(t.pnl, 2)}%</td>
-      <td>${t.duration || '—'}</td>
+      <td>${t.exitReason}</td>
     </tr>`;
   }).join('');
+}
+
+async function refreshStatsForMode(mode) {
+  statsMode = mode || 'backtest';
+  document.querySelectorAll('.stats-mode-selector .mode-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.mode === statsMode);
+  });
+
+  if (statsMode === 'backtest') {
+    renderStatsDashboard(lastBacktestResult, statsMode);
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/stats?mode=${encodeURIComponent(statsMode)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const payload = await resp.json();
+    renderStatsDashboard(payload, statsMode);
+  } catch (err) {
+    console.warn('Stats fetch failed:', err);
+    renderStatsDashboard({
+      totalTrades: 0,
+      winRate: 0,
+      netProfit: 0,
+      maxDrawdown: 0,
+      profitFactor: 0,
+      recoveryFactor: 0,
+      trades: [],
+      equityCurve: [],
+    }, statsMode);
+  }
+}
+
+function initStatsModeSelector() {
+  const root = document.querySelector('.stats-mode-selector');
+  if (!root) return;
+  root.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode;
+      if (mode) refreshStatsForMode(mode);
+    });
+  });
+}
+
+function renderBacktestStats(result) {
+  lastBacktestResult = result;
+  if (statsMode === 'backtest') {
+    renderStatsDashboard(result, 'backtest');
+  }
 }
 
 function appendBacktestLog(message) {
@@ -5720,22 +6191,45 @@ function setDefaultBacktestDates() {
   if (endEl && !endEl.value) endEl.value = fmt(end);
 }
 
-function setBacktestButtonDisabled(disabled) {
-  const btn = document.getElementById('btn-run-backtest');
-  if (btn) btn.disabled = disabled;
+function indexBacktestChartPoints(points) {
+  backtestChartPointsByTime = new Map();
+  if (!Array.isArray(points)) {
+    rebuildBacktestTradeMarkerTimes(backtestLastTrades);
+    return;
+  }
+  points.forEach((p) => {
+    const t = chartTime(p.time);
+    if (t != null) backtestChartPointsByTime.set(t, p);
+  });
+  rebuildBacktestTradeMarkerTimes(backtestLastTrades);
+}
+
+function setBacktestRunState(active) {
+  backtestRunActive = active;
+  const runBtn = document.getElementById('btn-run-backtest');
+  const stopBtn = document.getElementById('btn-stop-backtest');
+  if (runBtn) {
+    runBtn.disabled = active;
+    runBtn.textContent = active ? 'Running…' : 'Run';
+  }
+  if (stopBtn) stopBtn.disabled = !active;
+}
+
+async function stopBacktest() {
+  if (!backtestRunActive) return;
+  appendBacktestLog('[Backtest] Stop requested…');
+  try {
+    await fetch('/api/backtest/stop', { method: 'POST' });
+  } catch (err) {
+    console.warn('Backtest stop request failed:', err);
+  }
+  backtestAbortController?.abort();
 }
 
 function resetBacktestRunUi() {
-  const btn = document.getElementById('btn-run-backtest');
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = 'Run';
-  }
+  setBacktestRunState(false);
+  backtestAbortController = null;
   setBacktestLoading(false);
-}
-
-function disableButton(disabled) {
-  setBacktestButtonDisabled(disabled);
 }
 
 async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
@@ -5785,7 +6279,8 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     appendBacktestLog('[Backtest] Recalculating with updated settings...');
   }
 
-  if (!isSettingsRefresh) disableButton(true);
+  if (!isSettingsRefresh) setBacktestRunState(true);
+  backtestAbortController = new AbortController();
 
   const slowMsgTimer = isSettingsRefresh
     ? null
@@ -5822,6 +6317,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: backtestAbortController?.signal,
       });
 
       rawText = await resp.text();
@@ -5869,8 +6365,12 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       ?? 0;
     console.log('Lines received:', priceLineCount);
 
-    appendBacktestLog('[Backtest] Simulation complete.');
-    appendBacktestLog(`[Backtest] Trades: ${result.totalTrades} | Win Rate: ${result.winRate}%`);
+    appendBacktestLog(result.cancelled
+      ? `[Backtest] Stopped early. Trades: ${result.totalTrades} | Win Rate: ${result.winRate}%`
+      : '[Backtest] Simulation complete.');
+    if (!result.cancelled) {
+      appendBacktestLog(`[Backtest] Trades: ${result.totalTrades} | Win Rate: ${result.winRate}%`);
+    }
     if (Array.isArray(result.chartData)) {
       appendBacktestLog(`[Backtest] Chart points: ${result.chartData.length}`);
     }
@@ -5879,10 +6379,19 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       patchIndicatorsOnly,
     }, anchor);
     renderBacktestStats(result);
+    clearHistoricalInspection(false);
+    if (!shouldSwitchTab) {
+      const endData = getDefaultBacktestTelemetryData();
+      if (endData) updateScoringUI(endData, { source: 'backtest', force: true });
+    }
     if (shouldSwitchTab) {
       switchTab('tab-stats');
     }
   } catch (err) {
+    if (err?.name === 'AbortError') {
+      appendBacktestLog('[Backtest] Client request aborted.');
+      return;
+    }
     const msg = err?.message || String(err);
     appendBacktestLog(`[Backtest] Error: ${msg}`);
     console.error('Backtest failed:', err);
@@ -5941,6 +6450,7 @@ function initBacktest() {
   initBacktestDateNav();
   initBacktestIntervalHandler();
   document.getElementById('btn-run-backtest')?.addEventListener('click', () => runBacktest(true));
+  document.getElementById('btn-stop-backtest')?.addEventListener('click', () => stopBacktest());
   initConsoleDrawer();
 }
 
@@ -5979,6 +6489,20 @@ function updateHeader(state) {
       sandboxEl.classList.toggle('active', isSandbox);
     }
   }
+}
+
+async function fetchBootstrapState() {
+  const params = new URLSearchParams({
+    rsxLookback: String(liveRsxSettings.div_lookback),
+    limit: String(LIVE_STATE_CANDLE_LIMIT),
+  });
+  const resp = await fetch(`/api/state?${params.toString()}`, { cache: 'no-store' });
+  const data = await resp.json().catch(() => ({}));
+  if (resp.status === 503 || data.status === 'warming_up') {
+    return { warmingUp: true, data };
+  }
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+  return { warmingUp: false, data };
 }
 
 async function fetchState() {
@@ -6094,6 +6618,7 @@ function applyLatestOscPoint(pt) {
 }
 
 function renderState(data, options = {}) {
+  syncTradingTimeframeFromState(data);
   updateHeader(data);
   updateScoringUI(data);
   if (typeof data.tickBufferLen === 'number') {
@@ -6223,6 +6748,11 @@ async function loadDashboard(options = {}) {
   }
   try {
     const { warmingUp, data } = await fetchState();
+    if (syncTradingTimeframeFromState(data) && !options._tfSyncRetried) {
+      clearChartData();
+      chartInitialized = false;
+      return loadDashboard({ ...options, _tfSyncRetried: true });
+    }
     if (reqId !== currentLiveRequestId) return;
     if (warmingUp) {
       setTimeout(loadDashboard, 2000);
@@ -6385,7 +6915,9 @@ async function maybeLoadHistory(range) {
 }
 
 function isLiveTf() {
-  return currentTf === '1m' || isOrderFlowTf();
+  if (isOrderFlowTf()) return true;
+  const scoringTf = backendTradingTimeframe || currentTf;
+  return scoringTf.toLowerCase() === currentTf.toLowerCase();
 }
 
 function handleWSMessage(event) {
@@ -6393,14 +6925,14 @@ function handleWSMessage(event) {
   try { msg = JSON.parse(event.data); } catch { return; }
   if (msg.type !== 'tick' || !msg.data) return;
 
-  const tickTf = (msg.data.timeframe || '1m').toLowerCase();
+  const tickTf = (msg.data.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
   if (tickTf !== currentTf.toLowerCase()) return;
 
   const d = msg.data;
   const time = chartTime(d.time);
   if (time == null) return;
 
-  if (tickTf === '1m') {
+  if (isLiveTf()) {
     updateHeader({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
     updateScoringUI(d);
   }
@@ -6489,6 +7021,7 @@ function attachRulerToChart(chartData) {
 function initRuler() {
   attachRulerToChart(liveChartData);
   attachRulerToChart(backtestChartData);
+  attachBacktestScoringCrosshair(backtestChartData);
 }
 
 function setRulerCursor(active) {
@@ -6632,30 +7165,70 @@ function updateRulerOverlay(chartData) {
 }
 
 function boot() {
-  initTfBarInteraction();
-  if (!initCharts()) {
-    setTimeout(boot, 500);
-    return;
-  }
-  initTfBarInteraction();
   initTabs();
   initThresholdInputs();
   initScoringMatrix();
   initRiskSettings();
   initEquityChart();
+  initStatsModeSelector();
   initBacktest();
   initNavigatorPopupOkHandlers();
   initMtfSyncCheckboxes();
-  requestAnimationFrame(() => handleResize());
-  if (isOrderFlowTf()) {
-    applyOrderFlowTimeScale(true);
-  }
-  loadDashboard();
-  connectWS();
-  refreshTimer = setInterval(pollLatestState, pollIntervalForTf());
-  if (isOrderFlowTf()) {
-    orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
-  }
+
+  (async () => {
+    try {
+      let data = null;
+      while (true) {
+        const result = await fetchBootstrapState();
+        if (!result.warmingUp) {
+          data = result.data;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      const tf = resolveTf(data.tradingTimeframe) || resolveTf(data.timeframe) || '1m';
+      backendTradingTimeframe = tf;
+      tradingTimeframeSynced = true;
+      currentTf = tf === '1M' ? '1w' : tf;
+
+      if (typeof LightweightCharts === 'undefined') {
+        setTimeout(boot, 500);
+        return;
+      }
+      if (!initCharts()) {
+        setTimeout(boot, 500);
+        return;
+      }
+
+      initControls({ useServerTf: true });
+      syncToolbarToActiveContext();
+
+      if (isOrderFlowTf()) {
+        applyOrderFlowTimeScale(true);
+      }
+
+      liveNavigatorSettingsSynced = true;
+      try {
+        await syncLiveNavigatorSettingsToServer();
+      } catch (err) {
+        console.warn('live navigator settings sync:', err);
+      }
+
+      renderState(data);
+      connectWS();
+      refreshTimer = setInterval(pollLatestState, pollIntervalForTf());
+      if (isOrderFlowTf()) {
+        orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
+      }
+
+      requestAnimationFrame(() => handleResize());
+      isAppInitialized = true;
+    } catch (err) {
+      console.error('boot failed:', err);
+      setTimeout(boot, 3000);
+    }
+  })();
 }
 
 if (document.readyState === 'loading') {

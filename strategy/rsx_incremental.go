@@ -1,14 +1,39 @@
 package strategy
 
+// rsxMarkerConfig is a frozen snapshot of RSX divergence settings (no global reads in hot path).
+type rsxMarkerConfig struct {
+	source      string
+	lookback    int
+	pivotRadius int
+	useFractal  bool
+}
+
+func rsxMarkerConfigFromSettings(s RSXSettings) rsxMarkerConfig {
+	lookback := s.DivLookback
+	if lookback <= 0 {
+		lookback = RSXLookbackDefault
+	}
+	pivotRadius := s.PivotRadius
+	if pivotRadius <= 0 {
+		pivotRadius = DefaultRSXPivotRadius
+	}
+	return rsxMarkerConfig{
+		source:      normalizeRSXSource(s.Source),
+		lookback:    lookback,
+		pivotRadius: pivotRadius,
+		useFractal:  normalizeRSXDivMethod(s.DivMethod) == "fractal",
+	}
+}
+
 // rsxMarkerState tracks RSX pivot/divergence markers incrementally (O(1) per bar).
 type rsxMarkerState struct {
+	cfg           rsxMarkerConfig
 	prices        []float64
 	rsx           []float64
 	markers       map[int]string
 	latest        string
 	lastPivotHigh int
 	lastPivotLow  int
-	lookback      int
 
 	// TradingView rolling divergence state (rsx_div_tv.go).
 	tvCloses       []float64
@@ -26,6 +51,7 @@ type rsxMarkerState struct {
 }
 
 type rsxMarkerSnapshot struct {
+	cfg            rsxMarkerConfig
 	prices         []float64
 	rsx            []float64
 	markers        map[int]string
@@ -44,16 +70,27 @@ type rsxMarkerSnapshot struct {
 	tvMinCloseHist []float64
 }
 
-func newRSXMarkerState(lookback int) rsxMarkerState {
-	if lookback <= 0 {
-		lookback = GetRSXSettings().DivLookback
-	}
+func newRSXMarkerStateFromSettings(settings RSXSettings) rsxMarkerState {
+	cfg := rsxMarkerConfigFromSettings(settings)
 	return rsxMarkerState{
+		cfg:           cfg,
 		markers:       make(map[int]string),
 		lastPivotHigh: -1,
 		lastPivotLow:  -1,
-		lookback:      lookback,
 	}
+}
+
+// newRSXMarkerState preserves the legacy lookback-only constructor for tests.
+func newRSXMarkerState(lookback int) rsxMarkerState {
+	s := RSXSettings{DivLookback: lookback}
+	if lookback <= 0 {
+		s = GetRSXSettings()
+	}
+	return newRSXMarkerStateFromSettings(s)
+}
+
+func (s *rsxMarkerState) reconfigure(settings RSXSettings) {
+	s.cfg = rsxMarkerConfigFromSettings(settings)
 }
 
 func (s *rsxMarkerState) reset() {
@@ -72,13 +109,12 @@ func (s *rsxMarkerState) reset() {
 }
 
 func (s *rsxMarkerState) appendBar(high, low, close, rsxVal float64) {
-	settings := GetRSXSettings()
-	price := RSXSourcePrice(high, low, close, settings.Source)
+	price := RSXSourcePrice(high, low, close, s.cfg.source)
 	s.prices = append(s.prices, price)
 	s.rsx = append(s.rsx, rsxVal)
 
-	if RSXUsesFractalDiv() {
-		radius := RSXPivotRadius()
+	if s.cfg.useFractal {
+		radius := s.cfg.pivotRadius
 		confirmIdx := len(s.rsx) - 1 - radius
 		if confirmIdx >= radius {
 			s.markFractalPivotAt(confirmIdx)
@@ -104,7 +140,7 @@ func (s *rsxMarkerState) recentTradingMarker(memoryBars int) string {
 		memoryBars = RSXSignalMemoryBars
 	}
 	n := len(s.rsx)
-	if !RSXUsesFractalDiv() {
+	if !s.cfg.useFractal {
 		n = len(s.tvRSX)
 	}
 	if n == 0 {
@@ -135,6 +171,7 @@ func (s *rsxMarkerState) markerAt(barIndex int) string {
 }
 
 func (s *rsxMarkerState) SaveState() {
+	s.snap.cfg = s.cfg
 	s.snap.prices = append([]float64(nil), s.prices...)
 	s.snap.rsx = append([]float64(nil), s.rsx...)
 	s.snap.markers = make(map[int]string, len(s.markers))
@@ -157,6 +194,7 @@ func (s *rsxMarkerState) SaveState() {
 }
 
 func (s *rsxMarkerState) RestoreState() {
+	s.cfg = s.snap.cfg
 	s.prices = append([]float64(nil), s.snap.prices...)
 	s.rsx = append([]float64(nil), s.snap.rsx...)
 	s.markers = make(map[int]string, len(s.snap.markers))

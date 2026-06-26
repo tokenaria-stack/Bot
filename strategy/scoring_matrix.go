@@ -20,6 +20,7 @@ type ScoringMatrix struct {
 	UseGeometryBounce   bool `json:"useGeometryBounce"`
 	UseGeometryTriangle bool `json:"useGeometryTriangle"`
 	UseTrendlines       bool `json:"useTrendlines"`
+	UseHTFOscillators   bool `json:"useHTFOscillators"`
 	UseDivergence       bool `json:"useDivergence"`
 	UseFib              bool `json:"useFib"`
 	UseExpRegime        bool `json:"useExpRegime"`
@@ -121,7 +122,8 @@ func ScoringMatrixFullyDisabledFor(m ScoringMatrix) bool {
 		!m.UseWozduhSpike &&
 		!m.UseAD &&
 		!m.UseAOCross &&
-		!m.UseTrendlines
+		!m.UseTrendlines &&
+		!m.UseHTFOscillators
 }
 
 // ScoringMatrixEntrySourcesEnabled reports whether any entry signal source is active (global).

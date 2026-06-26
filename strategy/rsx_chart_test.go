@@ -28,10 +28,10 @@ func TestRSXColor(t *testing.T) {
 
 func TestIsRSXPivotHigh(t *testing.T) {
 	rsx := []float64{50, 55, 58, 65, 63, 61, 59}
-	if !isRSXPivotHigh(rsx, 3) {
+	if !isRSXPivotHigh(rsx, 3, 2) {
 		t.Fatal("index 3 should be 5-bar pivot high")
 	}
-	if isRSXPivotHigh(rsx, 4) {
+	if isRSXPivotHigh(rsx, 4, 2) {
 		t.Fatal("index 4 should not be pivot high")
 	}
 }
@@ -46,7 +46,7 @@ func TestScanRSXFractalMarkers_SingleP(t *testing.T) {
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
 	}
-	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault)
+	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault, 2)
 	if markers[7] != "P" {
 		t.Fatalf("expected P at macro pivot index 7, got %q", markers[7])
 	}
@@ -65,7 +65,7 @@ func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
 	}
-	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault)
+	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault, 2)
 	if len(markers) != 0 {
 		t.Fatalf("expected no P without macro pivot, got %v", markers)
 	}

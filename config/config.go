@@ -14,6 +14,8 @@ type Config struct {
 	BinanceSecretKey string
 	ReadOnly         bool
 	SandboxMode      bool
+	Symbol           string
+	Timeframe        string
 }
 
 // LoadConfig loads .env (optional) and reads Binance USD-M Futures credentials.
@@ -38,11 +40,22 @@ func LoadConfig() (*Config, error) {
 		return nil, errors.New("BINANCE_API_KEY is not set but BINANCE_SECRET_KEY is")
 	}
 
+	symbol := strings.TrimSpace(os.Getenv("TRADING_SYMBOL"))
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
+	timeframe := strings.TrimSpace(os.Getenv("TRADING_TIMEFRAME"))
+	if timeframe == "" {
+		timeframe = "1m"
+	}
+
 	return &Config{
 		BinanceAPIKey:    apiKey,
 		BinanceSecretKey: secretKey,
 		ReadOnly:         readOnly,
 		SandboxMode:      envTruthy("HYPER_SCALP_TEST", "SANDBOX_MODE"),
+		Symbol:           symbol,
+		Timeframe:        timeframe,
 	}, nil
 }
 

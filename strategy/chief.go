@@ -1,18 +1,25 @@
 package strategy
 
-// ChiefAnalyst is the final approval pipe between Analyst and order execution.
-// Phase 1: transparent pass-through; logic will be added in later phases.
+// ChiefAnalyst is the final approval gate before execution.
 type ChiefAnalyst struct{}
 
-// NewChiefAnalyst creates the chief approval pipe.
+// NewChiefAnalyst creates the chief approval module.
 func NewChiefAnalyst() *ChiefAnalyst {
 	return &ChiefAnalyst{}
 }
 
-// Approve forwards an entry decision unchanged toward execution (Shooter).
-func (c *ChiefAnalyst) Approve(decision ScalpDecision, _ Report) ScalpDecision {
-	if c == nil {
-		return decision
+// Approve may veto a raw signal. Mutates decision in place; never clears Factors or scores.
+func (c *ChiefAnalyst) Approve(decision *ScoreDecision) {
+	if c == nil || decision == nil {
+		return
 	}
-	return decision
+	// Phase 1: pass-through.
+	//
+	// Future veto example:
+	// if someChiefConditionFails {
+	//     decision.IsVetoed = true
+	//     decision.VetoReason = "Chief: macro regime blocked"
+	//     decision.FinalAction = WaitAction
+	//     return
+	// }
 }

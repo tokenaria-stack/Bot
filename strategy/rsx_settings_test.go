@@ -67,7 +67,6 @@ func TestFalconEngine_SetRSXLength(t *testing.T) {
 }
 
 func TestFalconEngine_RSXSourceClose(t *testing.T) {
-	t.Parallel()
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 
@@ -95,6 +94,26 @@ func TestFalconEngine_RSXSourceClose(t *testing.T) {
 	}
 	if math.Abs(vClose-vHlc3) < 0.01 {
 		t.Fatalf("close vs hlc3 RSX should differ, got %f vs %f", vClose, vHlc3)
+	}
+}
+
+func TestFalconEngine_RSXSourceSnapshotIgnoresGlobalMutation(t *testing.T) {
+	t.Parallel()
+
+	ResetRSXSettings()
+	t.Cleanup(ResetRSXSettings)
+
+	ApplyRSXSettings(RSXSettings{Length: 14, Source: "close"})
+	engine := NewFalconEngine()
+	for i := 0; i < 40; i++ {
+		engine.Evaluate(120, 100, 118, 1000)
+	}
+	baseline := engine.Evaluate(120, 100, 118, 1000).JurikRSX
+
+	ApplyRSXSettings(RSXSettings{Length: 14, Source: "hlc3"})
+	got := engine.Evaluate(120, 100, 118, 1000).JurikRSX
+	if math.Abs(got-baseline) > 1e-9 {
+		t.Fatalf("engine followed global source flip: baseline=%f got=%f", baseline, got)
 	}
 }
 

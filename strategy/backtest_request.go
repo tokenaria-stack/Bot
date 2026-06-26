@@ -5,9 +5,18 @@ import "strings"
 // BacktestRunSettings is the settings object sent by the dashboard (POST /api/backtest/run).
 // JSON keys must match web/app.js buildFinalBacktestPayload() exactly.
 type BacktestRunSettings struct {
-	Matrix     ScoringMatrix                  `json:"matrix"`
-	Navigators map[string]NavigatorUISettings `json:"navigators"`
-	Risk       *RiskSettings                  `json:"risk,omitempty"`
+	Matrix      ScoringMatrix                  `json:"matrix"`
+	Navigators  map[string]NavigatorUISettings `json:"navigators"`
+	Risk        *RiskSettings                  `json:"risk,omitempty"`
+	SlippagePct float64                        `json:"slippage_pct,omitempty"`
+}
+
+// ResolveBacktestSlippage returns slippage % per fill from the request or the default.
+func ResolveBacktestSlippage(settings *BacktestRunSettings) float64 {
+	if settings != nil && settings.SlippagePct > 0 {
+		return settings.SlippagePct
+	}
+	return DefaultBacktestSlippagePct
 }
 
 // ResolveBacktestMatrix returns the scoring matrix from the request or active defaults.

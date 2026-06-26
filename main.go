@@ -11,7 +11,6 @@ import (
 	"trading_bot/config"
 	"trading_bot/data"
 	"trading_bot/domain"
-	"trading_bot/execution"
 	"trading_bot/exchange"
 	"trading_bot/server"
 	"trading_bot/strategy"
@@ -19,10 +18,6 @@ import (
 )
 
 const historyKlinesLimit = 1000
-
-const (
-	Symbol = "BTCUSDT"
-)
 
 func main() {
 	log.Println("=== Trading Bot Initialization ===")
@@ -37,6 +32,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("[Init] Failed to load config: %v", err)
 	}
+
+	tradingTF := cfg.Timeframe
+	if _, err := server.ResolveTimeframe(tradingTF); err != nil {
+		log.Fatalf("[Init] Invalid TRADING_TIMEFRAME %q: %v", tradingTF, err)
+	}
+	symbol := exchange.NormalizeFuturesSymbol(cfg.Symbol)
+	log.Printf("[Init] Trading pair %s @ %s", symbol, tradingTF)
 
 	if err := data.InitDB(); err != nil {
 		log.Fatalf("[Init] Failed to init history DB: %v", err)
@@ -84,7 +86,7 @@ func main() {
 	for _, tf := range timeframes {
 		history := []exchange.Kline{}
 
-		candles, err := restClient.GetKlines(Symbol, tf, historyKlinesLimit)
+		candles, err := restClient.GetKlines(symbol, tf, historyKlinesLimit)
 		if err != nil {
 			log.Printf("[Init] Analyst [%s] failed to load history: %v", tf, err)
 		} else {
@@ -106,46 +108,45 @@ func main() {
 	orderFlow := domain.NewOrderFlowStore()
 	var _ exchange.OrderFlowSink = orderFlow
 
-	rm := execution.NewRiskManager(1.0, 10)
 	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
 	htfProvider := exchange.NewHTFProvider()
 	master := strategy.NewMasterGeneral(
-		analysts, signalAnalyst, rm, restClient, htfProvider, nil,
-		cfg.ReadOnly, cfg.SandboxMode, strategy.DefaultHuntTimeframe,
+		analysts, signalAnalyst, restClient, htfProvider, nil,
+		cfg.ReadOnly, cfg.SandboxMode, symbol, tradingTF,
 	)
 
-	dashboard := server.NewDashboardServer(analysts, restClient, Symbol, orderFlow, signalAnalyst, htfProvider, cfg.ReadOnly, cfg.SandboxMode)
-	master.SetOnTick(func(k exchange.Kline, jurik, red, green, blue float64) {
-		longScore := 0
-		shortScore := 0
-		brainStatus := "Analyzing..."
-		aiStatus := "Offline"
-
-		rsxColor := strategy.RSXColorNeutral
-		rsxSignal := 0.0
-		if analyst := analysts["1m"]; analyst != nil {
-			rsxColor = analyst.JurikRSXColor()
-			if report, err := analyst.GenerateMarketReport(); err == nil {
-				rsxSignal = report.RSXSignal
-				scoreResult := strategy.ProcessScore(context.Background(), *report, strategy.DefaultScalpFeeRate, nil)
-				telemetry := strategy.ScalpDecisionFromScoreResult(scoreResult, *report)
-				longScore = telemetry.LongScore
-				shortScore = telemetry.ShortScore
-				brainStatus = strategy.TelemetryBrainStatus(telemetry, *report, signalAnalyst)
-				aiStatus = strategy.TelemetryAIStatus(context.Background(), *report, nil)
-			}
+	dashboard := server.NewDashboardServer(
+		analysts, restClient, symbol, orderFlow, signalAnalyst, htfProvider,
+		cfg.ReadOnly, cfg.SandboxMode, tradingTF,
+	)
+	dashboard.BindMaster(master)
+	master.SetNavigatorPanes(strategy.DefaultLiveNavigatorPanes())
+	master.NotifyKlineGapFillComplete(symbol, tradingTF)
+	master.SetOnTelemetry(func(tick exchange.WsTick, falcon strategy.FalconSignals, decision strategy.ScoreDecision) {
+		analyst := analysts[tradingTF]
+		if analyst == nil {
+			return
 		}
+		rsxColor := analyst.JurikRSXColor()
+		rsxSignal := 0.0
+		if analyst.HasMinBars(strategy.BacktestMinBars()) {
+			rsxSignal = analyst.RSXSignalLine()
+		}
+		brainStatus := strategy.TelemetryBrainStatus(decision, signalAnalyst)
+		aiStatus := strategy.TelemetryAIStatus(context.Background(), analyst, nil)
 
 		dashboard.BroadcastTick(
-			domain.CandleFromKline(k),
-			jurik, rsxSignal, red, green, blue,
+			tradingTF,
+			domain.CandleFromKline(tick.Kline),
+			falcon.JurikRSX, rsxSignal,
+			falcon.RedLine, falcon.GreenLine, falcon.BlueLine,
 			rsxColor,
-			longScore, shortScore,
+			decision,
 			brainStatus, aiStatus,
 		)
 	})
 	master.SetOnKlineBar(func(tf string, k exchange.Kline) {
-		if tf == "1m" {
+		if tf == tradingTF {
 			return
 		}
 		dashboard.BroadcastPriceBar(tf, domain.CandleFromKline(k))
@@ -153,10 +154,13 @@ func main() {
 	master.SetOnTrade(func(event strategy.TradeEvent) {
 		dashboard.BroadcastMarker(event.Side, event.Price, event.BarTime, event.Reason, event.Kind)
 	})
+	master.SetOnClosedTrade(func(trade domain.ClosedTrade, isVirtual bool) {
+		dashboard.RecordClosedTrade(trade, isVirtual)
+	})
 
 	master.RecoverState()
 
-	wsClient := exchange.NewWsClient(Symbol, orderFlow)
+	wsClient := exchange.NewWsClient(symbol, orderFlow)
 
 	master.StartDataFeed(ctx, wsClient.OutCh)
 

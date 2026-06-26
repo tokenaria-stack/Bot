@@ -1,17 +1,20 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
+	"trading_bot/execution"
 	"trading_bot/exchange"
 )
 
 const (
-	BacktestInitialCapital = 10000.0
-	backtestMinBars     = 50
-	backtestEquityEvery = 100
+	BacktestInitialCapital     = 10000.0
+	DefaultBacktestSlippagePct = 0.03 // 0.03% per fill
+	backtestMinBars            = 50
+	backtestEquityEvery        = 100
 )
 
 // BacktestMinBars returns the minimum candle count required before trading in backtests.
@@ -73,14 +76,15 @@ func PadBacktestStartMs(binanceInterval string, startMs, endMs int64, candleCoun
 
 // BacktestConfig configures a historical simulation run.
 type BacktestConfig struct {
-	Symbol     string
-	Interval   string
+	Symbol       string
+	Interval     string
 	EntryAnalyst *Analyst
-	FeeRate    float64
-	Matrix     *ScoringMatrix
-	Navigator  NavigatorUISettings
-	Navigators map[string]NavigatorUISettings
-	HTF        *exchange.HTFProvider
+	FeeRate      float64
+	SlippagePct  float64
+	Matrix       *ScoringMatrix
+	Navigator    NavigatorUISettings
+	Navigators   map[string]NavigatorUISettings
+	HTF          *exchange.HTFProvider
 }
 
 func (e *BacktestEngine) activeMatrix() ScoringMatrix {
@@ -126,6 +130,14 @@ type BacktestChartPoint struct {
 	// Legacy aliases (still populated for compatibility).
 	WozduhUp   float64
 	WozduhDown float64
+
+	LongScore  int                        `json:"longScore"`
+	ShortScore int                        `json:"shortScore"`
+	RawAction   string                    `json:"rawAction"`
+	FinalAction string                    `json:"finalAction"`
+	IsVetoed    bool                      `json:"isVetoed"`
+	VetoReason  string                    `json:"vetoReason,omitempty"`
+	Factors    map[string]ScoreFactor     `json:"factors,omitempty"`
 }
 
 // BacktestTradeResult is one completed round-trip trade.
@@ -155,6 +167,7 @@ type BacktestRunResult struct {
 	ProfitFactor   float64
 	MaxDrawdown    float64
 	RecoveryFactor float64
+	Cancelled      bool
 	Trades         []BacktestTradeResult
 	EquityCurve    []BacktestEquityPoint
 	ChartData      []BacktestChartPoint
@@ -172,6 +185,9 @@ func NewBacktestEngine(cfg BacktestConfig) *BacktestEngine {
 	if cfg.FeeRate <= 0 {
 		cfg.FeeRate = DefaultScalpFeeRate
 	}
+	if cfg.SlippagePct <= 0 {
+		cfg.SlippagePct = DefaultBacktestSlippagePct
+	}
 	return &BacktestEngine{cfg: cfg}
 }
 
@@ -180,6 +196,15 @@ type btPosition struct {
 	entryPrice float64
 	entryTime  int64
 	stopPrice  float64
+	qty        float64
+}
+
+// btPendingEntry is a signal queued on bar N for execution at bar N+1 open.
+type btPendingEntry struct {
+	side           string
+	lotMod         float64
+	signalBarIndex int
+	atr            float64
 }
 
 func (p *btPosition) displaySide() string {
@@ -225,7 +250,7 @@ func buildBacktestRSXMarkersMap(candles []exchange.Candle) map[int64]string {
 	var indexMarkers map[int]string
 	switch normalizeRSXDivMethod(settings.DivMethod) {
 	case "fractal":
-		indexMarkers = scanRSXFractalMarkers(prices, rsxValues, lookback)
+		indexMarkers = scanRSXFractalMarkers(prices, rsxValues, lookback, settings.PivotRadius)
 	default:
 		indexMarkers = scanRSXTVMarkers(closes, rsxValues, lookback)
 	}
@@ -240,28 +265,24 @@ func buildBacktestRSXMarkersMap(candles []exchange.Candle) map[int64]string {
 	return out
 }
 
-func (e *BacktestEngine) evaluateBacktestDecision(report *Report, chief *ChiefAnalyst) ScalpDecision {
+func (e *BacktestEngine) evaluateBacktestDecision(marker *Marker, chief *ChiefAnalyst) ScoreDecision {
 	matrix := e.activeMatrix()
-	scoreResult := ProcessScoreForMatrix(*report, matrix)
-	decision := ScalpDecisionFromScoreResult(scoreResult, *report)
-	if decision.Action != BuyAction && decision.Action != SellAction {
-		return decision
-	}
-
+	decision := DefaultScoreEngine.Calculate(marker, matrix)
 	analyst := e.cfg.EntryAnalyst
 	if analyst == nil {
 		analyst = NewAnalyst(false)
 	}
-	if err := analyst.AnalyzeSignals(report, string(decision.Action)); err != nil {
-		return ScalpDecision{Action: WaitAction, Reason: "Analyst blocked"}
-	}
-	return chief.Approve(decision, *report)
+	return ApplyExecutionVetoes(decision, marker, analyst, chief)
 }
 
 // Run simulates the strategy over historical candles and returns performance stats.
-func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, error) {
+// When ctx is cancelled the loop stops early and returns partial results with Cancelled=true.
+func (e *BacktestEngine) Run(ctx context.Context, candles []exchange.Candle) (*BacktestRunResult, error) {
 	if len(candles) == 0 {
 		return nil, fmt.Errorf("no candles to backtest")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	log.Printf("[Backtest] Processing %d candles", len(candles))
@@ -282,7 +303,7 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 	chartData := make([]BacktestChartPoint, 0, len(candles))
 
 	var pos *btPosition
-	var posSlot btPosition
+	var pending *btPendingEntry
 	var prevBlue float64
 	var prevBlueReady bool
 	var prevRSX float64
@@ -290,18 +311,52 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 
 	var kline exchange.Kline
 	var pt BacktestChartPoint
-	var report Report
-	var reportOK bool
-	var decision ScalpDecision
+	var scoreReady bool
+	var decision ScoreDecision
 
 	histKlines := make([]exchange.Kline, 0, len(candles))
 	histRSX := make([]float64, 0, len(candles))
 	histWozduh := make([]float64, 0, len(candles))
 
+	var mtfTracker *WalkForwardMTFTracker
+	if mtfTFs := CollectWalkForwardMTFPeriods(e.cfg.Navigators, e.cfg.Interval); e.cfg.HTF != nil && len(mtfTFs) > 0 {
+		priceUI := e.cfg.Navigators["price"]
+		mtfTracker = NewWalkForwardMTFTracker(e.cfg.HTF, e.cfg.Symbol, e.cfg.Interval, priceUI, mtfTFs)
+		if len(candles) > 0 {
+			mtfTracker.SetChartStartMs(candles[0].OpenTime)
+		}
+		mtfTracker.Prefetch()
+		log.Printf("[Backtest] Walk-forward MTF tracker: %v", mtfTFs)
+	}
+
 	lastIdx := len(candles) - 1
+	cancelled := false
+	lastProcessedIdx := -1
 	for i := range candles {
+		select {
+		case <-ctx.Done():
+			cancelled = true
+		default:
+		}
+		if cancelled {
+			break
+		}
+
 		candle := candles[i]
+		lastProcessedIdx = i
 		barTimeSec := candle.OpenTime / 1000
+
+		if pending != nil && pos == nil {
+			entryPrice := applyEntrySlippage(pending.side, candle.Open, e.cfg.SlippagePct)
+			posSlot, opened := e.openPosition(
+				histKlines, pending.signalBarIndex, pending.side,
+				entryPrice, barTimeSec, pending.atr, balance, pending.lotMod,
+			)
+			if opened {
+				pos = &posSlot
+			}
+			pending = nil
+		}
 
 		kline.OpenTime = candle.OpenTime
 		kline.Open = candle.Open
@@ -318,17 +373,14 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 		histRSX = append(histRSX, marker.falconSignals.JurikRSX)
 		histWozduh = append(histWozduh, marker.falconSignals.RsiVolSlow)
 
-		reportOK = false
-
-		if i+1 >= backtestMinBars {
-			var err error
-			report, err = marker.GenerateStreamingReport()
-			if err == nil {
-				reportOK = true
-			}
+		if mtfTracker != nil {
+			mtfTracker.Update(barTimeSec, histKlines)
+			marker.SetCurrentMTFState(mtfTracker.States())
 		}
 
-		if !reportOK {
+		scoreReady = marker.HasMinBars(backtestMinBars)
+
+		if !scoreReady {
 			continue
 		}
 
@@ -340,24 +392,32 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 			Close:  candle.Close,
 			Volume: candle.Volume,
 		}
-		populateBacktestPointFromReport(&pt, report, prevBlue, prevBlueReady)
+		populateBacktestPointFromMarker(&pt, marker, prevBlue, prevBlueReady)
 		if prevRSXReady {
 			pt.Color = RSXColor(pt.RSX, prevRSX)
 		}
 		pt.Marker = barMarker
 		if pt.Marker == "" {
-			pt.Marker = report.RSXMarker
+			pt.Marker = marker.RecentRSXMarker()
 		}
 		prevRSX = pt.RSX
 		prevRSXReady = true
-		prevBlue = report.Falcon.BlueLine
+		falcon := marker.FalconSnapshot()
+		prevBlue = falcon.BlueLine
 		prevBlueReady = true
+		decision = e.evaluateBacktestDecision(marker, chief)
+		pt.LongScore = decision.LongScore
+		pt.ShortScore = decision.ShortScore
+		pt.RawAction = string(decision.RawAction)
+		pt.FinalAction = string(decision.FinalAction)
+		pt.IsVetoed = decision.IsVetoed
+		pt.VetoReason = decision.VetoReason
+		pt.Factors = decision.Factors
 		chartData = append(chartData, pt)
 
-		decision = e.evaluateBacktestDecision(&report, chief)
-
 		if pos != nil {
-			if exitPrice, hit := checkFractalStop(pos, candle); hit {
+			if rawStop, hit := checkFractalStop(pos, candle); hit {
+				exitPrice := applyExitSlippage(pos.side, rawStop, e.cfg.SlippagePct)
 				balance, peak, maxDrawdownPct, maxDrawdownUSD = e.closeBacktestPosition(
 					pos, exitPrice, barTimeSec, "stop", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
 				)
@@ -368,37 +428,53 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 		if pos != nil {
 			switch pos.side {
 			case "BUY":
-				switch decision.Action {
+				switch decision.FinalAction {
 				case BuyAction:
 					// already long — ignore
 				case SellAction:
+					exitPrice := applyExitSlippage(pos.side, candle.Close, e.cfg.SlippagePct)
 					balance, peak, maxDrawdownPct, maxDrawdownUSD = e.closeBacktestPosition(
-						pos, candle.Close, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
+						pos, exitPrice, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
 					)
 					pos = nil
-					if decision.Action == SellAction {
-						posSlot = e.openPosition(histKlines, i, "SELL", candle.Close, barTimeSec, report.Volatility.ATR)
-						pos = &posSlot
+					if i+1 < len(candles) {
+						pending = &btPendingEntry{
+							side:           "SELL",
+							lotMod:         decision.LotMod,
+							signalBarIndex: i,
+							atr:            marker.LastATR(),
+						}
 					}
 				}
 			case "SELL":
-				switch decision.Action {
+				switch decision.FinalAction {
 				case SellAction:
 					// already short — ignore
 				case BuyAction:
+					exitPrice := applyExitSlippage(pos.side, candle.Close, e.cfg.SlippagePct)
 					balance, peak, maxDrawdownPct, maxDrawdownUSD = e.closeBacktestPosition(
-						pos, candle.Close, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
+						pos, exitPrice, barTimeSec, "signal", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
 					)
 					pos = nil
-					if decision.Action == BuyAction {
-						posSlot = e.openPosition(histKlines, i, "BUY", candle.Close, barTimeSec, report.Volatility.ATR)
-						pos = &posSlot
+					if i+1 < len(candles) {
+						pending = &btPendingEntry{
+							side:           "BUY",
+							lotMod:         decision.LotMod,
+							signalBarIndex: i,
+							atr:            marker.LastATR(),
+						}
 					}
 				}
 			}
-		} else if decision.Action == BuyAction || decision.Action == SellAction {
-			posSlot = e.openPosition(histKlines, i, string(decision.Action), candle.Close, barTimeSec, report.Volatility.ATR)
-			pos = &posSlot
+		} else if decision.FinalAction == BuyAction || decision.FinalAction == SellAction {
+			if i+1 < len(candles) {
+				pending = &btPendingEntry{
+					side:           string(decision.FinalAction),
+					lotMod:         decision.LotMod,
+					signalBarIndex: i,
+					atr:            marker.LastATR(),
+				}
+			}
 		}
 
 		if i > 0 && i%backtestEquityEvery == 0 {
@@ -407,28 +483,43 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 		}
 	}
 
-	if pos != nil {
+	if !cancelled && pos != nil {
 		last := candles[lastIdx]
 		barTimeSec := last.OpenTime / 1000
-		balanceBefore := balance
-		pnlPct := calcPnLPct(pos.side, pos.entryPrice, last.Close)
-		balance += balance * (pnlPct / 100.0)
-		closedTrades = append(closedTrades, backtestClosedTrade{
-			timeSec:       barTimeSec,
-			entryTime:     pos.entryTime,
-			side:          pos.displaySide(),
-			entryPrice:    pos.entryPrice,
-			exitPrice:     last.Close,
-			stopLossPrice: pos.stopPrice,
-			exitReason:    "eod",
-			pnlPct:        pnlPct,
-			dollarPnL:     balance - balanceBefore,
-			duration:      formatBacktestDuration(pos.entryTime, barTimeSec),
-		})
-		recordEquityPoint(&equity, barTimeSec, balance)
-		peak, maxDrawdownPct, maxDrawdownUSD = updateDrawdown(balance, peak, maxDrawdownPct, maxDrawdownUSD)
+		exitPrice := applyExitSlippage(pos.side, last.Close, e.cfg.SlippagePct)
+		balance, peak, maxDrawdownPct, maxDrawdownUSD = e.closeBacktestPosition(
+			pos, exitPrice, barTimeSec, "eod", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
+		)
+	} else if cancelled && pos != nil && lastProcessedIdx >= 0 {
+		last := candles[lastProcessedIdx]
+		barTimeSec := last.OpenTime / 1000
+		exitPrice := applyExitSlippage(pos.side, last.Close, e.cfg.SlippagePct)
+		balance, peak, maxDrawdownPct, maxDrawdownUSD = e.closeBacktestPosition(
+			pos, exitPrice, barTimeSec, "stopped", balance, &closedTrades, &equity, peak, maxDrawdownPct, maxDrawdownUSD,
+		)
 	}
 
+	if cancelled {
+		log.Printf("[Backtest] Cancelled after %d/%d candles", lastProcessedIdx+1, len(candles))
+	}
+
+	return e.assembleRunResult(
+		balance, closedTrades, equity, chartData,
+		histKlines, histRSX, histWozduh,
+		maxDrawdownPct, maxDrawdownUSD, cancelled,
+	), nil
+}
+
+func (e *BacktestEngine) assembleRunResult(
+	balance float64,
+	closedTrades []backtestClosedTrade,
+	equity []BacktestEquityPoint,
+	chartData []BacktestChartPoint,
+	histKlines []exchange.Kline,
+	histRSX, histWozduh []float64,
+	maxDrawdownPct, maxDrawdownUSD float64,
+	cancelled bool,
+) *BacktestRunResult {
 	metrics := computeBacktestMetrics(BacktestInitialCapital, balance, closedTrades, maxDrawdownPct, maxDrawdownUSD)
 
 	trades := make([]BacktestTradeResult, len(closedTrades))
@@ -474,12 +565,13 @@ func (e *BacktestEngine) Run(candles []exchange.Candle) (*BacktestRunResult, err
 		ProfitFactor:   metrics.profitFactor,
 		MaxDrawdown:    metrics.maxDrawdown,
 		RecoveryFactor: metrics.recoveryFactor,
+		Cancelled:      cancelled,
 		Trades:         trades,
 		EquityCurve:    equity,
 		ChartData:      chartData,
 		NavigatorData:  navData,
 		Navigators:     navigators,
-	}, nil
+	}
 }
 
 type backtestClosedTrade struct {
@@ -504,15 +596,46 @@ type backtestMetrics struct {
 	recoveryFactor float64
 }
 
-func (e *BacktestEngine) openPosition(klines []exchange.Kline, barIndex int, side string, entryPrice float64, entryTime int64, atr float64) btPosition {
+func (e *BacktestEngine) openPosition(
+	klines []exchange.Kline,
+	barIndex int,
+	side string,
+	entryPrice float64,
+	entryTime int64,
+	atr float64,
+	balance float64,
+	lotMod float64,
+) (btPosition, bool) {
 	isLong := side == "BUY"
 	stopPrice := computePositionStop(klines, barIndex, isLong, atr, GetRiskSettings())
+	if stopPrice <= 0 {
+		return btPosition{}, false
+	}
+
+	risk := GetRiskSettings()
+	maxLev := float64(risk.Leverage)
+	if maxLev <= 0 {
+		maxLev = 1
+	}
+	qty, _ := execution.CalculateTargetQuantity(
+		balance,
+		risk.RiskPerTrade,
+		entryPrice,
+		stopPrice,
+		lotMod,
+		maxLev,
+	)
+	if qty <= 0 {
+		return btPosition{}, false
+	}
+
 	return btPosition{
 		side:       side,
 		entryPrice: entryPrice,
 		entryTime:  entryTime,
 		stopPrice:  stopPrice,
-	}
+		qty:        qty,
+	}, true
 }
 
 func checkFractalStop(pos *btPosition, candle exchange.Candle) (float64, bool) {
@@ -538,9 +661,19 @@ func (e *BacktestEngine) closeBacktestPosition(
 	equity *[]BacktestEquityPoint,
 	peak, maxDrawdownPct, maxDrawdownUSD float64,
 ) (float64, float64, float64, float64) {
+	if pos == nil || pos.qty <= 0 {
+		return balance, peak, maxDrawdownPct, maxDrawdownUSD
+	}
+
 	balanceBefore := balance
-	pnlPct := calcPnLPct(pos.side, pos.entryPrice, exitPrice)
-	balance += balance * (pnlPct / 100.0)
+	netPnL := calcBacktestNetPnL(pos.side, pos.entryPrice, exitPrice, pos.qty, e.cfg.FeeRate)
+	balance += netPnL
+
+	pnlPct := 0.0
+	if balanceBefore > 0 {
+		pnlPct = netPnL / balanceBefore * 100
+	}
+
 	*closedTrades = append(*closedTrades, backtestClosedTrade{
 		timeSec:       barTimeSec,
 		entryTime:     pos.entryTime,
@@ -550,12 +683,48 @@ func (e *BacktestEngine) closeBacktestPosition(
 		stopLossPrice: pos.stopPrice,
 		exitReason:    exitReason,
 		pnlPct:        pnlPct,
-		dollarPnL:     balance - balanceBefore,
+		dollarPnL:     netPnL,
 		duration:      formatBacktestDuration(pos.entryTime, barTimeSec),
 	})
 	recordEquityPoint(equity, barTimeSec, balance)
 	peak, maxDrawdownPct, maxDrawdownUSD = updateDrawdown(balance, peak, maxDrawdownPct, maxDrawdownUSD)
 	return balance, peak, maxDrawdownPct, maxDrawdownUSD
+}
+
+func calcBacktestNetPnL(side string, entryPrice, exitPrice, qty, feeRate float64) float64 {
+	if qty <= 0 || entryPrice <= 0 || exitPrice <= 0 {
+		return 0
+	}
+	var rawPnL float64
+	if side == "BUY" {
+		rawPnL = (exitPrice - entryPrice) * qty
+	} else {
+		rawPnL = (entryPrice - exitPrice) * qty
+	}
+	fee := (entryPrice*qty*feeRate) + (exitPrice*qty*feeRate)
+	return rawPnL - fee
+}
+
+func applyEntrySlippage(side string, openPrice, slippagePct float64) float64 {
+	if openPrice <= 0 || slippagePct <= 0 {
+		return openPrice
+	}
+	slip := slippagePct / 100.0
+	if side == "BUY" {
+		return openPrice * (1 + slip)
+	}
+	return openPrice * (1 - slip)
+}
+
+func applyExitSlippage(side string, marketPrice, slippagePct float64) float64 {
+	if marketPrice <= 0 || slippagePct <= 0 {
+		return marketPrice
+	}
+	slip := slippagePct / 100.0
+	if side == "BUY" {
+		return marketPrice * (1 - slip)
+	}
+	return marketPrice * (1 + slip)
 }
 
 func calcPnLPct(side string, entryPrice, exitPrice float64) float64 {
@@ -681,32 +850,32 @@ func applyBacktestRSXMarkers(chartData []BacktestChartPoint, klines []exchange.K
 	}
 }
 
-func populateBacktestPointFromReport(pt *BacktestChartPoint, report Report, prevBlue float64, prevReady bool) {
-	f := report.Falcon
-	pt.RSX = f.JurikRSX
-	pt.Jurik = f.JurikRSX
-	pt.RSXSignal = f.JurikRSXSignal
-	pt.RsiPrice = f.RsiPrice
-	pt.EmaRsi = f.EmaRsi
-	pt.RsiRsi = f.RsiRsi
-	pt.RsiHl2 = f.RsiHl2
-	pt.RsiVolFast = f.RsiVolFast
-	pt.RsiVolSlow = f.RsiVolSlow
-	pt.MacdRsi = f.MacdRsi
-	pt.RsiAd = f.RsiAd
-	pt.RsiHl2Vol = f.RsiHl2Vol
-	pt.VolCrossMarker = f.VolCrossMarker
-	pt.VolChanMid = f.VolChanMid
-	pt.VolChanUp = f.VolChanUp
-	pt.VolChanDn = f.VolChanDn
-	pt.PriceChanMid = f.PriceChanMid
-	pt.PriceChanUp = f.PriceChanUp
-	pt.PriceChanDn = f.PriceChanDn
-	pt.WozduhUp = f.RsiVolFast
-	pt.WozduhDown = f.RsiVolSlow
+func populateBacktestPointFromMarker(pt *BacktestChartPoint, marker *Marker, prevBlue float64, prevReady bool) {
+	falcon := marker.FalconSnapshot()
+	pt.RSX = falcon.JurikRSX
+	pt.Jurik = falcon.JurikRSX
+	pt.RSXSignal = falcon.JurikRSXSignal
+	pt.RsiPrice = falcon.RsiPrice
+	pt.EmaRsi = falcon.EmaRsi
+	pt.RsiRsi = falcon.RsiRsi
+	pt.RsiHl2 = falcon.RsiHl2
+	pt.RsiVolFast = falcon.RsiVolFast
+	pt.RsiVolSlow = falcon.RsiVolSlow
+	pt.MacdRsi = falcon.MacdRsi
+	pt.RsiAd = falcon.RsiAd
+	pt.RsiHl2Vol = falcon.RsiHl2Vol
+	pt.VolCrossMarker = falcon.VolCrossMarker
+	pt.VolChanMid = falcon.VolChanMid
+	pt.VolChanUp = falcon.VolChanUp
+	pt.VolChanDn = falcon.VolChanDn
+	pt.PriceChanMid = falcon.PriceChanMid
+	pt.PriceChanUp = falcon.PriceChanUp
+	pt.PriceChanDn = falcon.PriceChanDn
+	pt.WozduhUp = falcon.RsiVolFast
+	pt.WozduhDown = falcon.RsiVolSlow
 	if prevReady {
-		pt.VolumeSpikeUp = DetectWozduxVolumeSpikeUp(prevBlue, f.BlueLine, f.RedLine)
-		pt.VolumeSpikeDown = DetectWozduxVolumeSpikeDown(prevBlue, f.BlueLine, f.RedLine)
+		pt.VolumeSpikeUp = DetectWozduxVolumeSpikeUp(prevBlue, falcon.BlueLine, falcon.RedLine)
+		pt.VolumeSpikeDown = DetectWozduxVolumeSpikeDown(prevBlue, falcon.BlueLine, falcon.RedLine)
 	}
 }
 

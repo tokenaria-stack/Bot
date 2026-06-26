@@ -82,6 +82,7 @@ type Marker struct {
 	prevZigHas               bool
 	rsxMarkers               rsxMarkerState
 	layer2Snap               layer2StreamingSnapshot
+	mtfStates                map[string]*HTFState
 }
 
 // NewMarker loads the initial candle history into a protected store.
@@ -95,7 +96,7 @@ func NewMarker(history []exchange.Kline, db *vector_db.DBClient, timeframe, coll
 		timeframe:  timeframe,
 		collection: collection,
 		config:     config,
-		rsxMarkers: newRSXMarkerState(GetRSXSettings().DivLookback),
+		rsxMarkers: newRSXMarkerStateFromSettings(GetRSXSettings()),
 	}
 	a.warmupStreaming(copied)
 	return a
@@ -113,6 +114,22 @@ func (a *Marker) JurikRSXColor() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return RSXColor(a.jurikValue, a.jurikPrevBar)
+}
+
+// LoadHistoricalKlines merges SQLite backfill with the live RAM buffer (overlay wins on
+// duplicate OpenTime), then replays streaming engines once.
+//
+// Mutex contract: analyst.mu is a plain sync.Mutex (blocking wait, no timeout).
+// UpdateKlineTick and LoadHistoricalKlines are the only writers; both call Lock once.
+// replayStreamingLocked / evaluateTickLocked must never acquire mu — no re-entrant deadlock.
+// While this runs, the WS data-feed goroutine blocks on Lock; OutCh (cap 1000) applies
+// backpressure to the socket reader until hydrate completes.
+func (a *Marker) LoadHistoricalKlines(klines []exchange.Kline) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	merged := mergeKlinesByOpenTime(klines, a.klines)
+	a.klines = merged
+	a.replayStreamingLocked()
 }
 
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
@@ -157,6 +174,60 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 	// Out-of-order tick for an earlier period — drop.
 	_ = isClosed
+}
+
+// SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).
+func (a *Marker) SetCurrentMTFState(states map[string]*HTFState) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(states) == 0 {
+		a.mtfStates = nil
+		return
+	}
+	a.mtfStates = make(map[string]*HTFState, len(states))
+	for tf, st := range states {
+		if st == nil {
+			continue
+		}
+		cp := *st
+		cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
+		cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
+		a.mtfStates[tf] = &cp
+	}
+}
+
+// MTFState returns walk-forward HTF state for one interval (nil when unavailable).
+func (a *Marker) MTFState(tf string) *HTFState {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	st := a.mtfStates[tf]
+	if st == nil {
+		return nil
+	}
+	cp := *st
+	cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
+	cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
+	return &cp
+}
+
+// MTFStates returns a defensive copy of all walk-forward HTF states.
+func (a *Marker) MTFStates() map[string]*HTFState {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.mtfStates) == 0 {
+		return nil
+	}
+	out := make(map[string]*HTFState, len(a.mtfStates))
+	for tf, st := range a.mtfStates {
+		if st == nil {
+			continue
+		}
+		cp := *st
+		cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
+		cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
+		out[tf] = &cp
+	}
+	return out
 }
 
 // GetKlines returns a defensive copy of the stored candles.
@@ -384,190 +455,84 @@ func filteredFractalPeaks(klines []exchange.Kline) ([]indicators.Peak, error) {
 	return filtered, nil
 }
 
-// Report contains a standardized market summary for MasterGeneral.
-type Report struct {
-	Timeframe    string
-	Close        float64
-	RSI          float64
-	MACD         float64
-	ATR          float64
-	IsOverbought bool
-	IsOversold   bool
-	LatestAO     float64
-	UpFractal    float64
-	DownFractal  float64
-	Falcon       FalconSignals
-	Volatility   VolatilityState
-	Divergence   indicators.DivSignal
-	ZigZag       ZigZagState
-	Geometry     GeometryState
-	FibZones     []indicators.FibZone
-	RedLineCrossGreenUp   bool
-	RedLineCrossGreenDown bool
-	JurikValue            float64
-	JurikIsRising         bool
-	WozduxVolumeSpikeUp   bool // anomalous volume at oversold bottom (green dot)
-	WozduxVolumeSpikeDown bool // anomalous volume at overbought top (red dot)
-	GeometryBounceUp      bool // bounce off support trendline
-	GeometryBounceDown    bool // bounce off resistance trendline
-	GeometryTriangle      bool // price compressed in triangle (energy building)
-	AccumulationRising    bool // AD line climbing (whale accumulation)
-	DistributionFalling   bool // AD line falling (whale distribution)
-	AOCrossZeroUp         bool // AO histogram crossed zero upward
-	AOCrossZeroDown       bool // AO histogram crossed zero downward
-	RSXMarker             string // L, LL, S, SS, P from RSX chart pivot/divergence scan
-	RSXSignal             float64 // SMA(RSX, 9) signal line
-}
-
-// GenerateMarketReport collects current indicator values into a unified summary.
-func (a *Marker) GenerateMarketReport() (*Report, error) {
-	klines := a.GetKlines()
-	if len(klines) < 50 {
-		return nil, fmt.Errorf("not enough klines to generate full report: %d", len(klines))
-	}
-
-	_, high, low, closePrices, _ := indicators.ExtractPrices(klines)
-	lastClose := closePrices[len(closePrices)-1]
-
-	rsiArr := indicators.RSIValues(closePrices, 14)
-	var lastRSI float64
-	if len(rsiArr) > 0 {
-		lastRSI = rsiArr[len(rsiArr)-1]
-	}
-
-	macdArr, _, _ := indicators.MACDValues(closePrices, 12, 26, 9)
-	var lastMACD float64
-	if len(macdArr) > 0 {
-		lastMACD = macdArr[len(macdArr)-1]
-	}
-
-	atrArr := indicators.ATRValues(high, low, closePrices, 14)
-	var lastATR float64
-	if len(atrArr) > 0 {
-		lastATR = atrArr[len(atrArr)-1]
-	}
-
-	upFractal, downFractal := lastConfirmedFractals(klines)
-
-	a.mu.RLock()
-	falcon := a.falconSignals
-	volatility := a.volatilityState
-	divergence := a.divSignal
-	zigZag := a.zigZagState
-	geometry := a.geometryState
-	latestAO := a.latestAO
-	fibZones := append([]indicators.FibZone(nil), a.fibZones...)
-	redCross := a.redLineCrossGreenUp
-	redCrossDown := a.redLineCrossGreenDown
-	jurikValue := a.jurikValue
-	jurikRising := a.jurikIsRising
-	volSpikeUp := a.wozduxVolumeSpikeUp
-	volSpikeDown := a.wozduxVolumeSpikeDown
-	geomBounceUp := a.geometryBounceUp
-	geomBounceDown := a.geometryBounceDown
-	geomTriangle := a.geometryTriangle
-	adRising := a.accumulationRising
-	adFalling := a.distributionFalling
-	aoCrossUp := a.aoCrossZeroUp
-	aoCrossDown := a.aoCrossZeroDown
-	a.mu.RUnlock()
-
-	rsxMarker := LatestRSXChartMarker(klines, GetRSXSettings().DivLookback)
-
-	return &Report{
-		Timeframe:    a.timeframe,
-		Close:        lastClose,
-		RSI:          lastRSI,
-		MACD:         lastMACD,
-		ATR:          lastATR,
-		IsOverbought: lastRSI >= 70,
-		IsOversold:   lastRSI <= 30,
-		LatestAO:     latestAO,
-		UpFractal:    upFractal,
-		DownFractal:  downFractal,
-		Falcon:       falcon,
-		Volatility:   volatility,
-		Divergence:   divergence,
-		ZigZag:       zigZag,
-		Geometry:     geometry,
-		FibZones:     fibZones,
-		RedLineCrossGreenUp:   redCross,
-		RedLineCrossGreenDown: redCrossDown,
-		JurikValue:            jurikValue,
-		JurikIsRising:         jurikRising,
-		WozduxVolumeSpikeUp:   volSpikeUp,
-		WozduxVolumeSpikeDown: volSpikeDown,
-		GeometryBounceUp:      geomBounceUp,
-		GeometryBounceDown:    geomBounceDown,
-		GeometryTriangle:      geomTriangle,
-		AccumulationRising:    adRising,
-		DistributionFalling:   adFalling,
-		AOCrossZeroUp:         aoCrossUp,
-		AOCrossZeroDown:       aoCrossDown,
-		RSXMarker:             rsxMarker,
-		RSXSignal:             falcon.JurikRSXSignal,
-	}, nil
-}
-
-// GenerateStreamingReport builds a Report from incremental indicator state (O(1) per call).
-// Use for backtests instead of GenerateMarketReport to avoid rescanning full history.
-func (a *Marker) GenerateStreamingReport() (Report, error) {
+// LastClose returns the latest candle close price (0 when no bars).
+func (a *Marker) LastClose() float64 {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-
-	if len(a.klines) < 50 {
-		return Report{}, fmt.Errorf("not enough klines to generate full report: %d", len(a.klines))
+	if len(a.klines) == 0 {
+		return 0
 	}
+	return a.klines[len(a.klines)-1].Close
+}
 
-	last := a.klines[len(a.klines)-1]
-	lastRSI := a.orangeRsi.Value()
-	lastMACD := a.falconSignals.BlackLine - 50.0
+// LastATR returns the streaming volatility ATR from the latest tick.
+func (a *Marker) LastATR() float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.volatilityState.ATR
+}
 
-	upFractal := last.High
-	downFractal := last.Low
-	if a.zigZagState.LastNode.Confirmed {
-		if a.zigZagState.LastNode.IsHigh {
-			upFractal = a.zigZagState.LastNode.Price
-		} else {
-			downFractal = a.zigZagState.LastNode.Price
+// VolatilityStateSnapshot returns a copy of the current volatility regime state.
+func (a *Marker) VolatilityStateSnapshot() VolatilityState {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.volatilityState
+}
+
+// FalconSnapshot returns a copy of the latest Falcon dashboard values.
+func (a *Marker) FalconSnapshot() FalconSignals {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.falconSignals
+}
+
+// RSXSignalLine returns the Jurik RSX signal line value.
+func (a *Marker) RSXSignalLine() float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.falconSignals.JurikRSXSignal
+}
+
+// FibZonesSnapshot returns a defensive copy of active Fibonacci zones.
+func (a *Marker) FibZonesSnapshot() []indicators.FibZone {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return append([]indicators.FibZone(nil), a.fibZones...)
+}
+
+// RecentRSXMarker returns the latest RSX trading marker string (L/LL/S/SS).
+func (a *Marker) RecentRSXMarker() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.rsxMarkers.recentTradingMarker(RSXSignalMemoryBars)
+}
+
+// HasMinBars reports whether the marker has enough bars for scoring.
+func (a *Marker) HasMinBars(min int) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return len(a.klines) >= min
+}
+
+// VectorSnapshot projects Marker state into vector_db.ReportSnapshot for Qdrant embeddings.
+func (a *Marker) VectorSnapshot() vector_db.ReportSnapshot {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	fibActive := false
+	for _, zone := range a.fibZones {
+		if zone.IsActive {
+			fibActive = true
+			break
 		}
 	}
-
-	fibZones := append([]indicators.FibZone(nil), a.fibZones...)
-
-	return Report{
-		Timeframe:             a.timeframe,
-		Close:                 last.Close,
-		RSI:                   lastRSI,
-		MACD:                  lastMACD,
-		ATR:                   a.volatilityState.ATR,
-		IsOverbought:          lastRSI >= 70,
-		IsOversold:            lastRSI <= 30,
-		LatestAO:              a.latestAO,
-		UpFractal:             upFractal,
-		DownFractal:           downFractal,
-		Falcon:                a.falconSignals,
-		Volatility:            a.volatilityState,
-		Divergence:            a.divSignal,
-		ZigZag:                a.zigZagState,
-		Geometry:              a.geometryState,
-		FibZones:              fibZones,
-		RedLineCrossGreenUp:   a.redLineCrossGreenUp,
-		RedLineCrossGreenDown: a.redLineCrossGreenDown,
-		JurikValue:            a.jurikValue,
-		JurikIsRising:         a.jurikIsRising,
-		WozduxVolumeSpikeUp:   a.wozduxVolumeSpikeUp,
-		WozduxVolumeSpikeDown: a.wozduxVolumeSpikeDown,
-		GeometryBounceUp:      a.geometryBounceUp,
-		GeometryBounceDown:    a.geometryBounceDown,
-		GeometryTriangle:      a.geometryTriangle,
-		AccumulationRising:    a.accumulationRising,
-		DistributionFalling:   a.distributionFalling,
-		AOCrossZeroUp:         a.aoCrossZeroUp,
-		AOCrossZeroDown:       a.aoCrossZeroDown,
-		RSXMarker:             a.rsxMarkers.recentTradingMarker(RSXSignalMemoryBars),
-		RSXSignal:             a.falconSignals.JurikRSXSignal,
-	}, nil
+	return vector_db.ReportSnapshot{
+		JurikValue:      a.jurikValue,
+		DivergenceScore: a.divSignal.Score,
+		Regime:          string(a.volatilityState.Regime),
+		FalconRedLine:   a.falconSignals.RedLine,
+		FalconBlueLine:  a.falconSignals.BlueLine,
+		FibActive:       fibActive,
+	}
 }
 
 // lastConfirmedFractals returns the most recent filtered Bill Williams fractals,

@@ -1229,11 +1229,20 @@
         </div>
       </div>
       <button type="button" id="btn-run-backtest" class="btn-compact">Run</button>
+      <button type="button" id="btn-stop-backtest" class="btn-compact btn-stop" disabled title="Stop simulation">Stop</button>
     </form>
 
     <div class="command-spacer"></div>
 
     <button type="button" class="btn-ghost" id="console-toggle" title="Backtest console">Console</button>
+  </div>
+
+  <div class="telemetry-bar-wrap">
+    <div class="card" id="scoring-telemetry-card">
+      <div id="telemetry-compact-line" class="telemetry-compact-line" aria-live="polite">
+        <span class="telemetry-idle">—</span>
+      </div>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -1299,6 +1308,7 @@
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryBounce" data-matrix-key="useGeometryBounce" checked /> Geometry bounce (+25)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryTriangle" data-matrix-key="useGeometryTriangle" checked /> Geometry triangle (+10)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useHTFOscillators" data-matrix-key="useHTFOscillators" checked /> HTF RSX &amp; Wozduh (walk-forward MTF, +20)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useDivergence" data-matrix-key="useDivergence" checked /> Divergence score (±)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useFib" data-matrix-key="useFib" checked /> Fib 0.618 active (+20)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useExpRegime" data-matrix-key="useExpRegime" checked /> Regime EXPANSION (+15)</label>
@@ -1391,6 +1401,12 @@
 
     <div id="tab-stats" class="tab-content">
       <div class="stats-panel">
+        <div class="stats-mode-selector">
+          <button type="button" class="mode-btn active" data-mode="backtest">Бэктест</button>
+          <button type="button" class="mode-btn" data-mode="paper">Бумажный (Paper)</button>
+          <button type="button" class="mode-btn" data-mode="live">Live (Real)</button>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-card-label">Total Trades</div>
@@ -1426,16 +1442,18 @@
           <table id="trade-history-table">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Side</th>
+                <th>Entry Time</th>
+                <th>Exit Time</th>
+                <th>Type</th>
                 <th>Entry Price</th>
                 <th>Exit Price</th>
+                <th>Fee</th>
                 <th>PnL</th>
-                <th>Duration</th>
+                <th>Reason</th>
               </tr>
             </thead>
             <tbody id="trade-history-body">
-              <tr><td colspan="6" style="color: var(--tv-muted);">No trades yet</td></tr>
+              <tr><td colspan="8" class="stats-empty">No trades yet</td></tr>
             </tbody>
           </table>
         </div>

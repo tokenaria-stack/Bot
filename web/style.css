@@ -429,3 +429,160 @@
 .navigator-popup__footer .btn-save-default:hover {
   border-color: var(--tv-accent);
 }
+
+/* ── Score telemetry panel ── */
+.telemetry-bar-wrap {
+  padding: 0 12px 4px;
+  background: var(--tv-bg, #131722);
+  border-bottom: 1px solid var(--tv-border, #2a2e39);
+}
+
+#scoring-telemetry-card.card {
+  background: var(--tv-panel, #1e222d);
+  border: 1px solid var(--tv-border, #2a2e39);
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.telemetry-compact-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--tv-muted, #787b86);
+  min-height: 22px;
+}
+
+.telemetry-compact-line strong {
+  color: var(--tv-text, #d1d4dc);
+  font-weight: 700;
+}
+
+.telemetry-idle {
+  color: var(--tv-muted, #787b86);
+  font-style: italic;
+}
+
+.telemetry-sep {
+  opacity: 0.45;
+  user-select: none;
+}
+
+.telemetry-action.telemetry-buy { color: var(--tv-green, #26a69a); font-weight: 700; }
+.telemetry-action.telemetry-sell { color: var(--tv-red, #ef5350); font-weight: 700; }
+.telemetry-action.telemetry-wait { color: var(--tv-muted, #787b86); }
+.telemetry-action.telemetry-vetoed { color: #ffb74d; font-weight: 600; }
+
+.telemetry-factors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.telemetry-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  color: #b0b8c4;
+  white-space: nowrap;
+}
+
+.telemetry-veto {
+  color: #ffb74d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.crosshair-scoring-hint {
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(19, 23, 34, 0.92);
+  border: 1px solid var(--tv-border, #363a45);
+  color: #d1d4dc;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.btn-stop {
+  color: #ef5350;
+  border-color: rgba(239, 83, 80, 0.45);
+}
+
+.btn-stop:disabled {
+  opacity: 0.45;
+}
+
+#scoring-telemetry-card.telemetry-locked {
+  background: rgba(41, 98, 255, 0.14);
+  border-color: rgba(41, 98, 255, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(41, 98, 255, 0.25);
+}
+
+.telemetry-lock-badge {
+  color: #7eb7ff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.telemetry-bar-wrap.is-hidden { display: none; }
+
+/* ── Stats tab: mode selector ── */
+.stats-mode-selector {
+  display: inline-flex;
+  gap: 0;
+  padding: 3px;
+  background: var(--tv-panel, #1e222d);
+  border: 1px solid var(--tv-border, #363a45);
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.stats-mode-selector .mode-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--tv-muted, #787b86);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.stats-mode-selector .mode-btn:hover {
+  color: var(--tv-text, #d1d4dc);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stats-mode-selector .mode-btn.active {
+  color: var(--tv-text, #d1d4dc);
+  background: rgba(41, 98, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(41, 98, 255, 0.45);
+}
+
+#trade-history-table .stats-empty {
+  color: var(--tv-muted, #787b86);
+  text-align: center;
+}
+
+#trade-history-table .pnl-pos {
+  color: var(--tv-green, #26a69a);
+  font-weight: 600;
+}
+
+#trade-history-table .pnl-neg {
+  color: var(--tv-red, #ef5350);
+  font-weight: 600;
+}

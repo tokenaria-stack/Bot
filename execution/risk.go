@@ -25,7 +25,7 @@ type OrderRequest struct {
 
 // RiskManager protects deposit and computes position sizing.
 type RiskManager struct {
-	RiskPerTradePct float64 // % of balance risked per trade (e.g. 1.0 = 1%)
+	RiskPerTradePct float64
 	MaxLeverage     int
 }
 
@@ -37,8 +37,45 @@ func NewRiskManager(riskPct float64, maxLev int) *RiskManager {
 	}
 }
 
+// CalculateTargetQuantity returns position size (base asset qty) and required leverage.
+// lotMod scales the dollar risk budget (from ScoreDecision volatility modifier).
+func CalculateTargetQuantity(
+	balance, riskPerTradePct, entryPrice, stopLossPrice, lotMod, maxLeverage float64,
+) (float64, float64) {
+	if balance <= 0 || entryPrice <= 0 || stopLossPrice <= 0 || entryPrice == stopLossPrice {
+		return 0, 0
+	}
+	if maxLeverage <= 0 {
+		maxLeverage = 1
+	}
+
+	riskAmount := balance * (riskPerTradePct / 100.0)
+	if lotMod > 0 {
+		riskAmount *= lotMod
+	}
+
+	slDistancePct := math.Abs(entryPrice-stopLossPrice) / entryPrice
+	if slDistancePct == 0 {
+		return 0, 0
+	}
+
+	positionSizeUSDT := riskAmount / slDistancePct
+
+	requiredLeverage := positionSizeUSDT / balance
+	if requiredLeverage > maxLeverage {
+		positionSizeUSDT = balance * maxLeverage
+		requiredLeverage = maxLeverage
+	}
+	if requiredLeverage < 1 {
+		requiredLeverage = 1
+	}
+
+	qty := positionSizeUSDT / entryPrice
+	return qty, math.Ceil(requiredLeverage)
+}
+
 // EvaluateSignal converts a raw signal into a sized order using stop-distance sizing.
-func (rm *RiskManager) EvaluateSignal(sig TradeSignal, availableBalance float64) (*OrderRequest, error) {
+func (rm *RiskManager) EvaluateSignal(sig TradeSignal, availableBalance, lotMod float64) (*OrderRequest, error) {
 	if availableBalance <= 0 {
 		return nil, fmt.Errorf("insufficient balance: %.2f", availableBalance)
 	}
@@ -46,35 +83,31 @@ func (rm *RiskManager) EvaluateSignal(sig TradeSignal, availableBalance float64)
 		return nil, fmt.Errorf("invalid price or stop loss")
 	}
 
-	slDistancePct := math.Abs(sig.Price-sig.StopLoss) / sig.Price
-	if slDistancePct == 0 {
-		return nil, fmt.Errorf("stop loss cannot be equal to entry price")
+	maxLev := float64(rm.MaxLeverage)
+	if maxLev <= 0 {
+		maxLev = 1
 	}
 
-	riskAmount := availableBalance * (rm.RiskPerTradePct / 100.0)
-	positionSizeUSDT := riskAmount / slDistancePct
-
-	leverage := int(math.Ceil(positionSizeUSDT / availableBalance))
-	if leverage < 1 {
-		leverage = 1
+	qty, lev := CalculateTargetQuantity(
+		availableBalance,
+		rm.RiskPerTradePct,
+		sig.Price,
+		sig.StopLoss,
+		lotMod,
+		maxLev,
+	)
+	if qty <= 0 {
+		return nil, fmt.Errorf("position size is zero")
 	}
 
-	if leverage > rm.MaxLeverage {
-		log.Printf("[RiskManager] Warning: Required leverage %d exceeds MaxLeverage %d. Capping.", leverage, rm.MaxLeverage)
-		leverage = rm.MaxLeverage
-		positionSizeUSDT = availableBalance * float64(leverage)
-	}
-
-	qty := positionSizeUSDT / sig.Price
-
-	log.Printf("[RiskManager] Evaluated %s: Entry=%.2f, SL=%.2f (Dist: %.2f%%). Risking %.2f USDT. Qty=%.4f, Lev=%dx",
-		sig.Side, sig.Price, sig.StopLoss, slDistancePct*100, riskAmount, qty, leverage)
+	log.Printf("[RiskManager] Evaluated %s: Entry=%.2f, SL=%.2f. Qty=%.8f, Lev=%.0fx",
+		sig.Side, sig.Price, sig.StopLoss, qty, lev)
 
 	return &OrderRequest{
 		Symbol:   sig.Symbol,
 		Side:     sig.Side,
 		Quantity: qty,
-		Leverage: leverage,
+		Leverage: int(lev),
 		StopLoss: sig.StopLoss,
 	}, nil
 }

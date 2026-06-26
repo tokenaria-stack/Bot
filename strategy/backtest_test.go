@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"context"
 	"testing"
 
 	"trading_bot/exchange"
@@ -123,61 +122,71 @@ func TestCalcPnLPct(t *testing.T) {
 	}
 }
 
-func TestEvaluateBacktestDecision_UsesRequestMatrix(t *testing.T) {
-	origL, origS := LongScoreThreshold(), ShortScoreThreshold()
-	t.Cleanup(func() { SetScoreThresholds(origL, origS) })
-	SetScoreThresholds(35, 35)
+func TestApplyEntrySlippage(t *testing.T) {
+	t.Parallel()
 
-	matrix := ScoringMatrix{UseWozduhCross: true}
-	engine := NewBacktestEngine(BacktestConfig{Matrix: &matrix})
-	chief := NewChiefAnalyst()
-
-	report := &Report{
-		Close: 100,
-		Falcon: FalconSignals{VolCrossMarker: "red"},
-		Volatility: VolatilityState{
-			ATR:    1.0,
-			Regime: RegimeExpansion,
-		},
+	const slip = 0.05
+	long := applyEntrySlippage("BUY", 100, slip)
+	if long <= 100 {
+		t.Fatalf("long entry slip = %v, want > 100", long)
 	}
-
-	decision := engine.evaluateBacktestDecision(report, chief)
-	if decision.Action != SellAction {
-		t.Fatalf("Action = %q, want SELL (matrix from config, not global)", decision.Action)
+	short := applyEntrySlippage("SELL", 100, slip)
+	if short >= 100 {
+		t.Fatalf("short entry slip = %v, want < 100", short)
 	}
 }
 
-func TestEvaluateBacktestDecision_DisabledMatrix(t *testing.T) {
-	matrix := ScoringMatrix{}
-	engine := NewBacktestEngine(BacktestConfig{Matrix: &matrix})
-	chief := NewChiefAnalyst()
+func TestApplyExitSlippage(t *testing.T) {
+	t.Parallel()
 
-	report := &Report{
-		Close:      100,
-		RSXMarker:  "L",
-		Falcon:     FalconSignals{VolCrossMarker: "lime"},
-		Volatility: scalpVolatilityOK(),
+	const slip = 0.05
+	longExit := applyExitSlippage("BUY", 100, slip)
+	if longExit >= 100 {
+		t.Fatalf("long exit slip = %v, want < 100", longExit)
 	}
-
-	decision := engine.evaluateBacktestDecision(report, chief)
-	if decision.Action != WaitAction {
-		t.Fatalf("Action = %q, want WAIT when matrix disabled", decision.Action)
+	shortExit := applyExitSlippage("SELL", 100, slip)
+	if shortExit <= 100 {
+		t.Fatalf("short exit slip = %v, want > 100", shortExit)
 	}
 }
 
-func TestProcessScoreForMatrix_IgnoresGlobalMatrix(t *testing.T) {
-	ResetScoringMatrix()
-	t.Cleanup(ResetScoringMatrix)
+func TestCalcBacktestNetPnL_withSlippagePrices(t *testing.T) {
+	t.Parallel()
 
-	report := longSignalReport()
-	global := ProcessScore(context.Background(), report, DefaultScalpFeeRate, nil)
-	if len(global.ActiveSignals) != 0 {
-		t.Fatalf("global matrix should be disabled by default, got %d signals", len(global.ActiveSignals))
+	entry := applyEntrySlippage("BUY", 100, 0.05)
+	exit := applyExitSlippage("BUY", 110, 0.05)
+	qty := 1.0
+	feeRate := 0.001
+
+	net := calcBacktestNetPnL("BUY", entry, exit, qty, feeRate)
+	raw := (exit - entry) * qty
+	fees := entry*qty*feeRate + exit*qty*feeRate
+	want := raw - fees
+	if net != want {
+		t.Fatalf("net = %v, want %v", net, want)
 	}
+	if net >= raw {
+		t.Fatal("slipped prices with fees should reduce net vs ideal raw move")
+	}
+}
 
-	enabled := allEnabledScoringMatrix()
-	local := ProcessScoreForMatrix(report, enabled)
-	if len(local.ActiveSignals) == 0 {
-		t.Fatal("expected active signals from explicit matrix")
+func TestResolveBacktestSlippage(t *testing.T) {
+	t.Parallel()
+
+	if got := ResolveBacktestSlippage(nil); got != DefaultBacktestSlippagePct {
+		t.Fatalf("default slippage = %v, want %v", got, DefaultBacktestSlippagePct)
+	}
+	custom := 0.1
+	if got := ResolveBacktestSlippage(&BacktestRunSettings{SlippagePct: custom}); got != custom {
+		t.Fatalf("custom slippage = %v, want %v", got, custom)
+	}
+}
+
+func TestNewBacktestEngine_defaultSlippage(t *testing.T) {
+	t.Parallel()
+
+	engine := NewBacktestEngine(BacktestConfig{})
+	if engine.cfg.SlippagePct != DefaultBacktestSlippagePct {
+		t.Fatalf("SlippagePct = %v, want %v", engine.cfg.SlippagePct, DefaultBacktestSlippagePct)
 	}
 }

@@ -283,13 +283,35 @@ func BuildNavigatorData(ui NavigatorUISettings, klines []exchange.Kline, rsxValu
 	return mergeHTFNavigatorLayers(out, ui, interval, klines, htfData)
 }
 
-func mergeHTFNavigatorLayers(base NavigatorResultDTO, ui NavigatorUISettings, chartInterval string, chartKlines []exchange.Kline, htfData map[string][]exchange.Kline) NavigatorResultDTO {
-	if len(htfData) == 0 {
-		return base
+// BuildHTFNavigatorLayer computes navigator lines for one HTF kline slice (walk-forward safe).
+// chartKlines clips overlay geometry to the current chart window.
+func BuildHTFNavigatorLayer(ui NavigatorUISettings, htfKlines []exchange.Kline, period string, chartKlines []exchange.Kline) NavigatorResultDTO {
+	if len(htfKlines) < 3 {
+		return NavigatorResultDTO{}
+	}
+	ui = normalizeNavigatorUISettings(ui)
+	switch normalizeNavigatorSource(ui.Source) {
+	case navigatorSourceRSX, navigatorSourceWozduh:
+		return NavigatorResultDTO{}
 	}
 	trendType := ui.TrendType
 	if trendType == "" {
 		trendType = NavigatorTrendWicks
+	}
+	hHighs, hLows, _ := ExtractTrendlineData(htfKlines, trendType)
+	hCloses := ExtractCloses(htfKlines)
+	hBarTimes := ExtractBarTimes(htfKlines)
+	layer := RunNavigatorAggregator(hHighs, hLows, hCloses, hBarTimes, ui, period)
+	if len(chartKlines) > 0 {
+		layer.Lines = ClipNavigatorLinesToChartWindow(layer.Lines, chartKlines)
+		layer.Markers = clipNavigatorMarkersToChartWindow(layer.Markers, chartKlines)
+	}
+	return layer
+}
+
+func mergeHTFNavigatorLayers(base NavigatorResultDTO, ui NavigatorUISettings, chartInterval string, chartKlines []exchange.Kline, htfData map[string][]exchange.Kline) NavigatorResultDTO {
+	if len(htfData) == 0 {
+		return base
 	}
 	for _, period := range ui.Periods {
 		period = strings.TrimSpace(period)
@@ -300,21 +322,7 @@ func mergeHTFNavigatorLayers(base NavigatorResultDTO, ui NavigatorUISettings, ch
 		if len(htfKlines) < 3 {
 			continue
 		}
-		var hHighs, hLows, hCloses []float64
-		switch normalizeNavigatorSource(ui.Source) {
-		case navigatorSourceRSX, navigatorSourceWozduh:
-			// HTF oscillator series are not pre-aggregated — MTF merge applies to price TLs only.
-			continue
-		default:
-			hHighs, hLows, _ = ExtractTrendlineData(htfKlines, trendType)
-			hCloses = ExtractCloses(htfKlines)
-		}
-		hBarTimes := ExtractBarTimes(htfKlines)
-		htfLayer := RunNavigatorAggregator(hHighs, hLows, hCloses, hBarTimes, ui, period)
-		if len(chartKlines) > 0 {
-			htfLayer.Lines = ClipNavigatorLinesToChartWindow(htfLayer.Lines, chartKlines)
-			htfLayer.Markers = clipNavigatorMarkersToChartWindow(htfLayer.Markers, chartKlines)
-		}
+		htfLayer := BuildHTFNavigatorLayer(ui, htfKlines, period, chartKlines)
 		base.Lines = append(base.Lines, htfLayer.Lines...)
 		base.Markers = append(base.Markers, htfLayer.Markers...)
 	}

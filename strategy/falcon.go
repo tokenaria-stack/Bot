@@ -68,6 +68,8 @@ type FalconEngine struct {
 	ad         *indicators.AD
 	adRsi      *indicators.RSI
 
+	rsxSource string // snapshotted at construction; immune to parallel global settings mutation
+
 	prevWt11    float64
 	prevWt22    float64
 	prevWtReady bool
@@ -81,6 +83,7 @@ type FalconEngine struct {
 func NewFalconEngine() *FalconEngine {
 	settings := GetRSXSettings()
 	return &FalconEngine{
+		rsxSource:  normalizeRSXSource(settings.Source),
 		rsx:        indicators.NewJurikRSX(settings.Length),
 		rsxSignal:  indicators.NewRSXSignalLine(settings.SignalLength),
 		redRsi:     indicators.NewRSI(14),
@@ -212,7 +215,7 @@ func (e *FalconEngine) Evaluate(high, low, close, volume float64) FalconSignals 
 	adVal := e.ad.UpdateCandle(high, low, close)
 	rsiAd := e.adRsi.Update(adVal)
 
-	jurikRSX := e.rsx.Update(RSXSourcePrice(high, low, close, GetRSXSettings().Source))
+	jurikRSX := e.rsx.Update(RSXSourcePrice(high, low, close, e.rsxSource))
 
 	return FalconSignals{
 		JurikRSX:       jurikRSX,
@@ -256,4 +259,12 @@ func (e *FalconEngine) SetRSXLength(length int) {
 		return
 	}
 	e.rsx.Reconfigure(length)
+}
+
+// SetRSXSource pins the price source used for Jurik RSX (close vs hlc3).
+func (e *FalconEngine) SetRSXSource(source string) {
+	if e == nil {
+		return
+	}
+	e.rsxSource = normalizeRSXSource(source)
 }

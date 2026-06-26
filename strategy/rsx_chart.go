@@ -78,7 +78,7 @@ func BuildRSXChart(klines []exchange.Kline, rsxValues []float64, lookback int) [
 		points[i].Color = RSXColor(rsxValues[i], prevRSX)
 	}
 
-	markers := scanRSXDivergenceMarkers(prices, closes, rsxValues, lookback)
+	markers := scanRSXDivergenceMarkers(prices, closes, rsxValues, settings)
 	for i, m := range markers {
 		if i >= 0 && i < n && m != "" {
 			points[i].Marker = m
@@ -95,9 +95,14 @@ func buildRSXPriceSeries(klines []exchange.Kline, source string) []float64 {
 	return out
 }
 
-func scanRSXDivergenceMarkers(prices, closes, rsx []float64, lookback int) map[int]string {
-	if RSXUsesFractalDiv() {
-		return scanRSXFractalMarkers(prices, rsx, lookback)
+func scanRSXDivergenceMarkers(prices, closes, rsx []float64, settings RSXSettings) map[int]string {
+	lookback := settings.DivLookback
+	if lookback <= 0 {
+		lookback = RSXLookbackDefault
+	}
+	cfg := rsxMarkerConfigFromSettings(settings)
+	if cfg.useFractal {
+		return scanRSXFractalMarkers(prices, rsx, lookback, cfg.pivotRadius)
 	}
 	return scanRSXTVMarkers(closes, rsx, lookback)
 }

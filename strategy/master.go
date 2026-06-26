@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -10,15 +11,16 @@ import (
 
 	"trading_bot/exchange"
 	"trading_bot/execution"
+	"trading_bot/data"
+	"trading_bot/domain"
 	"trading_bot/vector_db"
 )
 
 const (
-	positionSymbol         = "BTCUSDT"
-	positionSyncInterval   = 5 * time.Second
-	orderCooldown          = 3 * time.Second
-	defaultFeeRate         = 0.0012 // Binance USDⓈ-M Futures taker approx.
-	DefaultHuntTimeframe   = "1m"
+	positionSyncInterval = 5 * time.Second
+	defaultFeeRate       = 0.0012 // Binance USDⓈ-M Futures taker approx.
+	DefaultTradingTimeframe = "1m"
+	tradingHistoryPrefetchBars = 100 // aligned with dashboard indicatorWarmupBars
 )
 
 type MasterState string
@@ -29,47 +31,53 @@ const (
 )
 
 type MasterGeneral struct {
-	mu          sync.RWMutex
-	state       MasterState
-	targetSide  string
+	mu               sync.RWMutex
+	state            MasterState
+	targetSide       string
 	analysts         map[string]*Marker
 	signalAnalyst    *Analyst
 	chief            *ChiefAnalyst
-	positionSizer    *execution.RiskManager
 	exchangeClient   *exchange.BinanceExchange
 	htfProvider      *exchange.HTFProvider
 	readOnly         bool
 	sandboxMode      bool
-	huntTimeframe    string
+	symbol           string
+	timeframe        string
 	balance          float64
-	positionQty          float64
-	entryPrice           float64
-	currentStopPrice     float64
-	lastPositionSync     time.Time
-	lastOrderTime        time.Time
-	feeRate              float64
-	memoryStore          *vector_db.MemoryStore
-	onTick               func(kline exchange.Kline, jurik, redLine, greenLine, blueLine float64)
-	onKlineBar             func(timeframe string, kline exchange.Kline)
-	onTrade              func(event TradeEvent)
+	positionQty      float64
+	entryPrice       float64
+	entryTimeSec     int64
+	currentStopPrice float64
+	lastPositionSync time.Time
+	lastOrderTime    time.Time
+	feeRate          float64
+	memoryStore      *vector_db.MemoryStore
+	onTick           func(kline exchange.Kline, jurik, redLine, greenLine, blueLine float64)
+	onTelemetry      func(tick exchange.WsTick, falcon FalconSignals, decision ScoreDecision)
+	onKlineBar       func(timeframe string, kline exchange.Kline)
+	onTrade          func(event TradeEvent)
+	onClosedTrade    func(trade domain.ClosedTrade, isVirtual bool)
 
-	TickHuntCh  chan struct{}
 	TickLiveCh chan struct{}
+
+	mtfTracker     *WalkForwardMTFTracker
+	navigatorPanes map[string]NavigatorUISettings
+	navMu          sync.RWMutex
 }
 
 func NewMasterGeneral(
 	analysts map[string]*Marker,
 	signalAnalyst *Analyst,
-	positionSizer *execution.RiskManager,
 	exchangeClient *exchange.BinanceExchange,
 	htfProvider *exchange.HTFProvider,
 	memoryStore *vector_db.MemoryStore,
 	readOnly bool,
 	sandboxMode bool,
-	huntTimeframe string,
+	symbol string,
+	timeframe string,
 ) *MasterGeneral {
-	if huntTimeframe == "" {
-		huntTimeframe = DefaultHuntTimeframe
+	if timeframe == "" {
+		timeframe = DefaultTradingTimeframe
 	}
 	if signalAnalyst == nil {
 		signalAnalyst = NewAnalyst(sandboxMode)
@@ -79,29 +87,212 @@ func NewMasterGeneral(
 		analysts:       analysts,
 		signalAnalyst:  signalAnalyst,
 		chief:          NewChiefAnalyst(),
-		positionSizer:  positionSizer,
 		exchangeClient: exchangeClient,
 		htfProvider:    htfProvider,
 		memoryStore:    memoryStore,
 		readOnly:       readOnly,
 		sandboxMode:    sandboxMode,
-		huntTimeframe:  huntTimeframe,
+		symbol:         symbol,
+		timeframe:      timeframe,
 		feeRate:        defaultFeeRate,
-		TickHuntCh:     make(chan struct{}, 100),
 		TickLiveCh:     make(chan struct{}, 1000),
 	}
 }
 
-// HTFProvider returns the shared higher-timeframe data hub (may be nil).
+// TradingTimeframe returns the active strategy/decision timeframe.
+func (m *MasterGeneral) TradingTimeframe() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.timeframe != "" {
+		return m.timeframe
+	}
+	return DefaultTradingTimeframe
+}
+
 func (m *MasterGeneral) HTFProvider() *exchange.HTFProvider {
 	return m.htfProvider
 }
 
-// SetOnTick registers a callback invoked after each 1m kline update with live oscillator values.
+// SetNavigatorPanes updates walk-forward MTF navigator settings (from dashboard UI).
+func (m *MasterGeneral) SetNavigatorPanes(panes map[string]NavigatorUISettings) {
+	if m == nil {
+		return
+	}
+	m.navMu.Lock()
+	if len(panes) == 0 {
+		m.navigatorPanes = nil
+	} else {
+		m.navigatorPanes = make(map[string]NavigatorUISettings, len(panes))
+		for k, v := range panes {
+			m.navigatorPanes[k] = v
+		}
+	}
+	m.navMu.Unlock()
+	m.rebuildMTFTrackerIfReady()
+}
+
+func (m *MasterGeneral) rebuildMTFTrackerIfReady() {
+	if m == nil || m.htfProvider == nil {
+		m.mtfTracker = nil
+		return
+	}
+	analyst := m.workAnalyst()
+	if analyst == nil || !analyst.HasMinBars(minScoreBars) {
+		m.mtfTracker = nil
+		log.Printf("[Master] MTF tracker deferred: warming up (%d bars, need %d)",
+			barCount(analyst), minScoreBars)
+		return
+	}
+	m.rebuildMTFTracker()
+}
+
+func (m *MasterGeneral) rebuildMTFTracker() {
+	if m == nil || m.htfProvider == nil {
+		m.mtfTracker = nil
+		return
+	}
+	m.navMu.RLock()
+	panes := m.navigatorPanes
+	m.mu.RLock()
+	symbol := m.symbol
+	tf := m.timeframe
+	m.mu.RUnlock()
+	m.navMu.RUnlock()
+
+	tfs := CollectWalkForwardMTFPeriods(panes, tf)
+	if len(tfs) == 0 {
+		m.mtfTracker = nil
+		return
+	}
+	priceUI, ok := panes["price"]
+	if !ok {
+		priceUI = NavigatorUISettings{Enabled: true, Source: navigatorSourcePrice}
+	}
+	tracker := NewWalkForwardMTFTracker(m.htfProvider, symbol, tf, priceUI, tfs)
+	if analyst := m.workAnalyst(); analyst != nil {
+		klines := analyst.GetKlines()
+		if len(klines) > 0 {
+			tracker.SetChartStartMs(klines[0].OpenTime)
+		}
+	}
+	tracker.Prefetch()
+	m.mtfTracker = tracker
+	log.Printf("[Master] Walk-forward MTF tracker ready: %v", tfs)
+}
+
+func barCount(analyst *Marker) int {
+	if analyst == nil {
+		return 0
+	}
+	return len(analyst.GetKlines())
+}
+
+// NotifyKlineGapFillComplete is called after background SQLite gap-fill for a symbol/interval.
+func (m *MasterGeneral) NotifyKlineGapFillComplete(symbol, interval string) {
+	if m == nil {
+		return
+	}
+	m.mu.RLock()
+	sym := m.symbol
+	tf := m.timeframe
+	m.mu.RUnlock()
+	if exchange.NormalizeFuturesSymbol(symbol) != exchange.NormalizeFuturesSymbol(sym) {
+		return
+	}
+	if interval == tf {
+		m.hydrateTradingHistoryFromStore(sym, interval)
+	}
+	m.rebuildMTFTrackerIfReady()
+}
+
+func (m *MasterGeneral) hydrateTradingHistoryFromStore(symbol, interval string) {
+	startMs, endMs := m.tradingHistoryWindowMs(interval)
+	candles, err := exchange.LoadContinuousContractFromDB(symbol, interval, startMs, endMs)
+	if err != nil || len(candles) == 0 {
+		log.Printf("[Master] hydrate %s %s: %v (%d bars)", symbol, interval, err, len(candles))
+		return
+	}
+	klines := exchange.KlinesFromCandles(candles)
+	analyst := m.workAnalyst()
+	if analyst == nil {
+		return
+	}
+	analyst.LoadHistoricalKlines(klines)
+	log.Printf("[Master] Hydrated trading history: %s %s (%d bars)", symbol, interval, len(klines))
+}
+
+func (m *MasterGeneral) tradingHistoryWindowMs(interval string) (startMs, endMs int64) {
+	endMs = time.Now().UnixMilli()
+	intervalMs, err := data.IntervalDurationMs(interval)
+	if err != nil || intervalMs <= 0 {
+		return 0, endMs
+	}
+	bars := int64(minScoreBars + tradingHistoryPrefetchBars + 500)
+	startMs = endMs - intervalMs*bars
+	if startMs < 0 {
+		startMs = 0
+	}
+	return startMs, endMs
+}
+
+func (m *MasterGeneral) ensureMTFTrackerReady(analyst *Marker) {
+	if m == nil || m.mtfTracker != nil {
+		return
+	}
+	if analyst == nil || !analyst.HasMinBars(minScoreBars) {
+		return
+	}
+	m.rebuildMTFTracker()
+}
+
+func (m *MasterGeneral) syncMTFState(analyst *Marker) {
+	if m == nil || analyst == nil || m.mtfTracker == nil {
+		return
+	}
+	klines := analyst.GetKlines()
+	var tickSec int64
+	if len(klines) > 0 {
+		last := klines[len(klines)-1]
+		if last.CloseTime > 0 {
+			tickSec = last.CloseTime / 1000
+		} else {
+			tickSec = last.OpenTime / 1000
+		}
+	}
+	if tickSec <= 0 {
+		tickSec = time.Now().Unix()
+	}
+	m.mtfTracker.Update(tickSec, klines)
+	analyst.SetCurrentMTFState(m.mtfTracker.States())
+}
+
+// SetOnTick registers a callback invoked after each closed candle on the trading timeframe.
+// Deprecated: prefer SetOnTelemetry for live dashboard scoring.
 func (m *MasterGeneral) SetOnTick(fn func(kline exchange.Kline, jurik, redLine, greenLine, blueLine float64)) {
 	m.mu.Lock()
 	m.onTick = fn
 	m.mu.Unlock()
+}
+
+// SetOnTelemetry registers a callback for every trading-TF WS tick (intra-bar + close)
+// with a fresh ScoreDecision (MTF synced on bar close before scoring).
+func (m *MasterGeneral) SetOnTelemetry(fn func(tick exchange.WsTick, falcon FalconSignals, decision ScoreDecision)) {
+	m.mu.Lock()
+	m.onTelemetry = fn
+	m.mu.Unlock()
+}
+
+// ScoreDecisionForTelemetry returns the live ScoreDecision for dashboard/API consumers.
+// Syncs walk-forward MTF state when marker is the active trading analyst.
+func (m *MasterGeneral) ScoreDecisionForTelemetry(marker *Marker) ScoreDecision {
+	if m == nil || marker == nil {
+		return ScoreDecision{Factors: make(map[string]ScoreFactor)}
+	}
+	if marker == m.workAnalyst() {
+		m.ensureMTFTrackerReady(marker)
+		m.syncMTFState(marker)
+	}
+	return m.evaluateScoreDecision(marker)
 }
 
 // SetOnKlineBar registers a callback for live kline updates on any subscribed timeframe.
@@ -111,10 +302,17 @@ func (m *MasterGeneral) SetOnKlineBar(fn func(timeframe string, kline exchange.K
 	m.mu.Unlock()
 }
 
-// SetOnTrade registers a callback invoked when a scalp entry or exit is executed.
+// SetOnTrade registers a callback invoked when a trade entry or exit is executed.
 func (m *MasterGeneral) SetOnTrade(fn func(event TradeEvent)) {
 	m.mu.Lock()
 	m.onTrade = fn
+	m.mu.Unlock()
+}
+
+// SetOnClosedTrade registers a callback when a round-trip position is closed.
+func (m *MasterGeneral) SetOnClosedTrade(fn func(trade domain.ClosedTrade, isVirtual bool)) {
+	m.mu.Lock()
+	m.onClosedTrade = fn
 	m.mu.Unlock()
 }
 
@@ -123,7 +321,7 @@ func (m *MasterGeneral) SetOnTrade(fn func(event TradeEvent)) {
 func (m *MasterGeneral) RecoverState() {
 	if m.sandboxMode {
 		m.resetToCleanState()
-		log.Println("[Master] Sandbox mode: starting in IDLE (Pure Strategy, risk vetoes bypassed)")
+		log.Println("[Master] Sandbox mode: starting in IDLE (virtual balance, paper execution)")
 		if m.readOnly {
 			log.Println("[Master] Sandbox + read-only: virtual trades only")
 		}
@@ -141,7 +339,7 @@ func (m *MasterGeneral) RecoverState() {
 		return
 	}
 
-	amt, err := m.exchangeClient.GetPositionAmt(positionSymbol)
+	amt, err := m.exchangeClient.GetPositionAmt(m.symbol)
 	if err != nil {
 		log.Printf("[Master] ⚠️ Could not recover state: %v", err)
 		return
@@ -166,7 +364,7 @@ func (m *MasterGeneral) RecoverState() {
 
 		log.Printf("[Master] 🔄 RECOVERY SUCCESS: Found active %s position (Qty: %.4f). Resuming IN_POSITION state.", side, qty)
 
-		if err := m.exchangeClient.CancelAllOpenOrders(positionSymbol); err != nil {
+		if err := m.exchangeClient.CancelAllOpenOrders(m.symbol); err != nil {
 			log.Printf("[Master] ⚠️ Failed to cancel stale orders during recovery: %v", err)
 		}
 	} else {
@@ -178,11 +376,21 @@ func (m *MasterGeneral) resetToCleanState() {
 	m.mu.Lock()
 	m.state = StateIdle
 	m.targetSide = ""
-	m.balance = 0
+	m.balance = BacktestInitialCapital
 	m.positionQty = 0
 	m.entryPrice = 0
 	m.currentStopPrice = 0
 	m.mu.Unlock()
+}
+
+func (m *MasterGeneral) paperBalance() float64 {
+	m.mu.RLock()
+	bal := m.balance
+	m.mu.RUnlock()
+	if bal > 0 {
+		return bal
+	}
+	return BacktestInitialCapital
 }
 
 func (m *MasterGeneral) Run(ctx context.Context) {
@@ -191,46 +399,44 @@ func (m *MasterGeneral) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-m.TickHuntCh:
-			m.handleHuntTick()
 		case <-m.TickLiveCh:
 			m.handleLiveTick()
 		}
 	}
 }
 
-func (m *MasterGeneral) handleHuntTick() {
-	log.Printf("[Master] ⏱ %s candle closed — evaluating strategy...", m.huntTimeframe)
+func (m *MasterGeneral) handleLiveTick() {
+	analyst := m.workAnalyst()
+	if analyst == nil {
+		return
+	}
+	if !analyst.HasMinBars(minScoreBars) {
+		log.Printf("[Master] ⏳ Warmup: %d/%d bars on %s — skipping evaluation",
+			len(analyst.GetKlines()), minScoreBars, m.timeframe)
+		return
+	}
+
+	log.Printf("[Master] ⏱ %s candle closed — evaluating strategy...", m.timeframe)
+
+	m.ensureMTFTrackerReady(analyst)
+	m.syncMTFState(analyst)
 
 	m.mu.RLock()
 	state := m.state
+	readOnly := m.readOnly
+	sandbox := m.sandboxMode
 	m.mu.RUnlock()
 
 	switch state {
 	case StateInPosition:
-		if m.readOnly || m.sandboxMode {
-			m.manageVirtualPosition(false)
+		if readOnly || sandbox {
+			m.manageVirtualPosition()
 		} else {
 			m.manageReversal()
+			m.managePosition()
 		}
 	default:
-		m.huntForEntry()
-	}
-}
-
-func (m *MasterGeneral) handleLiveTick() {
-	m.mu.RLock()
-	state := m.state
-	readOnly := m.readOnly
-	m.mu.RUnlock()
-
-	if state == StateInPosition && readOnly {
-		m.manageVirtualPosition(true)
-		return
-	}
-
-	if state == StateInPosition && !readOnly {
-		m.managePosition()
+		m.tryForEntry()
 	}
 }
 
@@ -249,15 +455,15 @@ func (m *MasterGeneral) setState(newState MasterState) {
 	}
 }
 
-func (m *MasterGeneral) huntAnalyst() *Marker {
-	if a, ok := m.analysts[m.huntTimeframe]; ok {
+func (m *MasterGeneral) workAnalyst() *Marker {
+	if a, ok := m.analysts[m.timeframe]; ok {
 		return a
 	}
-	return m.analysts[DefaultHuntTimeframe]
+	return m.analysts[DefaultTradingTimeframe]
 }
 
-// huntForEntry looks for a setup on the hunt timeframe via Layer 3 scoring + entry risk gate.
-func (m *MasterGeneral) huntForEntry() {
+// tryForEntry looks for a setup on the trading timeframe via Layer 3 scoring + entry risk gate.
+func (m *MasterGeneral) tryForEntry() {
 	m.mu.RLock()
 	state := m.state
 	m.mu.RUnlock()
@@ -265,35 +471,36 @@ func (m *MasterGeneral) huntForEntry() {
 		return
 	}
 
-	analyst := m.huntAnalyst()
+	analyst := m.workAnalyst()
 	if analyst == nil {
 		return
 	}
-	report, err := analyst.GenerateMarketReport()
-	if err != nil {
+	if !analyst.HasMinBars(minScoreBars) {
 		return
 	}
 
+	falcon := analyst.FalconSnapshot()
 	log.Printf("[FALCON] %s Jurik: %.2f | Red: %.2f | Green: %.2f | RSX: %q | VolCross: %q",
-		m.huntTimeframe, report.Falcon.JurikRSX, report.Falcon.RedLine, report.Falcon.GreenLine,
-		report.RSXMarker, report.Falcon.VolCrossMarker)
+		m.timeframe, falcon.JurikRSX, falcon.RedLine, falcon.GreenLine,
+		analyst.RecentRSXMarker(), falcon.VolCrossMarker)
 
-	decision := m.evaluateScalpDecision(report)
-	if decision.Action != BuyAction && decision.Action != SellAction {
+	decision := m.evaluateScoreDecision(analyst)
+	if !decision.HasFinalSignal() {
 		return
 	}
 
-	entrySide := string(decision.Action)
+	entrySide := string(decision.FinalAction)
 
 	direction := "LONG"
 	if entrySide == "SELL" {
 		direction = "SHORT"
 	}
-	log.Printf("[Master] 🔥 SCALP TRIGGER: %s | Score: %d | Entry: %.2f | LotMod: %.2f | %s",
-		direction, decision.Score, report.Close, decision.LotMod, decision.Reason)
+	closePrice := analyst.LastClose()
+	log.Printf("[Master] 🔥 ENTRY TRIGGER: %s | Score: %d | Entry: %.2f | LotMod: %.2f | %s",
+		direction, decision.WinningScore(), closePrice, decision.LotMod, decision.Reason)
 
 	klines := analyst.GetKlines()
-	stopLossPrice := computePositionStop(klines, len(klines)-1, entrySide == "BUY", report.Volatility.ATR, GetRiskSettings())
+	stopLossPrice := computePositionStop(klines, len(klines)-1, entrySide == "BUY", analyst.LastATR(), GetRiskSettings())
 	if stopLossPrice <= 0 {
 		log.Println("[Master] ❌ Fractal stop level unavailable")
 		return
@@ -301,19 +508,18 @@ func (m *MasterGeneral) huntForEntry() {
 
 	if m.readOnly || m.sandboxMode {
 		log.Printf("[Paper Trading] Virtual order executed. %s @ %.2f | SL %.2f | %s",
-			entrySide, report.Close, stopLossPrice, decision.Reason)
-		m.openVirtualPosition(entrySide, report.Close, stopLossPrice, decision, analyst)
+			entrySide, closePrice, stopLossPrice, decision.Reason)
+		m.openVirtualPosition(entrySide, closePrice, stopLossPrice, decision, analyst)
 		return
 	}
 
-	m.openLivePosition(entrySide, report, decision, analyst, stopLossPrice)
+	m.openLivePosition(entrySide, analyst, decision, stopLossPrice)
 }
 
 func (m *MasterGeneral) openLivePosition(
 	entrySide string,
-	report *Report,
-	decision ScalpDecision,
 	analyst *Marker,
+	decision ScoreDecision,
 	stopLossPrice float64,
 ) {
 	if m.exchangeClient == nil {
@@ -338,40 +544,36 @@ func (m *MasterGeneral) openLivePosition(
 		direction = "SHORT"
 	}
 
-	orderReq, err := m.calculateSafePositionSize(*report, stopLossPrice, entrySide, availableBalance)
+	closePrice := analyst.LastClose()
+	qty, leverage, err := m.calculateTargetQuantity(closePrice, stopLossPrice, decision.LotMod, availableBalance)
 	if err != nil {
 		log.Printf("[Master] ❌ Risk evaluation failed: %v", err)
 		return
 	}
 
-	orderReq.Quantity *= decision.LotMod
-	if orderReq.Quantity <= 0 {
-		log.Println("[Master] ❌ Position size is zero after LotMod adjustment")
-		return
-	}
-
-	log.Printf("[Master] 🔥 SCALP EXEC: %s | Fractal SL: %.2f | Qty: %.8f",
-		direction, stopLossPrice, orderReq.Quantity)
+	log.Printf("[Master] 🔥 EXEC: %s | Fractal SL: %.2f | Qty: %.8f | Lev: %.0fx",
+		direction, stopLossPrice, qty, leverage)
 
 	m.fireTradeEvent(TradeEvent{
 		Side:    entrySide,
-		Price:   report.Close,
+		Price:   closePrice,
 		BarTime: barTimeFromAnalyst(analyst),
 		Reason:  decision.Reason,
 		Kind:    "entry",
 	})
 
-	if err := m.exchangeClient.ChangeLeverage(orderReq.Symbol, orderReq.Leverage); err != nil {
-		log.Printf("[Master] ❌ Failed to set leverage %dx: %v", orderReq.Leverage, err)
+	levInt := int(leverage)
+	if levInt < 1 {
+		levInt = 1
+	}
+
+	if err := m.exchangeClient.ChangeLeverage(m.symbol, levInt); err != nil {
+		log.Printf("[Master] ❌ Failed to set leverage %dx: %v", levInt, err)
 		m.setState(StateIdle)
 		return
 	}
 
-	response, err := m.exchangeClient.CreateMarketOrder(
-		orderReq.Symbol,
-		orderReq.Side,
-		orderReq.Quantity,
-	)
+	response, err := m.exchangeClient.CreateMarketOrder(m.symbol, entrySide, qty)
 	if err != nil {
 		log.Printf("[Master] ❌ Order failed: %v", err)
 		m.setState(StateIdle)
@@ -381,15 +583,16 @@ func (m *MasterGeneral) openLivePosition(
 	orderID, parseErr := parseOrderID(response)
 	if parseErr != nil {
 		log.Printf("[Master] ✅ Order sent | %s %s qty=%.8f | response: %s",
-			orderReq.Side, orderReq.Symbol, orderReq.Quantity, response)
+			entrySide, m.symbol, qty, response)
 	} else {
 		log.Printf("[Master] ✅ Order executed! OrderID=%d | %s %s qty=%.8f",
-			orderID, orderReq.Side, orderReq.Symbol, orderReq.Quantity)
+			orderID, entrySide, m.symbol, qty)
 	}
 
 	m.mu.Lock()
-	m.positionQty = orderReq.Quantity
-	m.entryPrice = report.Close
+	m.positionQty = qty
+	m.entryPrice = closePrice
+	m.entryTimeSec = barTimeFromAnalyst(analyst)
 	m.mu.Unlock()
 
 	stopSide := "SELL"
@@ -397,12 +600,7 @@ func (m *MasterGeneral) openLivePosition(
 		stopSide = "BUY"
 	}
 
-	err = m.exchangeClient.CreateStopMarketOrder(
-		orderReq.Symbol,
-		stopSide,
-		orderReq.Quantity,
-		stopLossPrice,
-	)
+	err = m.exchangeClient.CreateStopMarketOrder(m.symbol, stopSide, qty, stopLossPrice)
 	if err != nil {
 		log.Printf("[Master] ⚠️ Hard stop failed (position is open): %v", err)
 	} else {
@@ -415,19 +613,26 @@ func (m *MasterGeneral) openLivePosition(
 	m.setState(StateInPosition)
 }
 
-func (m *MasterGeneral) calculateSafePositionSize(
-	report Report,
-	stopLoss float64,
-	side string,
-	availableBalance float64,
-) (*execution.OrderRequest, error) {
-	signal := execution.TradeSignal{
-		Symbol:   positionSymbol,
-		Side:     side,
-		Price:    report.Close,
-		StopLoss: stopLoss,
+func (m *MasterGeneral) calculateTargetQuantity(
+	entryPrice, stopLoss, lotMod, balance float64,
+) (qty, leverage float64, err error) {
+	risk := GetRiskSettings()
+	maxLev := float64(risk.Leverage)
+	if maxLev <= 0 {
+		maxLev = 1
 	}
-	return m.positionSizer.EvaluateSignal(signal, availableBalance)
+	qty, leverage = execution.CalculateTargetQuantity(
+		balance,
+		risk.RiskPerTrade,
+		entryPrice,
+		stopLoss,
+		lotMod,
+		maxLev,
+	)
+	if qty <= 0 {
+		return 0, 0, fmt.Errorf("position size is zero")
+	}
+	return qty, leverage, nil
 }
 
 func barTimeFromAnalyst(analyst *Marker) int64 {
@@ -460,9 +665,16 @@ func (m *MasterGeneral) fireTradeEvent(event TradeEvent) {
 func (m *MasterGeneral) openVirtualPosition(
 	entrySide string,
 	entryPrice, stopPrice float64,
-	decision ScalpDecision,
+	decision ScoreDecision,
 	analyst *Marker,
 ) {
+	balance := m.paperBalance()
+	qty, leverage, err := m.calculateTargetQuantity(entryPrice, stopPrice, decision.LotMod, balance)
+	if err != nil {
+		log.Printf("[Paper Trading] ❌ Sizing failed: %v", err)
+		return
+	}
+
 	m.fireTradeEvent(TradeEvent{
 		Side:    entrySide,
 		Price:   entryPrice,
@@ -474,18 +686,24 @@ func (m *MasterGeneral) openVirtualPosition(
 	m.mu.Lock()
 	m.targetSide = entrySide
 	m.entryPrice = entryPrice
+	m.entryTimeSec = barTimeFromAnalyst(analyst)
 	m.currentStopPrice = stopPrice
-	m.positionQty = 1
+	m.positionQty = qty
 	m.mu.Unlock()
 
 	m.setState(StateInPosition)
-	log.Printf("[Paper Trading] Virtual position opened: %s @ %.2f | Fractal SL %.2f",
-		entrySide, entryPrice, stopPrice)
+	log.Printf("[Paper Trading] Virtual position opened: %s @ %.2f | Qty %.8f | Lev %.0fx | Fractal SL %.2f",
+		entrySide, entryPrice, qty, leverage, stopPrice)
 }
 
 func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price float64, analyst *Marker) {
 	m.mu.RLock()
 	entrySide := m.targetSide
+	entryPrice := m.entryPrice
+	entryTime := m.entryTimeSec
+	stopPrice := m.currentStopPrice
+	qty := m.positionQty
+	balanceBefore := m.balance
 	m.mu.RUnlock()
 
 	closeSide := "CLOSE_LONG"
@@ -493,8 +711,18 @@ func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price flo
 		closeSide = "CLOSE_SHORT"
 	}
 
+	netPnL := m.calcNetPnL(entrySide, entryPrice, price, qty)
+	balanceAfter := balanceBefore + netPnL
+	if balanceAfter < 0 {
+		balanceAfter = 0
+	}
+
+	exitTime := barTimeFromAnalyst(analyst)
 	reason := FormatExitReason(trigger, entrySide)
-	log.Printf("[Paper Trading] Virtual position closed. %s @ %.2f | %s", closeSide, price, reason)
+	m.emitClosedTrade(entrySide, entryPrice, price, stopPrice, qty, entryTime, exitTime, reason, balanceBefore, true)
+
+	log.Printf("[Paper Trading] Virtual position closed. %s @ %.2f | Net PnL %.2f | %s",
+		closeSide, price, netPnL, reason)
 
 	m.fireTradeEvent(TradeEvent{
 		Side:    closeSide,
@@ -507,14 +735,77 @@ func (m *MasterGeneral) closeVirtualPosition(exitSide, trigger string, price flo
 	m.mu.Lock()
 	m.targetSide = ""
 	m.entryPrice = 0
+	m.entryTimeSec = 0
 	m.currentStopPrice = 0
 	m.positionQty = 0
+	m.balance = balanceAfter
 	m.mu.Unlock()
 
 	m.setState(StateIdle)
 }
 
-func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, decision ScalpDecision, analyst *Marker) {
+func (m *MasterGeneral) emitClosedTrade(
+	entrySide string,
+	entryPrice, exitPrice, stopPrice, qty float64,
+	entryTimeSec, exitTimeSec int64,
+	exitReason string,
+	balanceBefore float64,
+	isVirtual bool,
+) {
+	if qty <= 0 || entryPrice <= 0 || exitPrice <= 0 || entrySide == "" {
+		return
+	}
+
+	netPnL := m.calcNetPnL(entrySide, entryPrice, exitPrice, qty)
+	fee := (entryPrice*qty*m.feeRate) + (exitPrice*qty*m.feeRate)
+	pnlPct := 0.0
+	if balanceBefore > 0 {
+		pnlPct = netPnL / balanceBefore * 100
+	}
+	if exitTimeSec <= 0 {
+		exitTimeSec = time.Now().Unix()
+	}
+	if entryTimeSec <= 0 {
+		entryTimeSec = exitTimeSec
+	}
+
+	trade := domain.ClosedTrade{
+		EntryTime:     entryTimeSec,
+		ExitTime:      exitTimeSec,
+		Side:          domain.DisplaySideFromEntry(entrySide),
+		EntryPrice:    entryPrice,
+		ExitPrice:     exitPrice,
+		StopLossPrice: stopPrice,
+		Fee:           fee,
+		PnL:           pnlPct,
+		PnLDollar:     netPnL,
+		ExitReason:    exitReason,
+		Duration:      domain.FormatTradeDuration(entryTimeSec, exitTimeSec),
+	}
+
+	m.mu.RLock()
+	cb := m.onClosedTrade
+	m.mu.RUnlock()
+	if cb != nil {
+		cb(trade, isVirtual)
+	}
+}
+
+func (m *MasterGeneral) calcNetPnL(side string, entryPrice, exitPrice, qty float64) float64 {
+	if qty <= 0 || entryPrice <= 0 || exitPrice <= 0 {
+		return 0
+	}
+	var rawPnL float64
+	if side == "BUY" {
+		rawPnL = (exitPrice - entryPrice) * qty
+	} else {
+		rawPnL = (entryPrice - exitPrice) * qty
+	}
+	fee := (entryPrice*qty*m.feeRate) + (exitPrice*qty*m.feeRate)
+	return rawPnL - fee
+}
+
+func (m *MasterGeneral) reverseVirtualPosition(newSide string, closePrice float64, decision ScoreDecision, analyst *Marker) {
 	m.mu.RLock()
 	entrySide := m.targetSide
 	m.mu.RUnlock()
@@ -524,31 +815,27 @@ func (m *MasterGeneral) reverseVirtualPosition(newSide string, report Report, de
 		exitSide = "BUY"
 	}
 
-	m.closeVirtualPosition(exitSide, "Reverse Signal", report.Close, analyst)
+	m.closeVirtualPosition(exitSide, "Reverse Signal", closePrice, analyst)
 
-	if err := m.signalAnalyst.AnalyzeSignals(&report, newSide); err != nil {
+	if err := m.signalAnalyst.AnalyzeSignals(analyst, newSide); err != nil {
 		log.Printf("[Master] ⛔ Reverse blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
 		return
 	}
 
 	klines := analyst.GetKlines()
-	stopLossPrice := computePositionStop(klines, len(klines)-1, newSide == "BUY", report.Volatility.ATR, GetRiskSettings())
+	stopLossPrice := computePositionStop(klines, len(klines)-1, newSide == "BUY", analyst.LastATR(), GetRiskSettings())
 	if stopLossPrice <= 0 {
 		log.Println("[Master] ❌ Fractal stop level unavailable for reverse")
 		return
 	}
 
-	decision = m.chief.Approve(decision, report)
-	m.openVirtualPosition(newSide, report.Close, stopLossPrice, decision, analyst)
+	m.openVirtualPosition(newSide, closePrice, stopLossPrice, decision, analyst)
 }
 
-// manageVirtualPosition handles paper exits: 1m fractal SL checks and hunt-TF reversal signals.
-func (m *MasterGeneral) manageVirtualPosition(liveOnly bool) {
-	priceAnalyst := m.analysts["1m"]
-	if priceAnalyst == nil {
-		priceAnalyst = m.huntAnalyst()
-	}
-	if priceAnalyst == nil {
+// manageVirtualPosition handles paper exits: fractal SL and reversal on the trading timeframe.
+func (m *MasterGeneral) manageVirtualPosition() {
+	analyst := m.workAnalyst()
+	if analyst == nil {
 		return
 	}
 
@@ -561,7 +848,7 @@ func (m *MasterGeneral) manageVirtualPosition(liveOnly bool) {
 		return
 	}
 
-	klines := priceAnalyst.GetKlines()
+	klines := analyst.GetKlines()
 	if len(klines) > 0 {
 		last := klines[len(klines)-1]
 		exitSide := "SELL"
@@ -569,83 +856,78 @@ func (m *MasterGeneral) manageVirtualPosition(liveOnly bool) {
 			exitSide = "BUY"
 		}
 		if entrySide == "BUY" && last.Low <= stopPrice {
-			m.closeVirtualPosition(exitSide, "Stop Loss", stopPrice, priceAnalyst)
+			m.closeVirtualPosition(exitSide, "Stop Loss", stopPrice, analyst)
 			return
 		}
 		if entrySide == "SELL" && last.High >= stopPrice {
-			m.closeVirtualPosition(exitSide, "Stop Loss", stopPrice, priceAnalyst)
+			m.closeVirtualPosition(exitSide, "Stop Loss", stopPrice, analyst)
 			return
 		}
 	}
 
-	if liveOnly {
+	if !analyst.HasMinBars(minScoreBars) {
 		return
 	}
 
-	huntAnalyst := m.huntAnalyst()
-	if huntAnalyst == nil {
-		return
-	}
-	huntReport, err := huntAnalyst.GenerateMarketReport()
-	if err != nil {
-		return
-	}
-
-	decision := m.evaluateScalpDecision(huntReport)
+	decision := m.evaluateScoreDecision(analyst)
 	switch entrySide {
 	case "BUY":
-		if decision.Action == BuyAction {
+		if decision.FinalAction == BuyAction {
 			return
 		}
-		if decision.Action == SellAction {
-			m.reverseVirtualPosition("SELL", *huntReport, decision, huntAnalyst)
+		if decision.FinalAction == SellAction {
+			m.reverseVirtualPosition("SELL", analyst.LastClose(), decision, analyst)
 		}
 	case "SELL":
-		if decision.Action == SellAction {
+		if decision.FinalAction == SellAction {
 			return
 		}
-		if decision.Action == BuyAction {
-			m.reverseVirtualPosition("BUY", *huntReport, decision, huntAnalyst)
+		if decision.FinalAction == BuyAction {
+			m.reverseVirtualPosition("BUY", analyst.LastClose(), decision, analyst)
 		}
 	}
 }
 
 func (m *MasterGeneral) manageReversal() {
-	analyst := m.huntAnalyst()
+	// During warmup only protective exits (exchange SL) are active — no reversal orders.
+	analyst := m.workAnalyst()
 	if analyst == nil {
 		return
 	}
-	report, err := analyst.GenerateMarketReport()
-	if err != nil {
+	if !analyst.HasMinBars(minScoreBars) {
 		return
 	}
 
 	m.mu.RLock()
 	entrySide := m.targetSide
+	entryPrice := m.entryPrice
+	entryTime := m.entryTimeSec
+	stopPrice := m.currentStopPrice
 	qty := m.positionQty
+	balanceBefore := m.balance
 	m.mu.RUnlock()
 
 	if entrySide == "" || qty <= 0 || m.exchangeClient == nil {
 		return
 	}
 
-	decision := m.evaluateScalpDecision(report)
+	decision := m.evaluateScoreDecision(analyst)
 
 	var newSide string
 	switch entrySide {
 	case "BUY":
-		if decision.Action == BuyAction {
+		if decision.FinalAction == BuyAction {
 			return
 		}
-		if decision.Action != SellAction {
+		if decision.FinalAction != SellAction {
 			return
 		}
 		newSide = "SELL"
 	case "SELL":
-		if decision.Action == SellAction {
+		if decision.FinalAction == SellAction {
 			return
 		}
-		if decision.Action != BuyAction {
+		if decision.FinalAction != BuyAction {
 			return
 		}
 		newSide = "BUY"
@@ -653,13 +935,13 @@ func (m *MasterGeneral) manageReversal() {
 		return
 	}
 
-	if err := m.signalAnalyst.AnalyzeSignals(report, newSide); err != nil {
+	if err := m.signalAnalyst.AnalyzeSignals(analyst, newSide); err != nil {
 		log.Printf("[Master] ⛔ Reverse blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
 		return
 	}
 
 	klines := analyst.GetKlines()
-	stopLossPrice := computePositionStop(klines, len(klines)-1, newSide == "BUY", report.Volatility.ATR, GetRiskSettings())
+	stopLossPrice := computePositionStop(klines, len(klines)-1, newSide == "BUY", analyst.LastATR(), GetRiskSettings())
 	if stopLossPrice <= 0 {
 		log.Println("[Master] ❌ Fractal stop level unavailable for reverse")
 		return
@@ -674,41 +956,40 @@ func (m *MasterGeneral) manageReversal() {
 
 	log.Printf("[Master] 🔄 Reverse: %s -> %s | %s", entrySide, newSide, decision.Reason)
 
+	closePrice := analyst.LastClose()
+	exitTime := barTimeFromAnalyst(analyst)
+	exitReason := FormatExitReason("Reverse Signal", entrySide)
+	m.emitClosedTrade(entrySide, entryPrice, closePrice, stopPrice, qty, entryTime, exitTime, exitReason, balanceBefore, false)
+
 	m.fireTradeEvent(TradeEvent{
 		Side:    closeMarker,
-		Price:   report.Close,
-		BarTime: barTimeFromAnalyst(analyst),
-		Reason:  FormatExitReason("Reverse Signal", entrySide),
+		Price:   closePrice,
+		BarTime: exitTime,
+		Reason:  exitReason,
 		Kind:    "exit",
 	})
 
-	if _, err := m.exchangeClient.CreateMarketOrder(positionSymbol, exitSide, qty); err != nil {
+	if _, err := m.exchangeClient.CreateMarketOrder(m.symbol, exitSide, qty); err != nil {
 		log.Printf("[Master] ❌ Reverse close failed: %v", err)
 		return
 	}
-	_ = m.exchangeClient.CancelAllOpenOrders(positionSymbol)
+	_ = m.exchangeClient.CancelAllOpenOrders(m.symbol)
 
 	m.mu.Lock()
 	m.positionQty = 0
 	m.currentStopPrice = 0
 	m.targetSide = ""
+	m.entryPrice = 0
+	m.entryTimeSec = 0
 	m.mu.Unlock()
 	m.setState(StateIdle)
 
-	m.openLivePosition(newSide, report, m.chief.Approve(decision, *report), analyst, stopLossPrice)
+	m.openLivePosition(newSide, analyst, decision, stopLossPrice)
 }
 
-func (m *MasterGeneral) evaluateScalpDecision(report *Report) ScalpDecision {
-	scoreResult := ProcessScore(context.Background(), *report, m.feeRate, m.memoryStore)
-	decision := ScalpDecisionFromScoreResult(scoreResult, *report)
-	if decision.Action != BuyAction && decision.Action != SellAction {
-		return decision
-	}
-	if err := m.signalAnalyst.AnalyzeSignals(report, string(decision.Action)); err != nil {
-		log.Printf("[Master] ⛔ Entry blocked by Analyst: %v (%s)", err, RiskErrorLabel(err))
-		return ScalpDecision{Action: WaitAction, Reason: "Analyst blocked"}
-	}
-	return m.chief.Approve(decision, *report)
+func (m *MasterGeneral) evaluateScoreDecision(marker *Marker) ScoreDecision {
+	decision := CalculateScoreGlobal(marker)
+	return ApplyExecutionVetoes(decision, marker, m.signalAnalyst, m.chief)
 }
 
 func parseOrderID(response string) (int64, error) {
@@ -738,7 +1019,7 @@ func (m *MasterGeneral) managePosition() {
 		return
 	}
 
-	currentPos, err := m.exchangeClient.GetPositionAmt(positionSymbol)
+	currentPos, err := m.exchangeClient.GetPositionAmt(m.symbol)
 	if err != nil {
 		log.Printf("[Master] ⚠️ Failed to sync position with exchange: %v", err)
 		return
@@ -751,6 +1032,11 @@ func (m *MasterGeneral) managePosition() {
 
 	m.mu.RLock()
 	entrySide := m.targetSide
+	entryPrice := m.entryPrice
+	entryTime := m.entryTimeSec
+	stopPrice := m.currentStopPrice
+	qty := m.positionQty
+	balanceBefore := m.balance
 	m.mu.RUnlock()
 
 	closeMarker := "CLOSE_LONG"
@@ -759,23 +1045,29 @@ func (m *MasterGeneral) managePosition() {
 	}
 
 	barTime := time.Now().Unix()
-	price := 0.0
-	if microAnalyst, ok := m.analysts["1m"]; ok {
-		barTime = barTimeFromAnalyst(microAnalyst)
-		if report, err := microAnalyst.GenerateMarketReport(); err == nil {
-			price = report.Close
+	price := stopPrice
+	if price <= 0 {
+		price = 0.0
+	}
+	if work := m.workAnalyst(); work != nil {
+		barTime = barTimeFromAnalyst(work)
+		if price <= 0 {
+			price = work.LastClose()
 		}
 	}
+
+	exitReason := FormatExitReason("Stop Loss", entrySide)
+	m.emitClosedTrade(entrySide, entryPrice, price, stopPrice, qty, entryTime, barTime, exitReason, balanceBefore, false)
 
 	m.fireTradeEvent(TradeEvent{
 		Side:    closeMarker,
 		Price:   price,
 		BarTime: barTime,
-		Reason:  FormatExitReason("Stop Loss", entrySide),
+		Reason:  exitReason,
 		Kind:    "exit",
 	})
 
-	if cancelErr := m.exchangeClient.CancelAllOpenOrders(positionSymbol); cancelErr != nil {
+	if cancelErr := m.exchangeClient.CancelAllOpenOrders(m.symbol); cancelErr != nil {
 		log.Printf("[Master] ⚠️ Failed to cancel pending orders: %v", cancelErr)
 	}
 
@@ -783,6 +1075,8 @@ func (m *MasterGeneral) managePosition() {
 	m.positionQty = 0
 	m.currentStopPrice = 0
 	m.targetSide = ""
+	m.entryPrice = 0
+	m.entryTimeSec = 0
 	m.state = StateIdle
 	m.mu.Unlock()
 }
@@ -805,6 +1099,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 
 				m.mu.RLock()
 				analyst, exists := m.analysts[tick.Timeframe]
+				workTF := m.timeframe
 				m.mu.RUnlock()
 
 				if !exists {
@@ -820,39 +1115,39 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 					klineCB(tick.Timeframe, tick.Kline)
 				}
 
-				if tick.Timeframe == "1m" {
-					m.mu.RLock()
-					tickCB := m.onTick
-					m.mu.RUnlock()
-					if tickCB != nil {
-						if report, err := analyst.GenerateMarketReport(); err == nil {
-							tickCB(
-								tick.Kline,
-								report.JurikValue,
-								report.Falcon.RedLine,
-								report.Falcon.GreenLine,
-								report.Falcon.BlueLine,
-							)
-						}
-					}
-
-					select {
-					case m.TickLiveCh <- struct{}{}:
-					default:
-					}
-				}
-
 				if tick.IsClosed {
 					analyst.UpdateIndicators()
 				}
 
-				m.mu.RLock()
-				huntTF := m.huntTimeframe
-				m.mu.RUnlock()
-				if tick.Timeframe == huntTF && tick.IsClosed {
-					select {
-					case m.TickHuntCh <- struct{}{}:
-					default:
+				if tick.Timeframe == workTF {
+					if tick.IsClosed {
+						m.ensureMTFTrackerReady(analyst)
+						m.syncMTFState(analyst)
+					}
+					m.mu.RLock()
+					telemetryCB := m.onTelemetry
+					tickCB := m.onTick
+					m.mu.RUnlock()
+					if telemetryCB != nil {
+						falcon := analyst.FalconSnapshot()
+						decision := m.evaluateScoreDecision(analyst)
+						telemetryCB(tick, falcon, decision)
+					} else if tick.IsClosed && tickCB != nil {
+						falcon := analyst.FalconSnapshot()
+						tickCB(
+							tick.Kline,
+							falcon.JurikRSX,
+							falcon.RedLine,
+							falcon.GreenLine,
+							falcon.BlueLine,
+						)
+					}
+
+					if tick.IsClosed {
+						select {
+						case m.TickLiveCh <- struct{}{}:
+						default:
+						}
 					}
 				}
 			}

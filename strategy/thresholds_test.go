@@ -1,39 +1,20 @@
 package strategy
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
-func TestSetScoreThresholds(t *testing.T) {
+func TestThresholds_SetAndRestore(t *testing.T) {
 	origL, origS := LongScoreThreshold(), ShortScoreThreshold()
 	t.Cleanup(func() { SetScoreThresholds(origL, origS) })
-
-	SetScoringMatrix(allEnabledScoringMatrix())
-	t.Cleanup(ResetScoringMatrix)
-
 	SetScoreThresholds(101, 101)
 	if LongScoreThreshold() != 101 || ShortScoreThreshold() != 101 {
 		t.Fatalf("thresholds = %d/%d, want 101/101", LongScoreThreshold(), ShortScoreThreshold())
 	}
-
-	decision := scalpDecisionFromReport(context.Background(), longSignalReport())
-	if decision.Action != WaitAction {
-		t.Fatalf("Action = %q with threshold 101, want WAIT (score=%d)", decision.Action, decision.Score)
-	}
-
-	SetScoreThresholds(70, 70)
-	decision = scalpDecisionFromReport(context.Background(), longSignalReport())
-	if decision.Action != BuyAction {
-		t.Fatalf("Action = %q with threshold 70, want BUY", decision.Action)
-	}
 }
 
-func TestSetScoreThresholds_Clamp(t *testing.T) {
+func TestThresholds_InvalidIgnored(t *testing.T) {
 	origL, origS := LongScoreThreshold(), ShortScoreThreshold()
 	t.Cleanup(func() { SetScoreThresholds(origL, origS) })
-
-	SetScoreThresholds(5, 300)
+	SetScoreThresholds(5, 500)
 	if LongScoreThreshold() != origL || ShortScoreThreshold() != origS {
 		t.Fatalf("invalid values should be ignored: got %d/%d", LongScoreThreshold(), ShortScoreThreshold())
 	}

@@ -59,10 +59,11 @@ func (a *Marker) resetStreamingEngines() {
 	a.aoCrossZeroUp = false
 	a.aoCrossZeroDown = false
 	a.prevZigHas = false
-	a.rsxMarkers = newRSXMarkerState(GetRSXSettings().DivLookback)
+	a.rsxMarkers = newRSXMarkerStateFromSettings(GetRSXSettings())
 	settings := GetRSXSettings()
 	a.falcon.SetRSXLength(settings.Length)
 	a.falcon.SetRSXSignalLength(settings.SignalLength)
+	a.falcon.SetRSXSource(settings.Source)
 }
 
 func (a *Marker) warmupStreaming(klines []exchange.Kline) {

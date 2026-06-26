@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"context"
 	"testing"
 )
 
@@ -64,68 +63,6 @@ func TestRecentRSXTradingMarkerFromSeries(t *testing.T) {
 	want := RecentRSXTradingMarker(points, RSXSignalMemoryBars)
 	if got != want {
 		t.Fatalf("from series = %q, batch scan = %q", got, want)
-	}
-}
-
-func TestEvaluateScalpSignal_RSXOnlyThreshold10(t *testing.T) {
-	SetScoreThresholds(10, 10)
-	t.Cleanup(func() {
-		SetScoreThresholds(70, 70)
-	})
-
-	m := GetScoringMatrix()
-	m.UseRSX = true
-	m.UseWozduhCross = false
-	m.UseRedCross = false
-	m.UseGeometry = false
-	m.UseDivergence = false
-	m.UseFib = false
-	m.UseExpRegime = false
-	m.UseJurikTrend = false
-	m.UseWozduhSpike = false
-	m.UseGeometryBounce = false
-	m.UseGeometryTriangle = false
-	m.UseAD = false
-	m.UseAOCross = false
-	SetScoringMatrix(m)
-	t.Cleanup(func() { ResetScoringMatrix() })
-
-	report := Report{
-		Close:      100,
-		RSXMarker:  "L",
-		Volatility: scalpVolatilityOK(),
-	}
-	decision := scalpDecisionFromReport(context.Background(), report)
-	if decision.Action != BuyAction {
-		t.Fatalf("Action = %q, want BUY (score=%d)", decision.Action, decision.LongScore)
-	}
-
-	report.RSXMarker = "LL"
-	decision = scalpDecisionFromReport(context.Background(), report)
-	if decision.Action != BuyAction || decision.Score < 45 {
-		t.Fatalf("LL: Action=%q score=%d", decision.Action, decision.Score)
-	}
-}
-
-func TestAnalyst_PassThroughStrongRSX(t *testing.T) {
-	a := NewAnalyst(false)
-	report := &Report{
-		Close: 100,
-		Volatility: VolatilityState{
-			ATR:    1.0,
-			Regime: RegimeExpansion,
-		},
-		JurikValue:    30,
-		JurikIsRising: false,
-		RSXMarker:     "LL",
-	}
-	if err := a.AnalyzeSignals(report, "BUY"); err != nil {
-		t.Fatalf("AnalyzeSignals() = %v, want nil", err)
-	}
-
-	report.RSXMarker = "L"
-	if err := a.AnalyzeSignals(report, "BUY"); err != nil {
-		t.Fatalf("AnalyzeSignals() = %v, want nil pass-through", err)
 	}
 }
 

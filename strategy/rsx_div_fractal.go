@@ -4,8 +4,10 @@ import (
 	"trading_bot/indicators"
 )
 
-func isRSXPivotHigh(rsx []float64, i int) bool {
-	radius := RSXPivotRadius()
+func isRSXPivotHigh(rsx []float64, i, radius int) bool {
+	if radius <= 0 {
+		radius = DefaultRSXPivotRadius
+	}
 	if i < radius || i+radius >= len(rsx) {
 		return false
 	}
@@ -18,8 +20,10 @@ func isRSXPivotHigh(rsx []float64, i int) bool {
 	return true
 }
 
-func isRSXPivotLow(rsx []float64, i int) bool {
-	radius := RSXPivotRadius()
+func isRSXPivotLow(rsx []float64, i, radius int) bool {
+	if radius <= 0 {
+		radius = DefaultRSXPivotRadius
+	}
 	if i < radius || i+radius >= len(rsx) {
 		return false
 	}
@@ -59,15 +63,17 @@ func isRSXMacroPivotLow(rsx []float64, i int) bool {
 }
 
 // scanRSXFractalMarkers assigns at most one marker per confirmed RSX pivot (radius on each side).
-// Divergence markers (S/L/SS/LL) use lookback; plain P requires a 15-bar macro extremum (±7).
-func scanRSXFractalMarkers(prices, rsx []float64, lookback int) map[int]string {
+func scanRSXFractalMarkers(prices, rsx []float64, lookback, pivotRadius int) map[int]string {
 	markers := make(map[int]string)
-	radius := RSXPivotRadius()
+	if pivotRadius <= 0 {
+		pivotRadius = DefaultRSXPivotRadius
+	}
+	radius := pivotRadius
 	if len(rsx) < radius*2+1 {
 		return markers
 	}
 	if lookback <= 0 {
-		lookback = GetRSXSettings().DivLookback
+		lookback = RSXLookbackDefault
 	}
 
 	lastPivotHigh := -1
@@ -75,7 +81,7 @@ func scanRSXFractalMarkers(prices, rsx []float64, lookback int) map[int]string {
 
 	for i := radius; i+radius < len(rsx); i++ {
 		switch {
-		case isRSXPivotHigh(rsx, i) && rsx[i] > RSXZoneHigh:
+		case isRSXPivotHigh(rsx, i, radius) && rsx[i] > RSXZoneHigh:
 			marker := ""
 			if lastPivotHigh >= 0 && i-lastPivotHigh <= lookback {
 				div := checkPivotDivergence(prices, rsx, lastPivotHigh, i, indicators.PeakHigh)
@@ -91,7 +97,7 @@ func scanRSXFractalMarkers(prices, rsx []float64, lookback int) map[int]string {
 			}
 			lastPivotHigh = i
 
-		case isRSXPivotLow(rsx, i) && rsx[i] < RSXZoneLow:
+		case isRSXPivotLow(rsx, i, radius) && rsx[i] < RSXZoneLow:
 			marker := ""
 			if lastPivotLow >= 0 && i-lastPivotLow <= lookback {
 				div := checkPivotDivergence(prices, rsx, lastPivotLow, i, indicators.PeakLow)
@@ -138,15 +144,18 @@ func bullishRSXMarker(div indicators.DivergenceResult) string {
 }
 
 func (s *rsxMarkerState) markFractalPivotAt(i int) {
-	radius := RSXPivotRadius()
+	radius := s.cfg.pivotRadius
+	if radius <= 0 {
+		radius = DefaultRSXPivotRadius
+	}
 	if i < radius || i+radius >= len(s.rsx) {
 		return
 	}
 
 	switch {
-	case isRSXPivotHigh(s.rsx, i) && s.rsx[i] > RSXZoneHigh:
+	case isRSXPivotHigh(s.rsx, i, radius) && s.rsx[i] > RSXZoneHigh:
 		marker := ""
-		if s.lastPivotHigh >= 0 && i-s.lastPivotHigh <= s.lookback {
+		if s.lastPivotHigh >= 0 && i-s.lastPivotHigh <= s.cfg.lookback {
 			div := checkPivotDivergence(s.prices, s.rsx, s.lastPivotHigh, i, indicators.PeakHigh)
 			if div.Direction == indicators.Bearish {
 				marker = bearishRSXMarker(div)
@@ -160,9 +169,9 @@ func (s *rsxMarkerState) markFractalPivotAt(i int) {
 		}
 		s.lastPivotHigh = i
 
-	case isRSXPivotLow(s.rsx, i) && s.rsx[i] < RSXZoneLow:
+	case isRSXPivotLow(s.rsx, i, radius) && s.rsx[i] < RSXZoneLow:
 		marker := ""
-		if s.lastPivotLow >= 0 && i-s.lastPivotLow <= s.lookback {
+		if s.lastPivotLow >= 0 && i-s.lastPivotLow <= s.cfg.lookback {
 			div := checkPivotDivergence(s.prices, s.rsx, s.lastPivotLow, i, indicators.PeakLow)
 			if div.Direction == indicators.Bullish {
 				marker = bullishRSXMarker(div)
@@ -182,10 +191,14 @@ func (s *rsxMarkerState) tryFractalMacroOnlyMarker(i int) {
 	if _, ok := s.markers[i]; ok {
 		return
 	}
+	radius := s.cfg.pivotRadius
+	if radius <= 0 {
+		radius = DefaultRSXPivotRadius
+	}
 	switch {
-	case isRSXPivotHigh(s.rsx, i) && s.rsx[i] > RSXZoneHigh && isRSXMacroPivotHigh(s.rsx, i):
+	case isRSXPivotHigh(s.rsx, i, radius) && s.rsx[i] > RSXZoneHigh && isRSXMacroPivotHigh(s.rsx, i):
 		s.markers[i] = "P"
-	case isRSXPivotLow(s.rsx, i) && s.rsx[i] < RSXZoneLow && isRSXMacroPivotLow(s.rsx, i):
+	case isRSXPivotLow(s.rsx, i, radius) && s.rsx[i] < RSXZoneLow && isRSXMacroPivotLow(s.rsx, i):
 		s.markers[i] = "P"
 	}
 }
