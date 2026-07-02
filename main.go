@@ -93,7 +93,7 @@ func main() {
 			defer bootWG.Done()
 			tfStart := time.Now()
 
-			history := strategy.LoadRAMHistory(restClient, symbol, tf, strategy.LiveKlineRAMCap)
+			history := strategy.LoadRAMHistory(restClient, symbol, tf, strategy.AnalystBootKlineLimit)
 			source := "sqlite"
 			if len(history) == 0 {
 				candles, err := restClient.GetKlines(symbol, tf, historyKlinesLimit)

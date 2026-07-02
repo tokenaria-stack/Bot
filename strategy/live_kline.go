@@ -5,6 +5,9 @@ import "trading_bot/exchange"
 // LiveKlineRAMCap is the max closed bars kept in RAM per live Marker (ring buffer).
 const LiveKlineRAMCap = 3000
 
+// AnalystBootKlineLimit is how many bars each analyst loads from SQLite/REST at process start.
+const AnalystBootKlineLimit = 50
+
 // GetKlinesTail returns a copy of the last maxBars candles (or all when shorter).
 func (a *Marker) GetKlinesTail(maxBars int) []exchange.Kline {
 	a.mu.RLock()

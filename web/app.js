@@ -850,7 +850,9 @@ function applyPriceBar(bar) {
   if (!shouldPaintLiveChart()) return;
 
   const delta = liveStore.getLatestDeltaForChart();
-  ChartAdapter.applyDelta('live', delta);
+  if (delta && !liveStore.isSealed()) {
+    ChartAdapter.applyDelta('live', delta);
+  }
 }
 
 function mergeAnnotations(existing, incoming) {
@@ -1203,7 +1205,9 @@ function applyLatestOscPoint(pt) {
   liveStore.upsertOscPoint(pt, getLiveStoreTf());
   syncLiveRsxToolbarFromOsc(pt);
   const delta = liveStore.getLatestDeltaForChart();
-  ChartAdapter.applyDelta('live', delta);
+  if (delta && !liveStore.isSealed()) {
+    ChartAdapter.applyDelta('live', delta);
+  }
 }
 
 function renderState(data, options = {}) {
@@ -1213,38 +1217,39 @@ function renderState(data, options = {}) {
     lastTickBufferLen = data.tickBufferLen;
   }
 
-  liveStore.replaceFromServer({
-    candles: toCandles(data.candles),
-    oscillators: data.oscillators || [],
-    annotations: data.annotations,
-  }, getLiveStoreTf());
-  const oscPts = data.oscillators || [];
-  if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
-  const storeData = liveStore.getForLightweightCharts();
-  const candles = storeData.candles;
-  const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
-  mergeSessionTrades(data.trades, {
-    masterState,
-    lastCandleTime: candles.length ? candles[candles.length - 1].time : null,
-  });
-
-  const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
-
-  if (candles.length > 0 && candles.length < 20 && hasMore) {
-    // Бэкенд отдал слишком мало свечей (вероятно, только live-буфер), потому что в фоне
-    // прямо сейчас идет скачивание истории (gap fill). Одна свеча растянется на весь экран.
-    setTimeout(() => loadDashboard(), 500);
-    updateBufferingOverlay();
-    return;
-  }
-
-  historyHasMore = hasMore;
-  if (data.navigators) {
-    liveNavigatorResult = data.navigators;
-  }
-
+  liveStore.seal();
   beginDataUpdate();
   try {
+    liveStore.replaceFromServer({
+      candles: toCandles(data.candles),
+      oscillators: data.oscillators || [],
+      annotations: data.annotations,
+    }, getLiveStoreTf());
+    const oscPts = data.oscillators || [];
+    if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
+    const storeData = liveStore.getForLightweightCharts();
+    const candles = storeData.candles;
+    const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
+    mergeSessionTrades(data.trades, {
+      masterState,
+      lastCandleTime: candles.length ? candles[candles.length - 1].time : null,
+    });
+
+    const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
+
+    if (candles.length > 0 && candles.length < 20 && hasMore) {
+      // Бэкенд отдал слишком мало свечей (вероятно, только live-буфер), потому что в фоне
+      // прямо сейчас идет скачивание истории (gap fill). Одна свеча растянется на весь экран.
+      setTimeout(() => loadDashboard(), 500);
+      updateBufferingOverlay();
+      return;
+    }
+
+    historyHasMore = hasMore;
+    if (data.navigators) {
+      liveNavigatorResult = data.navigators;
+    }
+
     applySeriesData({
       preserveViewport: options.preserveViewport ?? null,
       isPrepend: options.isPrepend === true,
@@ -1257,12 +1262,23 @@ function renderState(data, options = {}) {
       }
     }
   } finally {
+    liveStore.unseal();
     endDataUpdate(0);
   }
 
   // График полностью загружен историей, теперь WebSocket может рисовать новые тики
   ChartAdapter.setChartInitialized(true);
   updateBufferingOverlay();
+
+  if (historyHasMore && shouldPaintLiveChart()) {
+    requestAnimationFrame(() => {
+      const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+      if (viewportRange && viewportRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
+        liveHistoryScrollArmed = true;
+        scheduleHistoryLoad(viewportRange);
+      }
+    });
+  }
 }
 
 async function pollOrderFlowState() {
@@ -1345,7 +1361,9 @@ async function pollLatestState() {
     }
 
     const delta = liveStore.getLatestDeltaForChart();
-    ChartAdapter.applyDelta('live', delta);
+    if (delta && !liveStore.isSealed()) {
+      ChartAdapter.applyDelta('live', delta);
+    }
     endDataUpdate();
   } catch (err) {
     ChartAdapter.setLiveUpdating(false);
@@ -1425,6 +1443,7 @@ async function maybeLoadBacktestHistory(range) {
   const endTimeMs = firstTime < 1e12 ? firstTime * 1000 : firstTime;
 
   backtestHistoryLoading = true;
+  let added = 0;
   try {
     const params = new URLSearchParams({
       symbol,
@@ -1440,31 +1459,39 @@ async function maybeLoadBacktestHistory(range) {
     }
 
     const prependOldRange = ChartAdapter.getVisibleLogicalRange('backtest') ?? null;
-    const { added } = backtestStore.prependHistory(
-      chartPointsToStorePayload(data.chartData, data.annotations),
-      getBacktestStoreTf(),
-    );
-    backtestHistoryHasMore = data.hasMore !== false;
 
-    if (added === 0) {
-      backtestHistoryHasMore = false;
-      console.warn('History pagination stalled: Zero overlap.');
-      return;
+    backtestStore.seal();
+    beginDataUpdate();
+    try {
+      ({ added } = backtestStore.prependHistory(
+        chartPointsToStorePayload(data.chartData, data.annotations),
+        getBacktestStoreTf(),
+      ));
+      backtestHistoryHasMore = data.hasMore !== false;
+
+      if (added === 0) {
+        backtestHistoryHasMore = false;
+        console.warn('History pagination stalled: Zero overlap.');
+        return;
+      }
+
+      const storeData = backtestStore.getForLightweightCharts();
+
+      ChartAdapter.applyFullData('backtest', storeData, {
+        isPrepend: true,
+        addedCount: added,
+        prependOldRange,
+      });
+      ChartAdapter.applyWozduhVisibility('backtest');
+      ChartAdapter.applyBacktestMarkers(backtestLastTrades, storeData.osc);
+
+      backtestHistoryHasMore = data.hasMore !== false && added > 0;
+    } finally {
+      backtestStore.unseal();
+      endDataUpdate(0);
     }
 
-    const storeData = backtestStore.getForLightweightCharts();
-
-    ChartAdapter.applyFullData('backtest', storeData, {
-      isPrepend: true,
-      addedCount: added,
-      prependOldRange,
-    });
-    ChartAdapter.applyWozduhVisibility('backtest');
-    ChartAdapter.applyBacktestMarkers(backtestLastTrades, storeData.osc);
-
-    backtestHistoryHasMore = data.hasMore !== false && added > 0;
-
-    if (added > 0 && backtestHistoryHasMore) {
+    if (backtestHistoryHasMore && added > 0) {
       requestAnimationFrame(() => {
         const nextRange = ChartAdapter.getVisibleLogicalRange('backtest');
         if (nextRange && nextRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
@@ -1483,7 +1510,7 @@ async function fetchLiveHistory(endTimeSec) {
   return API.fetchLiveHistory({
     tf: currentTf,
     endTimeSec,
-    limit: LIVE_STATE_CANDLE_LIMIT,
+    limit: HISTORY_CHUNK_LIMIT,
     rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
   });
 }
@@ -1504,6 +1531,7 @@ async function maybeLoadHistory(range, options = {}) {
   const prependOldRange = ChartAdapter.getVisibleLogicalRange('live');
 
   isLoadingHistory = true;
+  let added = 0;
 
   try {
     const data = await fetchLiveHistory(endTimeSec);
@@ -1513,21 +1541,22 @@ async function maybeLoadHistory(range, options = {}) {
       return;
     }
 
-    const { added } = liveStore.prependHistory({
-      candles: toCandles(data.candles),
-      oscillators: data.oscillators || [],
-      annotations: data.annotations,
-    }, getLiveStoreTf());
-    historyHasMore = data.hasMore !== false;
-
-    if (added === 0) {
-      historyHasMore = false;
-      console.warn('History pagination stalled: Zero overlap.');
-      return;
-    }
-
+    liveStore.seal();
     beginDataUpdate();
     try {
+      ({ added } = liveStore.prependHistory({
+        candles: toCandles(data.candles),
+        oscillators: data.oscillators || [],
+        annotations: data.annotations,
+      }, getLiveStoreTf()));
+      historyHasMore = data.hasMore !== false;
+
+      if (added === 0) {
+        historyHasMore = false;
+        console.warn('History pagination stalled: Zero overlap.');
+        return;
+      }
+
       const storeData = liveStore.getForLightweightCharts();
       ChartAdapter.applyFullData('live', storeData, {
         isPrepend: true,
@@ -1542,20 +1571,21 @@ async function maybeLoadHistory(range, options = {}) {
       }
       updateBufferingOverlay();
     } finally {
+      liveStore.unseal();
       endDataUpdate(0);
     }
 
-    if (!historyHasMore || epoch !== liveHistoryEpoch) return;
-
-    if (added > 0) {
+    if (historyHasMore && added > 0) {
       requestAnimationFrame(() => {
-        if (epoch !== liveHistoryEpoch || !liveHistoryScrollArmed) return;
-        const nextRange = ChartAdapter.getVisibleLogicalRange('live');
-        if (nextRange && nextRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
-          scheduleHistoryLoad(nextRange);
+        const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+        if (viewportRange && viewportRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
+          liveHistoryScrollArmed = true;
+          scheduleHistoryLoad(viewportRange);
         }
       });
     }
+
+    if (!historyHasMore || epoch !== liveHistoryEpoch) return;
   } catch (err) {
     console.error('lazy history:', err);
   } finally {

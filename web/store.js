@@ -12,6 +12,7 @@ class ChartDataStore {
     this._dirtyMs = null;
     this._dirtyIsNewBar = false;
     this._dirtyAnnotations = false;
+    this._sealed = false;
   }
 
   static toMs(t) {
@@ -42,6 +43,15 @@ class ChartDataStore {
     this._dirtyIsNewBar = false;
     this._dirtyAnnotations = false;
   }
+
+  seal() { this._sealed = true; }
+
+  unseal() {
+    this._sealed = false;
+    this._dirtyIsNewBar = false;
+  }
+
+  isSealed() { return this._sealed; }
 
   _markDirtyMs(ms, isNewBar = false) {
     if (this._dirtyMs == null) {
@@ -369,6 +379,7 @@ class ChartDataStore {
   }
 
   getLatestDeltaForChart() {
+    if (this._sealed) return null;
     if (this._dirtyMs == null && !this._dirtyAnnotations) return null;
 
     const ms = this._dirtyMs;
