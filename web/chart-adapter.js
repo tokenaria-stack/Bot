@@ -1341,7 +1341,10 @@ function applyRsxData(osc, chartData = _live, annotations = null) {
     rsx: new Set(lineData.map((d) => d.time)),
   };
   const resolved = annotations ?? _storeDataForChart(chartData).annotations;
-  const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
+  const showPivots = rsxShowPivotsFrom(
+    RsxController.getSettings(rsxSettingsContextForChart(chartData)),
+    true,
+  );
   applyUniversalAnnotations(getChartAnnotationPanes(chartData), resolved, seriesTimesByPane, { showPivots });
 
   if (_chartContext(chartData) === 'live') {
@@ -1368,7 +1371,10 @@ function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = _live
   if (marker || _storeForChart(chartData).annotationCount() > 0) {
     const storeData = _storeDataForChart(chartData);
     const mapped = mapRSXData(storeData.osc);
-    const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
+    const showPivots = rsxShowPivotsFrom(
+    RsxController.getSettings(rsxSettingsContextForChart(chartData)),
+    true,
+  );
     applyUniversalAnnotations(
       getChartAnnotationPanes(chartData),
       storeData.annotations,

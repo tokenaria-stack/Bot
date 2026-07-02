@@ -62,7 +62,7 @@ function getRiskSettingsFromUI() {
 }
 
 function getRSXSettingsFromUI(context = 'backtest') {
-  return readRsxSettingsFromMenu(context);
+  return RsxController.getSettings(context);
 }
 
 function getWozduhSettingsFromUI(context = 'backtest') {
@@ -212,9 +212,6 @@ function canPatchBacktestIndicatorsOnly(options = {}) {
 }
 
 
-let liveRsxSettings = defaultRsxSettings();
-let backtestRsxSettings = defaultRsxSettings();
-
 let backtestHistoryHasMore = true;
 let backtestHistoryLoading = false;
 let backtestLastTrades = [];
@@ -257,182 +254,8 @@ function syncTradingTimeframeFromState(data) {
   return true;
 }
 
-function applyTfToBacktestSelect(tf) {
-  const el = document.getElementById('bt-interval');
-  if (!el) return false;
-  const hasOption = [...el.options].some((o) => o.value === tf);
-  if (!hasOption) {
-    const opt = document.createElement('option');
-    opt.value = tf;
-    opt.textContent = TF_DISPLAY[tf] || tf;
-    el.appendChild(opt);
-  }
-  el.value = tf;
-  backtestTf = tf;
-  return true;
-}
-
-function rsxContextFromWrap(wrap) {
-  return wrap?.id === 'bt-rsx-wrap' ? 'backtest' : 'live';
-}
-
 function getActiveUiContext() {
   return NavigatorController.getContext();
-}
-
-function getRsxSettingsState(context = 'live') {
-  return context === 'backtest' ? backtestRsxSettings : liveRsxSettings;
-}
-
-function setRsxSettingsState(context, settings) {
-  const normalized = normalizeRsxSettingsFromAPI(settings, getRsxSettingsState(context));
-  if (context === 'backtest') backtestRsxSettings = normalized;
-  else liveRsxSettings = normalized;
-  return normalized;
-}
-
-function rsxStorageKey(context) {
-  return context === 'backtest' ? LS_RSX_SETTINGS_BACKTEST_KEY : LS_RSX_SETTINGS_LIVE_KEY;
-}
-
-function persistRsxSettings(context, settings) {
-  localStorage.setItem(rsxStorageKey(context), JSON.stringify(settings));
-}
-
-function loadRsxSettingsFromStorage(context) {
-  try {
-    const raw = localStorage.getItem(rsxStorageKey(context));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        return setRsxSettingsState(context, parsed);
-      }
-    }
-  } catch {
-    /* use defaults */
-  }
-
-  if (context === 'live') {
-    const migrated = defaultRsxSettings();
-    try {
-      const lb = parseInt(localStorage.getItem(LS_RSX_LOOKBACK_KEY), 10);
-      const sl = parseInt(localStorage.getItem(LS_RSX_SIGNAL_LENGTH_KEY), 10);
-      const len = parseInt(localStorage.getItem(LS_RSX_LENGTH_KEY), 10);
-      if (Number.isFinite(lb)) migrated.div_lookback = clampRsxDivLookback(lb);
-      if (Number.isFinite(sl)) migrated.signal_length = clampRsxSignalLength(sl);
-      if (Number.isFinite(len)) migrated.length = clampRsxLength(len);
-    } catch {
-      /* noop */
-    }
-    return setRsxSettingsState('live', migrated);
-  }
-
-  return setRsxSettingsState(context, defaultRsxSettings());
-}
-
-function getRsxWrap(context = 'live') {
-  return document.getElementById(context === 'backtest' ? 'bt-rsx-wrap' : 'rsx-wrap');
-}
-
-function getOscWrap(context = 'live') {
-  return document.getElementById(context === 'backtest' ? 'bt-osc-wrap' : 'osc-wrap');
-}
-
-
-
-
-function getRsxSettingsMenu(wrap) {
-  if (!wrap) return null;
-  return wrap.querySelector('.indicator-settings-menu');
-}
-
-
-
-function readRsxFloatDeltaInput(el, fallback = 0) {
-  if (!el) return fallback;
-  const n = Number(el.value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function readRsxSettingsFromMenu(contextOrWrap, context = 'live') {
-  const wrap = typeof contextOrWrap === 'string'
-    ? getRsxWrap(contextOrWrap)
-    : (contextOrWrap?.id === 'rsx-wrap' || contextOrWrap?.id === 'bt-rsx-wrap'
-      ? contextOrWrap
-      : contextOrWrap?.closest?.('.rsx-wrap') || contextOrWrap);
-  const ctx = typeof contextOrWrap === 'string' ? contextOrWrap : (context || rsxContextFromWrap(wrap));
-  const defaults = getRsxSettingsState(ctx);
-  if (!wrap) return coerceRsxSettingsForAPI({ ...defaults }, defaults);
-  const source = wrap.querySelector('.rsx-source-select')?.value || defaults.source;
-  const divMethod = wrap.querySelector('.rsx-div-method-select')?.value || defaults.div_method;
-  const showPivotsEl = wrap.querySelector('.rsx-show-pivots-chk');
-  return coerceRsxSettingsForAPI({
-    length: clampRsxLength(Number(wrap.querySelector('.rsx-length-input')?.value)),
-    div_lookback: clampRsxDivLookback(Number(wrap.querySelector('.rsx-div-lookback-input')?.value)),
-    signal_length: clampRsxSignalLength(Number(wrap.querySelector('.rsx-signal-length-input')?.value)),
-    source: source === 'hlc3' ? 'hlc3' : 'close',
-    pivot_radius: clampRsxPivotRadius(Number(wrap.querySelector('.rsx-pivot-radius-input')?.value)),
-    div_method: divMethod === 'fractal' ? 'fractal' : 'tv',
-    min_price_delta_ratio: readRsxFloatDeltaInput(
-      wrap.querySelector('.rsx-min-price-delta-input'),
-      defaults.min_price_delta_ratio ?? 0,
-    ),
-    min_osc_delta: readRsxFloatDeltaInput(
-      wrap.querySelector('.rsx-min-osc-delta-input'),
-      defaults.min_osc_delta ?? 0,
-    ),
-    show_pivots: showPivotsEl ? showPivotsEl.checked : rsxShowPivotsFrom(defaults, true),
-  }, defaults);
-}
-
-
-
-function applyRsxSettingsToMenu(context, settings, defaults = defaultRsxSettings()) {
-  const wrap = getRsxWrap(context);
-  if (!wrap || !settings) return;
-  const s = normalizeRsxSettingsFromAPI(settings, defaults);
-  const lengthEl = wrap.querySelector('.rsx-length-input');
-  const lookbackEl = wrap.querySelector('.rsx-div-lookback-input');
-  const signalEl = wrap.querySelector('.rsx-signal-length-input');
-  const sourceEl = wrap.querySelector('.rsx-source-select');
-  const pivotEl = wrap.querySelector('.rsx-pivot-radius-input');
-  const methodEl = wrap.querySelector('.rsx-div-method-select');
-  const showPivotsEl = wrap.querySelector('.rsx-show-pivots-chk');
-  const minPriceDeltaEl = wrap.querySelector('.rsx-min-price-delta-input');
-  const minOscDeltaEl = wrap.querySelector('.rsx-min-osc-delta-input');
-  if (lengthEl && Number.isFinite(s.length)) lengthEl.value = String(s.length);
-  if (lookbackEl && Number.isFinite(s.div_lookback)) lookbackEl.value = String(s.div_lookback);
-  if (signalEl && Number.isFinite(s.signal_length)) signalEl.value = String(s.signal_length);
-  if (sourceEl && s.source) sourceEl.value = s.source;
-  if (pivotEl && Number.isFinite(s.pivot_radius)) pivotEl.value = String(s.pivot_radius);
-  if (methodEl && s.div_method) methodEl.value = s.div_method;
-  if (minPriceDeltaEl && Number.isFinite(s.min_price_delta_ratio)) {
-    minPriceDeltaEl.value = String(s.min_price_delta_ratio);
-  }
-  if (minOscDeltaEl && Number.isFinite(s.min_osc_delta)) {
-    minOscDeltaEl.value = String(s.min_osc_delta);
-  }
-  if (showPivotsEl && typeof s.show_pivots === 'boolean') showPivotsEl.checked = s.show_pivots;
-  syncRsxPivotRadiusFieldState(context);
-}
-
-function syncRsxPivotRadiusFieldState(contextOrWrap) {
-  const wrap = typeof contextOrWrap === 'string'
-    ? getRsxWrap(contextOrWrap)
-    : (contextOrWrap?.id === 'rsx-wrap' || contextOrWrap?.id === 'bt-rsx-wrap'
-      ? contextOrWrap
-      : contextOrWrap?.closest?.('.rsx-wrap'));
-  if (!wrap) return;
-  const method = wrap.querySelector('.rsx-div-method-select')?.value || 'tv';
-  const pivotEl = wrap.querySelector('.rsx-pivot-radius-input');
-  const row = pivotEl?.closest('.setting-row');
-  const isTV = method !== 'fractal';
-  if (pivotEl) pivotEl.disabled = isTV;
-  if (row) row.classList.toggle('setting-row--disabled', isTV);
-}
-
-function applyRsxSettingsToContextMenu(context, settings) {
-  applyRsxSettingsToMenu(context, settings, getRsxSettingsState(context));
 }
 
 let rsxSettingsSyncTimer = null;
@@ -454,7 +277,7 @@ async function pushRsxSettingsToServer(settings) {
 
 async function fetchRsxIndicatorSettings() {
   const version = ++rsxSettingsFetchVersion;
-  const localBeforeFetch = { ...getRsxSettingsState('live') };
+  const localBeforeFetch = { ...RsxController.getSettings('live') };
   try {
     const serverSettings = await API.fetchRsxSettings();
     if (version !== rsxSettingsFetchVersion) return;
@@ -462,9 +285,9 @@ async function fetchRsxIndicatorSettings() {
       { ...serverSettings, ...localBeforeFetch },
       defaultRsxSettings(),
     );
-    const applied = setRsxSettingsState('live', merged);
-    persistRsxSettings('live', applied);
-    applyRsxSettingsToContextMenu('live', applied);
+    const applied = RsxController.setSettings('live', merged);
+    RsxController.persist('live', applied);
+    RsxController.applyToMenu('live', applied);
     if (JSON.stringify(coerceRsxSettingsForAPI(serverSettings)) !== JSON.stringify(coerceRsxSettingsForAPI(applied))) {
       try {
         await pushRsxSettingsToServer(applied);
@@ -507,7 +330,7 @@ async function reloadRsxChartFromServer() {
 }
 
 function appendBacktestRsxSettingsToParams(params) {
-  const settings = coerceRsxSettingsForAPI(getRsxSettingsState('backtest'));
+  const settings = coerceRsxSettingsForAPI(RsxController.getSettings('backtest'));
   params.set('rsx_length', String(settings.length));
   params.set('rsx_signal_length', String(settings.signal_length));
   params.set('rsx_source', settings.source);
@@ -519,19 +342,8 @@ function appendBacktestRsxSettingsToParams(params) {
   return params;
 }
 
-async function syncBacktestRsxSettingsLocal() {
-  const settings = readRsxSettingsFromMenu('backtest');
-  const applied = setRsxSettingsState('backtest', settings);
-  persistRsxSettings('backtest', applied);
-  applyRsxSettingsToContextMenu('backtest', applied);
-  return applied;
-}
-
 async function syncRsxIndicatorSettings(context = 'live') {
-  const settings = readRsxSettingsFromMenu(context);
-  const applied = setRsxSettingsState(context, settings);
-  persistRsxSettings(context, applied);
-  applyRsxSettingsToContextMenu(context, applied);
+  const applied = RsxController.syncFromMenu(context);
 
   if (context === 'backtest') {
     return applied;
@@ -540,12 +352,12 @@ async function syncRsxIndicatorSettings(context = 'live') {
   rsxSettingsFetchVersion += 1;
   const serverApplied = await pushRsxSettingsToServer(applied);
   if (serverApplied) {
-    const liveApplied = setRsxSettingsState('live', normalizeRsxSettingsFromAPI(
+    const liveApplied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
       { ...serverApplied, show_pivots: applied.show_pivots },
       applied,
     ));
-    persistRsxSettings('live', liveApplied);
-    applyRsxSettingsToContextMenu('live', liveApplied);
+    RsxController.persist('live', liveApplied);
+    RsxController.applyToMenu('live', liveApplied);
   }
 
   await reloadRsxChartFromServer();
@@ -557,13 +369,6 @@ function scheduleRsxSettingsSync(context = 'live') {
     rsxSettingsSyncTimer = null;
     syncRsxIndicatorSettings(context);
   }, 350);
-}
-
-function persistBacktestRsxFromMenu() {
-  const settings = readRsxSettingsFromMenu('backtest');
-  const applied = setRsxSettingsState('backtest', settings);
-  persistRsxSettings('backtest', applied);
-  return applied;
 }
 
 function getIntervalMs(tf) {
@@ -593,7 +398,7 @@ function isLiveTickGapTooLarge(lastTimeSec, newTimeSec) {
 function buildLiveStateQueryParams(extra = {}) {
   return API.apiQueryParams({
     tf: currentTf,
-    rsxLookback: liveRsxSettings.div_lookback,
+    rsxLookback: RsxController.getSettings('live').div_lookback,
     limit: LIVE_STATE_CANDLE_LIMIT,
     extra,
     pendingAnchor: window.__pendingAnchor,
@@ -887,7 +692,7 @@ function initControls() {
 }
 
 function hidePanelSettingsMenus() {
-  hideRsxSettingsMenus();
+  RsxController.hideMenus();
   hideWozduhSettingsMenus();
   hideRiskSettingsMenu();
   NavigatorController.hideAllPopups();
@@ -1070,94 +875,6 @@ function notifyChartsLayoutChange() {
   });
 }
 
-async function saveRsxSettingsFromMenu(menu, context) {
-  if (!menu) return;
-  const active = document.activeElement;
-  if (active && menu.contains(active) && typeof active.blur === 'function') {
-    active.blur();
-  }
-  try {
-    if (context === 'backtest') {
-      persistBacktestRsxFromMenu();
-    } else {
-      await syncRsxIndicatorSettings('live');
-    }
-  } finally {
-    menu.hidden = true;
-  }
-}
-
-function hideRsxSettingsMenus() {
-  document.querySelectorAll('.rsx-wrap .indicator-settings-menu').forEach((menu) => {
-    menu.hidden = true;
-  });
-}
-
-function initRsxSettings() {
-  loadRsxSettingsFromStorage('live');
-  loadRsxSettingsFromStorage('backtest');
-  applyRsxSettingsToContextMenu('live', liveRsxSettings);
-  applyRsxSettingsToContextMenu('backtest', backtestRsxSettings);
-  fetchRsxIndicatorSettings();
-
-  const rsxFieldSelector = '.rsx-length-input, .rsx-div-lookback-input, .rsx-signal-length-input, .rsx-source-select, .rsx-pivot-radius-input, .rsx-div-method-select, .rsx-min-price-delta-input, .rsx-min-osc-delta-input, .rsx-show-pivots-chk';
-  document.querySelectorAll('.rsx-wrap').forEach((wrap) => {
-    const toggle = wrap.querySelector('.rsx-settings-toggle');
-    const menu = getRsxSettingsMenu(wrap);
-    if (!menu) return;
-
-    const context = rsxContextFromWrap(wrap);
-    initFloatingMenuDrag(menu);
-    syncRsxPivotRadiusFieldState(context);
-
-    toggle?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hideWozduhSettingsMenus();
-      hideRiskSettingsMenu();
-      const willOpen = menu.hidden;
-      hideRsxSettingsMenus();
-      if (willOpen) openFloatingMenu(menu, toggle);
-      else menu.hidden = true;
-    });
-
-    menu.querySelectorAll(rsxFieldSelector).forEach((el) => {
-      if (el.classList.contains('rsx-div-method-select')) {
-        el.addEventListener('change', () => syncRsxPivotRadiusFieldState(context));
-      }
-      if (el.classList.contains('rsx-show-pivots-chk')) {
-        el.addEventListener('change', () => {
-          const settings = readRsxSettingsFromMenu(context);
-          const applied = setRsxSettingsState(context, settings);
-          persistRsxSettings(context, applied);
-          const chartData = context === 'backtest' ? ChartAdapter.getChartHandle('backtest') : ChartAdapter.getChartHandle('live');
-          const storeData = (chartData === ChartAdapter.getChartHandle('backtest') ? backtestStore : liveStore).getForLightweightCharts();
-          const osc = storeData.osc;
-          const anns = storeData.annotations;
-          if (chartData?.rsxSeries && osc?.length) {
-            ChartAdapter.applyRsxData(chartData === ChartAdapter.getChartHandle('backtest') ? 'backtest' : 'live', osc, anns);
-          }
-        });
-        return;
-      }
-      if (context !== 'backtest') {
-        el.addEventListener('input', () => scheduleRsxSettingsSync(context));
-        el.addEventListener('change', () => scheduleRsxSettingsSync(context));
-      }
-    });
-
-    menu.addEventListener('mousedown', (e) => e.stopPropagation());
-    menu.addEventListener('click', (e) => e.stopPropagation());
-
-    menu.querySelector('.rsx-save-btn')?.addEventListener('click', async () => {
-      await saveRsxSettingsFromMenu(menu, context);
-    });
-  });
-
-  initPanelSettingsOutsideClose();
-  initPanelSettingsEnterNavigation();
-}
-
-
 function resetBacktestClientCacheForTfChange() {
   backtestStore.clear();
   backtestNavigatorChartLines = [];
@@ -1181,7 +898,7 @@ async function handleBacktestIntervalChange(newTf) {
 
   backtestIntervalChangeInFlight = true;
 
-  applyTfToBacktestSelect(tf);
+  backtestTf = BacktestController.setInterval(tf) || tf;
   syncToolbarToActiveContext();
   BacktestController.applyDateRangeLimits(tf);
 
@@ -1190,7 +907,7 @@ async function handleBacktestIntervalChange(newTf) {
     : null;
 
   resetBacktestClientCacheForTfChange();
-  persistBacktestRsxFromMenu();
+  RsxController.syncFromMenu('backtest');
 
   if (window.currentBacktestPayload) {
     window.currentBacktestPayload.interval = tf;
@@ -1213,15 +930,6 @@ async function handleBacktestIntervalChange(newTf) {
     backtestIntervalChangeInFlight = false;
     BacktestController.setLoading(false);
   }
-}
-
-function initBacktestIntervalHandler() {
-  const el = document.getElementById('bt-interval');
-  if (!el || el.dataset.autoHandlerBound === '1') return;
-  el.dataset.autoHandlerBound = '1';
-  el.addEventListener('change', () => {
-    handleBacktestIntervalChange(el.value);
-  });
 }
 
 function isDashboardWsOpen() {
@@ -1610,7 +1318,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     }
 
     if (!skipSettingsPush) {
-      await pushRsxSettingsToServer(coerceRsxSettingsForAPI(backtestRsxSettings));
+      await pushRsxSettingsToServer(coerceRsxSettingsForAPI(RsxController.getSettings('backtest')));
     }
 
     let result;
@@ -1897,7 +1605,7 @@ async function pollLatestState() {
     const { warmingUp, data } = await API.fetchPollState({
       tf: currentTf,
       limit: LIVE_POLL_CANDLE_LIMIT,
-      rsxLookback: liveRsxSettings.div_lookback,
+      rsxLookback: RsxController.getSettings('live').div_lookback,
     });
     if (!shouldRunLivePoll()) return;
     if (warmingUp || !data.candles?.length) return;
@@ -2076,7 +1784,7 @@ async function fetchLiveHistory(endTimeSec) {
     tf: currentTf,
     endTimeSec,
     limit: LIVE_STATE_CANDLE_LIMIT,
-    rsxSettings: coerceRsxSettingsForAPI(getRsxSettingsState('live')),
+    rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
   });
 }
 
@@ -2363,12 +2071,21 @@ function boot() {
     NavigatorController.init();
     NavigatorController.onSettingsChanged(() => triggerNavigatorAutoUpdate());
   });
+  safeInit('panel settings', () => {
+    initPanelSettingsOutsideClose();
+    initPanelSettingsEnterNavigation();
+  });
+  safeInit('UI rsx', () => {
+    RsxController.init();
+    RsxController.onSettingsChanged(() => scheduleRsxSettingsSync('live'));
+    fetchRsxIndicatorSettings();
+  });
   safeInit('equity chart', initEquityChart);
   safeInit('UI backtest', () => {
     BacktestController.init();
     BacktestController.onRunRequested(() => runBacktest(true));
     BacktestController.onStopRequested(() => stopBacktest());
-    initBacktestIntervalHandler();
+    BacktestController.onIntervalChange((tf) => handleBacktestIntervalChange(tf));
     backtestTf = getBacktestInterval();
   });
 
@@ -2416,7 +2133,6 @@ function boot() {
               NavigatorController.renderChartLegends('backtest');
             },
           });
-          initRsxSettings();
           WozduhController.init();
           NavigatorController.initLegends();
           ChartAdapter.initRuler();

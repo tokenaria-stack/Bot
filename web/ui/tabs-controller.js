@@ -74,7 +74,7 @@ const TabsController = (() => {
     }
 
     if (targetId === 'tab-live' && typeof pushRsxSettingsToServer === 'function') {
-      pushRsxSettingsToServer(coerceRsxSettingsForAPI(liveRsxSettings))
+      pushRsxSettingsToServer(coerceRsxSettingsForAPI(RsxController.getSettings('live')))
         .then(() => {
           if (ChartAdapter.chartInitialized() && isLiveTabActive()) {
             reloadRsxChartFromServer();

@@ -4,6 +4,7 @@
 const BacktestController = (() => {
   let runCallback = null;
   let stopCallback = null;
+  let intervalChangeCallback = null;
   let statsMode = 'backtest';
   let lastBacktestResult = null;
   let runActive = false;
@@ -259,10 +260,40 @@ const BacktestController = (() => {
     stopCallback = callback;
   }
 
+  function onIntervalChange(callback) {
+    intervalChangeCallback = callback;
+  }
+
+  function setInterval(interval) {
+    const tf = String(interval || '').trim();
+    if (!tf) return null;
+    const el = document.getElementById('bt-interval');
+    if (!el) return tf;
+    const hasOption = [...el.options].some((o) => o.value === tf);
+    if (!hasOption) {
+      const opt = document.createElement('option');
+      opt.value = tf;
+      opt.textContent = TF_DISPLAY[tf] || tf;
+      el.appendChild(opt);
+    }
+    el.value = tf;
+    return tf;
+  }
+
+  function initIntervalHandler() {
+    const el = document.getElementById('bt-interval');
+    if (!el || el.dataset.autoHandlerBound === '1') return;
+    el.dataset.autoHandlerBound = '1';
+    el.addEventListener('change', () => {
+      intervalChangeCallback?.(el.value);
+    });
+  }
+
   function init() {
     setDefaultBacktestDates();
     initBacktestDateNav();
     initStatsModeSelector();
+    initIntervalHandler();
     document.getElementById('btn-run-backtest')?.addEventListener('click', () => runCallback?.());
     document.getElementById('btn-stop-backtest')?.addEventListener('click', () => stopCallback?.());
   }
@@ -283,6 +314,8 @@ const BacktestController = (() => {
     renderStats,
     onRunRequested,
     onStopRequested,
+    onIntervalChange,
+    setInterval,
     applyDateRangeLimits,
     expandBacktestStartDate,
     refreshStatsForMode,
