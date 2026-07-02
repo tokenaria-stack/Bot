@@ -145,7 +145,7 @@ function getNavigatorContext() {
 }
 
 function getNavigatorChartData(context = getNavigatorContext()) {
-  return context === 'backtest' ? backtestChartData : liveChartData;
+  return ChartAdapter.getChartHandle(context);
 }
 
 function getNavigatorSettingsPrefix(context = getNavigatorContext()) {
@@ -190,103 +190,10 @@ function getMtfPeriodColor(tf) {
   return MTF_PERIOD_COLORS[key] || '#787b86';
 }
 
-/** Overlay line series that must not affect price autoscale (all MTF / helper layers). */
-function createMTFOverlaySeries(chart, options = {}) {
-  if (!chart?.addLineSeries) return null;
-  const {
-    color = 'transparent',
-    lineWidth = 2,
-    lineStyle = 0,
-    ...rest
-  } = options;
-  return chart.addLineSeries({
-    color,
-    lineWidth,
-    lineStyle,
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerVisible: false,
-    autoscaleInfoProvider: () => null,
-    ...rest,
-  });
-}
-
-function getNavigatorHostSeries(chartData, pane) {
-  if (!chartData) return null;
-  if (pane === 'rsx') return chartData.rsxSeries;
-  if (pane === 'wozduh') return chartData.wozduhDownSeries || chartData.wozduxSeries?.rsiVolSlow;
-  return chartData.candleSeries;
-}
-
-function getNavigatorPriceChart(chartData, pane) {
-  if (!chartData) return null;
-  if (pane === 'rsx') return chartData.rsxChart;
-  if (pane === 'wozduh') return chartData.oscChart;
-  return chartData.priceChart;
-}
-
-function ensureMtfNavigatorLayers(chartData) {
-  if (!chartData.mtfNavigatorLayers) {
-    chartData.mtfNavigatorLayers = { price: {}, rsx: {}, wozduh: {} };
-  }
-  return chartData.mtfNavigatorLayers;
-}
-
 function getActiveMtfPeriods(settings, chartTf) {
   const chartKey = normalizeMtfPeriod(chartTf);
   const periods = coerceNavigatorPeriods(settings);
   return periods.filter((p) => p && !mtfPeriodsEqual(p, chartKey));
-}
-
-function ensureMtfNavigatorLayer(chartData, pane, tf) {
-  const key = normalizeMtfPeriod(tf);
-  if (!key) return null;
-  const layers = ensureMtfNavigatorLayers(chartData);
-  const paneMap = layers[pane] || (layers[pane] = {});
-  if (paneMap[key]) return paneMap[key];
-
-  const priceChart = getNavigatorPriceChart(chartData, pane);
-  if (!priceChart) return null;
-
-  const anchorSeries = createMTFOverlaySeries(priceChart, {
-    color: getMtfPeriodColor(key),
-    lineWidth: 0,
-    visible: false,
-  });
-  let plugin = null;
-  if (anchorSeries && typeof TrendlinePrimitive !== 'undefined') {
-    plugin = new TrendlinePrimitive();
-    anchorSeries.attachPrimitive(plugin);
-  }
-  paneMap[key] = { anchorSeries, plugin, tf: key };
-  return paneMap[key];
-}
-
-function getMtfNavigatorPlugin(chartData, pane, interval, chartTf) {
-  const key = normalizeMtfPeriod(interval);
-  const chartKey = normalizeMtfPeriod(chartTf);
-  if (!key || mtfPeriodsEqual(key, chartKey)) {
-    return getNavigatorPluginForPane(chartData, pane);
-  }
-  return ensureMtfNavigatorLayer(chartData, pane, key)?.plugin || null;
-}
-
-function syncMtfNavigatorLayerRegistry(chartData, pane, activePeriods, chartTf) {
-  const layers = ensureMtfNavigatorLayers(chartData);
-  const paneMap = layers[pane] || (layers[pane] = {});
-  const wanted = new Set(
-    (activePeriods || []).map((p) => normalizeMtfPeriod(p)).filter(Boolean),
-  );
-  wanted.forEach((tf) => {
-    if (!mtfPeriodsEqual(tf, chartTf)) {
-      ensureMtfNavigatorLayer(chartData, pane, tf);
-    }
-  });
-  Object.keys(paneMap).forEach((key) => {
-    if (wanted.has(key)) return;
-    paneMap[key]?.plugin?.setData([]);
-    paneMap[key]?.plugin?.setBackgroundZones([]);
-  });
 }
 
 function groupNavigatorLinesByInterval(lines, chartTf) {
@@ -499,7 +406,7 @@ function initMtfSyncCheckboxes() {
       syncPeriodCheckboxFromMtf(tf, chk.checked);
       const context = getNavigatorContext();
       if (context === 'live') {
-        if (chartInitialized && isLiveTabActive()) {
+        if (ChartAdapter.chartInitialized() && isLiveTabActive()) {
           triggerNavigatorAutoUpdate().catch((err) => {
             console.error('[UI] MTF sync live update failed:', err);
           });
@@ -556,9 +463,9 @@ let navigatorAutoUpdateTimer = null;
 async function triggerNavigatorAutoUpdate() {
   const context = getNavigatorContext();
   if (context === 'live') {
-    const viewportSnapshot = captureLiveViewportSnapshot();
+    const viewportSnapshot = ChartAdapter.captureLiveViewport();
     await syncLiveNavigatorSettingsToServer();
-    if (chartInitialized && liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
+    if (ChartAdapter.chartInitialized() && liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
       await refreshLiveNavigatorFromServer(viewportSnapshot);
     } else {
       await loadDashboard({ preserveViewport: viewportSnapshot });
@@ -577,13 +484,11 @@ async function refreshLiveNavigatorFromServer(viewportSnapshot) {
     liveNavigatorResult = data.navigators || null;
     beginDataUpdate();
     try {
-      applyNavigatorOverlays(
-        { navigators: liveNavigatorResult },
-        liveStore.getForLightweightCharts().candles,
-        liveChartData,
-        { context: 'live', updateLoadedCandles: false },
-      );
-      restoreLiveViewportSnapshotTwice(viewportSnapshot);
+      ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, liveStore.getForLightweightCharts().candles, {
+        context: 'live',
+        updateLoadedCandles: false,
+      });
+      ChartAdapter.restoreLiveViewportTwice(viewportSnapshot);
     } finally {
       endDataUpdate(0);
     }
@@ -798,12 +703,8 @@ function buildNavigatorBacktestPayload() {
   return buildBacktestSettingsPayload().navigators;
 }
 
-function getChartDataForContext(context) {
-  return context === 'backtest' ? backtestChartData : liveChartData;
-}
-
 function getWrapForPane(context, pane) {
-  const chartData = getChartDataForContext(context);
+  const chartData = ChartAdapter.getChartHandle(context);
   if (!chartData?.elements) return null;
   if (pane === 'price') return chartData.elements.priceWrap;
   if (pane === 'wozduh') return chartData.elements.oscWrap;
@@ -821,44 +722,12 @@ function ensureLegendVisibilityState(context, pane, legendId) {
 function toggleLegendVisibility(context, pane, legendId) {
   const state = ensureLegendVisibilityState(context, pane, legendId);
   state.visible = !state.visible;
-  const chartData = getChartDataForContext(context);
-  const visible = state.visible;
-
-  if (legendId === 'price') {
-    const mode = chartType;
-    const series = mode === 'bars' ? chartData.barSeries
-      : mode === 'line' ? chartData.lineSeries
-        : chartData.candleSeries;
-    series?.applyOptions({ visible });
-    chartData.candleSeries?.applyOptions({ visible: mode === 'candles' ? visible : false });
-    chartData.barSeries?.applyOptions({ visible: mode === 'bars' ? visible : false });
-    chartData.lineSeries?.applyOptions({ visible: mode === 'line' ? visible : false });
-    chartData.volumeSeries?.applyOptions({ visible });
-  } else if (legendId === 'wozduh') {
-    if (visible) {
-      applyWozduhVisibilityToChart(chartData, context);
-    } else {
-      Object.values(chartData.wozduxSeries || {}).forEach((series) => {
-        series?.applyOptions({ visible: false });
-      });
-    }
-  } else if (legendId === 'rsx') {
-    chartData.rsxSeries?.applyOptions({ visible });
-    chartData.rsxSignalSeries?.applyOptions({ visible });
-    if (!visible) {
-      chartData.rsxSeries?.applyOptions({ visible: false });
-      chartData.rsxSignalSeries?.applyOptions({ visible: false });
-    }
-  } else if (legendId === 'trendlines') {
-    const plugin = getNavigatorPluginForPane(chartData, pane);
-    plugin?.setLinesVisible(visible);
+  ChartAdapter.setLegendVisibility(context, pane, legendId, state.visible, ChartAdapter.getChartType());
+  if (legendId === 'trendlines') {
     const paneSettings = loadNavigatorPaneSettings(pane, context);
-    paneSettings.linesVisible = visible;
+    paneSettings.linesVisible = state.visible;
     saveNavigatorPaneSettings(pane, paneSettings, context);
-  } else if (legendId === 'trades') {
-    chartData.tradeMarkerPlugin?.setVisible(visible);
   }
-
   renderChartLegends(context);
 }
 
@@ -1245,172 +1114,47 @@ function initChartLegends() {
 
 
 
-function withSeriesDefaults(style) {
-  ensureChartLibraryStyles();
-  return { ...CHART_STYLES.seriesDefaults, ...style };
-}
-
-function wozduxLineSeriesOptions(def) {
-  return withSeriesDefaults({
-    color: def.color,
-    lineWidth: def.lineWidth,
-    lineStyle: def.lineStyle ?? LightweightCharts.LineStyle.Solid,
-    title: '',
-  });
-}
 
 
-function unixChartTimeToDate(time) {
-  if (typeof time === 'object' && time !== null && 'year' in time) {
-    return new Date(Date.UTC(time.year, time.month - 1, time.day));
-  }
-  return new Date(time * 1000);
-}
+
 
 /** Lightweight Charts localization: axis labels in the user's local timezone (wire time stays UTC seconds). */
-function chartLocalizationOptions() {
-  const locale = navigator.language || 'en-US';
-  return {
-    locale,
-    timeFormatter: (time) => unixChartTimeToDate(time).toLocaleTimeString(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }),
-    dateFormatter: (time) => unixChartTimeToDate(time).toLocaleDateString(locale, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }),
-  };
-}
 
-const CHART_PRICE_SCALE_MIN_WIDTH = 70;
 
-function sharedRightPriceScaleOptions(extra = {}) {
-  return {
-    borderColor: TV.border,
-    autoScale: true,
-    minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
-    alignLabels: true,
-    borderVisible: true,
-    ...extra,
-  };
-}
 
 const RULER_IDLE = 0;
 const RULER_MEASURING = 1;
 const RULER_FIXED = 2;
 
-function sharedChartLayout() {
-  return {
-    background: { color: TV.bg },
-    textColor: TV.text,
-    fontSize: 11,
-    attributionLogo: false,
-  };
-}
 
-function createPriceChartOptions(width, height) {
-  return {
-    autoSize: true,
-    layout: sharedChartLayout(),
-    localization: chartLocalizationOptions(),
-    grid: {
-      vertLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-      horzLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-    },
-    crosshair: { ...SHARED_CROSSHAIR },
-    timeScale: { ...SHARED_TIME_SCALE },
-    width,
-    height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Logarithmic,
-    }),
-  };
-}
 
-function createWozduxChartOptions(width, height) {
-  return {
-    autoSize: true,
-    layout: sharedChartLayout(),
-    localization: chartLocalizationOptions(),
-    grid: {
-      vertLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-      horzLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-    },
-    crosshair: { ...SHARED_CROSSHAIR },
-    timeScale: { ...SHARED_TIME_SCALE },
-    width,
-    height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Normal,
-      scaleMargins: { top: 0.05, bottom: 0.05 },
-    }),
-  };
-}
 
-function createRSXChartOptions(width, height) {
-  return {
-    autoSize: true,
-    layout: sharedChartLayout(),
-    localization: chartLocalizationOptions(),
-    grid: {
-      vertLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-      horzLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-    },
-    crosshair: { ...SHARED_CROSSHAIR },
-    timeScale: { ...SHARED_TIME_SCALE },
-    width,
-    height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Normal,
-      scaleMargins: { top: 0.05, bottom: 0.05 },
-    }),
-  };
-}
 
-let liveChartData = {};
-let backtestChartData = {};
 
-const LOGICAL_RANGE_EPS = 0.01;
-let backtestNavigatorChartLines = [];
-let backtestNavigatorChartMarkers = [];
 let liveNavigatorResult = null;
-let liveNavigatorChartLines = [];
-let liveNavigatorChartMarkers = [];
 let backtestTf = '15m';
-let equityChart;
-let equitySeries;
 let lastBacktestResult = null;
 let statsMode = 'backtest';
 let backtestAbortController = null;
 let backtestRunActive = false;
 
-let wozduxPriceLines = [];
-let rsxPriceLines = [];
 let tradeMarkers = [];
 let sessionTrades = [];
 let spikeMarkers = [];
-let fibPriceLines = [];
 let lastFibZones = [];
 let currentTf = '1m';
 let backendTradingTimeframe = null;
 let tradingTimeframeSynced = false;
 let tfFavorites = [];
 let refreshTimer = null;
-let historyLoading = false;
 let historyHasMore = true;
 let currentLiveRequestId = 0;
 let navigatorRequestId = 0;
-let chartInitialized = false;
 let isAppInitialized = false;
-let chartType = 'candles';
 let livePollSuppressedByWs = false;
 let lastTickBufferLen = 0;
 let orderFlowPollTimer = null;
 let isUpdatingData = false;
-let liveChartUpdating = false;
 let isLoadingHistory = false;
 let liveHistoryEpoch = 0;
 let pendingHistoryLoad = null;
@@ -1428,87 +1172,16 @@ if (typeof window !== 'undefined') {
 const liveStore = new ChartDataStore('live');
 const backtestStore = new ChartDataStore('backtest');
 
-function getDataStoreForChart(chartData) {
-  return chartData === backtestChartData ? backtestStore : liveStore;
-}
-
-function getStoreDataForChart(chartData) {
-  return getDataStoreForChart(chartData).getForLightweightCharts();
-}
 
 
-function applyOscPointDelta(oscPt, chartData = liveChartData) {
-  if (!oscPt || !chartData) return;
-  const time = chartTime(oscPt.time);
-  if (time == null) return;
 
-  WOZDUX_LINE_KEYS.forEach((key) => {
-    const value = Number(oscPt[key]);
-    if (!Number.isFinite(value) || !chartData.wozduxSeries?.[key]) return;
-    chartData.wozduxSeries[key].update({ time, value });
-  });
-  if (oscPt.volCrossMarker) {
-    applyWozduxMarkers(getStoreDataForChart(chartData).osc, chartData);
-  }
-
-  const rsxVal = parseFloat(oscPt.rsx ?? oscPt.jurik);
-  if (Number.isFinite(rsxVal) && chartData.rsxSeries) {
-    const ptColor = oscPt.color || RSX_DEFAULT_COLOR;
-    chartData.rsxSeries.update({ time, value: rsxVal, color: ptColor });
-    const signalVal = parseFloat(oscPt.rsx_signal ?? oscPt.rsxSignal);
-    if (chartData.rsxSignalSeries && Number.isFinite(signalVal)) {
-      chartData.rsxSignalSeries.update({ time, value: signalVal });
-    }
-    if (chartData === liveChartData) {
-      const rsxEl = document.getElementById('rsx-val');
-      if (rsxEl) {
-        rsxEl.textContent = rsxVal.toFixed(1);
-        rsxEl.style.color = ptColor;
-      }
-    }
-  }
-}
-
-function applyLiveChartDelta(delta) {
-  if (!delta || !shouldPaintLiveChart()) return;
-
-  if (delta.candle) {
-    if (liveStore.candleCount() <= 1) {
-      const candles = liveStore.getForLightweightCharts().candles;
-      setAllPriceData(candles);
-      liveChartData.volumeSeries.setData(toVolumeBars(candles));
-      updateVolumeLabel(candles);
-    } else {
-      updateAllPriceSeries(delta.candle);
-    }
-  }
-
-  if (delta.osc) {
-    applyOscPointDelta(delta.osc, liveChartData);
-  }
-
-  if (delta.fullAnnotations) {
-    const showPivots = rsxShowPivotsFrom(getRsxSettingsState('live'), true);
-    const rsxTimes = delta.osc?.time != null
-      ? new Set([delta.osc.time])
-      : new Set();
-    applyUniversalAnnotations(
-      getChartAnnotationPanes(liveChartData),
-      delta.fullAnnotations,
-      { rsx: rsxTimes },
-      { showPivots },
-    );
-  }
-
-  updateBufferingOverlay();
-}
 
 function canPatchBacktestIndicatorsOnly(options = {}) {
   if (options.patchIndicatorsOnly === false) return false;
   if (options.patchIndicatorsOnly === true) return true;
   return options.preserveView === true
     && backtestStore.candleCount() > 0
-    && !!backtestChartData?.candleSeries;
+    && ChartAdapter.isInitialized('backtest');
 }
 
 
@@ -1549,7 +1222,7 @@ function shouldPaintLiveChart() {
 }
 
 function getActiveChartData() {
-  return isBacktestTabActive() ? backtestChartData : liveChartData;
+  return ChartAdapter.getChartHandle(isBacktestTabActive() ? 'backtest' : 'live');
 }
 
 function getBacktestInterval() {
@@ -1646,178 +1319,16 @@ function applyTfToBacktestSelect(tf) {
   return true;
 }
 
-function defaultPriceScaleState() {
-  return { logEnabled: true, autoScale: true };
-}
 
-function normalizePriceScaleView(saved) {
-  if (!saved) return defaultPriceScaleState();
-  if (saved.logEnabled != null || saved.autoScale != null) {
-    return {
-      logEnabled: saved.logEnabled !== false,
-      autoScale: saved.autoScale !== false,
-    };
-  }
-  return {
-    logEnabled: saved.priceScaleMode !== 'auto',
-    autoScale: saved.priceScaleMode === 'auto',
-  };
-}
 
-function readPriceAutoScaleFromChart(chartData) {
-  try {
-    return chartData.priceChart.priceScale('right').options().autoScale !== false;
-  } catch {
-    return true;
-  }
-}
 
-function syncPriceScaleControlsUI(chartData) {
-  const controls = chartData?.scaleControlsEl;
-  if (!controls) return;
-  const state = chartData.priceScaleState || defaultPriceScaleState();
-  const autoBtn = controls.querySelector('[data-action="auto"]');
-  const logBtn = controls.querySelector('[data-action="log"]');
-  if (autoBtn) autoBtn.classList.toggle('active', !!state.autoScale);
-  if (logBtn) logBtn.classList.toggle('active', !!state.logEnabled);
-}
 
-function applyPriceScaleState(chartData, saved) {
-  if (!chartData?.priceChart) return;
-  const state = normalizePriceScaleView(saved);
-  chartData.priceScaleState = state;
-  chartData.priceScaleMode = state.logEnabled ? 'log' : 'normal';
-  chartData.priceChart.priceScale('right').applyOptions({
-    mode: state.logEnabled
-      ? LightweightCharts.PriceScaleMode.Logarithmic
-      : LightweightCharts.PriceScaleMode.Normal,
-    autoScale: state.autoScale,
-  });
-  syncPriceScaleControlsUI(chartData);
-}
 
-function capturePriceScaleState(chartData) {
-  const state = chartData?.priceScaleState || defaultPriceScaleState();
-  return {
-    logEnabled: state.logEnabled,
-    autoScale: readPriceAutoScaleFromChart(chartData),
-  };
-}
 
-function togglePriceLogScale(chartData) {
-  if (!chartData?.priceChart) return;
-  const state = { ...(chartData.priceScaleState || defaultPriceScaleState()) };
-  state.logEnabled = !state.logEnabled;
-  chartData.priceScaleState = state;
-  chartData.priceScaleMode = state.logEnabled ? 'log' : 'normal';
-  chartData.priceChart.priceScale('right').applyOptions({
-    mode: state.logEnabled
-      ? LightweightCharts.PriceScaleMode.Logarithmic
-      : LightweightCharts.PriceScaleMode.Normal,
-  });
-  syncPriceScaleControlsUI(chartData);
-}
 
-function enablePriceAutoScale(chartData) {
-  if (!chartData?.priceChart) return;
-  const state = { ...(chartData.priceScaleState || defaultPriceScaleState()) };
-  state.autoScale = true;
-  chartData.priceScaleState = state;
-  chartData.priceChart.priceScale('right').applyOptions({ autoScale: true });
-  syncPriceScaleControlsUI(chartData);
-}
 
-function isPointerOnPriceScale(chartData, clientX) {
-  const container = chartData?.elements?.chartContainer;
-  if (!container || !chartData?.priceChart) return false;
-  const rect = container.getBoundingClientRect();
-  const scaleW = chartData.priceChart.priceScale('right').width() || CHART_PRICE_SCALE_MIN_WIDTH;
-  return clientX >= rect.right - scaleW;
-}
 
-function attachPriceScaleInteractionWatch(chartData) {
-  const container = chartData?.elements?.chartContainer;
-  if (!container) return;
-  container._priceScaleChartData = chartData;
 
-  const syncAutoFromChart = () => {
-    const active = container._priceScaleChartData;
-    if (!active?.priceChart) return;
-    const autoOn = readPriceAutoScaleFromChart(active);
-    if (!active.priceScaleState) active.priceScaleState = defaultPriceScaleState();
-    if (active.priceScaleState.autoScale !== autoOn) {
-      active.priceScaleState.autoScale = autoOn;
-      syncPriceScaleControlsUI(active);
-    }
-  };
-
-  if (container._priceScaleWatchBound) return;
-  container._priceScaleWatchBound = true;
-
-  let draggingPriceScale = false;
-
-  container.addEventListener('mousedown', (e) => {
-    const active = container._priceScaleChartData;
-    if (active && isPointerOnPriceScale(active, e.clientX)) draggingPriceScale = true;
-  });
-  container.addEventListener('wheel', (e) => {
-    const active = container._priceScaleChartData;
-    if (active && isPointerOnPriceScale(active, e.clientX)) {
-      requestAnimationFrame(syncAutoFromChart);
-    }
-  }, { passive: true });
-  container.addEventListener('dblclick', (e) => {
-    const active = container._priceScaleChartData;
-    if (!active || !isPointerOnPriceScale(active, e.clientX)) return;
-    e.stopPropagation();
-    enablePriceAutoScale(active);
-  });
-
-  const onPointerEnd = () => {
-    if (!draggingPriceScale) return;
-    draggingPriceScale = false;
-    requestAnimationFrame(syncAutoFromChart);
-  };
-  container.addEventListener('mouseup', onPointerEnd);
-  document.addEventListener('mouseup', onPointerEnd);
-}
-
-function initPriceScaleControls(chartData) {
-  const wrap = chartData?.elements?.priceWrap;
-  if (!wrap || !chartData?.priceChart) return;
-
-  let controls = wrap.querySelector('.scale-controls');
-  if (!controls) {
-    controls = document.createElement('div');
-    controls.className = 'scale-controls';
-    controls.setAttribute('aria-label', 'Price scale controls');
-    controls.innerHTML = `
-      <button type="button" class="scale-btn scale-btn--auto active" data-action="auto" title="Auto scale (Y)">Auto</button>
-      <button type="button" class="scale-btn scale-btn--log active" data-action="log" title="Logarithmic scale">Log</button>
-    `;
-    wrap.appendChild(controls);
-  }
-  chartData.scaleControlsEl = controls;
-
-  if (!chartData.priceScaleState) {
-    chartData.priceScaleState = defaultPriceScaleState();
-  }
-
-  if (!controls._scaleControlsBound) {
-    controls._scaleControlsBound = true;
-    controls.querySelector('[data-action="log"]')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      togglePriceLogScale(chartData);
-    });
-    controls.querySelector('[data-action="auto"]')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      enablePriceAutoScale(chartData);
-    });
-  }
-
-  attachPriceScaleInteractionWatch(chartData);
-  syncPriceScaleControlsUI(chartData);
-}
 
 function syncToolbarToActiveContext() {
   const activeTf = getActiveTf();
@@ -2109,9 +1620,9 @@ async function reloadRsxChartFromServer() {
 
     beginDataUpdate();
     const storeData = liveStore.getForLightweightCharts();
-    applyRsxData(storeData.osc, liveChartData, storeData.annotations);
+    ChartAdapter.applyRsxData('live', storeData.osc, storeData.annotations);
     endDataUpdate();
-    forceSyncChartTimeScales(liveChartData);
+    ChartAdapter.forceSyncTimeScales('live');
   } catch (err) {
     console.warn('Failed to reload RSX chart:', err);
   }
@@ -2270,12 +1781,12 @@ function attachLiveHistoryScrollArm() {
 }
 
 function beginDataUpdate() {
-  liveChartUpdating = true;
+  ChartAdapter.setLiveUpdating(true);
 }
 
 function endDataUpdate(delayMs = 50) {
   setTimeout(() => {
-    liveChartUpdating = false;
+    ChartAdapter.setLiveUpdating(false);
     if (pendingHistoryLoad) {
       const job = pendingHistoryLoad;
       pendingHistoryLoad = null;
@@ -2287,757 +1798,44 @@ function endDataUpdate(delayMs = 50) {
 
 
 
-function destroyChartInstance(chartData) {
-  if (!chartData?.allCharts?.length) return;
-  chartData.allCharts.forEach((chart) => {
-    try {
-      chart.remove();
-    } catch {
-      /* noop */
-    }
-  });
-  ['oscWrap', 'rsxWrap', 'priceWrap'].forEach((key) => {
-    const wrap = chartData.elements?.[key];
-    if (wrap?._paneResizeObs) {
-      wrap._paneResizeObs.disconnect();
-      wrap._paneResizeObs = null;
-    }
-  });
-}
-
-function exitFullscreenPane() {
-  document.querySelectorAll('.fullscreen-pane').forEach((el) => {
-    el.classList.remove('fullscreen-pane');
-  });
-  handleResize();
-}
-
-function toggleFullscreenPane(wrapEl, chartData) {
-  if (!wrapEl) return;
-  const entering = !wrapEl.classList.contains('fullscreen-pane');
-  exitFullscreenPane();
-  if (entering) wrapEl.classList.add('fullscreen-pane');
-  requestAnimationFrame(() => {
-    const root = document.getElementById(chartData.containerId);
-    if (root) resizeChartForContainer(chartData, root);
-  });
-}
-
-function initPaneFullscreen(chartData) {
-  if (!chartData?.elements) return;
-  ['priceWrap', 'oscWrap', 'rsxWrap'].forEach((key) => {
-    const wrap = chartData.elements[key];
-    if (!wrap || wrap._fullscreenBound) return;
-    wrap._fullscreenBound = true;
-    wrap.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.indicator-settings-menu, button')) return;
-      toggleFullscreenPane(wrap, chartData);
-    });
-  });
-}
-
-function initPaneVerticalResize(chartData) {
-  if (!chartData?.elements) return;
-  ['priceWrap', 'oscWrap', 'rsxWrap'].forEach((key) => {
-    const wrap = chartData.elements[key];
-    if (!wrap || wrap._paneResizeObs) return;
-    wrap._paneResizeObs = new ResizeObserver(() => {
-      const root = document.getElementById(chartData.containerId);
-      if (root) resizeChartForContainer(chartData, root);
-    });
-    wrap._paneResizeObs.observe(wrap);
-  });
-}
-
-function setupChartPaneUX(chartData) {
-  initPaneVerticalResize(chartData);
-  initPaneFullscreen(chartData);
-}
-
-function applyIndicatorConfigStyles(chartData) {
-  if (!chartData) return;
-  if (!ensureChartLibraryStyles()) return;
-
-  const priceCfg = INDICATOR_CONFIG.price;
-  chartData.candleSeries?.applyOptions({
-    ...priceCfg.candle,
-    crosshairMarkerRadius: CHART_STYLES.seriesDefaults.crosshairMarkerRadius,
-    crosshairMarkerBorderWidth: CHART_STYLES.seriesDefaults.crosshairMarkerBorderWidth,
-    crosshairMarkerBorderColor: CHART_STYLES.seriesDefaults.crosshairMarkerBorderColor,
-  });
-  chartData.barSeries?.applyOptions({
-    ...priceCfg.bar,
-    crosshairMarkerRadius: CHART_STYLES.seriesDefaults.crosshairMarkerRadius,
-    crosshairMarkerBorderWidth: CHART_STYLES.seriesDefaults.crosshairMarkerBorderWidth,
-    crosshairMarkerBorderColor: CHART_STYLES.seriesDefaults.crosshairMarkerBorderColor,
-  });
-  chartData.lineSeries?.applyOptions(priceCfg.line);
-  chartData.volumeSeries?.applyOptions(priceCfg.volume);
-
-  Object.entries(INDICATOR_CONFIG.wozduh.lines).forEach(([, lineCfg]) => {
-    const series = chartData.wozduxSeries?.[lineCfg.dataKey];
-    if (series) series.applyOptions(wozduxLineSeriesOptions(lineCfg.style));
-  });
-
-  (INDICATOR_CONFIG.wozduh.areas || []).forEach((areaCfg) => {
-    const entry = chartData.wozduhAreas?.[areaCfg.id];
-    if (!entry?.series) return;
-    entry.series.applyOptions({
-      topColor: areaCfg.topColor,
-      bottomColor: areaCfg.bottomColor,
-      lineColor: areaCfg.lineColor || 'transparent',
-      lineWidth: areaCfg.lineWidth ?? 0,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    if (areaCfg.bottom != null && areaCfg.topLineKey == null) {
-      entry.series.applyOptions({
-        baseValue: { type: 'price', price: areaCfg.bottom },
-      });
-    }
-  });
-
-  const rsxMain = INDICATOR_CONFIG.rsx.lines.rsx_main;
-  chartData.rsxSeries?.applyOptions(withSeriesDefaults(rsxMain.style));
-  const rsxSignalLine = INDICATOR_CONFIG.rsx.lines.rsx_signal;
-  chartData.rsxSignalSeries?.applyOptions(withSeriesDefaults(rsxSignalLine.style));
-
-  (INDICATOR_CONFIG.rsx.areas || []).forEach((areaCfg) => {
-    const entry = chartData.rsxAreas?.[areaCfg.id];
-    if (!entry?.series) return;
-    entry.series.applyOptions({
-      topColor: areaCfg.topColor,
-      bottomColor: areaCfg.bottomColor,
-      lineColor: areaCfg.lineColor || 'transparent',
-      lineWidth: areaCfg.lineWidth ?? 0,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    if (areaCfg.bottom != null) {
-      entry.series.applyOptions({
-        baseValue: { type: 'price', price: areaCfg.bottom },
-      });
-    }
-  });
-}
-
-function reinitBacktestChart() {
-  destroyChartInstance(backtestChartData);
-  backtestChartData = initProfessionalChart('backtest-chart-container', {
-    selectors: BACKTEST_CHART_SELECTORS,
-    overlayTrades: true,
-    navigatorPlugin: true,
-    tradeMarkers: true,
-  }) || {};
-  applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-  attachProfessionalChartSync(backtestChartData, {
-    crosshairPriceSeries: () => backtestChartData.candleSeries,
-    onVisibleRangeChange: (range) => {
-      if (getRulerChartData() === backtestChartData) updateRulerOverlay(backtestChartData);
-      maybeLoadBacktestHistory(range);
-    },
-  });
-  attachRulerToChart(backtestChartData);
-  renderChartLegends('backtest');
-  return backtestChartData;
-}
-
-function normalizePriceLineLevel(level) {
-  const lineColor = level.color || TV.text;
-  const { labelBackgroundColor, labelTextColor, ...rest } = level;
-  return {
-    ...rest,
-    title: level.title ?? '',
-    axisLabelVisible: level.axisLabelVisible !== false,
-    axisLabelColor: level.axisLabelColor ?? TV.bg,
-    axisLabelTextColor: level.axisLabelTextColor ?? lineColor,
-  };
-}
-
-function addLevelLines(series, levels) {
-  return (levels || []).map((level) => series.createPriceLine(normalizePriceLineLevel(level)));
-}
-
-function createAreaSeries(chart, areaCfg) {
-  const series = chart.addAreaSeries({
-    topColor: areaCfg.topColor,
-    bottomColor: areaCfg.bottomColor,
-    lineColor: areaCfg.lineColor || 'transparent',
-    lineWidth: areaCfg.lineWidth ?? 0,
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerVisible: false,
-  });
-  if (areaCfg.bottom != null && areaCfg.topLineKey == null) {
-    series.applyOptions({
-      baseValue: { type: 'price', price: areaCfg.bottom },
-    });
-  }
-  return series;
-}
-
-function createStaticAreaData(times, top) {
-  return (times || [])
-    .filter((time) => time != null)
-    .map((time) => ({ time: Number(time), value: top }));
-}
-
-function buildDynamicWtBandData(osc, topKey, bottomKey) {
-  const map = new Map();
-  (osc || []).forEach((p) => {
-    const time = chartTime(p?.time ?? p?.Time);
-    const top = Number(p[topKey]);
-    const bottom = Number(p[bottomKey]);
-    if (time == null || isWarmupOscValue(top) || isWarmupOscValue(bottom)) return;
-    map.set(Number(time), { time: Number(time), value: Math.max(top, bottom) });
-  });
-  return Array.from(map.values()).sort((a, b) => a.time - b.time);
-}
-
-function applyStaticAreas(chartData, paneKey, times, osc) {
-  const paneCfg = INDICATOR_CONFIG[paneKey];
-  const areaMap = chartData[`${paneKey}Areas`];
-  if (!paneCfg?.areas || !areaMap) return;
-
-  paneCfg.areas.forEach((areaCfg) => {
-    const entry = areaMap[areaCfg.id];
-    if (!entry?.series) return;
-
-    if (areaCfg.topLineKey && areaCfg.bottomLineKey) {
-      entry.series.setData(buildDynamicWtBandData(osc, areaCfg.topLineKey, areaCfg.bottomLineKey));
-      return;
-    }
-
-    if (areaCfg.top != null) {
-      entry.series.setData(createStaticAreaData(times, areaCfg.top));
-    }
-  });
-}
-
-function initProfessionalChart(containerId, options = {}) {
-  if (typeof LightweightCharts === 'undefined') return null;
-
-  const selectors = options.selectors || LIVE_CHART_SELECTORS;
-  const root = document.getElementById(containerId);
-  const chartContainer = document.getElementById(selectors.chartContainer);
-  const oscContainer = document.getElementById(selectors.oscContainer);
-  const rsxContainer = document.getElementById(selectors.rsxContainer);
-  const priceWrap = document.getElementById(selectors.priceWrap);
-  const oscWrap = document.getElementById(selectors.oscWrap);
-  const rsxWrap = document.getElementById(selectors.rsxWrap);
-
-  if (!root || !chartContainer || !oscContainer || !rsxContainer) return null;
-  if (!ensureChartLibraryStyles()) return null;
-
-  const CHART_MIN_PRICE_PANE_H = 400;
-  const CHART_MIN_OSC_PANE_H = 150;
-  const width = Math.max(chartContainer.clientWidth || 0, root.clientWidth || 0, 800);
-  const priceH = Math.max(priceWrap?.clientHeight || 0, CHART_MIN_PRICE_PANE_H);
-  const oscH = Math.max(oscWrap?.clientHeight || 0, CHART_MIN_OSC_PANE_H);
-  const rsxH = Math.max(rsxWrap?.clientHeight || 0, CHART_MIN_OSC_PANE_H);
-
-  const priceChart = LightweightCharts.createChart(
-    chartContainer,
-    createPriceChartOptions(width, priceH),
-  );
-  const oscChart = LightweightCharts.createChart(
-    oscContainer,
-    createWozduxChartOptions(oscContainer.clientWidth || width, oscH),
-  );
-  const rsxChart = LightweightCharts.createChart(
-    rsxContainer,
-    createRSXChartOptions(rsxContainer.clientWidth || width, rsxH),
-  );
-
-  const priceCfg = INDICATOR_CONFIG.price;
-  const candleSeries = priceChart.addCandlestickSeries(priceCfg.candle);
-  const barSeries = priceChart.addBarSeries(priceCfg.bar);
-  const lineSeries = createMTFOverlaySeries(priceChart, {
-    ...priceCfg.line,
-    visible: priceCfg.line?.visible ?? false,
-  });
-  const volumeSeries = priceChart.addHistogramSeries(priceCfg.volume);
-  priceChart.priceScale('volume').applyOptions(priceCfg.volumeScale);
-  priceChart.priceScale('right').applyOptions({
-    ...priceCfg.priceScale,
-    minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
-  });
-  oscChart.priceScale('right').applyOptions({ minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH });
-  rsxChart.priceScale('right').applyOptions({ minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH });
-
-  const wozduhAreas = {};
-  INDICATOR_CONFIG.wozduh.areas.forEach((areaCfg) => {
-    wozduhAreas[areaCfg.id] = { series: createAreaSeries(oscChart, areaCfg), cfg: areaCfg };
-  });
-
-  const wozduxSeries = {};
-  Object.entries(INDICATOR_CONFIG.wozduh.lines).forEach(([seriesKey, lineCfg]) => {
-    wozduxSeries[seriesKey] = oscChart.addLineSeries(
-      wozduxLineSeriesOptions(lineCfg.style),
-    );
-    wozduxSeries[lineCfg.dataKey] = wozduxSeries[seriesKey];
-  });
-
-  const wozduhLevelAnchor = wozduxSeries.rsiPrice || wozduxSeries.wozduh_wt1;
-  const wozduxPriceLinesLocal = addLevelLines(wozduhLevelAnchor, INDICATOR_CONFIG.wozduh.levels);
-
-  const rsxAreas = {};
-  INDICATOR_CONFIG.rsx.areas.forEach((areaCfg) => {
-    rsxAreas[areaCfg.id] = { series: createAreaSeries(rsxChart, areaCfg), cfg: areaCfg };
-  });
-
-  const rsxLineCfg = INDICATOR_CONFIG.rsx.lines.rsx_main;
-  const rsxSeries = rsxChart.addLineSeries(withSeriesDefaults(rsxLineCfg.style));
-  const rsxSignalCfg = INDICATOR_CONFIG.rsx.lines.rsx_signal;
-  const rsxSignalSeries = rsxChart.addLineSeries(withSeriesDefaults(rsxSignalCfg.style));
-  const rsxPriceLinesLocal = addLevelLines(rsxSeries, INDICATOR_CONFIG.rsx.levels);
-
-  let entryMarkerSeries = null;
-  if (options.overlayTrades) {
-    entryMarkerSeries = createMTFOverlaySeries(priceChart, {
-      color: 'transparent',
-      lineWidth: 0,
-    });
-  }
-
-  let priceNavigatorPlugin = null;
-  let rsxNavigatorPlugin = null;
-  let wozduhNavigatorPlugin = null;
-  let tradeMarkerPlugin = null;
-
-  if (options.navigatorPlugin && typeof TrendlinePrimitive !== 'undefined') {
-    priceNavigatorPlugin = new TrendlinePrimitive();
-    candleSeries.attachPrimitive(priceNavigatorPlugin);
-
-    rsxNavigatorPlugin = new TrendlinePrimitive();
-    rsxSeries.attachPrimitive(rsxNavigatorPlugin);
-
-    const wozduhSeries = wozduxSeries.rsiVolSlow || wozduxSeries.wozduh_wt2;
-    if (wozduhSeries) {
-      wozduhNavigatorPlugin = new TrendlinePrimitive();
-      wozduhSeries.attachPrimitive(wozduhNavigatorPlugin);
-    }
-  }
-
-  if (options.tradeMarkers && typeof TradeMarkerPrimitive !== 'undefined') {
-    tradeMarkerPlugin = new TradeMarkerPrimitive();
-    candleSeries.attachPrimitive(tradeMarkerPlugin);
-  }
-
-  const allCharts = [priceChart, oscChart, rsxChart];
-
-  const result = {
-    chart: priceChart,
-    containerId,
-    root,
-    priceChart,
-    oscChart,
-    rsxChart,
-    candleSeries,
-    priceSeries: candleSeries,
-    barSeries,
-    lineSeries,
-    volumeSeries,
-    rsxSeries,
-    rsxSignalSeries,
-    wozduhUpSeries: wozduxSeries.rsiVolFast || wozduxSeries.wozduh_wt1,
-    wozduhDownSeries: wozduxSeries.rsiVolSlow || wozduxSeries.wozduh_wt2,
-    wozduxSeries,
-    wozduhAreas,
-    rsxAreas,
-    wozduxPriceLines: wozduxPriceLinesLocal,
-    rsxPriceLines: rsxPriceLinesLocal,
-    entryMarkerSeries,
-    priceNavigatorPlugin,
-    rsxNavigatorPlugin,
-    wozduhNavigatorPlugin,
-    tradeMarkerPlugin,
-    mtfNavigatorLayers: { price: {}, rsx: {}, wozduh: {} },
-    allCharts,
-    elements: { priceWrap, oscWrap, rsxWrap, chartContainer, oscContainer, rsxContainer },
-    syncingTimeScale: false,
-    priceScaleState: defaultPriceScaleState(),
-    priceScaleMode: 'log',
-    rulerAttached: false,
-  };
-
-  setupChartPaneUX(result);
-  initPriceScaleControls(result);
-  return result;
-}
-
-function logicalRangesEqual(a, b, eps = LOGICAL_RANGE_EPS) {
-  if (!a || !b) return false;
-  return Math.abs(a.from - b.from) < eps && Math.abs(a.to - b.to) < eps;
-}
-
-function syncVisibleLogicalRange(targetChart, range, options = {}) {
-  if (!targetChart?.timeScale || !range) return;
-  const timeScale = targetChart.timeScale();
-  const currentRange = timeScale.getVisibleLogicalRange();
-  if (logicalRangesEqual(currentRange, range)) return;
-  const rangeOpts = options.animate === false ? { animate: false } : undefined;
-  timeScale.setVisibleLogicalRange(range, rangeOpts);
-}
-
-function captureLiveViewportSnapshot() {
-  if (!liveChartData?.priceChart?.timeScale) return null;
-  try {
-    const logicalRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
-    if (!logicalRange) return null;
-    return { logicalRange };
-  } catch {
-    return null;
-  }
-}
-
-function restoreLiveViewportSnapshot(snapshot, options = {}) {
-  if (!snapshot?.logicalRange || !liveChartData?.allCharts?.length) return;
-  const animate = options.animate === true;
-  const lockAutoScale = options.lockAutoScale !== false;
-  liveChartData.allCharts.forEach((chart) => {
-    const apply = () => syncVisibleLogicalRange(chart, snapshot.logicalRange, { animate });
-    if (lockAutoScale && chart === liveChartData.priceChart) {
-      window.Viewport?.lockPriceAutoScaleDuring?.(chart, apply);
-    } else {
-      apply();
-    }
-  });
-}
-
-function restoreLiveViewportSnapshotTwice(snapshot) {
-  restoreLiveViewportSnapshot(snapshot, { animate: false });
-  requestAnimationFrame(() => {
-    restoreLiveViewportSnapshot(snapshot, { animate: false });
-    syncLiveChartPanesFromPrice();
-  });
-}
-
-function syncVisibleTimeRange(targetChart, range) {
-  if (!targetChart?.timeScale || !range) return;
-  const timeScale = targetChart.timeScale();
-  const currentRange = timeScale.getVisibleRange();
-  if (logicalRangesEqual(currentRange, range)) return;
-  timeScale.setVisibleRange(range);
-}
-
-function applyLiveViewportAfterData(chartData, klines, options = {}) {
-  if (!chartData?.allCharts?.length || !klines.length) return;
-
-  const {
-    isPrepend = false,
-    prevRange = null,
-  } = options;
-
-  const applyRange = (range, animate = false) => {
-    chartData.allCharts.forEach((chart) => syncVisibleLogicalRange(chart, range, { animate }));
-  };
-
-  if (isPrepend) {
-    return;
-  }
-
-  if (window.__pendingAnchor) {
-    runWithSuppressedHistoryLoad(() => {
-      window.Viewport?.restoreViewportToCharts(chartData, chartData.candleSeries, window.__pendingAnchor, {
-        candles: klines,
-        chartTime,
-        animate: false,
-      });
-    });
-    window.__pendingAnchor = null;
-    return;
-  }
-
-  if (prevRange) {
-    runWithSuppressedHistoryLoad(() => applyRange(prevRange, false));
-  }
-}
-
-function syncChartGroupLogicalRange(charts, sourceChart, range) {
-  if (!range || !charts?.length) return;
-  charts.forEach((targetChart) => {
-    if (targetChart !== sourceChart) {
-      syncVisibleLogicalRange(targetChart, range);
-    }
-  });
-}
-
-function syncChartGroupTimeRange(charts, sourceChart, range) {
-  if (!range || !charts?.length) return;
-  charts.forEach((targetChart) => {
-    if (targetChart !== sourceChart) {
-      syncVisibleTimeRange(targetChart, range);
-    }
-  });
-}
-
-function syncPaneCrosshairs(chartGroups) {
-  if (!chartGroups?.length) return;
-
-  chartGroups.forEach((sourceData) => {
-    const sourceChart = sourceData?.chart;
-    if (!sourceChart || sourceChart._crosshairSyncBound) return;
-    sourceChart._crosshairSyncBound = true;
-
-    sourceChart.subscribeCrosshairMove((param) => {
-      if (liveChartUpdating) return;
-      if (!param.sourceEvent) return;
-
-      const container = sourceData.container;
-      if (!container?.matches) return;
-      if (!container.matches(':hover') && !container.matches(':active')) return;
-
-      chartGroups.forEach((targetData) => {
-        const targetChart = targetData?.chart;
-        if (!targetChart || targetChart === sourceChart) return;
-
-        if (!param.point || param.time === undefined) {
-          if (typeof targetChart.clearCrosshairPosition === 'function') {
-            targetChart.clearCrosshairPosition();
-          }
-          return;
-        }
-
-        const series = typeof targetData.seriesGetter === 'function'
-          ? targetData.seriesGetter()
-          : null;
-        if (!series) return;
-
-        const price = seriesValueAtTime(series, param.time);
-        if (price != null) {
-          targetChart.setCrosshairPosition(price, param.time, series);
-        }
-      });
-    });
-  });
-}
-
-function attachProfessionalChartSync(chartData, hooks = {}) {
-  if (!chartData?.allCharts?.length) return;
-
-  const priceSeriesGetter = hooks.crosshairPriceSeries || (() => chartData.candleSeries);
-  const wozduhSeriesGetter = () => chartData.wozduxSeries?.rsiPrice || chartData.wozduhUpSeries;
-  const rsxSeriesGetter = () => chartData.rsxSeries;
-
-  const { chartContainer, oscContainer, rsxContainer } = chartData.elements || {};
-
-  chartData.allCharts.forEach((sourceChart) => {
-    sourceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (liveChartUpdating || liveHistorySuppressRangeHook || !range) return;
-
-      syncChartGroupLogicalRange(chartData.allCharts, sourceChart, range);
-
-      if (typeof hooks.onVisibleRangeChange === 'function') {
-        hooks.onVisibleRangeChange(range);
-      }
-    });
-  });
-
-  const crosshairPeers = [
-    { chart: chartData.priceChart, seriesGetter: priceSeriesGetter, container: chartContainer },
-    { chart: chartData.oscChart, seriesGetter: wozduhSeriesGetter, container: oscContainer },
-    { chart: chartData.rsxChart, seriesGetter: rsxSeriesGetter, container: rsxContainer },
-  ].filter((entry) => entry.chart && entry.container);
-
-  syncPaneCrosshairs(crosshairPeers);
-}
-
-function resetChartCrosshair(chart) {
-  if (!chart) return;
-  chart.applyOptions({ crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
-  if (typeof chart.crosshair === 'function') {
-    chart.crosshair().applyOptions({ mode: LightweightCharts.CrosshairMode.Normal });
-  }
-}
-
-function applyChartPanelResize(chart, width, height) {
-  if (!chart) return;
-  const opts = { width: Math.max(1, width) };
-  if (height > 0) opts.height = height;
-  chart.applyOptions(opts);
-  resetChartCrosshair(chart);
-}
-
-function resizeChartInstance(chartData, rootEl) {
-  if (!chartData?.elements || !rootEl) return;
-  const rootWidth = rootEl.clientWidth;
-  const { chartContainer, oscContainer, rsxContainer, priceWrap, oscWrap, rsxWrap } = chartData.elements;
-
-  applyChartPanelResize(
-    chartData.priceChart,
-    chartContainer?.clientWidth || rootWidth,
-    priceWrap?.clientHeight,
-  );
-  applyChartPanelResize(
-    chartData.oscChart,
-    oscContainer?.clientWidth || rootWidth,
-    oscWrap?.clientHeight,
-  );
-  applyChartPanelResize(
-    chartData.rsxChart,
-    rsxContainer?.clientWidth || rootWidth,
-    rsxWrap?.clientHeight,
-  );
-}
-
-function resizeChartForContainer(chartData, container) {
-  if (!chartData?.chart || !container) return;
-  resizeChartInstance(chartData, container);
-}
-
-function handleResize() {
-  const activeTab = getActiveTabId();
-
-  if (activeTab === 'tab-live') {
-    resizeChartForContainer(
-      liveChartData,
-      document.getElementById('live-chart-container'),
-    );
-  } else if (activeTab === 'tab-backtest') {
-    resizeChartForContainer(
-      backtestChartData,
-      document.getElementById('backtest-chart-container'),
-    );
-  }
-
-  if (ruler.active) {
-    updateRulerOverlay(getRulerChartData());
-  }
-}
-
-function fitChartInstance(chartData) {
-  if (!chartData?.priceChart?.timeScale) return;
-  chartData.priceChart.timeScale().fitContent();
-  forceSyncChartTimeScales(chartData);
-}
-
-function fitProfessionalChart(chartData) {
-  if (!chartData?.chart) return;
-
-  const containerId = chartData.containerId;
-  const container = containerId
-    ? document.getElementById(containerId)
-    : null;
-  if (container) {
-    resizeChartForContainer(chartData, container);
-  }
-  fitChartInstance(chartData);
-}
-
-function forceSyncChartTimeScales(chartData) {
-  if (!chartData?.priceChart?.timeScale || !chartData?.allCharts?.length) return;
-  if (liveChartUpdating) return;
-
-  const applyRange = () => {
-    if (liveChartUpdating) return false;
-    const range = chartData.priceChart.timeScale().getVisibleLogicalRange();
-    if (!range || range.from == null || range.to == null) return false;
-
-    chartData.allCharts.forEach((chart) => {
-      syncVisibleLogicalRange(chart, range);
-    });
-    return true;
-  };
-
-  if (!applyRange()) {
-    requestAnimationFrame(() => {
-      applyRange();
-      requestAnimationFrame(applyRange);
-    });
-    return;
-  }
-  requestAnimationFrame(applyRange);
-}
-
-function syncTimeScaleToAll(_sourceChart, range) {
-  if (!range || !liveChartData?.allCharts) return;
-  if (liveChartUpdating) return;
-
-  liveChartData.allCharts.forEach((chart) => {
-    syncVisibleLogicalRange(chart, range);
-  });
-  requestAnimationFrame(() => forceSyncChartTimeScales(liveChartData));
-}
-
-function seriesValueAtTime(series, time) {
-  const data = series.data();
-  for (let i = data.length - 1; i >= 0; i--) {
-    const bar = data[i];
-    if (bar.time <= time) {
-      return bar.value ?? bar.close ?? null;
-    }
-  }
-  return null;
-}
-
-function activePriceSeries() {
-  if (chartType === 'bars') return liveChartData.barSeries;
-  if (chartType === 'line') return liveChartData.lineSeries;
-  return liveChartData.candleSeries;
-}
-
-function initCharts() {
-  if (typeof LightweightCharts === 'undefined') return false;
-  if (liveChartData.chart) return true;
-
-  liveChartData = initProfessionalChart('live-chart-container', {
-    selectors: LIVE_CHART_SELECTORS,
-    navigatorPlugin: true,
-  }) || {};
-  if (!liveChartData.chart) return false;
-
-  wozduxPriceLines = liveChartData.wozduxPriceLines;
-  rsxPriceLines = liveChartData.rsxPriceLines;
-
-  attachLiveHistoryScrollArm();
-
-  attachProfessionalChartSync(liveChartData, {
-    crosshairPriceSeries: activePriceSeries,
-    onVisibleRangeChange: (range) => {
-      if (getRulerChartData() === liveChartData) updateRulerOverlay(liveChartData);
-      scheduleHistoryLoad(range);
-    },
-  });
-
-  backtestChartData = initProfessionalChart('backtest-chart-container', {
-    selectors: BACKTEST_CHART_SELECTORS,
-    overlayTrades: true,
-    navigatorPlugin: true,
-    tradeMarkers: true,
-  }) || {};
-  applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-
-  attachProfessionalChartSync(backtestChartData, {
-    crosshairPriceSeries: () => backtestChartData.candleSeries,
-    onVisibleRangeChange: (range) => {
-      if (getRulerChartData() === backtestChartData) updateRulerOverlay(backtestChartData);
-      maybeLoadBacktestHistory(range);
-    },
-  });
-
-  if (!window.__chartResizeBound) {
-    window.__chartResizeBound = true;
-    window.addEventListener('resize', () => {
-      handleResize();
-      resizeEquityChart();
-    });
-  }
-
-  initRsxSettings();
-  initWozduhSettings();
-  initChartLegends();
-  initRuler();
-  initPaneResize();
-  loadPaneHeights();
-  return true;
-}
-
-function resizeAllCharts() {
-  handleResize();
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function validPaneFlexGrow(value, fallback) {
   const n = Number(value);
@@ -3155,11 +1953,11 @@ function initControls(options = {}) {
   initTfBarInteraction();
 
   const toggles = {
-    'tog-jurik': () => [liveChartData.rsxSeries],
-    'tog-volume': () => [liveChartData.volumeSeries],
+    'tog-jurik': 'rsx',
+    'tog-volume': 'volume',
   };
 
-  Object.entries(toggles).forEach(([id, getSeriesList]) => {
+  Object.entries(toggles).forEach(([id, seriesKey]) => {
     const el = document.getElementById(id);
     if (!el) {
       console.warn(`[initControls] #${id} not found`);
@@ -3167,9 +1965,7 @@ function initControls(options = {}) {
     }
     const applyVisibility = () => {
       el.closest('.ind-toggle')?.classList.toggle('active', el.checked);
-      getSeriesList().forEach((series) => {
-        if (series) series.applyOptions({ visible: el.checked });
-      });
+      ChartAdapter.setToggleSeriesVisible('live', seriesKey, el.checked);
     };
     applyVisibility();
     el.addEventListener('change', applyVisibility);
@@ -3179,7 +1975,7 @@ function initControls(options = {}) {
   if (togSpike) {
     togSpike.addEventListener('change', (e) => {
       e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-      applyAllMarkers();
+      ChartAdapter.applyAllMarkers();
     });
   } else {
     console.warn('[initControls] #tog-spike not found');
@@ -3189,7 +1985,7 @@ function initControls(options = {}) {
   if (togFib) {
     togFib.addEventListener('change', (e) => {
       e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-      renderFibZones(lastFibZones);
+      ChartAdapter.renderFib(lastFibZones);
     });
   } else {
     console.warn('[initControls] #tog-fib not found');
@@ -3214,7 +2010,7 @@ function initControls(options = {}) {
   if (chartTypeGroup) {
     chartTypeGroup.querySelectorAll('.seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        setChartType(btn.dataset.chart);
+        ChartAdapter.setChartType(btn.dataset.chart);
         chartTypeGroup.querySelectorAll('.seg-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
       });
@@ -3415,7 +2211,7 @@ function initFloatingMenuDrag(menu) {
 
 function notifyChartsLayoutChange() {
   requestAnimationFrame(() => {
-    handleResize();
+    ChartAdapter.handleResize();
     try {
       window.dispatchEvent(new Event('resize'));
     } catch { /* noop */ }
@@ -3577,19 +2373,6 @@ function loadWozduhPrefsForContext(context) {
   return null;
 }
 
-function applyWozduhVisibilityToChart(chartData, context = 'live') {
-  if (!chartData?.wozduxSeries) return;
-  const menu = getWozduhSettingsMenu(getOscWrap(context));
-  WOZDUH_MENU_ITEMS.forEach((item) => {
-    const el = menu?.querySelector(`.wozduh-chk[data-pref-key="${item.prefKey}"]`);
-    const visible = el ? el.checked : item.default;
-    item.keys.forEach((key) => {
-      if (chartData.wozduxSeries[key]) {
-        chartData.wozduxSeries[key].applyOptions({ visible });
-      }
-    });
-  });
-}
 
 function hideWozduhSettingsMenus() {
   document.querySelectorAll('.osc-wrap .wozduh-settings-menu').forEach((menu) => {
@@ -3605,7 +2388,7 @@ function initWozduhSettings() {
     const prefs = loadWozduhPrefsForContext(context) || defaultWozduhPrefs();
     applyWozduhPrefsToMenu(menu, prefs);
     saveWozduhPrefs(context, prefs);
-    applyWozduhVisibilityToChart(context === 'backtest' ? backtestChartData : liveChartData, context);
+    ChartAdapter.applyWozduhVisibility(context);
   });
 
   document.querySelectorAll('.osc-wrap').forEach((wrap) => {
@@ -3631,10 +2414,7 @@ function initWozduhSettings() {
       el.addEventListener('change', () => {
         const prefs = readWozduhPrefsFromMenu(menu);
         saveWozduhPrefs(context, prefs);
-        applyWozduhVisibilityToChart(
-          context === 'backtest' ? backtestChartData : liveChartData,
-          context,
-        );
+        ChartAdapter.applyWozduhVisibility(context, prefs);
       });
     });
   });
@@ -3682,12 +2462,12 @@ function initRsxSettings() {
           const settings = readRsxSettingsFromMenu(context);
           const applied = setRsxSettingsState(context, settings);
           persistRsxSettings(context, applied);
-          const chartData = context === 'backtest' ? backtestChartData : liveChartData;
-          const storeData = getStoreDataForChart(chartData);
+          const chartData = context === 'backtest' ? ChartAdapter.getChartHandle('backtest') : ChartAdapter.getChartHandle('live');
+          const storeData = (chartData === ChartAdapter.getChartHandle('backtest') ? backtestStore : liveStore).getForLightweightCharts();
           const osc = storeData.osc;
           const anns = storeData.annotations;
           if (chartData?.rsxSeries && osc?.length) {
-            applyRsxData(osc, chartData, anns);
+            ChartAdapter.applyRsxData(chartData === ChartAdapter.getChartHandle('backtest') ? 'backtest' : 'live', osc, anns);
           }
         });
         return;
@@ -3710,12 +2490,6 @@ function initRsxSettings() {
   initPanelSettingsEnterNavigation();
 }
 
-function setChartType(type) {
-  chartType = type;
-  liveChartData.candleSeries.applyOptions({ visible: type === 'candles' });
-  liveChartData.barSeries.applyOptions({ visible: type === 'bars' });
-  liveChartData.lineSeries.applyOptions({ visible: type === 'line' });
-}
 
 function applyCustomTf() {
   const input = document.getElementById('tf-custom-input');
@@ -3881,31 +2655,7 @@ function resetBacktestClientCacheForTfChange() {
   backtestHistoryHasMore = true;
   backtestHistoryLoading = false;
 
-  clearNavigatorOverlays(backtestChartData);
-
-  if (backtestChartData?.candleSeries) {
-    backtestChartData.candleSeries.setData([]);
-    backtestChartData.barSeries?.setData([]);
-    backtestChartData.lineSeries?.setData([]);
-    backtestChartData.candleSeries.setMarkers([]);
-  }
-  if (backtestChartData?.rsxSeries) {
-    backtestChartData.rsxSeries.setData([]);
-    backtestChartData.rsxSeries.setMarkers([]);
-    backtestChartData.rsxSignalSeries?.setData([]);
-  }
-  if (backtestChartData?.tradeMarkerPlugin) {
-    backtestChartData.tradeMarkerPlugin.setData([]);
-  }
-  if (backtestChartData?.wozduxSeries) {
-    Object.values(backtestChartData.wozduxSeries).forEach((series) => series.setData([]));
-  }
-  if (backtestChartData?.volumeSeries) {
-    backtestChartData.volumeSeries.setData([]);
-  }
-  if (backtestChartData?.entryMarkerSeries) {
-    backtestChartData.entryMarkerSeries.setData([]);
-  }
+  ChartAdapter.clearSeries('backtest');
 }
 
 async function handleBacktestIntervalChange(newTf) {
@@ -3924,8 +2674,8 @@ async function handleBacktestIntervalChange(newTf) {
   syncToolbarToActiveContext();
   applyBacktestDateRangeLimits(tf);
 
-  const anchor = backtestChartData?.chart && backtestChartData?.candleSeries
-    ? window.Viewport?.captureViewport(backtestChartData.chart, backtestChartData.candleSeries) ?? null
+  const anchor = ChartAdapter.isInitialized('backtest')
+    ? ChartAdapter.captureViewport('backtest')
     : null;
 
   resetBacktestClientCacheForTfChange();
@@ -3974,10 +2724,8 @@ function switchLiveTimeframe(tf) {
     window.__pendingAnchor = null;
     abortLiveStateFetch();
     ++currentLiveRequestId;
-    const chart = liveChartData?.chart;
-    const series = liveChartData?.candleSeries;
-    if (chart && series) {
-      window.__pendingAnchor = window.Viewport?.captureViewport(chart, series) ?? null;
+    if (ChartAdapter.isInitialized('live')) {
+      window.__pendingAnchor = ChartAdapter.captureViewport('live');
     }
   }
 
@@ -3990,7 +2738,7 @@ function switchLiveTimeframe(tf) {
 
   if (changed) {
     clearChartData();
-    chartInitialized = false;
+    ChartAdapter.setChartInitialized(false);
   }
 
   loadDashboard({ userTfChange: changed });
@@ -4003,20 +2751,13 @@ function switchLiveTimeframe(tf) {
   }
   if (isOrderFlowTf(resolved)) {
     orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
-    applyOrderFlowTimeScale(true);
+    ChartAdapter.applyOrderFlowTimeScale(true);
   } else {
-    applyOrderFlowTimeScale(false);
+    ChartAdapter.applyOrderFlowTimeScale(false);
   }
   updateBufferingOverlay();
 }
 
-function applyOrderFlowTimeScale(enabled) {
-  if (!liveChartData.priceChart) return;
-  liveChartData.priceChart.timeScale().applyOptions({
-    secondsVisible: enabled,
-    timeVisible: true,
-  });
-}
 
 function isDashboardWsOpen() {
   return WS.isOpen();
@@ -4094,38 +2835,19 @@ function clearChartData() {
   sessionTrades = [];
   tradeMarkers = [];
   spikeMarkers = [];
-  historyLoading = false;
   isLoadingHistory = false;
-  chartInitialized = false;
-  if (!liveChartData?.candleSeries) {
+  ChartAdapter.setChartInitialized(false);
+  if (!ChartAdapter.isInitialized('live')) {
     endDataUpdate();
     return;
   }
-  liveChartData.candleSeries.setData([]);
-  liveChartData.barSeries.setData([]);
-  liveChartData.lineSeries.setData([]);
-  liveChartData.volumeSeries.setData([]);
-  liveChartData.rsxSeries.setData([]);
-  liveChartData.rsxSeries.setMarkers([]);
-  liveChartData.rsxSignalSeries?.setData([]);
-  WOZDUX_LINE_KEYS.forEach((key) => {
-    if (liveChartData.wozduxSeries[key]) liveChartData.wozduxSeries[key].setData([]);
-  });
-  if (liveChartData.wozduxSeries.rsiVolSlow) liveChartData.wozduxSeries.rsiVolSlow.setMarkers([]);
-  liveChartData.candleSeries.setMarkers([]);
-  clearNavigatorOverlays(liveChartData);
-  clearFibLines();
+  ChartAdapter.clearSeries('live');
+  ChartAdapter.clearFib();
   resetRuler();
   updateBufferingOverlay();
   endDataUpdate();
 }
 
-function clearFibLines() {
-  fibPriceLines.forEach((pl) => {
-    try { liveChartData.candleSeries.removePriceLine(pl); } catch (_) { /* noop */ }
-  });
-  fibPriceLines = [];
-}
 
 
 /** RSX/Wozduh warmup sentinel — 0 is never a valid live oscillator reading. */
@@ -4150,7 +2872,7 @@ function applyPriceBar(bar) {
   if (!shouldPaintLiveChart()) return;
 
   const delta = liveStore.getLatestDeltaForChart();
-  applyLiveChartDelta(delta);
+  ChartAdapter.applyDelta('live', delta);
 }
 
 function fmt(v) {
@@ -4169,80 +2891,12 @@ function fmtPrice(v) {
 
 
 
-function applyPriceToChart(chartData, candles, options = {}) {
-  if (!chartData?.candleSeries) return;
-  const sorted = [...(candles || [])].sort((a, b) => a.time - b.time);
-  const lineData = toLineClose(sorted);
-  lineData.sort((a, b) => a.time - b.time);
-  chartData.candleSeries.setData(sorted);
-  if (chartData.barSeries) chartData.barSeries.setData(sorted);
-  if (chartData.lineSeries) chartData.lineSeries.setData(lineData);
-  if (options.includeVolume !== false && chartData.volumeSeries) {
-    chartData.volumeSeries.setData(toVolumeBars(sorted));
-  }
-}
 
-function applyOscillatorToChart(chartData, osc, annotations = null) {
-  applyWozduxData(osc, chartData);
-  applyRsxData(osc, chartData, annotations);
-  const times = (osc || []).map((p) => chartTime(p?.time)).filter((t) => t != null);
-  applyStaticAreas(chartData, 'rsx', times, osc);
-  applyStaticAreas(chartData, 'wozduh', times, osc);
-}
 
-function applyCandleMarkers(chartData, markers) {
-  if (!chartData?.candleSeries) return;
-  chartData.candleSeries.setMarkers(
-    (markers || []).slice().sort((a, b) => a.time - b.time),
-  );
-}
 
-function wozduxMarkersFromOsc(osc) {
-  const markers = [];
-  (osc || []).forEach((d) => {
-    if (!d.volCrossMarker) return;
-    const time = chartTime(d.time);
-    if (time == null) return;
-    markers.push({
-      time: Number(time),
-      position: 'inBar',
-      color: d.volCrossMarker,
-      shape: 'circle',
-      size: 1,
-    });
-  });
-  return markers.sort((a, b) => a.time - b.time);
-}
 
-function applyWozduxData(osc, chartData = liveChartData) {
-  WOZDUX_LINE_KEYS.forEach((key) => {
-    const series = chartData.wozduxSeries?.[key];
-    if (series) series.setData(toLine(osc, key));
-  });
-  applyWozduxMarkers(osc, chartData);
-}
 
-function applyWozduxMarkers(osc, chartData = liveChartData) {
-  const markerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
-  const markerSeries = chartData.wozduxSeries?.[markerKey];
-  if (markerSeries) {
-    markerSeries.setMarkers(wozduxMarkersFromOsc(osc));
-  }
-}
 
-function updateWozduxPoint(pt, chartData = liveChartData) {
-  if (!pt) return;
-  const time = chartTime(pt?.time ?? pt?.Time);
-  if (time == null) return;
-  WOZDUX_LINE_KEYS.forEach((key) => {
-    const value = Number(pt[key]);
-    if (!Number.isFinite(value) || !chartData.wozduxSeries?.[key]) return;
-    chartData.wozduxSeries[key].update({ time, value });
-  });
-  if (pt.volCrossMarker) {
-    applyWozduxMarkers(getStoreDataForChart(chartData).osc, chartData);
-  }
-}
 
 function fmtVolume(v) {
   if (!Number.isFinite(v) || v <= 0) return '—';
@@ -4264,53 +2918,10 @@ function updateVolumeLabel(candles) {
 
 
 
-function getChartAnnotationPanes(chartData) {
-  const wozduhMarkerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
-  const panes = {
-    price: chartData?.candleSeries || null,
-    rsx: chartData?.rsxSeries || null,
-    wozduh: chartData?.wozduxSeries?.[wozduhMarkerKey] || null,
-  };
-  return Object.fromEntries(
-    Object.entries(panes).map(([pane, series]) => [pane.toLowerCase(), series]),
-  );
-}
 
 
 
-function rsxSettingsContextForChart(chartData) {
-  return chartData === backtestChartData ? 'backtest' : 'live';
-}
 
-function applyUniversalAnnotations(chartPanes, annotations, seriesTimesByPane = {}, options = {}) {
-  if (!chartPanes) return;
-  const showPivots = options.showPivots !== false;
-  const grouped = {};
-  (annotations || []).forEach((ann) => {
-    const label = String(ann?.label ?? ann?.Label ?? ann?.text ?? '').toUpperCase();
-    if (!showPivots && label === 'P') return;
-    const pane = normalizeAnnotationPane(ann?.pane);
-    const series = chartPanes[pane];
-    if (!series) {
-      console.warn('[Annotations] unknown pane', ann?.pane, '→', pane);
-      return;
-    }
-    const native = annotationToNativeMarker(ann);
-    if (!native) {
-      console.warn('[Annotations] invalid time', pane, ann?.time ?? ann?.Time);
-      return;
-    }
-    const { _rawTime, ...marker } = native;
-    if (!grouped[pane]) grouped[pane] = [];
-    grouped[pane].push(marker);
-  });
-  Object.entries(chartPanes).forEach(([pane, series]) => {
-    if (!series) return;
-    const formattedMarkers = (grouped[pane] || []).slice().sort((a, b) => a.time - b.time);
-    console.log('Applying markers to', pane, formattedMarkers);
-    series.setMarkers(formattedMarkers);
-  });
-}
 
 function mergeAnnotations(existing, incoming) {
   const map = new Map();
@@ -4339,67 +2950,7 @@ function mergeAnnotations(existing, incoming) {
   return [...map.values()].sort((a, b) => a.time - b.time);
 }
 
-function applyRsxData(osc, chartData = liveChartData, annotations = null) {
-  if (!chartData?.rsxSeries) return;
 
-  const mappedRSX = mapRSXData(osc);
-  const lineData = mappedRSX.map(({ time, value, color }) => {
-    if (isWarmupOscValue(value)) return { time };
-    return { time, value, color };
-  });
-  chartData.rsxSeries.setData(lineData);
-  if (chartData.rsxSignalSeries) {
-    chartData.rsxSignalSeries.setData(mapRSXSignalData(osc));
-  }
-
-  const seriesTimesByPane = {
-    rsx: new Set(lineData.map((d) => d.time)),
-  };
-  const resolved = annotations ?? getStoreDataForChart(chartData).annotations;
-  const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
-  applyUniversalAnnotations(getChartAnnotationPanes(chartData), resolved, seriesTimesByPane, { showPivots });
-
-  if (chartData === liveChartData) {
-    const last = mappedRSX.length ? mappedRSX[mappedRSX.length - 1] : null;
-    const rsxEl = document.getElementById('rsx-val');
-    if (rsxEl && last) {
-      rsxEl.textContent = Number.isFinite(last.value) ? last.value.toFixed(1) : '—';
-      rsxEl.style.color = last.color || RSX_DEFAULT_COLOR;
-    }
-  }
-}
-
-function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = liveChartData) {
-  if (time == null || !Number.isFinite(value)) return;
-  const t = Number(time);
-  const ptColor = color || RSX_DEFAULT_COLOR;
-  chartData.rsxSeries.update({ time: t, value, color: ptColor });
-
-  const signalVal = parseFloat(rsxSignal);
-  if (chartData.rsxSignalSeries && Number.isFinite(signalVal)) {
-    chartData.rsxSignalSeries.update({ time: t, value: signalVal });
-  }
-
-  if (marker || getDataStoreForChart(chartData).annotationCount() > 0) {
-    const storeData = getStoreDataForChart(chartData);
-    const mapped = mapRSXData(storeData.osc);
-    const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
-    applyUniversalAnnotations(
-      getChartAnnotationPanes(chartData),
-      storeData.annotations,
-      { rsx: new Set(mapped.map((d) => d.time)) },
-      { showPivots },
-    );
-  }
-
-  if (chartData === liveChartData) {
-    const rsxEl = document.getElementById('rsx-val');
-    if (rsxEl) {
-      rsxEl.textContent = value.toFixed(1);
-      rsxEl.style.color = ptColor;
-    }
-  }
-}
 
 function tradeSide(trade) {
   return String(trade?.side || trade?.action || '').toUpperCase();
@@ -4471,45 +3022,11 @@ function applyTradeMarkers() {
     .map(tradeToMarker)
     .filter(Boolean)
     .sort((a, b) => a.time - b.time);
-  applyAllMarkers();
+  ChartAdapter.setTradeMarkers(tradeMarkers);
 }
 
-function buildSpikeMarkers(osc) {
-  const markers = [];
-  (osc || []).forEach((p) => {
-    const time = chartTime(p?.time ?? p?.Time);
-    if (time == null) return;
-    if (p.volumeSpikeUp) markers.push({ time, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
-    if (p.volumeSpikeDown) markers.push({ time, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
-  });
-  return markers.sort((a, b) => a.time - b.time);
-}
 
-function applyAllMarkers() {
-  const showSpike = document.getElementById('tog-spike').checked;
-  const combined = [...tradeMarkers];
-  if (showSpike) combined.push(...spikeMarkers);
-  combined.sort((a, b) => a.time - b.time);
-  liveChartData.candleSeries.setMarkers(combined);
-}
 
-function renderFibZones(zones) {
-  lastFibZones = zones || [];
-  clearFibLines();
-  if (!document.getElementById('tog-fib').checked) return;
-  lastFibZones.forEach((z) => {
-    if (!z.isActive || !Number.isFinite(z.price)) return;
-    const color = z.ratio === 0.618 ? '#e3b341' : 'rgba(120,123,134,0.7)';
-    fibPriceLines.push(liveChartData.candleSeries.createPriceLine(normalizePriceLineLevel({
-      price: z.price,
-      color,
-      lineWidth: z.ratio === 0.618 ? 2 : 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: `${(z.ratio * 100).toFixed(1)}%`,
-    })));
-  });
-}
 
 function deriveBotStatus(data) {
   if (data.masterState) return data.masterState;
@@ -4543,7 +3060,7 @@ function switchTab(targetId) {
   }
   resetRuler();
   syncToolbarToActiveContext();
-  applyWozduhVisibilityToChart(getActiveChartData(), getActiveUiContext());
+  ChartAdapter.applyWozduhVisibility(getActiveUiContext());
 
   const nextStrategyContext = (targetId === 'tab-backtest' || targetId === 'tab-stats') ? 'backtest' : 'live';
   applyThresholdsToHeader(getStrategyState(nextStrategyContext).thresholds);
@@ -4551,7 +3068,7 @@ function switchTab(targetId) {
   if (targetId === 'tab-live') {
     pushRsxSettingsToServer(coerceRsxSettingsForAPI(liveRsxSettings))
       .then(() => {
-        if (chartInitialized && isLiveTabActive()) {
+        if (ChartAdapter.chartInitialized() && isLiveTabActive()) {
           reloadRsxChartFromServer();
         }
       })
@@ -4559,17 +3076,17 @@ function switchTab(targetId) {
   }
 
   requestAnimationFrame(() => {
-    handleResize();
+    ChartAdapter.handleResize();
 
-    if (targetId === 'tab-live' && liveChartData.chart) {
+    if (targetId === 'tab-live' && ChartAdapter.getChartHandle('live').chart) {
       wsSubscribeTf(currentTf);
-      if (!chartInitialized) {
+      if (!ChartAdapter.chartInitialized()) {
         loadDashboard();
       } else {
         beginDataUpdate();
         try {
           applySeriesData();
-          syncLiveChartPanesFromPrice();
+          ChartAdapter.syncLivePanesFromPrice();
         } finally {
           endDataUpdate(0);
         }
@@ -4577,11 +3094,11 @@ function switchTab(targetId) {
           pollLatestState();
         }
       }
-    } else if (targetId === 'tab-backtest' && backtestChartData.chart) {
-      forceSyncChartTimeScales(backtestChartData);
+    } else if (targetId === 'tab-backtest' && ChartAdapter.getChartHandle('backtest').chart) {
+      ChartAdapter.forceSyncTimeScales(ChartAdapter.getChartHandle('backtest' === ChartAdapter.getChartHandle('backtest') ? 'backtest' : 'live'));
     } else if (targetId === 'tab-stats') {
-      resizeEquityChart();
-      equityChart?.timeScale().fitContent();
+      ChartAdapter.resizeEquity();
+      ChartAdapter.fitEquityContent();
       refreshStatsForMode(statsMode);
     }
   });
@@ -4800,25 +3317,6 @@ function buildBacktestTradeMarkers(trades) {
   return buildTradeMarkerPrimitiveData(trades);
 }
 
-function buildTradeMarkerPrimitiveData(trades) {
-  const markers = [];
-  (trades || []).forEach((trade) => {
-    const entryT = chartTime(trade.entryTime || trade.EntryTime);
-    const exitT = chartTime(trade.time || trade.Time);
-    const entryP = parseFloat(trade.entryPrice ?? trade.EntryPrice);
-    const exitP = parseFloat(trade.exitPrice ?? trade.ExitPrice);
-    const side = String(trade.side || trade.Side || '').toUpperCase();
-    const isLong = side === 'LONG' || side === 'BUY';
-
-    if (entryT && Number.isFinite(entryP)) {
-      markers.push({ time: entryT, price: entryP, kind: isLong ? 'long' : 'short' });
-    }
-    if (exitT && Number.isFinite(exitP)) {
-      markers.push({ time: exitT, price: exitP, kind: 'exit' });
-    }
-  });
-  return markers.sort((a, b) => a.time - b.time);
-}
 
 function filterNavigatorLinesByTerm(lines, pane) {
   const settings = getNavigatorPaneSettingsFromUI(pane);
@@ -4847,35 +3345,6 @@ function filterNavigatorMarkersByHHLL(markers, pane) {
 
 
 
-function applyNavigatorBarColors(chartData, barColors, candles, enabled) {
-  const colorByTime = navigatorBarColorMap(barColors, candles);
-  if (!enabled || !chartData?.candleSeries || !candles?.length || colorByTime.size === 0) {
-    return candles;
-  }
-
-  const colored = candles.map((candle) => {
-    const color = colorByTime.get(candle.time);
-    if (!color) return { ...candle };
-    return {
-      ...candle,
-      color,
-      borderColor: color,
-      wickColor: color,
-    };
-  });
-
-  const applyColoredData = () => {
-    chartData.candleSeries.setData(colored);
-    if (chartData.barSeries) chartData.barSeries.setData(colored);
-  };
-  if (chartData?.priceChart) {
-    window.Viewport?.lockPriceAutoScaleDuring?.(chartData.priceChart, applyColoredData);
-  } else {
-    applyColoredData();
-  }
-
-  return colored;
-}
 
 
 
@@ -4948,311 +3417,16 @@ function resolveNavigatorResults(result) {
   return {};
 }
 
-function reapplyCachedNavigatorPlugins(chartData = backtestChartData) {
-  if (!chartData || !backtestStore.candleCount()) return;
 
-  const pricePlugin = chartData.priceNavigatorPlugin;
-  if (pricePlugin && backtestNavigatorChartLines?.length) {
-    pricePlugin.setData(backtestNavigatorChartLines);
-    pricePlugin.setLinesVisible(true);
-  }
 
-  const navMarkers = backtestNavigatorChartMarkers || [];
-  if (navMarkers.length) {
-    const storeOsc = backtestStore.getForLightweightCharts().osc;
-    applyBacktestCandleMarkers(chartData, backtestLastTrades, storeOsc, navMarkers);
-  }
-}
 
-function clearNavigatorOverlays(chartData = backtestChartData) {
-  ['price', 'rsx', 'wozduh'].forEach((pane) => {
-    syncMtfNavigatorLayerRegistry(chartData, pane, [], '');
-    const plugin = getNavigatorPluginForPane(chartData, pane);
-    plugin?.setData([]);
-    plugin?.setBackgroundZones([]);
-  });
-  backtestNavigatorChartLines = [];
-  backtestNavigatorChartMarkers = [];
-}
 
-function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, options = {}) {
-  if (!chartData) return [];
 
-  const context = options.context || (chartData === liveChartData ? 'live' : 'backtest');
-  const chartTf = resolveChartTfForNavigator(context);
-  const paneEnabled = isNavigatorPaneEnabled(pane, context);
-  const settings = getNavigatorPaneSettingsFromUI(pane, context);
-  const hasLines = navigatorData?.lines?.length > 0;
-  const hasZones = navigatorData?.backgroundZones?.length > 0;
-  const activeMtfPeriods = getActiveMtfPeriods(settings, chartTf);
-  const chartKey = normalizeMtfPeriod(chartTf);
 
-  const clearAllLayers = () => {
-    syncMtfNavigatorLayerRegistry(chartData, pane, [], chartTf);
-    const chartPlugin = getNavigatorPluginForPane(chartData, pane);
-    chartPlugin?.setData([]);
-    chartPlugin?.setBackgroundZones([]);
-    chartPlugin?.setLinesVisible(false);
-    chartPlugin?.setBackgroundVisible(false);
-  };
 
-  if (!paneEnabled || (!hasLines && !hasZones)) {
-    clearAllLayers();
-    return [];
-  }
 
-  const grouped = groupNavigatorLinesByInterval(navigatorData.lines || [], chartTf);
-  syncMtfNavigatorLayerRegistry(chartData, pane, activeMtfPeriods, chartTf);
 
-  const zones = settings.backgroundColor
-    ? mapNavigatorBackgroundZones(navigatorData.backgroundZones)
-    : [];
 
-  const pushLinesToPlugin = (targetPlugin, rawLines, isChartTf) => {
-    if (!targetPlugin) return [];
-    const mapped = filterNavigatorLinesByTerm(
-      mapNavigatorLinesForChart(rawLines, candles),
-      pane,
-    );
-    const applyPluginData = () => {
-      targetPlugin.setData(mapped);
-      if (isChartTf) {
-        targetPlugin.setBackgroundZones(zones);
-        targetPlugin.setBackgroundVisible(
-          settings.backgroundVisible !== false && settings.backgroundColor,
-        );
-      } else {
-        targetPlugin.setBackgroundZones([]);
-        targetPlugin.setBackgroundVisible(false);
-      }
-      targetPlugin.setLinesVisible(settings.linesVisible !== false);
-    };
-    const hostChart = getNavigatorPriceChart(chartData, pane);
-    if (pane === 'price' && hostChart) {
-      window.Viewport?.lockPriceAutoScaleDuring?.(hostChart, applyPluginData);
-    } else {
-      applyPluginData();
-    }
-    return mapped;
-  };
-
-  let allMappedLines = [];
-  allMappedLines = allMappedLines.concat(
-    pushLinesToPlugin(
-      getMtfNavigatorPlugin(chartData, pane, chartKey, chartTf),
-      grouped.get(chartKey) || [],
-      true,
-    ),
-  );
-
-  activeMtfPeriods.forEach((tf) => {
-    const key = normalizeMtfPeriod(tf);
-    allMappedLines = allMappedLines.concat(
-      pushLinesToPlugin(
-        getMtfNavigatorPlugin(chartData, pane, key, chartTf),
-        grouped.get(key) || [],
-        false,
-      ),
-    );
-  });
-
-  if (pane === 'price' && allMappedLines.length) {
-    console.log('Lines received:', allMappedLines.length);
-    console.log('First line sample:', allMappedLines[0]);
-  }
-
-  if (pane === 'price' && settings.barColor && navigatorHasBarColors(navigatorData.barColors)) {
-    const colored = applyNavigatorBarColors(
-      chartData,
-      navigatorData.barColors,
-      candles,
-      true,
-    );
-    if (colored && options.updateLoadedCandles !== false && context === 'backtest') {
-      colored.forEach((c) => backtestStore.upsertCandle(c));
-    }
-  }
-
-  return buildNavigatorMarkers(navigatorData, candles, pane);
-}
-
-function applyNavigatorOverlays(result, candles, chartData = backtestChartData, options = {}) {
-  const context = options.context || (chartData === liveChartData ? 'live' : 'backtest');
-  const navigators = resolveNavigatorResults(result);
-  const allNavMarkers = [];
-
-  NAVIGATOR_PANES.forEach((pane) => {
-    const navData = navigators[pane] || null;
-    const markers = applyNavigatorPaneOverlay(pane, navData, candles, chartData, { ...options, context });
-    if (pane === 'price') {
-      const lines = (isNavigatorPaneEnabled('price', context) && navData?.lines?.length)
-        ? filterNavigatorLinesByTerm(mapNavigatorLinesForChart(navData.lines, candles), pane)
-        : [];
-      if (context === 'live') {
-        liveNavigatorChartLines = lines;
-        liveNavigatorChartMarkers = markers;
-      } else if (isNavigatorPaneEnabled('price', context) && navData?.lines?.length) {
-        backtestNavigatorChartLines = lines;
-        backtestNavigatorChartMarkers = markers;
-      } else {
-        backtestNavigatorChartLines = [];
-        backtestNavigatorChartMarkers = [];
-      }
-    }
-    allNavMarkers.push(...markers);
-  });
-
-  return allNavMarkers;
-}
-
-function applyNavigatorPriceOverlay(navigatorPrice, candles) {
-  applyNavigatorOverlays({ navigatorData: navigatorPrice }, candles, backtestChartData);
-}
-
-function applyBacktestCandleMarkers(chartData, trades, osc, navigatorMarkers) {
-  const spikeMarkers = buildSpikeMarkers(osc);
-  const navMarkers = navigatorMarkers ?? backtestNavigatorChartMarkers;
-  applyCandleMarkers(chartData, [...spikeMarkers, ...navMarkers]);
-}
-
-function applyBacktestTradeMarkerPrimitive(chartData, trades) {
-  if (!chartData?.tradeMarkerPlugin) return;
-  chartData.tradeMarkerPlugin.setData(buildTradeMarkerPrimitiveData(trades));
-}
-
-function applyBacktestIndicatorPatch(result) {
-  if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-  if (!backtestChartData?.candleSeries || backtestStore.candleCount() === 0) return;
-
-  const trades = result.trades || [];
-  backtestLastTrades = trades;
-
-  const patchPayload = { oscillators: chartPointsToOsc(result.chartData) };
-  if (Array.isArray(result.annotations)) {
-    patchPayload.annotations = result.annotations;
-  }
-  backtestStore.replaceOscAndAnnotations(patchPayload);
-  buildBacktestTradeMarkers(trades);
-
-  const storeData = backtestStore.getForLightweightCharts();
-  const priceChart = backtestChartData.priceChart;
-  const prevRange = priceChart?.timeScale()?.getVisibleLogicalRange();
-
-  isUpdatingData = true;
-  try {
-    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-
-    applyNavigatorOverlays(result, storeData.candles, backtestChartData, {
-      preserveView: true,
-      updateLoadedCandles: true,
-    });
-    applyBacktestCandleMarkers(backtestChartData, trades, storeData.osc, backtestNavigatorChartMarkers);
-    applyBacktestTradeMarkerPrimitive(backtestChartData, trades);
-  } finally {
-    setTimeout(() => { isUpdatingData = false; }, 0);
-  }
-
-  if (prevRange && backtestChartData.allCharts?.length) {
-    backtestChartData.allCharts.forEach((chart) => syncVisibleLogicalRange(chart, prevRange));
-  }
-
-  renderChartLegends('backtest');
-}
-
-function applyBacktestResultToChart(result, options = {}, viewportAnchor = null) {
-  if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-
-  const anchor = viewportAnchor ?? options.viewportAnchor ?? null;
-
-  const patchIndicatorsOnly = options.patchIndicatorsOnly === true
-    || (options.patchIndicatorsOnly !== false && canPatchBacktestIndicatorsOnly(options));
-
-  const container = document.getElementById('backtest-chart-container');
-  if (container) container.classList.add('visible');
-
-  if (!backtestChartData?.candleSeries) {
-    reinitBacktestChart();
-  }
-  if (!backtestChartData.candleSeries) return;
-
-  if (patchIndicatorsOnly) {
-    applyBacktestIndicatorPatch(result);
-    applyIndicatorConfigStyles(backtestChartData);
-    return;
-  }
-
-  backtestStore.replaceFromServer(chartPointsToStorePayload(result.chartData, result.annotations));
-  backtestLastTrades = result.trades || [];
-  backtestHistoryHasMore = true;
-  backtestHistoryLoading = false;
-  buildBacktestTradeMarkers(result.trades);
-
-  const storeData = backtestStore.getForLightweightCharts();
-
-  isUpdatingData = true;
-  try {
-    applyPriceToChart(backtestChartData, storeData.candles);
-    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-
-    applyNavigatorOverlays(result, storeData.candles, backtestChartData, {
-      updateLoadedCandles: true,
-    });
-    applyBacktestCandleMarkers(backtestChartData, result.trades, storeData.osc, backtestNavigatorChartMarkers);
-    applyBacktestTradeMarkerPrimitive(backtestChartData, result.trades);
-    renderChartLegends('backtest');
-
-    applyIndicatorConfigStyles(backtestChartData);
-
-    window.Viewport?.restoreViewportToCharts(
-      backtestChartData,
-      backtestChartData.candleSeries,
-      anchor,
-      { candles: storeData.candles, chartTime, animate: false },
-    );
-  } finally {
-    setTimeout(() => { isUpdatingData = false; }, 0);
-  }
-}
-
-function initEquityChart() {
-  const container = document.getElementById('equity-chart');
-  if (!container || typeof LightweightCharts === 'undefined') return;
-
-  equityChart = LightweightCharts.createChart(container, {
-    layout: { ...sharedChartLayout(), background: { type: 'solid', color: TV.bg }, textColor: '#d1d4dc' },
-    grid: {
-      vertLines: { color: TV.grid },
-      horzLines: { color: TV.grid },
-    },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    timeScale: {
-      borderColor: TV.border,
-      timeVisible: true,
-      secondsVisible: false,
-    },
-    width: container.clientWidth,
-    height: 300,
-    rightPriceScale: {
-      borderColor: TV.border,
-      autoScale: true,
-    },
-  });
-
-  equitySeries = equityChart.addLineSeries({
-    color: TV.green,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: true,
-  });
-}
-
-function resizeEquityChart() {
-  const container = document.getElementById('equity-chart');
-  if (!equityChart || !container) return;
-  equityChart.applyOptions({ width: container.clientWidth, height: 300 });
-}
 
 function formatStatNum(value, digits = 2) {
   const n = Number(value);
@@ -5286,7 +3460,7 @@ function renderStatsDashboard(data, mode) {
     setStatValue('stat-profit-factor', 0, 2, false);
     setStatValue('stat-max-drawdown', 0, 2, false);
     setStatValue('stat-recovery-factor', 0, 2, false);
-    if (equitySeries) equitySeries.setData([]);
+    ChartAdapter.setEquityData([]);
     const tbody = document.getElementById('trade-history-body');
     if (tbody) {
       const hint = mode === 'backtest'
@@ -5304,11 +3478,11 @@ function renderStatsDashboard(data, mode) {
   setStatValue('stat-max-drawdown', data.maxDrawdown, 2, false);
   setStatValue('stat-recovery-factor', data.recoveryFactor, 2, false);
 
-  if (equitySeries && Array.isArray(data.equityCurve)) {
-    equitySeries.setData(
+  if (Array.isArray(data.equityCurve)) {
+    ChartAdapter.setEquityData(
       data.equityCurve.map((p) => ({ time: p.time, value: p.value })),
     );
-    equityChart?.timeScale().fitContent();
+    ChartAdapter.fitEquityContent();
   }
 
   const tbody = document.getElementById('trade-history-body');
@@ -5448,10 +3622,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     || (canPatchBacktestIndicatorsOnly(options) && backtestStore.candleCount() > 0)
   );
 
-  const anchor = options.viewportAnchor
-    ?? (backtestChartData?.chart && backtestChartData?.candleSeries
-      ? window.Viewport?.captureViewport(backtestChartData.chart, backtestChartData.candleSeries)
-      : null);
+  const anchor = options.viewportAnchor ?? ChartAdapter.captureViewport('backtest');
 
   const symbol = document.getElementById('bt-symbol')?.value.trim() || 'BTCUSDT';
   const interval = normalizeTf(
@@ -5521,7 +3692,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       return;
     }
 
-    applyBacktestResultToChart(result, {
+    ChartAdapter.applyBacktestResult(result, {
       patchIndicatorsOnly,
     }, anchor);
     renderBacktestStats(result);
@@ -5621,41 +3792,8 @@ function updateHeader(state) {
   }
 }
 
-function setAllPriceData(candles) {
-  const sorted = [...(candles || [])].sort((a, b) => a.time - b.time);
-  const lineData = toLineClose(sorted);
-  lineData.sort((a, b) => a.time - b.time);
-  liveChartData.candleSeries.setData(sorted);
-  liveChartData.barSeries.setData(sorted);
-  liveChartData.lineSeries.setData(lineData);
-}
 
-function updateAllPriceSeries(bar) {
-  const normalized = normalizeCandle(bar);
-  if (!normalized) return;
-  liveChartData.candleSeries.update(normalized);
-  liveChartData.barSeries.update(normalized);
-  liveChartData.lineSeries.update({ time: normalized.time, value: normalized.close });
-  if (normalized.volume != null) {
-    liveChartData.volumeSeries.update({
-      time: normalized.time,
-      value: normalized.volume,
-      color: normalized.close >= normalized.open ? CHART_STYLES.volumeBar.upColor : CHART_STYLES.volumeBar.downColor,
-    });
-    updateVolumeLabel(liveStore.candleCount() ? liveStore.getForLightweightCharts().candles : [normalized]);
-  }
-  if (tradeMarkers.length > 0) {
-    applyAllMarkers();
-  }
-}
 
-function syncLiveChartPanesFromPrice() {
-  if (!liveChartData?.allCharts?.length || !liveChartData?.priceChart) return;
-  const mainRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
-  if (mainRange) {
-    syncChartGroupLogicalRange(liveChartData.allCharts, liveChartData.priceChart, mainRange);
-  }
-}
 
 function applySeriesData(options = {}) {
   const {
@@ -5664,14 +3802,14 @@ function applySeriesData(options = {}) {
     preserveViewport = null,
   } = options;
   let prevRange = preserveViewport?.logicalRange ?? null;
-  if (!prevRange && !isPrepend && shouldPaintLiveChart() && liveChartData?.priceChart) {
-    prevRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
+  if (!prevRange && !isPrepend && shouldPaintLiveChart()) {
+    prevRange = ChartAdapter.getVisibleLogicalRange('live');
   }
 
   const prependOldTotal = prependPrevRange?.oldTotal;
   let prependOldRange = null;
-  if (isPrepend && liveChartData?.priceChart?.timeScale) {
-    prependOldRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
+  if (isPrepend) {
+    prependOldRange = ChartAdapter.getVisibleLogicalRange('live');
   }
 
   const storeData = liveStore.getForLightweightCharts();
@@ -5679,19 +3817,14 @@ function applySeriesData(options = {}) {
 
   if (!shouldPaintLiveChart()) return;
 
-  applyPriceToChart(liveChartData, candles);
-  updateVolumeLabel(candles);
-  applyOscillatorToChart(liveChartData, storeData.osc, storeData.annotations);
-  applyWozduhVisibilityToChart(liveChartData, 'live');
-  spikeMarkers = buildSpikeMarkers(storeData.osc);
-  applyTradeMarkers();
+  ChartAdapter.applyFullData('live', storeData);
+  ChartAdapter.setSpikeMarkers(buildSpikeMarkers(storeData.osc));
+  ChartAdapter.applyAllMarkers();
   if (liveNavigatorResult) {
-    applyNavigatorOverlays(
-      { navigators: liveNavigatorResult },
-      candles,
-      liveChartData,
-      { context: 'live', updateLoadedCandles: false },
-    );
+    ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, candles, {
+      context: 'live',
+      updateLoadedCandles: false,
+    });
   }
   updateBufferingOverlay();
 
@@ -5703,21 +3836,22 @@ function applySeriesData(options = {}) {
         to: prependOldRange.to + shiftCount,
       };
       runWithSuppressedHistoryLoad(() => {
-        liveChartData.allCharts.forEach((chart) => {
-          syncVisibleLogicalRange(chart, nextRange, { animate: false });
+        const liveHandle = ChartAdapter.getChartHandle('live');
+        liveHandle.allCharts.forEach((chart) => {
+          ChartAdapter.syncVisibleLogicalRange(chart, nextRange, { animate: false });
         });
       });
     }
     return;
   }
 
-  applyLiveViewportAfterData(liveChartData, candles, {
+  ChartAdapter.applyLiveViewportAfterData(candles, {
     prevRange,
     isPrepend,
   });
 
   if (preserveViewport?.logicalRange) {
-    restoreLiveViewportSnapshotTwice(preserveViewport);
+    ChartAdapter.restoreLiveViewportTwice(preserveViewport);
   }
 }
 
@@ -5729,7 +3863,7 @@ function applyLatestOscPoint(pt) {
   }
   liveStore.upsertOscPoint(pt);
   const delta = liveStore.getLatestDeltaForChart();
-  applyLiveChartDelta(delta);
+  ChartAdapter.applyDelta('live', delta);
 }
 
 function renderState(data, options = {}) {
@@ -5774,10 +3908,10 @@ function renderState(data, options = {}) {
       isPrepend: options.isPrepend === true,
       prependPrevRange: options.prependPrevRange ?? null,
     });
-    renderFibZones(data.fibZones);
+    ChartAdapter.renderFib(data.fibZones);
     if (liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
       if (!options.preserveViewport?.logicalRange && !options.isPrepend) {
-        syncLiveChartPanesFromPrice();
+        ChartAdapter.syncLivePanesFromPrice();
       }
     }
   } finally {
@@ -5785,7 +3919,7 @@ function renderState(data, options = {}) {
   }
 
   // График полностью загружен историей, теперь WebSocket может рисовать новые тики
-  chartInitialized = true;
+  ChartAdapter.setChartInitialized(true);
   updateBufferingOverlay();
 }
 
@@ -5811,11 +3945,11 @@ async function pollOrderFlowState() {
     beginDataUpdate();
     try {
       applySeriesData();
-      syncLiveChartPanesFromPrice();
+      ChartAdapter.syncLivePanesFromPrice();
     } finally {
       endDataUpdate(0);
     }
-    chartInitialized = true;
+    ChartAdapter.setChartInitialized(true);
   } catch (err) {
     console.error('pollOrderFlowState:', err);
   }
@@ -5823,9 +3957,9 @@ async function pollOrderFlowState() {
 
 async function pollLatestState() {
   if (!shouldPaintLiveChart()) return;
-  if (!chartInitialized) return;
+  if (!ChartAdapter.chartInitialized()) return;
   if (isOrderFlowTf()) return;
-  if (liveChartUpdating) return;
+  if (ChartAdapter.isLiveUpdating()) return;
   if (!shouldRunLivePoll()) return;
   try {
     const { warmingUp, data } = await API.fetchPollState({
@@ -5872,10 +4006,10 @@ async function pollLatestState() {
     }
 
     const delta = liveStore.getLatestDeltaForChart();
-    applyLiveChartDelta(delta);
+    ChartAdapter.applyDelta('live', delta);
     endDataUpdate();
   } catch (err) {
-    liveChartUpdating = false;
+    ChartAdapter.setLiveUpdating(false);
     console.error('pollLatestState:', err);
   }
 }
@@ -5900,7 +4034,7 @@ async function loadDashboard(options = {}) {
     if (reqId !== currentLiveRequestId) return;
     if (syncTradingTimeframeFromState(data) && !options._tfSyncRetried) {
       clearChartData();
-      chartInitialized = false;
+      ChartAdapter.setChartInitialized(false);
       return loadDashboard({ ...options, _tfSyncRetried: true });
     }
     if (reqId !== currentLiveRequestId) return;
@@ -5912,7 +4046,7 @@ async function loadDashboard(options = {}) {
       if (data.status === 'ready') {
         renderState({ ...data, candles: data.candles || [], oscillators: data.oscillators || [] }, options);
         if (isOrderFlowTf(currentTf)) {
-          chartInitialized = true;
+          ChartAdapter.setChartInitialized(true);
           updateBufferingOverlay();
         }
         return;
@@ -5930,7 +4064,7 @@ async function loadDashboard(options = {}) {
     console.error('loadDashboard:', err);
     if (isOrderFlowTf(currentTf)) {
       clearChartData();
-      chartInitialized = true;
+      ChartAdapter.setChartInitialized(true);
       updateBufferingOverlay();
       return;
     }
@@ -5943,7 +4077,7 @@ async function maybeLoadBacktestHistory(range) {
   if (window.__isSettingsUpdating) return;
   if (!isBacktestTabActive()) return;
   if (!range || backtestHistoryLoading || !backtestHistoryHasMore || backtestStore.candleCount() === 0) return;
-  if (range.from >= 50) return;
+  if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
 
   const firstTime = backtestStore.firstCandleTimeSec();
   if (firstTime == null) return;
@@ -5967,39 +4101,34 @@ async function maybeLoadBacktestHistory(range) {
       return;
     }
 
-    const prependOldRange = backtestChartData.priceChart?.timeScale()?.getVisibleLogicalRange() ?? null;
-    const oldLen = backtestStore.candleCount();
-    backtestStore.prependHistory(chartPointsToStorePayload(data.chartData, data.annotations));
-    const added = backtestStore.candleCount() - oldLen;
+    const prependOldRange = ChartAdapter.getVisibleLogicalRange('backtest') ?? null;
+    const { added } = backtestStore.prependHistory(
+      chartPointsToStorePayload(data.chartData, data.annotations),
+    );
+    backtestHistoryHasMore = data.hasMore !== false;
+
     if (added === 0) {
-      backtestHistoryHasMore = data.hasMore !== false;
+      backtestHistoryHasMore = false;
+      console.warn('History pagination stalled: Zero overlap.');
       return;
     }
 
     const storeData = backtestStore.getForLightweightCharts();
 
-    applyPriceToChart(backtestChartData, storeData.candles);
-    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-    applyBacktestCandleMarkers(backtestChartData, backtestLastTrades, storeData.osc);
-    applyBacktestTradeMarkerPrimitive(backtestChartData, backtestLastTrades);
-
-    if (prependOldRange != null && added > 0) {
-      const nextRange = {
-        from: prependOldRange.from + added,
-        to: prependOldRange.to + added,
-      };
-      backtestChartData.allCharts.forEach((chart) => {
-        syncVisibleLogicalRange(chart, nextRange, { animate: false });
-      });
-    }
+    ChartAdapter.applyFullData('backtest', storeData, {
+      isPrepend: true,
+      addedCount: added,
+      prependOldRange,
+    });
+    ChartAdapter.applyWozduhVisibility('backtest');
+    ChartAdapter.applyBacktestMarkers(backtestLastTrades, storeData.osc);
 
     backtestHistoryHasMore = data.hasMore !== false && added > 0;
 
     if (added > 0 && backtestHistoryHasMore) {
       requestAnimationFrame(() => {
-        const nextRange = backtestChartData.priceChart?.timeScale()?.getVisibleLogicalRange();
-        if (nextRange && nextRange.from < 50) {
+        const nextRange = ChartAdapter.getVisibleLogicalRange('backtest');
+        if (nextRange && nextRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
           maybeLoadBacktestHistory(nextRange);
         }
       });
@@ -6022,9 +4151,9 @@ async function fetchLiveHistory(endTimeSec) {
 
 async function maybeLoadHistory(range, options = {}) {
   const force = options.force === true;
-  if (isLoadingHistory || historyLoading || !historyHasMore) return Promise.resolve();
+  if (isLoadingHistory || !historyHasMore) return Promise.resolve();
   if (!shouldPaintLiveChart()) return;
-  if (!chartInitialized || !liveHistoryScrollArmed) return;
+  if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (!range || liveStore.candleCount() === 0) return;
   if (!force && range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
 
@@ -6033,10 +4162,9 @@ async function maybeLoadHistory(range, options = {}) {
   const endTimeSec = Number(firstTime);
   const epoch = liveHistoryEpoch;
   const reqId = currentLiveRequestId;
-  const oldLen = liveStore.candleCount();
+  const prependOldRange = ChartAdapter.getVisibleLogicalRange('live');
 
   isLoadingHistory = true;
-  historyLoading = true;
 
   try {
     const data = await fetchLiveHistory(endTimeSec);
@@ -6046,30 +4174,46 @@ async function maybeLoadHistory(range, options = {}) {
       return;
     }
 
-    liveStore.prependHistory({
+    const { added } = liveStore.prependHistory({
       candles: toCandles(data.candles),
       oscillators: data.oscillators || [],
       annotations: data.annotations,
     });
     historyHasMore = data.hasMore !== false;
 
+    if (added === 0) {
+      historyHasMore = false;
+      console.warn('History pagination stalled: Zero overlap.');
+      return;
+    }
+
     beginDataUpdate();
     try {
-      applySeriesData({
+      const storeData = liveStore.getForLightweightCharts();
+      ChartAdapter.applyFullData('live', storeData, {
         isPrepend: true,
-        prependPrevRange: { oldTotal: oldLen },
+        addedCount: added,
+        prependOldRange,
       });
+      ChartAdapter.setSpikeMarkers(buildSpikeMarkers(storeData.osc));
+      ChartAdapter.applyAllMarkers();
+      if (liveNavigatorResult) {
+        ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, storeData.candles, {
+          context: 'live',
+          updateLoadedCandles: false,
+        });
+      }
+      updateBufferingOverlay();
     } finally {
       endDataUpdate(0);
     }
-    updateBufferingOverlay();
+
     if (!historyHasMore || epoch !== liveHistoryEpoch) return;
 
-    const added = liveStore.candleCount() - oldLen;
     if (added > 0) {
       requestAnimationFrame(() => {
         if (epoch !== liveHistoryEpoch || !liveHistoryScrollArmed) return;
-        const nextRange = liveChartData.priceChart?.timeScale().getVisibleLogicalRange();
+        const nextRange = ChartAdapter.getVisibleLogicalRange('live');
         if (nextRange && nextRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
           scheduleHistoryLoad(nextRange);
         }
@@ -6079,15 +4223,14 @@ async function maybeLoadHistory(range, options = {}) {
     console.error('lazy history:', err);
   } finally {
     isLoadingHistory = false;
-    historyLoading = false;
   }
 }
 
 function scheduleHistoryLoad(range, options = {}) {
   if (!range || !historyHasMore) return;
-  if (!chartInitialized || !liveHistoryScrollArmed) return;
+  if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
-  if (liveChartUpdating) {
+  if (ChartAdapter.isLiveUpdating()) {
     pendingHistoryLoad = { range, options };
     return;
   }
@@ -6115,7 +4258,7 @@ function handleLiveTick(d) {
   }
 
   if (!shouldPaintLiveChart()) return;
-  if (!chartInitialized) return;
+  if (!ChartAdapter.chartInitialized()) return;
 
   const bar = normalizeCandle({
     time, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume,
@@ -6178,45 +4321,29 @@ function ensureRulerElements(chartData) {
   }
 }
 
-function rulerPriceSeries(chartData) {
-  if (chartData === liveChartData) return activePriceSeries();
-  return chartData?.candleSeries;
-}
 
 function getRulerChartData() {
-  return ruler.chartData || getActiveChartData();
+  return ruler.chartData || ChartAdapter.getChartHandle(isBacktestTabActive() ? 'backtest' : 'live');
 }
 
-function attachRulerToChart(chartData) {
-  if (!chartData?.priceChart || chartData.rulerAttached) return;
-  ensureRulerElements(chartData);
-
-  const clickHandler = (param) => onRulerClick(param, chartData);
-  const moveHandler = (param) => onRulerMove(param, chartData);
-  chartData.priceChart.subscribeClick(clickHandler);
-  chartData.priceChart.subscribeCrosshairMove(moveHandler);
-  chartData._rulerClickHandler = clickHandler;
-  chartData._rulerMoveHandler = moveHandler;
-  chartData.rulerAttached = true;
-}
 
 function initRuler() {
-  attachRulerToChart(liveChartData);
-  attachRulerToChart(backtestChartData);
+  ChartAdapter.attachRuler(ChartAdapter.getChartHandle('live'));
+  ChartAdapter.attachRuler(ChartAdapter.getChartHandle('backtest'));
 }
 
 function setRulerCursor(active) {
-  [liveChartData, backtestChartData].forEach((chartData) => {
+  [ChartAdapter.getChartHandle('live'), ChartAdapter.getChartHandle('backtest')].forEach((chartData) => {
     const wrap = chartData?.elements?.priceWrap;
     if (!wrap) return;
-    const isActiveChart = chartData === getActiveChartData();
+    const isActiveChart = chartData === ChartAdapter.getChartHandle(isBacktestTabActive() ? 'backtest' : 'live');
     wrap.style.cursor = active && isActiveChart ? 'crosshair' : '';
   });
 }
 
 function toggleRuler() {
   ruler.active = !ruler.active;
-  ruler.chartData = getActiveChartData();
+  ruler.chartData = ChartAdapter.getChartHandle(isBacktestTabActive() ? 'backtest' : 'live');
   document.getElementById('ruler-btn')?.classList.toggle('active', ruler.active);
   setRulerCursor(ruler.active);
   if (!ruler.active) resetRuler();
@@ -6239,43 +4366,39 @@ function onRulerClick(param, chartData) {
     return;
   }
 
-  const series = rulerPriceSeries(chartData);
-  const price = series?.coordinateToPrice(param.point.y);
-  const time = chartData.priceChart.timeScale().coordinateToTime(param.point.x);
-  if (price == null || time == null) return;
+  const point = ChartAdapter.rulerPointFromParam(chartData, param);
+  if (!point) return;
 
   if (ruler.state === RULER_IDLE) {
-    ruler.p1 = { time, price };
-    ruler.p2 = { time, price };
+    ruler.p1 = point;
+    ruler.p2 = point;
     ruler.state = RULER_MEASURING;
     return;
   }
 
   if (ruler.state === RULER_MEASURING) {
-    ruler.p2 = { time, price };
+    ruler.p2 = point;
     ruler.state = RULER_FIXED;
-    updateRulerOverlay(chartData);
+    ChartAdapter.updateRulerOverlay(chartData);
   }
 }
 
 function onRulerMove(param, chartData) {
   if (!ruler.active || chartData !== getRulerChartData()) return;
-  if (chartData === backtestChartData ? isUpdatingData : liveChartUpdating) return;
+  if (chartData === ChartAdapter.getChartHandle('backtest') ? isUpdatingData : ChartAdapter.isLiveUpdating()) return;
   if (ruler.state !== RULER_MEASURING || !param.point) return;
 
-  const series = rulerPriceSeries(chartData);
-  const price = series?.coordinateToPrice(param.point.y);
-  const time = chartData.priceChart.timeScale().coordinateToTime(param.point.x);
-  if (price == null || time == null) return;
+  const point = ChartAdapter.rulerPointFromParam(chartData, param);
+  if (!point) return;
 
-  ruler.p2 = { time, price };
-  updateRulerOverlay(chartData);
+  ruler.p2 = point;
+  ChartAdapter.updateRulerOverlay(chartData);
 }
 
 function countBarsBetween(t1, t2, chartData) {
   const lo = Math.min(t1, t2);
   const hi = Math.max(t1, t2);
-  const candles = chartData === backtestChartData
+  const candles = chartData === ChartAdapter.getChartHandle('backtest')
     ? backtestStore.getForLightweightCharts().candles
     : liveStore.getForLightweightCharts().candles;
   return candles.filter((c) => c.time >= lo && c.time <= hi).length;
@@ -6292,60 +4415,6 @@ function formatDuration(barCount, tf) {
   return `${barCount} bars, ${h}h ${m}m`;
 }
 
-function updateRulerOverlay(chartData) {
-  chartData = chartData || getRulerChartData();
-  ensureRulerElements(chartData);
-
-  const shade = chartData.rulerShade;
-  const tooltip = chartData.rulerTooltip;
-  const wrap = chartData.elements?.priceWrap;
-  const series = rulerPriceSeries(chartData);
-
-  if (!shade || !tooltip || !wrap || !series) return;
-
-  if (ruler.state === RULER_IDLE || !ruler.p1 || !ruler.p2) {
-    shade.style.display = 'none';
-    tooltip.style.display = 'none';
-    return;
-  }
-
-  const x1 = chartData.priceChart.timeScale().timeToCoordinate(ruler.p1.time);
-  const x2 = chartData.priceChart.timeScale().timeToCoordinate(ruler.p2.time);
-  const y1 = series.priceToCoordinate(ruler.p1.price);
-  const y2 = series.priceToCoordinate(ruler.p2.price);
-
-  if (x1 == null || x2 == null || y1 == null || y2 == null) {
-    shade.style.display = 'none';
-    tooltip.style.display = 'none';
-    return;
-  }
-
-  const left = Math.min(x1, x2);
-  const top = Math.min(y1, y2);
-  const width = Math.abs(x2 - x1);
-  const height = Math.abs(y2 - y1);
-
-  shade.style.display = 'block';
-  shade.style.left = `${left}px`;
-  shade.style.top = `${top}px`;
-  shade.style.width = `${Math.max(width, 2)}px`;
-  shade.style.height = `${Math.max(height, 2)}px`;
-
-  const delta = ruler.p2.price - ruler.p1.price;
-  const pct = ruler.p1.price !== 0 ? (delta / ruler.p1.price) * 100 : 0;
-  const bars = countBarsBetween(ruler.p1.time, ruler.p2.time, chartData);
-  const sign = delta >= 0 ? '+' : '';
-
-  tooltip.style.display = 'block';
-  tooltip.innerHTML = `
-    <div class="pct">${sign}${fmtPrice(delta)} (${sign}${pct.toFixed(2)}%)</div>
-    <div>${formatDuration(bars)}</div>
-  `;
-
-  const tipLeft = left + width / 2 - 60;
-  tooltip.style.left = `${Math.max(4, Math.min(tipLeft, wrap.clientWidth - 140))}px`;
-  tooltip.style.top = `${Math.max(4, top - 52)}px`;
-}
 
 function safeInit(moduleName, fn) {
   try {
@@ -6369,14 +4438,55 @@ function boot() {
 
   (async () => {
     try {
-      if (typeof LightweightCharts === 'undefined') {
+      if (typeof LightweightCharts === 'undefined' || typeof ChartAdapter === 'undefined') {
         setTimeout(boot, 500);
         return;
       }
 
       let chartsReady = false;
       try {
-        chartsReady = initCharts();
+        chartsReady = ChartAdapter.initLiveCharts(LIVE_CHART_SELECTORS, {
+          shouldPaint: shouldPaintLiveChart,
+          onAfterDelta: updateBufferingOverlay,
+          crosshairPriceSeries: () => {
+            const t = ChartAdapter.getChartType();
+            const h = ChartAdapter.getChartHandle('live');
+            if (t === 'bars') return h.barSeries;
+            if (t === 'line') return h.lineSeries;
+            return h.candleSeries;
+          },
+          onVisibleRangeChange: (range) => {
+            if (getRulerChartData() === ChartAdapter.getChartHandle('live')) {
+              ChartAdapter.updateRulerOverlay(ChartAdapter.getChartHandle('live'));
+            }
+          },
+          onScrollHistory: (range) => scheduleHistoryLoad(range),
+          onLiveInit: () => {
+            attachLiveHistoryScrollArm();
+          },
+          applyTradeMarkers: () => ChartAdapter.applyAllMarkers(),
+        });
+        if (chartsReady) {
+          ChartAdapter.initBacktestCharts(BACKTEST_CHART_SELECTORS, {
+            crosshairPriceSeries: () => ChartAdapter.getChartHandle('backtest').candleSeries,
+            onVisibleRangeChange: (range) => {
+              if (getRulerChartData() === ChartAdapter.getChartHandle('backtest')) {
+                ChartAdapter.updateRulerOverlay(ChartAdapter.getChartHandle('backtest'));
+              }
+            },
+            onScrollHistory: (range) => maybeLoadBacktestHistory(range),
+            onBacktestInit: () => {
+              ChartAdapter.attachRuler(ChartAdapter.getChartHandle('backtest'));
+              renderChartLegends('backtest');
+            },
+          });
+          initRsxSettings();
+          initWozduhSettings();
+          initChartLegends();
+          ChartAdapter.initRuler();
+          initPaneResize();
+          loadPaneHeights();
+        }
       } catch (err) {
         console.error('Failed to init charts:', err);
       }
@@ -6389,7 +4499,7 @@ function boot() {
       syncToolbarToActiveContext();
 
       if (isOrderFlowTf()) {
-        applyOrderFlowTimeScale(true);
+        ChartAdapter.applyOrderFlowTimeScale(true);
       }
 
       liveNavigatorSettingsSynced = true;
@@ -6405,7 +4515,7 @@ function boot() {
         orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
       }
 
-      requestAnimationFrame(() => handleResize());
+      requestAnimationFrame(() => ChartAdapter.handleResize());
       isAppInitialized = true;
     } catch (err) {
       console.error('boot failed:', err);

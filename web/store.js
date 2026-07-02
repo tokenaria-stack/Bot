@@ -145,16 +145,55 @@ class ChartDataStore {
   }
 
   prependHistory(payload) {
+    let added = 0;
+    let rejected = 0;
     const anchorMs = this.sortedCandleTimesMs()[0] ?? null;
 
     (payload.candles || []).forEach((c) => {
-      this._ingestCandle(c, { allowOverwrite: false, anchorMs });
+      const bar = normalizeCandle(c);
+      if (!bar) {
+        rejected += 1;
+        return;
+      }
+      const ms = ChartDataStore.toMs(bar.time);
+      if (!ms) {
+        rejected += 1;
+        return;
+      }
+      if (anchorMs != null && ms >= anchorMs) {
+        rejected += 1;
+      } else if (!this.candles.has(ms)) {
+        this.candles.set(ms, { ...bar, timeMs: ms });
+        added += 1;
+      } else {
+        rejected += 1;
+      }
     });
+
     (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: false, anchorMs });
+      const norm = normalizeOscPoint(o);
+      if (!norm) {
+        rejected += 1;
+        return;
+      }
+      const ms = ChartDataStore.toMs(norm.time);
+      if (!ms) {
+        rejected += 1;
+        return;
+      }
+      if (anchorMs != null && ms >= anchorMs) {
+        rejected += 1;
+      } else if (!this.osc.has(ms)) {
+        this.osc.set(ms, { ...norm, timeMs: ms });
+      } else {
+        rejected += 1;
+      }
     });
+
     this._ingestAnnotations(payload.annotations, anchorMs);
     this._resetDirtyState();
+
+    return { added, rejected, anchorMs };
   }
 
   upsertCandle(c) {
