@@ -313,9 +313,9 @@ async function reloadRsxChartFromServer() {
       liveStore.replaceOscAndAnnotations({
         oscillators: data.oscillators,
         annotations: data.annotations,
-      });
+      }, getLiveStoreTf());
     } else if (data?.oscillators?.length) {
-      liveStore.replaceOscAndAnnotations({ oscillators: data.oscillators });
+      liveStore.replaceOscAndAnnotations({ oscillators: data.oscillators }, getLiveStoreTf());
     }
 
     beginDataUpdate();
@@ -371,18 +371,15 @@ function scheduleRsxSettingsSync(context = 'live') {
 }
 
 function getIntervalMs(tf) {
-  const raw = String(tf || '1m').toLowerCase();
-  const unit = raw.slice(-1);
-  const val = parseInt(raw, 10);
-  if (!Number.isFinite(val) || val <= 0) return 60000;
-  switch (unit) {
-    case 's': return val * 1000;
-    case 'm': return val * 60000;
-    case 'h': return val * 3600000;
-    case 'd': return val * 86400000;
-    case 'w': return val * 604800000;
-    default: return 60000;
-  }
+  return TimeNormalizer.getIntervalMs(tf);
+}
+
+function getLiveStoreTf() {
+  return TimeframeController.getActiveTf();
+}
+
+function getBacktestStoreTf() {
+  return BacktestController.getFormValues().interval || backtestTf || '15m';
 }
 
 /** Reject live ticks when viewing deep history (microscope mode). Times in Unix seconds. */
@@ -839,13 +836,13 @@ function applyPriceBar(bar) {
   if (!bar) return;
   const last = liveStore.lastCandleChartSec();
   if (last && last.time === bar.time) {
-    liveStore.upsertCandle(bar);
+    liveStore.upsertCandle(bar, getLiveStoreTf());
   } else if (!last || bar.time >= last.time) {
     if (last && isLiveTickGapTooLarge(last.time, bar.time)) {
       console.warn(`Time gap too large (${bar.time} vs ${last.time}). Ignoring live tick in history mode.`);
       return;
     }
-    liveStore.upsertCandle(bar);
+    liveStore.upsertCandle(bar, getLiveStoreTf());
   } else {
     return;
   }
@@ -1001,7 +998,7 @@ function tradesToStoreAnnotations(trades) {
 }
 
 function buildBacktestTradeMarkers(trades) {
-  backtestStore._ingestAnnotations(tradesToStoreAnnotations(trades));
+  backtestStore._ingestAnnotations(tradesToStoreAnnotations(trades), getBacktestStoreTf());
   return buildTradeMarkerPrimitiveData(trades);
 }
 
@@ -1162,8 +1159,6 @@ function applySeriesData(options = {}) {
   if (!shouldPaintLiveChart()) return;
 
   ChartAdapter.applyFullData('live', storeData);
-  ChartAdapter.setSpikeMarkers(buildSpikeMarkers(storeData.osc));
-  ChartAdapter.applyAllMarkers();
   if (liveNavigatorResult) {
     ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, candles, {
       context: 'live',
@@ -1205,7 +1200,7 @@ function applyLatestOscPoint(pt) {
   if (latestCandleTime != null && pt.time !== latestCandleTime) {
     pt = { ...pt, time: latestCandleTime };
   }
-  liveStore.upsertOscPoint(pt);
+  liveStore.upsertOscPoint(pt, getLiveStoreTf());
   syncLiveRsxToolbarFromOsc(pt);
   const delta = liveStore.getLatestDeltaForChart();
   ChartAdapter.applyDelta('live', delta);
@@ -1222,7 +1217,7 @@ function renderState(data, options = {}) {
     candles: toCandles(data.candles),
     oscillators: data.oscillators || [],
     annotations: data.annotations,
-  });
+  }, getLiveStoreTf());
   const oscPts = data.oscillators || [];
   if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
   const storeData = liveStore.getForLightweightCharts();
@@ -1288,7 +1283,7 @@ async function pollOrderFlowState() {
       candles,
       oscillators: data.oscillators || [],
       annotations: data.annotations,
-    });
+    }, getLiveStoreTf());
     beginDataUpdate();
     try {
       applySeriesData();
@@ -1325,13 +1320,13 @@ async function pollLatestState() {
 
     const last = liveStore.lastCandleChartSec();
     if (last && last.time === latest.time) {
-      liveStore.upsertCandle(latest);
+      liveStore.upsertCandle(latest, getLiveStoreTf());
     } else if (!last || latest.time > last.time) {
       if (last && isLiveTickGapTooLarge(last.time, latest.time)) {
         console.warn(`Time gap too large (${latest.time} vs ${last.time}). Ignoring live poll tick in history mode.`);
         return;
       }
-      liveStore.upsertCandle(latest);
+      liveStore.upsertCandle(latest, getLiveStoreTf());
     } else {
       return;
     }
@@ -1345,7 +1340,7 @@ async function pollLatestState() {
       if (latestCandleTime != null && pt.time !== latestCandleTime) {
         pt = { ...pt, time: latestCandleTime };
       }
-      liveStore.upsertOscPoint(pt);
+      liveStore.upsertOscPoint(pt, getLiveStoreTf());
       syncLiveRsxToolbarFromOsc(pt);
     }
 
@@ -1447,6 +1442,7 @@ async function maybeLoadBacktestHistory(range) {
     const prependOldRange = ChartAdapter.getVisibleLogicalRange('backtest') ?? null;
     const { added } = backtestStore.prependHistory(
       chartPointsToStorePayload(data.chartData, data.annotations),
+      getBacktestStoreTf(),
     );
     backtestHistoryHasMore = data.hasMore !== false;
 
@@ -1521,7 +1517,7 @@ async function maybeLoadHistory(range, options = {}) {
       candles: toCandles(data.candles),
       oscillators: data.oscillators || [],
       annotations: data.annotations,
-    });
+    }, getLiveStoreTf());
     historyHasMore = data.hasMore !== false;
 
     if (added === 0) {
@@ -1538,8 +1534,6 @@ async function maybeLoadHistory(range, options = {}) {
         addedCount: added,
         prependOldRange,
       });
-      ChartAdapter.setSpikeMarkers(buildSpikeMarkers(storeData.osc));
-      ChartAdapter.applyAllMarkers();
       if (liveNavigatorResult) {
         ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, storeData.candles, {
           context: 'live',

@@ -20,6 +20,9 @@ let _liveNavLines = [];
 let _liveNavMarkers = [];
 let _tradeMarkers = [];
 let _spikeMarkers = [];
+let _cachedPriceMarkers = [];
+let _cachedWozduhMarkers = [];
+const _SPIKE_MARKER_TEXTS = new Set(['▲', '▼']);
 let _hooks = { live: {}, backtest: {} };
 let _chartInitialized = false;
 
@@ -33,12 +36,79 @@ function _chartContext(chartData) {
   return chartData === _backtest ? 'backtest' : 'live';
 }
 
+function _storeTf(context = 'live') {
+  if (context === 'backtest') {
+    return BacktestController?.getFormValues?.().interval || '15m';
+  }
+  return TimeframeController?.getActiveTf?.() || '1m';
+}
+
 function _storeForChart(chartData) {
   return _chartContext(chartData) === 'backtest' ? backtestStore : liveStore;
 }
 
 function _storeDataForChart(chartData) {
   return _storeForChart(chartData).getForLightweightCharts();
+}
+
+function _isSpikeMarker(marker) {
+  return marker && _SPIKE_MARKER_TEXTS.has(marker.text);
+}
+
+function _rebuildPriceMarkerCache(annotationMap) {
+  const showSpike = typeof ToolbarController !== 'undefined' && ToolbarController.isSpikeEnabled();
+  const spikePart = showSpike ? buildSpikeMarkersFromGrid(annotationMap) : [];
+  _spikeMarkers = spikePart;
+  _cachedPriceMarkers = [..._tradeMarkers, ...spikePart].sort((a, b) => a.time - b.time);
+}
+
+function _rebuildWozduhMarkerCache(annotationMap) {
+  _cachedWozduhMarkers = buildWozduhMarkersFromGrid(annotationMap);
+}
+
+function _patchSpikeMarkersAtMs(ms, annotation) {
+  const timeSec = ChartDataStore.msToChartSec(ms);
+  const showSpike = typeof ToolbarController !== 'undefined' && ToolbarController.isSpikeEnabled();
+
+  _spikeMarkers = _spikeMarkers.filter((m) => !(m.time === timeSec && _isSpikeMarker(m)));
+  _cachedPriceMarkers = _cachedPriceMarkers.filter((m) => !(m.time === timeSec && _isSpikeMarker(m)));
+
+  if (showSpike && annotation) {
+    const added = [];
+    if (annotation.spikeUp) {
+      added.push({ time: timeSec, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
+    }
+    if (annotation.spikeDown) {
+      added.push({ time: timeSec, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
+    }
+    _spikeMarkers.push(...added);
+    _cachedPriceMarkers.push(...added);
+    _cachedPriceMarkers.sort((a, b) => a.time - b.time);
+  }
+}
+
+function _patchWozduhMarkerAtMs(ms, annotation) {
+  const timeSec = ChartDataStore.msToChartSec(ms);
+  _cachedWozduhMarkers = _cachedWozduhMarkers.filter((m) => m.time !== timeSec);
+  if (annotation?.volCross) {
+    _cachedWozduhMarkers.push({
+      time: timeSec,
+      position: 'inBar',
+      color: annotation.volCross,
+      shape: 'circle',
+      size: 1,
+    });
+    _cachedWozduhMarkers.sort((a, b) => a.time - b.time);
+  }
+}
+
+function _flushPriceMarkerCache() {
+  _live.candleSeries?.setMarkers(_cachedPriceMarkers);
+}
+
+function _flushWozduhMarkerCache(chartData = _live) {
+  const markerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
+  chartData.wozduxSeries?.[markerKey]?.setMarkers(_cachedWozduhMarkers);
 }
 
 function _storeForContext(context) {
@@ -264,9 +334,6 @@ function applyOscPointDelta(oscPt, chartData = _live) {
     if (!Number.isFinite(value) || !chartData.wozduxSeries?.[key]) return;
     chartData.wozduxSeries[key].update({ time, value });
   });
-  if (oscPt.volCrossMarker) {
-    applyWozduxMarkers(_storeDataForChart(chartData).osc, chartData);
-  }
 
   const rsxVal = parseFloat(oscPt.rsx ?? oscPt.jurik);
   if (Number.isFinite(rsxVal) && chartData.rsxSeries) {
@@ -1225,21 +1292,19 @@ function applyCandleMarkers(chartData, markers) {
   );
 }
 
-function wozduxMarkersFromOsc(osc) {
-  const markers = [];
-  (osc || []).forEach((d) => {
-    if (!d.volCrossMarker) return;
-    const time = chartTime(d.time);
-    if (time == null) return;
-    markers.push({
-      time: Number(time),
-      position: 'inBar',
-      color: d.volCrossMarker,
-      shape: 'circle',
-      size: 1,
-    });
-  });
-  return markers.sort((a, b) => a.time - b.time);
+function wozduxMarkersFromGrid(chartData = _live) {
+  return buildWozduhMarkersFromGrid(_storeForChart(chartData).getAnnotationsMap());
+}
+
+function applyWozduxMarkers(osc, chartData = _live) {
+  const markerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
+  const markerSeries = chartData.wozduxSeries?.[markerKey];
+  if (!markerSeries) return;
+  if (_chartContext(chartData) === 'live') {
+    markerSeries.setMarkers(_cachedWozduhMarkers);
+    return;
+  }
+  markerSeries.setMarkers(wozduxMarkersFromGrid(chartData));
 }
 
 function applyWozduxData(osc, chartData = _live) {
@@ -1248,14 +1313,6 @@ function applyWozduxData(osc, chartData = _live) {
     if (series) series.setData(toLine(osc, key));
   });
   applyWozduxMarkers(osc, chartData);
-}
-
-function applyWozduxMarkers(osc, chartData = _live) {
-  const markerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
-  const markerSeries = chartData.wozduxSeries?.[markerKey];
-  if (markerSeries) {
-    markerSeries.setMarkers(wozduxMarkersFromOsc(osc));
-  }
 }
 
 function updateWozduxPoint(pt, chartData = _live) {
@@ -1268,7 +1325,15 @@ function updateWozduxPoint(pt, chartData = _live) {
     chartData.wozduxSeries[key].update({ time, value });
   });
   if (pt.volCrossMarker) {
-    applyWozduxMarkers(_storeDataForChart(chartData).osc, chartData);
+    const rawMs = ChartDataStore.toMs(pt.time ?? pt.Time);
+    const ms = TimeNormalizer.snapToGrid(rawMs, _storeTf(_chartContext(chartData)));
+    const ann = ms != null ? _storeForChart(chartData).getAnnotationAt(ms) : null;
+    if (_chartContext(chartData) === 'live' && ann) {
+      _patchWozduhMarkerAtMs(ms, ann);
+      _flushWozduhMarkerCache(chartData);
+    } else {
+      applyWozduxMarkers(null, chartData);
+    }
   }
 }
 
@@ -1560,7 +1625,7 @@ function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, opti
       true,
     );
     if (colored && options.updateLoadedCandles !== false && context === 'backtest') {
-      colored.forEach((c) => backtestStore.upsertCandle(c));
+      colored.forEach((c) => backtestStore.upsertCandle(c, _storeTf('backtest')));
     }
   }
 
@@ -1601,7 +1666,7 @@ function applyNavigatorPriceOverlay(navigatorPrice, candles) {
 }
 
 function applyBacktestCandleMarkers(chartData, trades, osc, navigatorMarkers) {
-  const spikeMarkers = buildSpikeMarkers(osc);
+  const spikeMarkers = buildSpikeMarkersFromGrid(backtestStore.getAnnotationsMap());
   const navMarkers = navigatorMarkers ?? _btNavMarkers;
   applyCandleMarkers(chartData, [...spikeMarkers, ...navMarkers]);
 }
@@ -1622,7 +1687,7 @@ function applyBacktestIndicatorPatch(result) {
   if (Array.isArray(result.annotations)) {
     patchPayload.annotations = result.annotations;
   }
-  backtestStore.replaceOscAndAnnotations(patchPayload);
+  backtestStore.replaceOscAndAnnotations(patchPayload, _storeTf('backtest'));
   buildBacktestTradeMarkers(trades);
 
   const storeData = backtestStore.getForLightweightCharts();
@@ -1673,7 +1738,10 @@ function applyBacktestResultToChart(result, options = {}, viewportAnchor = null)
     return;
   }
 
-  backtestStore.replaceFromServer(chartPointsToStorePayload(result.chartData, result.annotations));
+  backtestStore.replaceFromServer(
+    chartPointsToStorePayload(result.chartData, result.annotations),
+    _storeTf('backtest'),
+  );
   backtestLastTrades = result.trades || [];
   backtestHistoryHasMore = true;
   backtestHistoryLoading = false;
@@ -1869,6 +1937,11 @@ function _applyFullDataInternal(context, storeData, options = {}) {
   if (context === 'live' && typeof ToolbarController !== 'undefined') {
     ToolbarController.updateVolume(storeData.candles);
   }
+  if (context === 'live') {
+    const annotationMap = liveStore.getAnnotationsMap();
+    _rebuildPriceMarkerCache(annotationMap);
+    _rebuildWozduhMarkerCache(annotationMap);
+  }
   applyOscillatorToChart(chartData, storeData.osc, storeData.annotations);
   const wozPrefs = options.wozduhPrefs;
   if (wozPrefs) {
@@ -1877,11 +1950,10 @@ function _applyFullDataInternal(context, storeData, options = {}) {
     applyWozduhVisibilityToChart(chartData, context);
   }
   if (context === 'live') {
-    _spikeMarkers = buildSpikeMarkers(storeData.osc);
     if (typeof _hooks.live.applyTradeMarkers === 'function') {
       _hooks.live.applyTradeMarkers(_spikeMarkers);
     } else {
-      applyAllMarkersFromState();
+      _flushPriceMarkerCache();
     }
   }
 
@@ -1920,11 +1992,8 @@ function applyWozduhVisibilityFromPrefs(chartData, prefs) {
 }
 
 function applyAllMarkersFromState() {
-  const showSpike = ToolbarController.isSpikeEnabled();
-  const combined = [..._tradeMarkers];
-  if (showSpike) combined.push(..._spikeMarkers);
-  combined.sort((a, b) => a.time - b.time);
-  _live.candleSeries?.setMarkers(combined);
+  _rebuildPriceMarkerCache(liveStore.getAnnotationsMap());
+  _flushPriceMarkerCache();
 }
 
 function _applyDeltaInternal(context, delta, options = {}) {
@@ -1956,6 +2025,15 @@ function _applyDeltaInternal(context, delta, options = {}) {
       { rsx: rsxTimes },
       { showPivots },
     );
+  }
+
+  if (context === 'live' && delta.annotationMs != null) {
+    _patchSpikeMarkersAtMs(delta.annotationMs, delta.annotation);
+    if (delta.annotation?.volCross !== undefined) {
+      _patchWozduhMarkerAtMs(delta.annotationMs, delta.annotation);
+      _flushWozduhMarkerCache(chartData);
+    }
+    _flushPriceMarkerCache();
   }
 
   const after = _hooks[context]?.onAfterDelta;
@@ -2120,11 +2198,13 @@ const ChartAdapter = {
 
   setTradeMarkers(markers) {
     _tradeMarkers = markers || [];
-    applyAllMarkersFromState();
+    _cachedPriceMarkers = [..._tradeMarkers, ..._spikeMarkers].sort((a, b) => a.time - b.time);
+    _flushPriceMarkerCache();
   },
 
   setSpikeMarkers(markers) {
     _spikeMarkers = markers || [];
+    _cachedPriceMarkers = [..._tradeMarkers, ..._spikeMarkers].sort((a, b) => a.time - b.time);
   },
 
   applyAllMarkers() { applyAllMarkersFromState(); },
@@ -2224,10 +2304,11 @@ const ChartAdapter = {
     if (!_shouldPaint('live')) return;
     applyPriceToChart(_live, candles);
     if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
+    _rebuildPriceMarkerCache(liveStore.getAnnotationsMap());
+    _rebuildWozduhMarkerCache(liveStore.getAnnotationsMap());
     applyOscillatorToChart(_live, storeData.osc, storeData.annotations);
     applyWozduhVisibilityToChart(_live, 'live');
-    _spikeMarkers = buildSpikeMarkers(storeData.osc);
-    applyAllMarkersFromState();
+    _flushPriceMarkerCache();
     return { candles, storeData };
   },
 

@@ -1,13 +1,13 @@
 /**
  * ChartDataStore — ms-keyed candle/osc/annotation store.
- * Runtime dependency: global normalizeCandle() and normalizeOscPoint() from mappers.js.
+ * Annotations: Map<snappedMs, flatProps> — O(1) marker lookup on the TimeGrid.
  */
 class ChartDataStore {
   constructor(context) {
     this.context = context;
-    this.candles = new Map(); // Map<ms, Candle>
-    this.osc = new Map(); // Map<ms, OscPoint>
-    // Map<ms, Map<text, Annotation>>
+    this.candles = new Map();
+    this.osc = new Map();
+    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, volCross, rsxLabel, ... } */
     this.annotations = new Map();
     this._dirtyMs = null;
     this._dirtyIsNewBar = false;
@@ -22,6 +22,12 @@ class ChartDataStore {
 
   static msToChartSec(ms) {
     return Math.floor(ms / 1000);
+  }
+
+  static _snapMs(timeLike, tf) {
+    const rawMs = ChartDataStore.toMs(timeLike);
+    if (!rawMs) return null;
+    return TimeNormalizer.snapToGrid(rawMs, tf);
   }
 
   clear() {
@@ -49,14 +55,98 @@ class ChartDataStore {
     }
   }
 
-  _ingestAnnotationKey(ms, text, extra = {}) {
-    const key = String(text ?? '').trim().substring(0, 2);
-    if (!key) return;
-    if (!this.annotations.has(ms)) this.annotations.set(ms, new Map());
-    const textMap = this.annotations.get(ms);
-    const isNew = !textMap.has(key);
-    textMap.set(key, { ...extra, timeMs: ms, text: key });
-    if (isNew) this._dirtyAnnotations = true;
+  _candleAtSnappedMs(bar, tf) {
+    const ms = ChartDataStore._snapMs(bar.time, tf);
+    if (!ms) return null;
+    return {
+      ...bar,
+      timeMs: ms,
+      time: ChartDataStore.msToChartSec(ms),
+    };
+  }
+
+  _mergeOsc(existing, incoming) {
+    return {
+      ...existing,
+      ...incoming,
+      timeMs: existing.timeMs,
+      time: existing.time,
+    };
+  }
+
+  _propsFromServerAnnotation(a, ms) {
+    const text = String(a?.text ?? a?.label ?? a?.Label ?? '').trim();
+    const props = { timeMs: ms };
+    if (text) props.rsxLabel = text.substring(0, 2).toUpperCase();
+    if (a?.pane) props.pane = a.pane;
+    if (a?.color) props.color = a.color;
+    if (a?.position) props.position = a.position;
+    if (a?.shape) props.shape = a.shape;
+    return props;
+  }
+
+  _propsFromOscPoint(snapped) {
+    if (!snapped) return null;
+    const props = {};
+    if (snapped.volumeSpikeUp) props.spikeUp = true;
+    if (snapped.volumeSpikeDown) props.spikeDown = true;
+    if (snapped.volCrossMarker) props.volCross = snapped.volCrossMarker;
+    if (snapped.marker) {
+      props.rsxLabel = String(snapped.marker).trim().substring(0, 2).toUpperCase();
+    }
+    return Object.keys(props).length ? props : null;
+  }
+
+  _mergeAnnotationProps(ms, incoming) {
+    if (!incoming || !Object.keys(incoming).length) return this.annotations.get(ms) || null;
+    const existing = this.annotations.get(ms) || { timeMs: ms };
+    const merged = Object.assign({}, existing, incoming, { timeMs: ms });
+    if (existing.spikeUp || incoming.spikeUp) merged.spikeUp = true;
+    if (existing.spikeDown || incoming.spikeDown) merged.spikeDown = true;
+    const changed = JSON.stringify(merged) !== JSON.stringify(existing);
+    this.annotations.set(ms, merged);
+    if (changed) this._dirtyAnnotations = true;
+    return merged;
+  }
+
+  getAnnotationsMap() {
+    return this.annotations;
+  }
+
+  getAnnotationAt(ms) {
+    return this.annotations.get(ms) || null;
+  }
+
+  upsertAnnotationProps(ms, props, tf) {
+    const snapped = TimeNormalizer.snapToGrid(ms, tf);
+    if (!snapped) return null;
+    return this._mergeAnnotationProps(snapped, { ...props, timeMs: snapped });
+  }
+
+  _syncOscAnnotationProps(snapped) {
+    const props = this._propsFromOscPoint(snapped);
+    if (!props) return;
+    this._mergeAnnotationProps(snapped.timeMs, props);
+  }
+
+  _annotationsToArray() {
+    const chartAnnotations = [];
+    this.annotations.forEach((props, ms) => {
+      const time = ChartDataStore.msToChartSec(ms);
+      if (props.rsxLabel) {
+        chartAnnotations.push({
+          time,
+          timeMs: ms,
+          text: props.rsxLabel,
+          pane: props.pane || 'rsx',
+          color: props.color,
+          position: props.position,
+          shape: props.shape,
+        });
+      }
+    });
+    chartAnnotations.sort((a, b) => a.time - b.time);
+    return chartAnnotations;
   }
 
   candleCount() {
@@ -87,64 +177,80 @@ class ChartDataStore {
   }
 
   annotationCount() {
-    let count = 0;
-    this.annotations.forEach((textMap) => { count += textMap.size; });
-    return count;
+    return this.annotations.size;
   }
 
-  _ingestAnnotations(annArray, anchorMs = null) {
+  _ingestAnnotations(annArray, tf, anchorMs = null) {
     if (!Array.isArray(annArray)) return;
     annArray.forEach((a) => {
-      const ms = ChartDataStore.toMs(a.time ?? a.Time);
+      const rawMs = ChartDataStore.toMs(a.time ?? a.Time);
+      if (!rawMs) return;
+      const ms = TimeNormalizer.snapToGrid(rawMs, tf);
       if (!ms) return;
       if (anchorMs != null && ms >= anchorMs) return;
-      const text = (a.text ?? a.label ?? a.Label ?? '').trim().substring(0, 2);
-      if (!text) return;
-
-      if (!this.annotations.has(ms)) this.annotations.set(ms, new Map());
-      const textMap = this.annotations.get(ms);
-      const isNew = !textMap.has(text);
-      textMap.set(text, { ...a, timeMs: ms, text });
-      if (isNew) this._dirtyAnnotations = true;
+      const props = this._propsFromServerAnnotation(a, ms);
+      this._mergeAnnotationProps(ms, props);
     });
   }
 
-  _ingestCandle(c, { allowOverwrite = true, anchorMs = null } = {}) {
+  _ingestCandle(c, tf, { allowOverwrite = true, anchorMs = null } = {}) {
     const bar = normalizeCandle(c);
     if (!bar) return;
-    const ms = ChartDataStore.toMs(bar.time);
-    if (!ms) return;
+    const snapped = this._candleAtSnappedMs(bar, tf);
+    if (!snapped) return;
+    const { timeMs: ms } = snapped;
     if (anchorMs != null && ms >= anchorMs) return;
+
+    const existing = this.candles.get(ms);
+    if (existing) {
+      this.candles.set(ms, TimeNormalizer.mergeCandles(existing, snapped));
+      return;
+    }
     if (!allowOverwrite && this.candles.has(ms)) return;
-    this.candles.set(ms, { ...bar, timeMs: ms });
+    this.candles.set(ms, snapped);
   }
 
-  _ingestOsc(o, { allowOverwrite = true, anchorMs = null } = {}) {
+  _ingestOsc(o, tf, { allowOverwrite = true, anchorMs = null } = {}) {
     const norm = normalizeOscPoint(o);
     if (!norm) return;
-    const ms = ChartDataStore.toMs(norm.time);
+    const ms = ChartDataStore._snapMs(norm.time, tf);
     if (!ms) return;
     if (anchorMs != null && ms >= anchorMs) return;
+
+    const snapped = {
+      ...norm,
+      timeMs: ms,
+      time: ChartDataStore.msToChartSec(ms),
+    };
+
+    const existing = this.osc.get(ms);
+    if (existing) {
+      const merged = this._mergeOsc(existing, snapped);
+      this.osc.set(ms, merged);
+      this._syncOscAnnotationProps(merged);
+      return;
+    }
     if (!allowOverwrite && this.osc.has(ms)) return;
-    this.osc.set(ms, { ...norm, timeMs: ms });
+    this.osc.set(ms, snapped);
+    this._syncOscAnnotationProps(snapped);
   }
 
-  replaceFromServer(payload) {
+  replaceFromServer(payload, tf) {
     this.candles.clear();
     this.osc.clear();
     this.annotations.clear();
 
     (payload.candles || []).forEach((c) => {
-      this._ingestCandle(c, { allowOverwrite: true });
+      this._ingestCandle(c, tf, { allowOverwrite: true });
     });
     (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: true });
+      this._ingestOsc(o, tf, { allowOverwrite: true });
     });
-    this._ingestAnnotations(payload.annotations);
+    this._ingestAnnotations(payload.annotations, tf);
     this._resetDirtyState();
   }
 
-  prependHistory(payload) {
+  prependHistory(payload, tf) {
     let added = 0;
     let rejected = 0;
     const anchorMs = this.sortedCandleTimesMs()[0] ?? null;
@@ -155,18 +261,22 @@ class ChartDataStore {
         rejected += 1;
         return;
       }
-      const ms = ChartDataStore.toMs(bar.time);
-      if (!ms) {
+      const snapped = this._candleAtSnappedMs(bar, tf);
+      if (!snapped) {
         rejected += 1;
         return;
       }
+      const { timeMs: ms } = snapped;
       if (anchorMs != null && ms >= anchorMs) {
         rejected += 1;
-      } else if (!this.candles.has(ms)) {
-        this.candles.set(ms, { ...bar, timeMs: ms });
-        added += 1;
-      } else {
+        return;
+      }
+      if (this.candles.has(ms)) {
+        this.candles.set(ms, TimeNormalizer.mergeCandles(this.candles.get(ms), snapped));
         rejected += 1;
+      } else {
+        this.candles.set(ms, snapped);
+        added += 1;
       }
     });
 
@@ -176,57 +286,84 @@ class ChartDataStore {
         rejected += 1;
         return;
       }
-      const ms = ChartDataStore.toMs(norm.time);
+      const ms = ChartDataStore._snapMs(norm.time, tf);
       if (!ms) {
         rejected += 1;
         return;
       }
       if (anchorMs != null && ms >= anchorMs) {
         rejected += 1;
-      } else if (!this.osc.has(ms)) {
-        this.osc.set(ms, { ...norm, timeMs: ms });
-      } else {
+        return;
+      }
+      const snapped = {
+        ...norm,
+        timeMs: ms,
+        time: ChartDataStore.msToChartSec(ms),
+      };
+      if (this.osc.has(ms)) {
+        const merged = this._mergeOsc(this.osc.get(ms), snapped);
+        this.osc.set(ms, merged);
+        this._syncOscAnnotationProps(merged);
         rejected += 1;
+      } else {
+        this.osc.set(ms, snapped);
+        this._syncOscAnnotationProps(snapped);
       }
     });
 
-    this._ingestAnnotations(payload.annotations, anchorMs);
+    this._ingestAnnotations(payload.annotations, tf, anchorMs);
     this._resetDirtyState();
 
     return { added, rejected, anchorMs };
   }
 
-  upsertCandle(c) {
+  upsertCandle(c, tf) {
     const bar = normalizeCandle(c);
     if (!bar) return null;
-    const ms = ChartDataStore.toMs(bar.time);
-    if (!ms) return null;
+    const snapped = this._candleAtSnappedMs(bar, tf);
+    if (!snapped) return null;
+    const { timeMs: ms } = snapped;
     const isNewBar = !this.candles.has(ms);
-    this.candles.set(ms, { ...bar, timeMs: ms });
+    const existing = this.candles.get(ms);
+    if (existing) {
+      this.candles.set(ms, TimeNormalizer.mergeCandles(existing, snapped));
+    } else {
+      this.candles.set(ms, snapped);
+    }
     this._markDirtyMs(ms, isNewBar);
-    return bar;
+    return { ...this.candles.get(ms), time: ChartDataStore.msToChartSec(ms) };
   }
 
-  upsertOscPoint(o) {
+  upsertOscPoint(o, tf) {
     const norm = normalizeOscPoint(o);
     if (!norm) return null;
-    const ms = ChartDataStore.toMs(norm.time);
+    const ms = ChartDataStore._snapMs(norm.time, tf);
     if (!ms) return null;
-    this.osc.set(ms, { ...norm, timeMs: ms });
-    this._markDirtyMs(ms, false);
-    if (norm.marker) {
-      this._ingestAnnotationKey(ms, norm.marker, { pane: 'rsx' });
+    const snapped = {
+      ...norm,
+      timeMs: ms,
+      time: ChartDataStore.msToChartSec(ms),
+    };
+    const existing = this.osc.get(ms);
+    if (existing) {
+      const merged = this._mergeOsc(existing, snapped);
+      this.osc.set(ms, merged);
+      this._syncOscAnnotationProps(merged);
+    } else {
+      this.osc.set(ms, snapped);
+      this._syncOscAnnotationProps(snapped);
     }
-    return norm;
+    this._markDirtyMs(ms, false);
+    return { ...this.osc.get(ms), time: ChartDataStore.msToChartSec(ms) };
   }
 
-  replaceOscAndAnnotations(payload) {
+  replaceOscAndAnnotations(payload, tf) {
     if (Array.isArray(payload.annotations)) {
       this.annotations.clear();
-      this._ingestAnnotations(payload.annotations);
+      this._ingestAnnotations(payload.annotations, tf);
     }
     (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: true });
+      this._ingestOsc(o, tf, { allowOverwrite: true });
     });
     this._resetDirtyState();
   }
@@ -237,21 +374,18 @@ class ChartDataStore {
     const ms = this._dirtyMs;
     const candle = ms != null ? this.candles.get(ms) : null;
     const osc = ms != null ? this.osc.get(ms) : null;
+    const latestMs = ms ?? this.sortedCandleTimesMs().pop() ?? null;
 
     let fullAnnotations = null;
     if (this._dirtyAnnotations) {
-      fullAnnotations = [];
-      Array.from(this.annotations.values()).forEach((textMap) => {
-        Array.from(textMap.values()).forEach((a) => {
-          fullAnnotations.push({ ...a, time: ChartDataStore.msToChartSec(a.timeMs) });
-        });
-      });
-      fullAnnotations.sort((a, b) => a.time - b.time);
+      fullAnnotations = this._annotationsToArray();
     }
 
     const delta = {
       candle: candle ? { ...candle, time: ChartDataStore.msToChartSec(ms) } : null,
       osc: osc ? { ...osc, time: ChartDataStore.msToChartSec(ms) } : null,
+      annotation: latestMs != null ? (this.annotations.get(latestMs) || null) : null,
+      annotationMs: latestMs,
       fullAnnotations,
       isNewBar: this._dirtyIsNewBar,
     };
@@ -277,15 +411,11 @@ class ChartDataStore {
       return { time: ChartDataStore.msToChartSec(c.timeMs) };
     });
 
-    const chartAnnotations = [];
-    Array.from(this.annotations.values()).forEach((textMap) => {
-      Array.from(textMap.values()).forEach((a) => {
-        chartAnnotations.push({ ...a, time: ChartDataStore.msToChartSec(a.timeMs) });
-      });
-    });
-    chartAnnotations.sort((a, b) => a.time - b.time);
-
-    return { candles: chartCandles, osc: chartOsc, annotations: chartAnnotations };
+    return {
+      candles: chartCandles,
+      osc: chartOsc,
+      annotations: this._annotationsToArray(),
+    };
   }
 }
 

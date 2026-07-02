@@ -404,15 +404,44 @@ function mapNavigatorLinesForChart(lines, candles) {
   }).filter(Boolean);
 }
 
-function buildSpikeMarkers(osc) {
+function buildSpikeMarkersFromGrid(annotationMap, { showSpike = true } = {}) {
+  if (!showSpike || !annotationMap) return [];
   const markers = [];
-  (osc || []).forEach((p) => {
-    const time = chartTime(p?.time ?? p?.Time);
-    if (time == null) return;
-    if (p.volumeSpikeUp) markers.push({ time, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
-    if (p.volumeSpikeDown) markers.push({ time, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
+  annotationMap.forEach((ann, ms) => {
+    if (!ann.spikeUp && !ann.spikeDown) return;
+    const time = ChartDataStore.msToChartSec(ms);
+    if (ann.spikeUp) {
+      markers.push({ time, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
+    }
+    if (ann.spikeDown) {
+      markers.push({ time, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
+    }
   });
   return markers.sort((a, b) => a.time - b.time);
+}
+
+function buildWozduhMarkersFromGrid(annotationMap) {
+  if (!annotationMap) return [];
+  const markers = [];
+  annotationMap.forEach((ann, ms) => {
+    if (!ann.volCross) return;
+    markers.push({
+      time: ChartDataStore.msToChartSec(ms),
+      position: 'inBar',
+      color: ann.volCross,
+      shape: 'circle',
+      size: 1,
+    });
+  });
+  return markers.sort((a, b) => a.time - b.time);
+}
+
+/** @deprecated Use buildSpikeMarkersFromGrid — kept for callers passing annotation Map. */
+function buildSpikeMarkers(annotationMapOrOsc) {
+  if (annotationMapOrOsc instanceof Map) {
+    return buildSpikeMarkersFromGrid(annotationMapOrOsc);
+  }
+  return buildSpikeMarkersFromGrid(new Map());
 }
 
 function normalizeTradeRow(t) {
@@ -462,5 +491,7 @@ if (typeof window !== 'undefined') {
     resolveTf,
     normalizeTradeRow,
     buildSpikeMarkers,
+    buildSpikeMarkersFromGrid,
+    buildWozduhMarkersFromGrid,
   };
 }
