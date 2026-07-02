@@ -107,7 +107,9 @@ const TabsController = (() => {
       } else if (targetId === 'tab-stats') {
         ChartAdapter?.resizeEquity?.();
         ChartAdapter?.fitEquityContent?.();
-        if (typeof refreshStatsForMode === 'function') refreshStatsForMode(statsMode);
+        if (typeof refreshStatsForMode === 'function') {
+          refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
+        }
       }
     });
   }
