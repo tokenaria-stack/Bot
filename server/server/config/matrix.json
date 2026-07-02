@@ -1,0 +1,17 @@
+{
+  "useRSX": false,
+  "useWozduhCross": true,
+  "useRedCross": true,
+  "useGeometry": true,
+  "useGeometryBounce": false,
+  "useGeometryTriangle": false,
+  "useTrendlines": false,
+  "useHTFOscillators": false,
+  "useDivergence": true,
+  "useFib": true,
+  "useExpRegime": true,
+  "useJurikTrend": true,
+  "useWozduhSpike": true,
+  "useAD": true,
+  "useAOCross": true
+}

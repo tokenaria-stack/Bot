@@ -18,7 +18,7 @@ func TestCheckClassicDivergence_bearishClassA(t *testing.T) {
 		{Index: 30, Value: 3, Type: indicators.PeakHigh},
 	}
 
-	result := indicators.CheckClassicDivergence(pricePeaks, oscPeaks, 2)
+	result := indicators.CheckClassicDivergence(pricePeaks, oscPeaks, 2, 0, 0)
 	if result.Direction != indicators.Bearish {
 		t.Fatalf("Direction = %q, want %q", result.Direction, indicators.Bearish)
 	}
@@ -39,7 +39,7 @@ func TestCheckClassicDivergence_bullishClassA(t *testing.T) {
 		{Index: 30, Value: -2, Type: indicators.PeakLow},
 	}
 
-	result := indicators.CheckClassicDivergence(pricePeaks, oscPeaks, 2)
+	result := indicators.CheckClassicDivergence(pricePeaks, oscPeaks, 2, 0, 0)
 	if result.Direction != indicators.Bullish {
 		t.Fatalf("Direction = %q, want %q", result.Direction, indicators.Bullish)
 	}
@@ -55,6 +55,7 @@ func TestCheckClassicDivergence_noMatch(t *testing.T) {
 		[]indicators.Peak{{Index: 1, Value: 1, Type: indicators.PeakHigh}},
 		[]indicators.Peak{{Index: 2, Value: 1, Type: indicators.PeakHigh}},
 		1,
+		0, 0,
 	)
 	if result.Direction != indicators.NoDiv || result.Class != indicators.None {
 		t.Fatalf("expected empty result, got %+v", result)

@@ -10,7 +10,7 @@ import (
 func TestSmartDivergenceEngine_bearishMacro(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	engine.UpdateSnapshot(indicators.Snapshot{
 		Index: 10, IsHigh: true, Price: 100,
 		Jurik: 70, OrangeRSI: 65, BlueVolume: 50, BurgundyAD: 10, AO: 0.5, MACD: 0.3,
@@ -32,7 +32,7 @@ func TestSmartDivergenceEngine_bearishMacro(t *testing.T) {
 func TestSmartDivergenceEngine_bullishMacro(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	engine.UpdateSnapshot(indicators.Snapshot{
 		Index: 10, IsHigh: false, Price: 90,
 		Jurik: 30, OrangeRSI: 35, AO: -0.5, MACD: -0.2,
@@ -51,7 +51,7 @@ func TestSmartDivergenceEngine_bullishMacro(t *testing.T) {
 func TestSmartDivergenceEngine_hiddenContinuation(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	engine.UpdateSnapshot(indicators.Snapshot{
 		Index: 10, IsHigh: false, Price: 90,
 		Jurik: 50, OrangeRSI: 45, RedRSI: 40, MACD: 0.2,
@@ -70,7 +70,7 @@ func TestSmartDivergenceEngine_hiddenContinuation(t *testing.T) {
 func TestAnalyzeMicro_saucer(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	score := engine.AnalyzeMicro(25, 26, 29)
 	if score < saucerScore {
 		t.Fatalf("expected saucer score >= %d, got %d", saucerScore, score)
@@ -80,7 +80,7 @@ func TestAnalyzeMicro_saucer(t *testing.T) {
 func TestAnalyzeMicro_vSpike(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	score := engine.AnalyzeMicro(35, 20, 28)
 	if score < vSpikeScore {
 		t.Fatalf("expected v-spike score >= %d, got %d", vSpikeScore, score)
@@ -90,7 +90,7 @@ func TestAnalyzeMicro_vSpike(t *testing.T) {
 func TestAnalyzeMicroCombined(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	engine.UpdateMicroTick(29, 29)
 	engine.UpdateMicroTick(26, 26)
 	engine.UpdateMicroTick(25, 25)
@@ -104,7 +104,7 @@ func TestAnalyzeMicroCombined(t *testing.T) {
 func TestSmartDivergenceEngine_SaveRestore_IntraBarMicroTicks(t *testing.T) {
 	t.Parallel()
 
-	engine := indicators.NewSmartDivergenceEngine()
+	engine := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	engine.UpdateMicroTick(40, 38)
 	engine.UpdateMicroTick(41, 39)
 	engine.UpdateMicroTick(42, 40)
@@ -120,7 +120,7 @@ func TestSmartDivergenceEngine_SaveRestore_IntraBarMicroTicks(t *testing.T) {
 	engine.UpdateMicroTick(finalOrange, finalRed)
 	got := engine.AnalyzeMicroCombined()
 
-	ref := indicators.NewSmartDivergenceEngine()
+	ref := indicators.NewSmartDivergenceEngine(indicators.RSXScanConfig{})
 	ref.UpdateMicroTick(40, 38)
 	ref.UpdateMicroTick(41, 39)
 	ref.UpdateMicroTick(42, 40)

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 )
@@ -22,12 +23,14 @@ const (
 
 // RSXSettings хранит конфигурацию индикатора RSX и поиска дивергенций.
 type RSXSettings struct {
-	Length       int    `json:"length"`
-	DivLookback  int    `json:"div_lookback"`
-	SignalLength int    `json:"signal_length"`
-	Source       string `json:"source"`       // "close" или "hlc3"
-	PivotRadius  int    `json:"pivot_radius"` // Для фрактальных дивергенций
-	DivMethod    string `json:"div_method"`   // "tv" (TradingView) или "fractal"
+	Length               int     `json:"length"`
+	DivLookback          int     `json:"div_lookback"`
+	SignalLength         int     `json:"signal_length"`
+	Source               string  `json:"source"`       // "close" или "hlc3"
+	PivotRadius          int     `json:"pivot_radius"` // Для фрактальных дивергенций
+	DivMethod            string  `json:"div_method"`   // "tv" (TradingView) или "fractal"
+	MinPriceDeltaRatio   float64 `json:"min_price_delta_ratio"`
+	MinOscDelta          float64 `json:"min_osc_delta"`
 }
 
 var (
@@ -45,7 +48,12 @@ func GetRSXSettings() RSXSettings {
 }
 
 func initRSXSettingsDefaults() {
-	rsxSettingsInstance = &RSXSettings{
+	rsxSettingsInstance = &RSXSettings{}
+	*rsxSettingsInstance = defaultRSXSettings()
+}
+
+func defaultRSXSettings() RSXSettings {
+	return RSXSettings{
 		Length:       DefaultRSXLength,
 		DivLookback:  RSXLookbackDefault,
 		SignalLength: DefaultRSXSignalLength,
@@ -53,6 +61,61 @@ func initRSXSettingsDefaults() {
 		PivotRadius:  DefaultRSXPivotRadius,
 		DivMethod:    "tv",
 	}
+}
+
+func mergeRSXSettings(base, update RSXSettings) RSXSettings {
+	out := base
+	if update.Length > 0 {
+		out.Length = clampInt(update.Length, MinRSXLength, MaxRSXLength, DefaultRSXLength)
+	}
+	if update.DivLookback > 0 {
+		out.DivLookback = clampInt(update.DivLookback, MinRSXDivLookback, MaxRSXDivLookback, RSXLookbackDefault)
+	}
+	if update.SignalLength > 0 {
+		out.SignalLength = clampInt(update.SignalLength, MinRSXSignalLength, MaxRSXSignalLength, DefaultRSXSignalLength)
+	}
+	if update.Source != "" {
+		out.Source = normalizeRSXSource(update.Source)
+	}
+	if update.PivotRadius > 0 {
+		out.PivotRadius = clampInt(update.PivotRadius, MinRSXPivotRadius, MaxRSXPivotRadius, DefaultRSXPivotRadius)
+	}
+	if update.DivMethod != "" {
+		out.DivMethod = normalizeRSXDivMethod(update.DivMethod)
+	}
+	if update.MinPriceDeltaRatio > 0 {
+		out.MinPriceDeltaRatio = update.MinPriceDeltaRatio
+	}
+	if update.MinOscDelta > 0 {
+		out.MinOscDelta = update.MinOscDelta
+	}
+	return out
+}
+
+// NormalizeRSXSettings clamps indicator settings without mutating the global singleton.
+func NormalizeRSXSettings(update RSXSettings) RSXSettings {
+	normalized := mergeRSXSettings(defaultRSXSettings(), update)
+	if normalized.PivotRadius <= 0 {
+		normalized.PivotRadius = DefaultRSXPivotRadius
+	}
+	return normalized
+}
+
+// UnmarshalJSON accepts pivot_radius and pivotRadius keys from dashboard payloads.
+func (s *RSXSettings) UnmarshalJSON(data []byte) error {
+	type alias RSXSettings
+	aux := struct {
+		alias
+		PivotRadiusCamel int `json:"pivotRadius"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*s = RSXSettings(aux.alias)
+	if s.PivotRadius <= 0 && aux.PivotRadiusCamel > 0 {
+		s.PivotRadius = aux.PivotRadiusCamel
+	}
+	return nil
 }
 
 // ApplyRSXSettings обновляет настройки с clamp и возвращает применённые значения.
@@ -61,26 +124,9 @@ func ApplyRSXSettings(update RSXSettings) RSXSettings {
 	rsxSettingsMutex.Lock()
 	defer rsxSettingsMutex.Unlock()
 
-	if update.Length > 0 {
-		rsxSettingsInstance.Length = clampInt(update.Length, MinRSXLength, MaxRSXLength, DefaultRSXLength)
-	}
-	if update.DivLookback > 0 {
-		rsxSettingsInstance.DivLookback = clampInt(update.DivLookback, MinRSXDivLookback, MaxRSXDivLookback, RSXLookbackDefault)
-	}
-	if update.SignalLength > 0 {
-		rsxSettingsInstance.SignalLength = clampInt(update.SignalLength, MinRSXSignalLength, MaxRSXSignalLength, DefaultRSXSignalLength)
-	}
-	if update.Source != "" {
-		rsxSettingsInstance.Source = normalizeRSXSource(update.Source)
-	}
-	if update.PivotRadius > 0 {
-		rsxSettingsInstance.PivotRadius = clampInt(update.PivotRadius, MinRSXPivotRadius, MaxRSXPivotRadius, DefaultRSXPivotRadius)
-	}
-	if update.DivMethod != "" {
-		rsxSettingsInstance.DivMethod = normalizeRSXDivMethod(update.DivMethod)
-	}
-
-	return *rsxSettingsInstance
+	normalized := mergeRSXSettings(*rsxSettingsInstance, update)
+	*rsxSettingsInstance = normalized
+	return normalized
 }
 
 // ResetRSXSettings restores dashboard defaults (tests).
@@ -88,14 +134,7 @@ func ResetRSXSettings() {
 	rsxSettingsOnce.Do(initRSXSettingsDefaults)
 	rsxSettingsMutex.Lock()
 	defer rsxSettingsMutex.Unlock()
-	*rsxSettingsInstance = RSXSettings{
-		Length:       DefaultRSXLength,
-		DivLookback:  RSXLookbackDefault,
-		SignalLength: DefaultRSXSignalLength,
-		Source:       "close",
-		PivotRadius:  DefaultRSXPivotRadius,
-		DivMethod:    "tv",
-	}
+	*rsxSettingsInstance = defaultRSXSettings()
 }
 
 // RSXPivotRadius returns the active fractal pivot radius from settings.

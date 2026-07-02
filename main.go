@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,7 +53,7 @@ func main() {
 		log.Fatalf("[Init] Failed to create REST client: %v", err)
 	}
 	if err := restClient.Ping(); err != nil {
-		log.Fatalf("[Init] Binance Mainnet ping failed: %v", err)
+		log.Printf("[Init] WARNING: Binance ping failed (non-fatal): %v", err)
 	}
 	if !restClient.UsesFuturesClient() {
 		log.Fatal("[Init] REST client is not a Binance USD-M Futures client")
@@ -62,9 +65,6 @@ func main() {
 	log.Printf("[Init] Binance USD-M Futures Mainnet — WS:  %s", exchange.FuturesWSCombinedURL())
 	if cfg.ReadOnly {
 		log.Println("[Init] Read-only mode: no API keys — public klines/websocket only (trading disabled)")
-	}
-	if cfg.SandboxMode {
-		log.Println("[Init] ⚠️  SANDBOX PURE STRATEGY — risk vetoes bypassed, RSX+Wozduh scoring, threshold=70")
 	}
 	strategy.SetSandboxMode(cfg.SandboxMode)
 
@@ -83,27 +83,52 @@ func main() {
 		AOSlowPeriod: 34,
 	}
 
+	bootStart := time.Now()
+	log.Printf("[Init] Parallel analyst boot: %d timeframes (%d CPUs, SQLite WAL)", len(timeframes), runtime.NumCPU())
+	var bootWG sync.WaitGroup
+	var bootMu sync.Mutex
 	for _, tf := range timeframes {
-		history := []exchange.Kline{}
+		bootWG.Add(1)
+		go func(tf string) {
+			defer bootWG.Done()
+			tfStart := time.Now()
 
-		candles, err := restClient.GetKlines(symbol, tf, historyKlinesLimit)
-		if err != nil {
-			log.Printf("[Init] Analyst [%s] failed to load history: %v", tf, err)
-		} else {
-			history = candlesToKlines(candles)
-			log.Printf("[Init] Analyst [%s] loaded %d historical klines", tf, len(history))
-		}
+			history := strategy.LoadRAMHistory(restClient, symbol, tf, strategy.LiveKlineRAMCap)
+			source := "sqlite"
+			if len(history) == 0 {
+				candles, err := restClient.GetKlines(symbol, tf, historyKlinesLimit)
+				if err != nil {
+					log.Printf("[Init] Analyst [%s] failed to load history: %v", tf, err)
+				} else {
+					history = candlesToKlines(candles)
+				}
+				source = "rest"
+			}
 
-		analysts[tf] = strategy.NewMarker(
-			history,
-			nil,
-			tf,
-			"btc_patterns",
-			chaosCfg,
-		)
-		analysts[tf].UpdateIndicators()
-		log.Printf("[Init] Analyst [%s] created", tf)
+			m := strategy.NewMarker(history, nil, tf, "btc_patterns", chaosCfg)
+			m.UpdateIndicators()
+
+			bootMu.Lock()
+			analysts[tf] = m
+			bootMu.Unlock()
+
+			elapsed := time.Since(tfStart)
+			log.Printf("[Init] Analyst [%s] loaded %d klines from %s (%.2fs)", tf, len(history), source, elapsed.Seconds())
+			// #region agent log
+			agentBootLog("main.go:boot", "tf boot complete", "boot", map[string]any{
+				"tf": tf, "source": source, "klines": len(history), "ms": elapsed.Milliseconds(),
+			})
+			// #endregion
+		}(tf)
 	}
+	bootWG.Wait()
+	bootElapsed := time.Since(bootStart)
+	log.Printf("[Init] All analysts ready in %.2fs (parallel)", bootElapsed.Seconds())
+	// #region agent log
+	agentBootLog("main.go:boot", "parallel boot complete", "boot", map[string]any{
+		"totalMs": bootElapsed.Milliseconds(), "cpus": runtime.NumCPU(), "tfs": len(timeframes),
+	})
+	// #endregion
 
 	orderFlow := domain.NewOrderFlowStore()
 	var _ exchange.OrderFlowSink = orderFlow
@@ -121,7 +146,8 @@ func main() {
 	)
 	dashboard.BindMaster(master)
 	master.SetNavigatorPanes(strategy.DefaultLiveNavigatorPanes())
-	master.NotifyKlineGapFillComplete(symbol, tradingTF)
+	master.StartKlineGapFillLoop(ctx)
+	master.SeedClosedBarTelemetry()
 	master.SetOnTelemetry(func(tick exchange.WsTick, falcon strategy.FalconSignals, decision strategy.ScoreDecision) {
 		analyst := analysts[tradingTF]
 		if analyst == nil {
@@ -134,6 +160,7 @@ func main() {
 		}
 		brainStatus := strategy.TelemetryBrainStatus(decision, signalAnalyst)
 		aiStatus := strategy.TelemetryAIStatus(context.Background(), analyst, nil)
+		regime := master.ClosedVolatilityRegimeForTelemetry(analyst)
 
 		dashboard.BroadcastTick(
 			tradingTF,
@@ -143,6 +170,8 @@ func main() {
 			rsxColor,
 			decision,
 			brainStatus, aiStatus,
+			regime,
+			tick.IsClosed,
 		)
 	})
 	master.SetOnKlineBar(func(tf string, k exchange.Kline) {
@@ -192,6 +221,29 @@ func main() {
 	cancel()
 	time.Sleep(1 * time.Second)
 	log.Println("=== Bot gracefully stopped ===")
+}
+
+const agentDebugLogPath = "/Users/ilmaru/trading_bot/.cursor/debug-39f875.log"
+
+func agentBootLog(location, message, hypothesisID string, data map[string]any) {
+	payload := map[string]any{
+		"sessionId":    "39f875",
+		"timestamp":    time.Now().UnixMilli(),
+		"location":     location,
+		"message":      message,
+		"hypothesisId": hypothesisID,
+		"data":         data,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile(agentDebugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

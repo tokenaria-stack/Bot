@@ -9,9 +9,11 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,18 +31,16 @@ const (
 	maxCandlesInState       = 500 // legacy default; overridden by limit query param
 	defaultStateCandleLimit = 3000
 	maxStateCandleLimit     = 10000
+	stateTailPollLimit      = 20 // skip navigators/hasMore for lightweight tail polls
 	maxBacktestChunkLimit   = 50000
 	maxBacktestBars         = 100000
 	historyFetchLimit       = 1000
-	indicatorWarmupBars     = 100
 	orderFlowWarmupBars     = 0
 	binanceMaxKlinesLimit   = 1000
 	defaultStaticDir        = "web"
 )
 
 var errWarmingUp = errors.New("warming_up")
-
-var activeGapFills sync.Map // key: symbol_interval, value: bool
 
 // WSClient wraps a WebSocket connection with a per-connection write mutex.
 // gorilla/websocket permits only one concurrent writer per connection.
@@ -117,19 +117,23 @@ type MarketState struct {
 	Oscillators      []ChartOscillator   `json:"oscillators"`
 	FibZones         []ChartFibZone      `json:"fibZones"`
 	Trades           []ChartTrade        `json:"trades,omitempty"`
+	MasterState      string              `json:"masterState,omitempty"`
 	PaperTrading     bool                `json:"paperTrading,omitempty"`
 	SandboxMode      bool                `json:"sandboxMode,omitempty"`
 	HasMore          bool                                        `json:"hasMore,omitempty"`
 	Navigators       map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
+	Annotations      []strategy.ChartAnnotation                `json:"annotations,omitempty"`
 }
 
 // ChartTrade is a virtual or live trade marker for the price chart (time in Unix seconds).
 type ChartTrade struct {
-	Time   int64   `json:"time"`
-	Side   string  `json:"side"`
-	Price  float64 `json:"price"`
-	Reason string  `json:"reason,omitempty"`
-	Kind   string  `json:"kind,omitempty"` // "entry" or "exit"
+	Time            int64    `json:"time"`
+	Side            string   `json:"side"`
+	Price           float64  `json:"price"`
+	Reason          string   `json:"reason,omitempty"`
+	Kind            string   `json:"kind,omitempty"` // "entry" or "exit"
+	EntryReason     string   `json:"entryReason,omitempty"`
+	FactorsSnapshot []string `json:"factorsSnapshot,omitempty"`
 }
 
 // ChartFibZone is a horizontal Fibonacci level for the price chart overlay.
@@ -157,6 +161,8 @@ type ChartOscillator struct {
 	RSXSignal       float64 `json:"rsx_signal"`
 	Red             float64 `json:"red"`
 	Green           float64 `json:"green"`
+	RedLine         float64 `json:"redLine"`
+	GreenLine       float64 `json:"greenLine"`
 	Blue            float64 `json:"blue"`
 	RsiPrice        float64 `json:"rsiPrice"`
 	EmaRsi          float64 `json:"emaRsi"`
@@ -176,8 +182,8 @@ type ChartOscillator struct {
 	PriceChanDn     float64 `json:"priceChanDn"`
 	Color           string  `json:"color,omitempty"`
 	Marker          string  `json:"marker,omitempty"`
-	VolumeSpikeUp   bool    `json:"volumeSpikeUp"`
-	VolumeSpikeDown bool    `json:"volumeSpikeDown"`
+	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
+	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
 }
 
 type warmingUpResponse struct {
@@ -214,6 +220,8 @@ type tickPayload struct {
 	Factors     map[string]strategy.ScoreFactor `json:"factors"`
 	BrainStatus string                         `json:"brainStatus"`
 	AIStatus    string  `json:"aiStatus"`
+	IsClosed    bool    `json:"isClosed,omitempty"`
+	VolatilityRegime string `json:"volatilityRegime,omitempty"`
 }
 
 type markerPayload struct {
@@ -225,8 +233,9 @@ type markerPayload struct {
 }
 
 type historyChunkResponse struct {
-	ChartData []ChartPoint `json:"chartData"`
-	HasMore   bool         `json:"hasMore"`
+	ChartData     []ChartPoint           `json:"chartData"`
+	HasMore       bool                   `json:"hasMore"`
+	Annotations []strategy.ChartAnnotation `json:"annotations,omitempty"`
 }
 
 type historyResponse struct {
@@ -237,6 +246,7 @@ type historyResponse struct {
 	Trades      []ChartTrade                                `json:"trades,omitempty"`
 	HasMore     bool                                        `json:"hasMore"`
 	Navigators  map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
+	Annotations []strategy.ChartAnnotation                 `json:"annotations,omitempty"`
 }
 
 // NewDashboardServer creates a dashboard server bound to Marker instances.
@@ -280,18 +290,18 @@ func NewDashboardServer(
 func (d *DashboardServer) Start(port string) error {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/state", d.handleState)
-	mux.HandleFunc("/api/history", d.handleHistory)
-	mux.HandleFunc("/api/history/chunk", d.handleHistoryChunk)
-	mux.HandleFunc("/api/settings/thresholds", d.handleThresholds)
-	mux.HandleFunc("/api/settings/matrix", d.handleScoringMatrix)
-	mux.HandleFunc("/api/settings/indicators", d.handleIndicatorSettings)
-	mux.HandleFunc("/api/settings/risk", d.handleRiskSettings)
-	mux.HandleFunc("/api/settings/navigators", d.handleNavigatorSettings)
-	mux.HandleFunc("/api/backtest/run", d.handleBacktestRun)
-	mux.HandleFunc("/api/backtest/stop", d.handleBacktestStop)
-	mux.HandleFunc("/api/stats", d.handleStats)
-	mux.HandleFunc("/api/cache/clear", d.handleCacheClear)
+	mux.HandleFunc("/api/state", withGzip(d.handleState))
+	mux.HandleFunc("/api/history", withGzip(d.handleHistory))
+	mux.HandleFunc("/api/history/chunk", withGzip(d.handleHistoryChunk))
+	mux.HandleFunc("/api/settings/thresholds", withGzip(d.handleThresholds))
+	mux.HandleFunc("/api/settings/matrix", withGzip(d.handleScoringMatrix))
+	mux.HandleFunc("/api/settings/indicators", withGzip(d.handleIndicatorSettings))
+	mux.HandleFunc("/api/settings/risk", withGzip(d.handleRiskSettings))
+	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
+	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
+	mux.HandleFunc("/api/backtest/stop", withGzip(d.handleBacktestStop))
+	mux.HandleFunc("/api/stats", withGzip(d.handleStats))
+	mux.HandleFunc("/api/cache/clear", withGzip(d.handleCacheClear))
 	mux.HandleFunc("/ws", d.handleWS)
 
 	webRoot, err := filepath.Abs(d.staticDir)
@@ -304,7 +314,7 @@ func (d *DashboardServer) Start(port string) error {
 	return http.ListenAndServe(port, mux)
 }
 
-// ChartCandleFromDomain converts a domain candle; OpenTime must be milliseconds.
+// ChartCandleFromDomain converts a domain candle; OpenTime is normalized to ms internally.
 // Returns false when OHLC is zero, missing, or non-finite.
 func ChartCandleFromDomain(c domain.Candle) (ChartCandle, bool) {
 	if !validOHLC(c.Open, c.High, c.Low, c.Close) {
@@ -343,6 +353,8 @@ func (d *DashboardServer) BroadcastTick(
 	rsxColor string,
 	decision strategy.ScoreDecision,
 	brainStatus, aiStatus string,
+	volatilityRegime string,
+	isClosed bool,
 ) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
@@ -377,6 +389,8 @@ func (d *DashboardServer) BroadcastTick(
 			Factors:     decision.Factors,
 			BrainStatus: brainStatus,
 			AIStatus:    aiStatus,
+			IsClosed:    isClosed,
+			VolatilityRegime: volatilityRegime,
 		},
 	})
 }
@@ -434,6 +448,35 @@ func (d *DashboardServer) sessionTrades() []ChartTrade {
 	}
 	out := make([]ChartTrade, len(d.trades))
 	copy(out, d.trades)
+	return out
+}
+
+// sessionTradesForChart returns executed trade markers for the price chart.
+// Telemetry-only signals (FinalAction) never appear here; orphan entry markers at
+// the tail are dropped when the master state machine is IDLE (e.g. failed live order).
+func (d *DashboardServer) sessionTradesForChart() []ChartTrade {
+	trades := d.sessionTrades()
+	if len(trades) == 0 {
+		return nil
+	}
+	if d.master == nil || d.master.State() == strategy.StateInPosition {
+		return trades
+	}
+	out := trades
+	for len(out) > 0 {
+		last := out[len(out)-1]
+		kind := strings.ToLower(strings.TrimSpace(last.Kind))
+		if kind == "" {
+			kind = "entry"
+		}
+		if kind != "entry" {
+			break
+		}
+		out = out[:len(out)-1]
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 
@@ -504,8 +547,98 @@ func (d *DashboardServer) broadcast(msg wsEnvelope) {
 	d.clientsMu.Unlock()
 }
 
-func parseRSXLookback(_ *http.Request) int {
+func parseRSXLookback(r *http.Request) int {
+	if r != nil {
+		if v := r.URL.Query().Get("rsx_div_lookback"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				return n
+			}
+		}
+	}
 	return strategy.GetRSXSettings().DivLookback
+}
+
+func hasRSXQueryOverrides(q url.Values) bool {
+	keys := []string{
+		"rsx_length", "rsx_signal_length", "rsx_source", "rsx_method", "rsx_pivot_radius",
+		"min_price_delta_ratio", "min_osc_delta", "rsx_div_lookback",
+	}
+	for _, k := range keys {
+		if v := q.Get(k); v != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func parseRSXSettingsFromRequest(r *http.Request) strategy.RSXSettings {
+	base := strategy.GetRSXSettings()
+	if r == nil || !hasRSXQueryOverrides(r.URL.Query()) {
+		return base
+	}
+	q := r.URL.Query()
+	patch := strategy.RSXSettings{}
+	if v := q.Get("rsx_length"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			patch.Length = n
+		}
+	}
+	if v := q.Get("rsx_signal_length"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			patch.SignalLength = n
+		}
+	}
+	if v := q.Get("rsx_div_lookback"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			patch.DivLookback = n
+		}
+	}
+	if v := q.Get("rsx_source"); v != "" {
+		patch.Source = v
+	}
+	if v := q.Get("rsx_method"); v != "" {
+		patch.DivMethod = v
+	}
+	if v := q.Get("rsx_pivot_radius"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			patch.PivotRadius = n
+		}
+	}
+	out := strategy.NormalizeRSXSettings(mergeRSXSettingsFromPatch(base, patch))
+	if v := q.Get("min_price_delta_ratio"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			out.MinPriceDeltaRatio = f
+		}
+	}
+	if v := q.Get("min_osc_delta"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			out.MinOscDelta = f
+		}
+	}
+	return out
+}
+
+func mergeRSXSettingsFromPatch(base, patch strategy.RSXSettings) strategy.RSXSettings {
+	out := base
+	if patch.Length > 0 {
+		out.Length = patch.Length
+	}
+	if patch.DivLookback > 0 {
+		out.DivLookback = patch.DivLookback
+	}
+	if patch.SignalLength > 0 {
+		out.SignalLength = patch.SignalLength
+	}
+	if patch.Source != "" {
+		out.Source = patch.Source
+	}
+	if patch.DivMethod != "" {
+		out.DivMethod = patch.DivMethod
+	}
+	if patch.PivotRadius > 0 {
+		out.PivotRadius = patch.PivotRadius
+	}
+	return out
 }
 
 func parseCandleLimit(r *http.Request, defaultLimit, maxLimit int) int {
@@ -522,6 +655,18 @@ func parseCandleLimit(r *http.Request, defaultLimit, maxLimit int) int {
 	return limit
 }
 
+func isTailPollRequest(r *http.Request, candleLimit int) bool {
+	if r == nil {
+		return false
+	}
+	switch r.URL.Query().Get("poll") {
+	case "1", "true", "tail":
+		return true
+	default:
+		return candleLimit > 0 && candleLimit <= stateTailPollLimit
+	}
+}
+
 func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -532,6 +677,12 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	if tf == "" {
 		tf = d.tradingTimeframe
 	}
+	reqStart := time.Now()
+	log.Printf("[Dashboard] GET /api/state tf=%s started", tf)
+	defer func() {
+		log.Printf("[Dashboard] GET /api/state tf=%s completed in %v", tf, time.Since(reqStart))
+	}()
+
 	spec, err := ResolveTimeframe(tf)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -544,7 +695,23 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	endTimeMs := parseStateEndTime(r)
-	state, err := d.buildMarketState(spec, parseRSXLookback(r), parseCandleLimit(r, defaultStateCandleLimit, maxStateCandleLimit), endTimeMs)
+	candleLimit := parseCandleLimit(r, defaultStateCandleLimit, maxStateCandleLimit)
+	tailPoll := isTailPollRequest(r, candleLimit)
+	if tailPoll && (candleLimit <= 0 || candleLimit > stateTailPollLimit) {
+		candleLimit = 5
+	}
+	navigatorsOnly := r.URL.Query().Get("navigators") == "1"
+	if navigatorsOnly {
+		candleLimit = 0
+		tailPoll = false
+	}
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
+	state, err := d.buildMarketState(r.Context(), spec, parseRSXLookback(r), candleLimit, endTimeMs, tailPoll, navigatorsOnly)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
 	if errors.Is(err, errWarmingUp) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -554,6 +721,10 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
 
@@ -733,9 +904,10 @@ func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http
 }
 
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
+	settings := strategy.GetRSXSettings()
 	for _, analyst := range d.analysts {
 		if analyst != nil {
-			analyst.ReapplyRSXSettings()
+			analyst.UpdateRSXScanConfig(settings)
 		}
 	}
 }
@@ -796,15 +968,21 @@ type ChartPoint struct {
 
 // BacktestTrade is a single simulated trade in a backtest result.
 type BacktestTrade struct {
-	Time          int64   `json:"time"`
-	EntryTime     int64   `json:"entryTime"`
-	Side          string  `json:"side"`
-	EntryPrice    float64 `json:"entryPrice"`
-	ExitPrice     float64 `json:"exitPrice"`
-	StopLossPrice float64 `json:"stopLossPrice"`
-	ExitReason    string  `json:"exitReason"`
-	PnL           float64 `json:"pnl"`
-	Duration      string  `json:"duration"`
+	Time            int64    `json:"time"`
+	EntryTime       int64    `json:"entryTime"`
+	Side            string   `json:"side"`
+	EntryPrice      float64  `json:"entryPrice"`
+	ExitPrice       float64  `json:"exitPrice"`
+	StopLossPrice   float64  `json:"stopLossPrice"`
+	ExitReason      string   `json:"exitReason"`
+	EntryReason     string   `json:"entryReason,omitempty"`
+	FactorsSnapshot []string `json:"factorsSnapshot,omitempty"`
+	StrategySource  string   `json:"strategySource,omitempty"`
+	ActiveFactors   []string `json:"activeFactors,omitempty"`
+	SignalKind      string   `json:"signalKind,omitempty"`
+	EntryScore      float64  `json:"entryScore,omitempty"`
+	PnL             float64  `json:"pnl"`
+	Duration        string   `json:"duration"`
 }
 
 // EquityPoint is one point on the equity curve (time in Unix seconds).
@@ -828,6 +1006,7 @@ type BacktestResult struct {
 	NavigatorData  strategy.NavigatorResultDTO            `json:"navigatorData"`
 	NavigatorPrice strategy.NavigatorResultDTO            `json:"navigatorPrice"` // legacy alias for navigatorData
 	Navigators     map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations    []strategy.ChartAnnotation             `json:"annotations,omitempty"`
 }
 
 func truncateLogBody(b []byte, max int) string {
@@ -847,11 +1026,6 @@ func (d *DashboardServer) handleCacheClear(w http.ResponseWriter, r *http.Reques
 	if d.htfProvider != nil {
 		removed = d.htfProvider.ClearCache(true)
 	}
-
-	activeGapFills.Range(func(key, _ any) bool {
-		activeGapFills.Delete(key)
-		return true
-	})
 
 	log.Printf("[Dashboard] cache cleared: htf entries=%d", removed)
 	w.WriteHeader(http.StatusOK)
@@ -978,6 +1152,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	matrix := &matrixSnapshot
 	navigators := strategy.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
 	strategy.ApplyMtfOptionsToNavigators(navigators, req.MtfOptions)
+	strategy.EnsureBacktestNavigatorsForMatrix(navigators, matrixSnapshot)
 
 	if req.Settings != nil && req.Settings.Risk != nil {
 		strategy.UpdateRiskSettings(*req.Settings.Risk)
@@ -991,19 +1166,39 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 			pane, ui.Enabled, ui.Source, ui.UseLong, ui.LongLen)
 	}
 
+	longTh, shortTh := strategy.ResolveBacktestThresholds(req.Settings)
+	rsxSettings, hasRSX := strategy.ResolveBacktestRSXSettings(req.Settings)
+	var rsxCfg *strategy.RSXSettings
+	if hasRSX {
+		rsxCfg = &rsxSettings
+	}
+	var wozduhPrefs map[string]bool
+	if req.Settings != nil && len(req.Settings.WozduhSettings) > 0 {
+		wozduhPrefs = req.Settings.WozduhSettings
+	}
+	log.Printf("[Backtest] thresholds: long=%d short=%d", longTh, shortTh)
+	if hasRSX {
+		log.Printf("[Backtest] RSX settings: length=%d lookback=%d pivot_radius=%d method=%s source=%s",
+			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.DivMethod, rsxSettings.Source)
+	}
+
 	ctx, endRun := d.backtestRuns.begin(r.Context())
 	defer endRun()
 
 	engine := strategy.NewBacktestEngine(strategy.BacktestConfig{
-		Symbol:       symbol,
-		Interval:     spec.BinanceInterval,
-		EntryAnalyst: d.signalAnalyst,
-		FeeRate:      strategy.DefaultScalpFeeRate,
-		SlippagePct:  strategy.ResolveBacktestSlippage(req.Settings),
-		Matrix:       matrix,
-		Navigator:    req.Navigator,
-		Navigators:   navigators,
-		HTF:          d.htfProvider,
+		Symbol:         symbol,
+		Interval:       spec.BinanceInterval,
+		EntryAnalyst:   d.signalAnalyst,
+		FeeRate:        strategy.DefaultScalpFeeRate,
+		SlippagePct:    strategy.ResolveBacktestSlippage(req.Settings),
+		Matrix:         matrix,
+		Navigator:      req.Navigator,
+		Navigators:     navigators,
+		HTF:            d.htfProvider,
+		LongThreshold:  longTh,
+		ShortThreshold: shortTh,
+		RSXSettings:    rsxCfg,
+		WozduhPrefs:    wozduhPrefs,
 	})
 	runResult, err := engine.Run(ctx, candles)
 	if err != nil {
@@ -1054,15 +1249,21 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 	trades := make([]BacktestTrade, len(run.Trades))
 	for i, t := range run.Trades {
 		trades[i] = BacktestTrade{
-			Time:          t.Time,
-			EntryTime:     t.EntryTime,
-			Side:          t.Side,
-			EntryPrice:    t.EntryPrice,
-			ExitPrice:     t.ExitPrice,
-			StopLossPrice: t.StopLossPrice,
-			ExitReason:    t.ExitReason,
-			PnL:           t.PnL,
-			Duration:      t.Duration,
+			Time:            t.Time,
+			EntryTime:       t.EntryTime,
+			Side:            t.Side,
+			EntryPrice:      t.EntryPrice,
+			ExitPrice:       t.ExitPrice,
+			StopLossPrice:   t.StopLossPrice,
+			ExitReason:      t.ExitReason,
+			EntryReason:     t.EntryReason,
+			FactorsSnapshot: append([]string(nil), t.FactorsSnapshot...),
+			StrategySource:  t.StrategySource,
+			ActiveFactors:   append([]string(nil), t.ActiveFactors...),
+			SignalKind:      t.SignalKind,
+			EntryScore:      t.EntryScore,
+			PnL:             t.PnL,
+			Duration:        t.Duration,
 		}
 	}
 
@@ -1129,6 +1330,7 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 		NavigatorData:  run.NavigatorData,
 		NavigatorPrice: run.NavigatorData,
 		Navigators:     run.Navigators,
+		Annotations:    run.Annotations,
 	}
 }
 
@@ -1137,11 +1339,15 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
 
 	tf := r.URL.Query().Get("tf")
+	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
 	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	if tf == "" || endTimeSec <= 0 {
-		http.Error(w, "tf and endTime required", http.StatusBadRequest)
+	if tf == "" || (endTimeMs <= 0 && endTimeSec <= 0) {
+		http.Error(w, "tf and endTime or endTimeMs required", http.StatusBadRequest)
 		return
 	}
 
@@ -1154,48 +1360,102 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	resp := historyResponse{
 		Status:    "ready",
 		Timeframe: spec.ID,
-		Trades:    d.sessionTrades(),
+		Trades:    d.sessionTradesForChart(),
 	}
 
-	rsxLookback := parseRSXLookback(r)
+	rsxSettings := parseRSXSettingsFromRequest(r)
+	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
 	candleLimit := parseCandleLimit(r, historyFetchLimit, maxStateCandleLimit)
 
 	if IsOrderFlowTimeframe(spec) {
+		if err := requestCtxErr(r.Context()); err != nil {
+			return
+		}
 		fetchLimit := candleLimit
 		klines := d.loadOrderFlowKlines(spec, endTimeSec, fetchLimit)
-		resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(klines, orderFlowWarmupBars, rsxLookback)
+		resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
+			r.Context(), klines, orderFlowWarmupBars, spec.BinanceInterval, rsxSettings,
+		)
 		resp.HasMore = len(klines) >= historyFetchLimit
+		if err := requestCtxErr(r.Context()); err != nil {
+			return
+		}
 		writeJSON(w, resp)
 		return
 	}
 
 	if spec.Kind == TFRAMOnly {
-		klines := d.ramKlines(spec.ID)
-		resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(klines, indicatorWarmupBars, rsxLookback)
+		if err := requestCtxErr(r.Context()); err != nil {
+			return
+		}
+		klines := d.ramKlines(spec.ID, candleLimit+strategy.IndicatorWarmupBars)
+		analyst := d.analystForSpec(spec)
+		if analyst != nil && len(klines) > 0 {
+			trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+			if candles, oscillators, annotations, ok := d.buildLiveChartFromRAM(analyst, klines, rsxSettings); ok {
+				if trimBars > 0 && len(candles) > trimBars {
+					candles = candles[trimBars:]
+					oscillators = oscillators[trimBars:]
+					annotations = trimAnnotations(annotations, trimBars, klines)
+				}
+				resp.Candles, resp.Oscillators, resp.Annotations = candles, oscillators, annotations
+			}
+		} else {
+			resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
+				r.Context(), klines, strategy.IndicatorWarmupBars, spec.ID, rsxSettings,
+			)
+		}
 		resp.HasMore = false
+		if err := requestCtxErr(r.Context()); err != nil {
+			return
+		}
 		writeJSON(w, resp)
 		return
 	}
 
-	endTimeMs := historyEndTimeToMs(endTimeSec)
-	klines := d.loadRESTKlinesFromStore(spec, endTimeMs, candleLimit)
+	resolvedEndMs := endTimeMs
+	if resolvedEndMs <= 0 {
+		resolvedEndMs = historyEndTimeToMs(endTimeSec)
+	}
+	klines := d.loadRESTKlinesFromStore(r.Context(), spec, resolvedEndMs, candleLimit, true)
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
 	if len(klines) == 0 {
 		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
 		return
 	}
 
-	resp.Candles, resp.Oscillators = buildChartSeriesTrimmed(
-		klines,
-		historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars),
-		rsxLookback,
-	)
-	trimBars := historyWarmupTrim(len(klines), candleLimit, indicatorWarmupBars)
-	if len(resp.Candles) > 0 && spec.BinanceInterval != "" {
-		resp.Navigators = buildNavigatorsFromSeries(
-			d.symbol, klines, resp.Oscillators, trimBars, spec.BinanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
-		)
+	trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
 	}
-	resp.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, endTimeMs)
+	resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
+		r.Context(),
+		klines,
+		trimBars,
+		spec.BinanceInterval,
+		rsxSettings,
+	)
+	if candleLimit > 0 && len(resp.Candles) > candleLimit {
+		drop := len(resp.Candles) - candleLimit
+		resp.Candles = resp.Candles[drop:]
+		resp.Oscillators = resp.Oscillators[drop:]
+		resp.Annotations = trimAnnotations(resp.Annotations, drop, klines)
+	}
+	if len(resp.Candles) == 0 {
+		log.Printf("[Dashboard] history replay empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(klines))
+		http.Error(w, "history replay empty", http.StatusServiceUnavailable)
+		return
+	}
+	if len(resp.Candles) > 0 {
+		resp.HasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, resp.Candles[0].Time*1000)
+	}
+	log.Printf("[Dashboard] history prepend %s %s: %d candles (from %d klines) hasMore=%v",
+		d.symbol, spec.BinanceInterval, len(resp.Candles), len(klines), resp.HasMore)
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
 	writeJSON(w, resp)
 }
 
@@ -1213,6 +1473,9 @@ func parseHistoryChunkLimit(r *http.Request) int {
 func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
 
@@ -1264,27 +1527,42 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fetchStartMs := fetchEndMs - intervalMs*int64(limit+indicatorWarmupBars)
+	fetchStartMs := fetchEndMs - intervalMs*int64(limit+strategy.IndicatorWarmupBars)
 	if fetchStartMs < 0 {
 		fetchStartMs = 0
 	}
 
-	rsxLookback := parseRSXLookback(r)
+	rsxSettings := parseRSXSettingsFromRequest(r)
+	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
 
 	if err := data.InitDB(); err == nil {
-		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs, limit+strategy.IndicatorWarmupBars)
 		if loadErr == nil && len(candles) > 0 {
-			if d.needsAsyncKlineGapFill(candles[len(candles)-1].OpenTime, len(candles), fetchEndMs, intervalMs, limit) {
-				d.scheduleKlineGapFill(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
-			}
 			klines := candlesToKlines(candles)
-			trim := historyWarmupTrim(len(klines), limit, indicatorWarmupBars)
-			chartCandles, oscillators := buildChartSeriesTrimmed(klines, trim, rsxLookback)
+			wantBars := limit + strategy.IndicatorWarmupBars
+			if wantBars > 0 && len(klines) > wantBars {
+				klines = klines[len(klines)-wantBars:]
+			}
+			trim := historyWarmupTrim(len(klines), limit, strategy.IndicatorWarmupBars)
+			if err := requestCtxErr(r.Context()); err != nil {
+				return
+			}
+			chartCandles, oscillators, annotations := d.buildHistoryChartSeriesTrimmed(r.Context(), klines, trim, spec.BinanceInterval, rsxSettings)
+			if limit > 0 && len(chartCandles) > limit {
+				drop := len(chartCandles) - limit
+				chartCandles = chartCandles[drop:]
+				oscillators = oscillators[drop:]
+				annotations = trimAnnotations(annotations, drop, klines)
+			}
 			chartData := chartPointsFromSeries(chartCandles, oscillators)
 			hasMore := len(chartCandles) >= limit && fetchStartMs > 0
+			if err := requestCtxErr(r.Context()); err != nil {
+				return
+			}
 			writeJSON(w, historyChunkResponse{
-				ChartData: chartData,
-				HasMore:   hasMore,
+				ChartData:     chartData,
+				HasMore:       hasMore,
+				Annotations: annotations,
 			})
 			return
 		}
@@ -1292,28 +1570,8 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		log.Printf("[HistoryChunk] DB init failed: %v", err)
 	}
 
-	if d.rest == nil {
-		http.Error(w, "REST client unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	candles, err := d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
-	if err != nil {
-		log.Printf("[HistoryChunk] fetch failed: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-
-	klines := candlesToKlines(candles)
-	trim := historyWarmupTrim(len(klines), limit, indicatorWarmupBars)
-	chartCandles, oscillators := buildChartSeriesTrimmed(klines, trim, rsxLookback)
-	chartData := chartPointsFromSeries(chartCandles, oscillators)
-
-	hasMore := len(chartCandles) >= limit && fetchStartMs > 0
-	writeJSON(w, historyChunkResponse{
-		ChartData: chartData,
-		HasMore:   hasMore,
-	})
+	log.Printf("[HistoryChunk] no SQLite data for %s %s [%d..%d]", symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+	http.Error(w, "no historical data available", http.StatusServiceUnavailable)
 }
 
 func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator) []ChartPoint {
@@ -1362,11 +1620,17 @@ func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator)
 	return out
 }
 
-func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, candleLimit int, endTimeMs int64) (*MarketState, error) {
+func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSpec, rsxLookback int, candleLimit int, endTimeMs int64, tailPoll bool, navigatorsOnly bool) (*MarketState, error) {
+	if err := requestCtxErr(ctx); err != nil {
+		return nil, err
+	}
+	if navigatorsOnly {
+		return d.buildNavigatorOnlyState(ctx, spec, candleLimit)
+	}
 	if candleLimit <= 0 {
 		candleLimit = defaultStateCandleLimit
 	}
-	klines := d.loadKlines(spec, candleLimit, endTimeMs)
+	klines := d.loadLiveKlinesFromRAM(spec, candleLimit)
 	if (spec.Kind == TFRAMOnly || IsOrderFlowTimeframe(spec)) && len(klines) == 0 {
 		state := &MarketState{
 			Status:           "ready",
@@ -1374,7 +1638,7 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 			Timeframe:        spec.ID,
 			TradingTimeframe: d.tradingTimeframe,
 			UpdatedAt:        time.Now().Unix(),
-			Trades:       d.sessionTrades(),
+			Trades:       d.sessionTradesForChart(),
 			PaperTrading: d.paperTrading,
 			SandboxMode:  d.sandboxMode,
 		}
@@ -1387,62 +1651,158 @@ func (d *DashboardServer) buildMarketState(spec TimeframeSpec, rsxLookback int, 
 		return nil, errWarmingUp
 	}
 
-	windowSize := candleLimit + indicatorWarmupBars
-	trimBars := indicatorWarmupBars
-	if IsOrderFlowTimeframe(spec) {
-		windowSize = candleLimit
-		trimBars = orderFlowWarmupBars
-	}
-	if len(klines) > windowSize {
-		klines = klines[len(klines)-windowSize:]
+	settings := strategy.GetRSXSettings()
+
+	// Tail poll: one candle from Marker RAM (or OHLC for Order Flow).
+	if tailPoll {
+		windowSize := candleLimit + strategy.IndicatorWarmupBars
+		if IsOrderFlowTimeframe(spec) {
+			windowSize = candleLimit
+		}
+		if len(klines) > windowSize {
+			klines = klines[len(klines)-windowSize:]
+		}
+		var candles []ChartCandle
+		var oscillators []ChartOscillator
+		var annotations []strategy.ChartAnnotation
+		if IsOrderFlowTimeframe(spec) {
+			if len(klines) > 0 {
+				candles, oscillators, annotations = buildOHLCChartFromKlines(klines[len(klines)-1:])
+			}
+		} else if analyst, ok := d.analysts[spec.ID]; ok {
+			candles, oscillators, annotations = d.buildTailPollChartFromRAM(analyst, klines)
+		} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+			candles, oscillators, annotations = d.buildTailPollChartFromRAM(analyst, klines)
+		}
+		return d.assembleMarketState(spec, candles, oscillators, annotations, klines, settings, false, tailPoll), nil
 	}
 
-	trimBars = historyWarmupTrim(len(klines), candleLimit, trimBars)
-	candles, oscillators := buildChartSeriesTrimmed(klines, trimBars, rsxLookback)
+	// RAM Router SSOT: Marker tail + ExportChartSeriesForWindow (no replay accumulator).
+	export, err := d.buildRAMChartExport(ctx, spec, candleLimit, settings)
+	if err != nil {
+		return nil, err
+	}
+	if err := requestCtxErr(ctx); err != nil {
+		return nil, err
+	}
+	state := d.assembleMarketState(spec, export.candles, export.oscillators, export.annotations, export.klines, settings, export.hasMore, tailPoll)
+	if !tailPoll && candleLimit > stateTailPollLimit {
+		if err := requestCtxErr(ctx); err != nil {
+			return nil, err
+		}
+		binanceInterval := spec.BinanceInterval
+		trimBars := historyWarmupTrim(len(export.klines), candleLimit, strategy.IndicatorWarmupBars)
+		state.Navigators = buildNavigatorsFromSeries(
+			ctx, d.symbol, export.klines, export.oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
+		)
+	}
+	return state, nil
+}
 
+func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec TimeframeSpec, displayLimit int) (*MarketState, error) {
+	if err := requestCtxErr(ctx); err != nil {
+		return nil, err
+	}
+	if displayLimit <= 0 {
+		displayLimit = defaultStateCandleLimit
+	}
+	settings := strategy.GetRSXSettings()
+	klines := d.loadLiveKlinesFromRAM(spec, displayLimit)
+	if len(klines) == 0 {
+		return nil, errWarmingUp
+	}
+	trimBars := historyWarmupTrim(len(klines), displayLimit, strategy.IndicatorWarmupBars)
+	binanceInterval := spec.BinanceInterval
+	if spec.Kind == TFRAMOnly {
+		binanceInterval = spec.ID
+	}
+	analyst := d.analystForSpec(spec)
+	_, oscillators, _, ok := d.buildLiveChartFromRAM(analyst, klines, settings)
+	if !ok {
+		return nil, errWarmingUp
+	}
+	if trimBars > 0 && len(oscillators) > trimBars {
+		oscillators = oscillators[trimBars:]
+	}
+	if err := requestCtxErr(ctx); err != nil {
+		return nil, err
+	}
+	return &MarketState{
+		Status:           "ready",
+		Symbol:           d.symbol,
+		Timeframe:        spec.ID,
+		TradingTimeframe: d.tradingTimeframe,
+		UpdatedAt:        time.Now().Unix(),
+		Navigators: buildNavigatorsFromSeries(
+			ctx, d.symbol, klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
+		),
+	}, nil
+}
+
+func (d *DashboardServer) assembleMarketState(
+	spec TimeframeSpec,
+	candles []ChartCandle,
+	oscillators []ChartOscillator,
+	annotations []strategy.ChartAnnotation,
+	klines []exchange.Kline,
+	settings strategy.RSXSettings,
+	hasMore bool,
+	tailPoll bool,
+) *MarketState {
 	state := &MarketState{
 		Status:           "ready",
 		Symbol:           d.symbol,
 		Timeframe:        spec.ID,
 		TradingTimeframe: d.tradingTimeframe,
 		UpdatedAt:        time.Now().Unix(),
-		Candles:      candles,
-		Oscillators:  oscillators,
-		Trades:       d.sessionTrades(),
-		PaperTrading: d.paperTrading,
-		SandboxMode:  d.sandboxMode,
-	}
-	if !IsOrderFlowTimeframe(spec) && len(candles) > 0 {
-		binanceInterval := spec.BinanceInterval
-		if spec.Kind == TFRAMOnly {
-			binanceInterval = spec.ID
-		}
-		state.Navigators = buildNavigatorsFromSeries(
-			d.symbol, klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
-		)
+		Candles:          candles,
+		Oscillators:      oscillators,
+		Annotations:      annotations,
+		Trades:           d.sessionTradesForChart(),
+		PaperTrading:     d.paperTrading,
+		SandboxMode:      d.sandboxMode,
+		HasMore:          hasMore,
 	}
 	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
 		state.TickBufferLen = d.orderFlow.Ticks.Len()
 	}
-
 	if analyst, ok := d.analysts[spec.ID]; ok {
 		d.enrichFromAnalyst(state, analyst, klines)
 	} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
 		d.enrichFromAnalyst(state, analyst, klines)
 	}
-
-	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" && len(klines) > 0 {
-		hasMoreEndMs := endTimeMs
-		if hasMoreEndMs <= 0 {
-			hasMoreEndMs = time.Now().UnixMilli()
-		}
-		state.HasMore = d.liveHistoryHasMore(d.symbol, spec.BinanceInterval, klines, candleLimit, hasMoreEndMs)
-	}
-
-	return state, nil
+	_ = tailPoll
+	return state
 }
 
-func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int, endTimeMs int64) []exchange.Kline {
+func (d *DashboardServer) loadLiveKlinesFromRAM(spec TimeframeSpec, limit int) []exchange.Kline {
+	if limit <= 0 {
+		limit = defaultStateCandleLimit
+	}
+	if IsOrderFlowTimeframe(spec) {
+		want := limit + orderFlowWarmupBars
+		if want > strategy.LiveKlineRAMCap {
+			want = strategy.LiveKlineRAMCap
+		}
+		return d.loadOrderFlowKlines(spec, 0, want)
+	}
+	want := limit + strategy.IndicatorWarmupBars
+	if want > strategy.LiveKlineRAMCap {
+		want = strategy.LiveKlineRAMCap
+	}
+	if analyst, ok := d.analysts[spec.ID]; ok {
+		return analyst.GetKlinesTail(want)
+	}
+	if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+		return analyst.GetKlinesTail(want)
+	}
+	return nil
+}
+
+func (d *DashboardServer) loadKlines(ctx context.Context, spec TimeframeSpec, limit int, endTimeMs int64) []exchange.Kline {
+	if err := requestCtxErr(ctx); err != nil {
+		return nil
+	}
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
 	}
@@ -1450,10 +1810,11 @@ func (d *DashboardServer) loadKlines(spec TimeframeSpec, limit int, endTimeMs in
 		return d.loadOrderFlowKlines(spec, 0, limit)
 	}
 	if spec.Kind == TFRAMOnly {
-		return d.ramKlines(spec.ID)
+		want := limit + strategy.IndicatorWarmupBars
+		return d.ramKlines(spec.ID, want)
 	}
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
-		klines := d.loadRESTKlinesFromStore(spec, endTimeMs, limit)
+		klines := d.loadRESTKlinesFromStore(ctx, spec, endTimeMs, limit, d.isHistoricalKlineEnd(endTimeMs, spec.BinanceInterval))
 		klines = mergeKlinesByOpenTime(klines, d.analystKlines(spec))
 		if len(klines) > 0 {
 			return klines
@@ -1472,7 +1833,10 @@ func (d *DashboardServer) analystKlines(spec TimeframeSpec) []exchange.Kline {
 	return nil
 }
 
-func (d *DashboardServer) loadRESTKlinesFromStore(spec TimeframeSpec, endTimeMs int64, limit int) []exchange.Kline {
+func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec TimeframeSpec, endTimeMs int64, limit int, historical bool) []exchange.Kline {
+	if err := requestCtxErr(ctx); err != nil {
+		return nil
+	}
 	if spec.BinanceInterval == "" {
 		return nil
 	}
@@ -1486,75 +1850,74 @@ func (d *DashboardServer) loadRESTKlinesFromStore(spec TimeframeSpec, endTimeMs 
 		return nil
 	}
 
-	wantBars := limit + indicatorWarmupBars
+	wantBars := limit + strategy.IndicatorWarmupBars
 	startTimeMs := endTimeMs - intervalMs*int64(wantBars)
 	if startTimeMs < 0 {
 		startTimeMs = 0
 	}
 
 	if err := data.InitDB(); err == nil {
-		candles, loadErr := exchange.LoadContinuousContractFromDB(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
+		if err := requestCtxErr(ctx); err != nil {
+			return nil
+		}
+		candles, loadErr := exchange.LoadContinuousContractFromDB(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs, wantBars)
 		if loadErr == nil && len(candles) > 0 {
-			klines := candlesToKlines(candles)
-			if d.needsAsyncKlineGapFill(candles[len(candles)-1].OpenTime, len(candles), endTimeMs, intervalMs, limit) {
-				d.scheduleKlineGapFill(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
+			if err := requestCtxErr(ctx); err != nil {
+				return nil
 			}
-			log.Printf("[Dashboard] SQLite fast path %s %s: %d bars", d.symbol, spec.BinanceInterval, len(klines))
+			klines := candlesToKlines(candles)
+			if wantBars > 0 && len(klines) > wantBars {
+				klines = klines[len(klines)-wantBars:]
+			}
+			log.Printf("[Dashboard] SQLite fast path %s %s: %d bars (cap %d)", d.symbol, spec.BinanceInterval, len(klines), wantBars)
 			return klines
 		}
 	} else {
 		log.Printf("[Dashboard] SQLite init: %v", err)
 	}
 
-	if d.rest == nil {
-		return nil
-	}
-
-	candles, err := d.rest.FetchHistoricalKlines(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs)
-	if err != nil {
-		log.Printf("[Dashboard] FetchHistoricalKlines %s %s: %v", d.symbol, spec.BinanceInterval, err)
-		return nil
-	}
-	log.Printf("[Dashboard] unified klines %s %s: %d bars", d.symbol, spec.BinanceInterval, len(candles))
-	return candlesToKlines(candles)
+	return nil
 }
 
-// needsAsyncKlineGapFill returns true when SQLite data should be served now but
-// a background Binance fetch should refresh the cache for later requests.
-func (d *DashboardServer) needsAsyncKlineGapFill(lastOpenTimeMs int64, barCount int, endTimeMs, intervalMs int64, limit int) bool {
-	if barCount == 0 {
+// isHistoricalKlineEnd reports whether endTimeMs targets deep history (scroll-left via /api/history).
+func (d *DashboardServer) isHistoricalKlineEnd(endTimeMs int64, interval string) bool {
+	if endTimeMs <= 0 {
 		return false
 	}
-	stale := endTimeMs-lastOpenTimeMs > intervalMs*2
-	sparse := barCount < limit/3
-	return stale || sparse
+	intervalMs, err := data.IntervalDurationMs(interval)
+	if err != nil || intervalMs <= 0 {
+		return endTimeMs < time.Now().UnixMilli()
+	}
+	return !d.isLiveKlineEnd(endTimeMs, intervalMs)
 }
 
-// scheduleKlineGapFill runs FetchHistoricalKlines in the background (SQLite writes only).
-func (d *DashboardServer) scheduleKlineGapFill(symbol, interval string, startTimeMs, endTimeMs int64) {
-	rest := d.rest
-	if rest == nil {
-		return
+func (d *DashboardServer) isLiveKlineEnd(endTimeMs, intervalMs int64) bool {
+	if endTimeMs <= 0 {
+		return true
 	}
+	nowMs := time.Now().UnixMilli()
+	return endTimeMs >= nowMs-intervalMs*3
+}
 
-	taskKey := symbol + "_" + interval
-	if _, alreadyRunning := activeGapFills.LoadOrStore(taskKey, true); alreadyRunning {
-		return
+// sqliteHasBarsBefore reports whether SQLite holds klines older than beforeOpenTimeMs.
+func (d *DashboardServer) sqliteHasBarsBefore(interval string, beforeOpenTimeMs int64) bool {
+	if interval == "" || beforeOpenTimeMs <= 0 {
+		return false
 	}
-
-	go func(sym, ivl string, start, end int64) {
-		defer activeGapFills.Delete(taskKey)
-
-		candles, err := rest.FetchHistoricalKlines(sym, ivl, start, end)
-		if err != nil {
-			log.Printf("[Dashboard] background gap fill %s %s [%d..%d]: %v", sym, ivl, start, end, err)
-			return
+	if err := data.InitDB(); err != nil {
+		return false
+	}
+	symbol := d.symbol
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
+	for _, sym := range []string{symbol, exchange.SpotStorageSymbol(symbol)} {
+		bounds, err := data.QueryKlineCacheBounds(sym, interval)
+		if err == nil && bounds.HasData && bounds.MinTime < beforeOpenTimeMs {
+			return true
 		}
-		log.Printf("[Dashboard] background gap fill %s %s: merged %d bars into cache", sym, ivl, len(candles))
-		if d.master != nil {
-			d.master.NotifyKlineGapFillComplete(sym, ivl)
-		}
-	}(symbol, interval, startTimeMs, endTimeMs)
+	}
+	return false
 }
 
 // liveHistoryHasMore is true when SQLite (or the requested window) indicates older bars exist.
@@ -1577,7 +1940,7 @@ func (d *DashboardServer) liveHistoryHasMore(symbol, interval string, klines []e
 	if err != nil {
 		return false
 	}
-	wantBars := candleLimit + indicatorWarmupBars
+	wantBars := candleLimit + strategy.IndicatorWarmupBars
 	if len(klines) >= wantBars {
 		startTimeMs := endTimeMs - intervalMs*int64(wantBars)
 		if startTimeMs > 0 {
@@ -1625,9 +1988,12 @@ func mergeKlinesByOpenTime(primary, live []exchange.Kline) []exchange.Kline {
 	return out
 }
 
-func (d *DashboardServer) ramKlines(tfID string) []exchange.Kline {
+func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
 	if analyst, ok := d.analysts[tfID]; ok {
-		return analyst.GetKlines()
+		if maxBars <= 0 {
+			maxBars = defaultStateCandleLimit
+		}
+		return analyst.GetKlinesTail(maxBars)
 	}
 	return nil
 }
@@ -1695,6 +2061,9 @@ func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strateg
 	applyScoreTelemetryToMarketState(state, decision)
 	state.BrainStatus = strategy.TelemetryBrainStatus(decision, d.signalAnalyst)
 	state.AIStatus = strategy.TelemetryAIStatus(context.Background(), analyst, nil)
+	if d.master != nil {
+		state.MasterState = string(d.master.State())
+	}
 
 	if !analyst.HasMinBars(strategy.BacktestMinBars()) {
 		if len(klines) == 0 {
@@ -1711,94 +2080,43 @@ func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strateg
 
 	vol := analyst.VolatilityStateSnapshot()
 	falcon := analyst.FalconSnapshot()
-	state.VolatilityRegime = string(vol.Regime)
+	if d.master != nil {
+		state.VolatilityRegime = d.master.ClosedVolatilityRegimeForTelemetry(analyst)
+	} else {
+		state.VolatilityRegime = analyst.ClosedVolatilityRegime()
+		if state.VolatilityRegime == "" {
+			state.VolatilityRegime = string(vol.Regime)
+		}
+	}
 	state.Jurik = falcon.JurikRSX
 	state.RedLine = falcon.RedLine
 	state.GreenLine = falcon.GreenLine
 	state.FibZones = chartFibZonesFromFib(analyst.FibZonesSnapshot())
 }
 
-func buildChartSeries(klines []exchange.Kline, rsxLookback int) ([]ChartCandle, []ChartOscillator) {
+func trimAnnotations(annotations []strategy.ChartAnnotation, trim int, klines []exchange.Kline) []strategy.ChartAnnotation {
+	if trim <= 0 || len(annotations) == 0 {
+		return annotations
+	}
+	if trim >= len(klines) {
+		return nil
+	}
 	sorted := make([]exchange.Kline, len(klines))
 	copy(sorted, klines)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].OpenTime < sorted[j].OpenTime
 	})
-
-	candles := make([]ChartCandle, 0, len(sorted))
-	oscillators := make([]ChartOscillator, 0, len(sorted))
-	falcon := strategy.NewFalconEngine()
-	var prevBlue float64
-
-	type evaluatedBar struct {
-		k   exchange.Kline
-		sig strategy.FalconSignals
+	minTime := exchange.ChartTimeSec(sorted[trim].OpenTime)
+	out := make([]strategy.ChartAnnotation, 0, len(annotations))
+	for _, ann := range annotations {
+		if ann.Time >= minTime {
+			out = append(out, ann)
+		}
 	}
-	evaluated := make([]evaluatedBar, 0, len(sorted))
-	rsxValues := make([]float64, 0, len(sorted))
-	for _, k := range sorted {
-		sig := falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
-		evaluated = append(evaluated, evaluatedBar{k: k, sig: sig})
-		rsxValues = append(rsxValues, sig.JurikRSX)
-	}
-	rsxPoints := strategy.BuildRSXChart(sorted, rsxValues, rsxLookback)
-
-	for i, ev := range evaluated {
-		chart, ok := ChartCandleFromKline(ev.k)
-		if !ok {
-			continue
-		}
-		sig := ev.sig
-		rsxMeta := rsxPoints[i]
-		spikeUp := false
-		spikeDown := false
-		if len(candles) > 0 {
-			spikeUp = strategy.DetectWozduxVolumeSpikeUp(prevBlue, sig.BlueLine, sig.RedLine)
-			spikeDown = strategy.DetectWozduxVolumeSpikeDown(prevBlue, sig.BlueLine, sig.RedLine)
-		}
-		osc := ChartOscillator{
-			Time:            chart.Time,
-			Jurik:           sig.JurikRSX,
-			RSX:             sig.JurikRSX,
-			RSXSignal:       sig.JurikRSXSignal,
-			Red:             sig.RedLine,
-			Green:           sig.GreenLine,
-			Blue:            sig.BlueLine,
-			RsiPrice:        sig.RsiPrice,
-			EmaRsi:          sig.EmaRsi,
-			RsiRsi:          sig.RsiRsi,
-			RsiHl2:          sig.RsiHl2,
-			RsiVolFast:      sig.RsiVolFast,
-			RsiVolSlow:      sig.RsiVolSlow,
-			MacdRsi:         sig.MacdRsi,
-			RsiAd:           sig.RsiAd,
-			RsiHl2Vol:       sig.RsiHl2Vol,
-			VolCrossMarker:  sig.VolCrossMarker,
-			VolChanMid:      sig.VolChanMid,
-			VolChanUp:       sig.VolChanUp,
-			VolChanDn:       sig.VolChanDn,
-			PriceChanMid:    sig.PriceChanMid,
-			PriceChanUp:     sig.PriceChanUp,
-			PriceChanDn:     sig.PriceChanDn,
-			Color:           rsxMeta.Color,
-			Marker:          rsxMeta.Marker,
-			VolumeSpikeUp:   spikeUp,
-			VolumeSpikeDown: spikeDown,
-		}
-
-		if len(candles) > 0 && candles[len(candles)-1].Time == chart.Time {
-			candles[len(candles)-1] = chart
-			oscillators[len(oscillators)-1] = osc
-		} else {
-			candles = append(candles, chart)
-			oscillators = append(oscillators, osc)
-		}
-		prevBlue = sig.BlueLine
-	}
-	return candles, oscillators
+	return out
 }
 
-// parseStateEndTime reads optional endTime from GET /api/state (seconds or milliseconds).
+// parseStateEndTime reads optional endTime from GET /api/state (Unix seconds).
 func parseStateEndTime(r *http.Request) int64 {
 	endTimeStr := r.URL.Query().Get("endTime")
 	if endTimeStr == "" {
@@ -1811,24 +2129,12 @@ func parseStateEndTime(r *http.Request) int64 {
 	return historyEndTimeToMs(val)
 }
 
-// historyEndTimeToMs converts Lightweight Charts endTime (Unix seconds) to Binance milliseconds.
+// historyEndTimeToMs converts chart endTime (Unix seconds) to Binance milliseconds.
 func historyEndTimeToMs(endTimeSec int64) int64 {
 	if endTimeSec <= 0 {
 		return 0
 	}
-	// Guard: if a client accidentally sends milliseconds, pass through unchanged.
-	if endTimeSec > 1e12 {
-		return endTimeSec
-	}
 	return endTimeSec * 1000
-}
-
-func buildChartSeriesTrimmed(klines []exchange.Kline, trim, rsxLookback int) ([]ChartCandle, []ChartOscillator) {
-	candles, oscillators := buildChartSeries(klines, rsxLookback)
-	if trim <= 0 || len(candles) <= trim {
-		return candles, oscillators
-	}
-	return candles[trim:], oscillators[trim:]
 }
 
 // historyWarmupTrim returns 0 when SQLite/Binance returned fewer bars than requested,
@@ -1844,6 +2150,7 @@ func historyWarmupTrim(gotBars, requestedBars, warmupTrim int) int {
 }
 
 func buildNavigatorsFromSeries(
+	ctx context.Context,
 	symbol string,
 	klines []exchange.Kline,
 	oscillators []ChartOscillator,
@@ -1852,6 +2159,9 @@ func buildNavigatorsFromSeries(
 	panes map[string]strategy.NavigatorUISettings,
 	htf *exchange.HTFProvider,
 ) map[string]strategy.NavigatorResultDTO {
+	if err := requestCtxErr(ctx); err != nil {
+		return nil
+	}
 	if len(klines) == 0 || len(oscillators) == 0 || len(panes) == 0 {
 		return nil
 	}

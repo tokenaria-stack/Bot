@@ -27,13 +27,15 @@ func main() {
 
 func run() int {
 	var (
-		symbol   = flag.String("symbol", "BTCUSDT", "futures symbol")
-		interval = flag.String("interval", "15m", "binance kline interval")
-		months   = flag.Int("months", 6, "lookback months when -start/-end omitted")
-		start    = flag.String("start", "", "start date YYYY-MM-DD (UTC)")
-		end      = flag.String("end", "", "end date YYYY-MM-DD (UTC)")
-		matrix   = flag.String("matrix", strategy.MatrixConfigPath, "scoring matrix JSON path")
-		useREST  = flag.Bool("rest", false, "allow REST gap-fill when SQLite is sparse")
+		symbol         = flag.String("symbol", "BTCUSDT", "futures symbol")
+		interval       = flag.String("interval", "15m", "binance kline interval")
+		months         = flag.Int("months", 6, "lookback months when -start/-end omitted")
+		start          = flag.String("start", "", "start date YYYY-MM-DD (UTC)")
+		end            = flag.String("end", "", "end date YYYY-MM-DD (UTC)")
+		matrix         = flag.String("matrix", strategy.MatrixConfigPath, "scoring matrix JSON path")
+		longThreshold  = flag.Int("long-threshold", 0, "long entry score threshold (0 = default 70)")
+		shortThreshold = flag.Int("short-threshold", 0, "short entry score threshold (0 = default 70)")
+		useREST        = flag.Bool("rest", false, "allow REST gap-fill when SQLite is sparse")
 	)
 	flag.Parse()
 
@@ -89,6 +91,10 @@ func run() int {
 	htf := exchange.NewHTFProvider()
 	analyst := strategy.NewAnalyst(false)
 	specs := strategy.DefaultABRunSpecs(baseMatrix)
+	longTh, shortTh := strategy.ResolveBacktestThresholds(&strategy.BacktestRunSettings{
+		LongThreshold:  *longThreshold,
+		ShortThreshold: *shortThreshold,
+	})
 
 	rows := make([]abRow, 0, len(specs))
 
@@ -102,6 +108,9 @@ func run() int {
 			htf,
 			analyst,
 			strategy.DefaultBacktestSlippagePct,
+			longTh,
+			shortTh,
+			nil,
 		)
 		log.Printf("[ab-test] running %s (HTF=%v WozduhCross=%v HTFOsc=%v periods=%v)",
 			spec.Label,

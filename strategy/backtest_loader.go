@@ -30,6 +30,9 @@ func LoadBacktestCandles(opts LoadBacktestCandlesOpts) ([]exchange.Candle, int64
 	if opts.EndMs <= 0 {
 		opts.EndMs = time.Now().UnixMilli()
 	}
+	if capped, capErr := data.CapKlineEndToLastClosed(opts.EndMs, opts.Interval); capErr == nil {
+		opts.EndMs = capped
+	}
 	if opts.StartMs <= 0 || opts.StartMs >= opts.EndMs {
 		opts.StartMs = opts.EndMs - int64(180)*24*time.Hour.Milliseconds()
 	}
@@ -76,7 +79,7 @@ func LoadBacktestCandles(opts LoadBacktestCandlesOpts) ([]exchange.Candle, int64
 }
 
 func loadCandlesRange(symbol, interval string, startMs, endMs int64) ([]exchange.Candle, error) {
-	raw, err := exchange.LoadContinuousContractFromDB(symbol, interval, startMs, endMs)
+	raw, err := exchange.LoadContinuousContractFromDB(symbol, interval, startMs, endMs, 0)
 	if err != nil {
 		return nil, err
 	}

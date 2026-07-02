@@ -49,20 +49,30 @@ func storageSymbolForSegment(symbol string, seg contractSegment) string {
 }
 
 // LoadContinuousContractFromDB reads spot (_SPOT) and futures rows from SQLite and stitches them.
-func LoadContinuousContractFromDB(symbol, interval string, startTimeMs, endTimeMs int64) ([]Candle, error) {
+// When limit > 0, returns at most the last limit stitched bars (ascending).
+func LoadContinuousContractFromDB(symbol, interval string, startTimeMs, endTimeMs int64, limit int) ([]Candle, error) {
 	symbol = NormalizeFuturesSymbol(symbol)
 	var merged []data.Candle
 
 	for _, seg := range splitRangeAtGenesis(startTimeMs, endTimeMs) {
 		storageSym := storageSymbolForSegment(symbol, seg)
-		rows, err := data.LoadKlines(storageSym, interval, seg.start, seg.end)
+		rows, err := data.LoadKlines(storageSym, interval, seg.start, seg.end, 0)
 		if err != nil {
 			return nil, fmt.Errorf("load %s %s [%d..%d]: %w", storageSym, interval, seg.start, seg.end, err)
 		}
 		merged = append(merged, rows...)
 	}
 
-	return candlesFromData(dedupeDataCandlesByOpenTime(merged)), nil
+	out := candlesFromData(dedupeDataCandlesByOpenTime(merged))
+	return TruncateCandlesTail(out, limit), nil
+}
+
+// TruncateCandlesTail keeps the last max bars; max <= 0 is a no-op.
+func TruncateCandlesTail(candles []Candle, max int) []Candle {
+	if max <= 0 || len(candles) <= max {
+		return candles
+	}
+	return candles[len(candles)-max:]
 }
 
 func queryContinuousContractCacheBounds(symbol, interval string, startTimeMs, endTimeMs int64) data.KlineCacheBounds {
@@ -154,19 +164,32 @@ func dedupeDataCandlesByOpenTime(candles []data.Candle) []data.Candle {
 }
 
 func (b *BinanceExchange) fetchGapSegment(symbol, interval string, seg contractSegment) ([]Candle, error) {
+	stepMs, err := data.IntervalDurationMs(interval)
+	if err != nil {
+		return nil, err
+	}
+	start, end := alignKlineRangeMs(seg.start, seg.end, stepMs)
+	if start > end {
+		return nil, nil
+	}
 	if seg.spotStorage {
-		start, end, ok := normalizeSpotRange(seg.start, seg.end)
+		start, end, ok := normalizeSpotRange(start, end)
 		if !ok {
-			log.Printf("[Spot API] skipped gap segment: normalized spot range empty [%d..%d]", seg.start, seg.end)
+			log.Printf("[Spot API] skipped gap segment: normalized spot range empty [%d..%d]", start, end)
 			return nil, nil
 		}
 		return b.fetchSpotHistoricalKlinesFromAPI(symbol, interval, start, end)
 	}
-	return b.fetchHistoricalKlinesFromAPI(symbol, interval, seg.start, seg.end)
+	return b.fetchHistoricalKlinesFromAPI(symbol, interval, start, end)
 }
 
 func (b *BinanceExchange) fetchSpotHistoricalKlinesFromAPI(symbol, interval string, startTimeMs, endTimeMs int64) ([]Candle, error) {
 	rawStart, rawEnd := startTimeMs, endTimeMs
+	stepMs, err := data.IntervalDurationMs(interval)
+	if err != nil {
+		return nil, err
+	}
+	startTimeMs, endTimeMs = alignKlineRangeMs(startTimeMs, endTimeMs, stepMs)
 	startTimeMs, endTimeMs, ok := normalizeSpotRange(startTimeMs, endTimeMs)
 	if !ok {
 		log.Printf("[Spot API] skipped fetch: normalized range empty for %s %s [%d..%d]", symbol, interval, rawStart, rawEnd)

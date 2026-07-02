@@ -10,8 +10,6 @@ import (
 
 const (
 	defaultZigZagSensitivity = 0.5
-	falconCrossZoneCeil      = 40.0
-	falconCrossZoneFloor     = 60.0
 	wozduxVolumeSpikeDelta   = 15.0
 	adTrendLookback          = 3
 )
@@ -23,9 +21,10 @@ type ZigZagState struct {
 }
 
 func (a *Marker) resetStreamingEngines() {
+	settings := a.effectiveRSXSettings()
 	a.falcon = NewFalconEngine()
 	a.volEngine = NewVolatilityEngine()
-	a.divEngine = indicators.NewSmartDivergenceEngine()
+	a.divEngine = indicators.NewSmartDivergenceEngine(rsxScanConfigFromSettings(settings))
 	a.zigzag = indicators.NewZigZag(indicators.DefaultATRPeriod)
 	a.zigzag.SetSensitivity(defaultZigZagSensitivity)
 	a.geometry = newGeometryTracker()
@@ -59,11 +58,12 @@ func (a *Marker) resetStreamingEngines() {
 	a.aoCrossZeroUp = false
 	a.aoCrossZeroDown = false
 	a.prevZigHas = false
-	a.rsxMarkers = newRSXMarkerStateFromSettings(GetRSXSettings())
-	settings := GetRSXSettings()
 	a.falcon.SetRSXLength(settings.Length)
 	a.falcon.SetRSXSignalLength(settings.SignalLength)
+	// Falcon Jurik and RSX divergence scans share the same normalized source.
 	a.falcon.SetRSXSource(settings.Source)
+	a.Annotations = nil
+	a.clearDataBusLocked()
 }
 
 func (a *Marker) warmupStreaming(klines []exchange.Kline) {
@@ -79,6 +79,8 @@ func (a *Marker) replayStreamingLocked() {
 	for i, k := range klines {
 		a.evaluateTickLocked(k, i, true)
 	}
+	a.ensureChartExportPointsAlignedLocked()
+	a.clampDataBusToKlinesLocked()
 }
 
 // layer2StreamingSnapshot holds Marker-level Layer 2 state between closed bars.
@@ -104,9 +106,16 @@ type layer2StreamingSnapshot struct {
 	aoCrossZeroDown       bool
 	volatilityState       VolatilityState
 	divSignal             indicators.DivSignal
+	annotations           []ChartAnnotation
+	jurikLines            []float64
+	wozduhRed             []float64
+	wozduhGreen           []float64
+	chartExportPoints     []BacktestChartPoint
 }
 
 func (a *Marker) restoreLayer2StreamingState() {
+	live := a.captureDataBusLiveLocked()
+
 	if a.volEngine != nil {
 		a.volEngine.RestoreState()
 	}
@@ -125,7 +134,6 @@ func (a *Marker) restoreLayer2StreamingState() {
 	if a.divEngine != nil {
 		a.divEngine.RestoreState()
 	}
-	a.rsxMarkers.RestoreState()
 
 	s := a.layer2Snap
 	a.adHistory = append(a.adHistory[:0], s.adHistory...)
@@ -149,9 +157,13 @@ func (a *Marker) restoreLayer2StreamingState() {
 	a.aoCrossZeroDown = s.aoCrossZeroDown
 	a.volatilityState = s.volatilityState
 	a.divSignal = s.divSignal
+	a.Annotations = append([]ChartAnnotation(nil), s.annotations...)
+	a.restoreDataBusFromSnapLocked(s, live)
 }
 
 func (a *Marker) saveLayer2StreamingState() {
+	a.alignAllDataBusToKlinesLocked()
+
 	if a.volEngine != nil {
 		a.volEngine.SaveState()
 	}
@@ -170,7 +182,6 @@ func (a *Marker) saveLayer2StreamingState() {
 	if a.divEngine != nil {
 		a.divEngine.SaveState()
 	}
-	a.rsxMarkers.SaveState()
 
 	a.layer2Snap = layer2StreamingSnapshot{
 		adHistory:             append([]float64(nil), a.adHistory...),
@@ -194,19 +205,28 @@ func (a *Marker) saveLayer2StreamingState() {
 		aoCrossZeroDown:       a.aoCrossZeroDown,
 		volatilityState:       a.volatilityState,
 		divSignal:             a.divSignal,
+		annotations:           append([]ChartAnnotation(nil), a.Annotations...),
+		jurikLines:            append([]float64(nil), a.JurikLines...),
+		wozduhRed:             append([]float64(nil), a.WozduhRed...),
+		wozduhGreen:           append([]float64(nil), a.WozduhGreen...),
+		chartExportPoints:     append([]BacktestChartPoint(nil), a.chartExportPoints...),
 	}
 }
 
 func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, isClosed bool) {
-	a.falcon.RestoreState()
+	if !a.bulkReplayMode {
+		a.falcon.RestoreState()
+	}
 	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
-	if isClosed {
+	if isClosed && !a.bulkReplayMode {
 		a.falcon.SaveState()
 	}
 }
 
 func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	a.restoreLayer2StreamingState()
+	if !a.bulkReplayMode {
+		a.restoreLayer2StreamingState()
+	}
 	a.evaluateFalconSignalsLocked(k, isClosed)
 	curRed := a.falconSignals.RedLine
 	curGreen := a.falconSignals.GreenLine
@@ -286,10 +306,24 @@ func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed boo
 	a.geometryBounceUp = a.geometryState.BounceUp
 	a.geometryBounceDown = a.geometryState.BounceDown
 	a.geometryTriangle = a.geometryState.TriangleKind != ""
-	a.divSignal = combineDivSignals(a.divEngine.AnalyzeMacro(), a.divEngine.AnalyzeMicroCombined())
-	a.rsxMarkers.appendBar(k.High, k.Low, k.Close, a.falconSignals.JurikRSX)
+	a.recordDataBusBarLocked(barIndex, a.falconSignals)
 
-	if isClosed {
+	var divAnn *indicators.DivAnnotation
+	a.divSignal, divAnn = a.divEngine.AnalyzeWithRSX(a, barIndex)
+	a.cachedRSXMarkerBar = barIndex
+	a.cachedRSXMarkerLabel = ""
+	if divAnn != nil && divAnn.Label != "" {
+		a.cachedRSXMarkerLabel = divAnn.Label
+	}
+	if isClosed && divAnn != nil {
+		a.appendRSXAnnotationLocked(a.chartAnnotationFromDivAnn(*divAnn))
+	}
+
+	if barIndex >= 0 && barIndex < len(a.klines) {
+		a.recordChartExportPointLocked(barIndex, k, a.falconSignals)
+	}
+
+	if isClosed && !a.bulkReplayMode {
 		a.saveLayer2StreamingState()
 	}
 }
@@ -305,11 +339,11 @@ func (a *Marker) isNewZigZagNode(upd indicators.ZigZagUpdate) bool {
 }
 
 func detectRedLineCrossGreenUp(prevRed, prevGreen, curRed, curGreen float64) bool {
-	return prevRed <= prevGreen && curRed > curGreen && curRed < falconCrossZoneCeil
+	return prevRed <= prevGreen && curRed > curGreen
 }
 
 func detectRedLineCrossGreenDown(prevRed, prevGreen, curRed, curGreen float64) bool {
-	return prevRed >= prevGreen && curRed < curGreen && curRed > falconCrossZoneFloor
+	return prevRed >= prevGreen && curRed < curGreen
 }
 
 func detectWozduxVolumeSpikeUp(prevBlue, curBlue, redLine float64) bool {
@@ -320,14 +354,14 @@ func detectWozduxVolumeSpikeDown(prevBlue, curBlue, redLine float64) bool {
 	return DetectWozduxVolumeSpikeDown(prevBlue, curBlue, redLine)
 }
 
-// DetectWozduxVolumeSpikeUp reports an anomalous volume spike at oversold levels.
-func DetectWozduxVolumeSpikeUp(prevBlue, curBlue, redLine float64) bool {
-	return curBlue-prevBlue > wozduxVolumeSpikeDelta && redLine < falconCrossZoneCeil
+// DetectWozduxVolumeSpikeUp reports an anomalous volume spike (no RSI zone veto).
+func DetectWozduxVolumeSpikeUp(prevBlue, curBlue, _ float64) bool {
+	return curBlue-prevBlue > wozduxVolumeSpikeDelta
 }
 
-// DetectWozduxVolumeSpikeDown reports an anomalous volume spike at overbought levels.
-func DetectWozduxVolumeSpikeDown(prevBlue, curBlue, redLine float64) bool {
-	return prevBlue-curBlue > wozduxVolumeSpikeDelta && redLine > falconCrossZoneFloor
+// DetectWozduxVolumeSpikeDown reports an anomalous volume spike (no RSI zone veto).
+func DetectWozduxVolumeSpikeDown(prevBlue, curBlue, _ float64) bool {
+	return prevBlue-curBlue > wozduxVolumeSpikeDelta
 }
 
 func appendADHistory(history []float64, value float64, maxLen int) []float64 {

@@ -33,7 +33,7 @@ func NewBinanceExchange(apiKey, apiSecret string, isTestnet bool) (*BinanceExcha
 	client := futures.NewClient(apiKey, apiSecret)
 
 	norm := NewNormalizer()
-	if err := norm.LoadLimitsFromFutures(context.Background(), client); err != nil {
+	if err := loadNormalizerLimits(context.Background(), norm, client, isTestnet); err != nil {
 		return nil, fmt.Errorf("load exchange limits: %w", err)
 	}
 

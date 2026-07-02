@@ -26,6 +26,28 @@
   bottom: auto;
 }
 
+.indicator-settings-menu__drag-handle {
+  margin: -2px -4px 8px;
+  padding: 4px 6px;
+  color: #787b86;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid #2a2e39;
+}
+
+.indicator-settings-menu__drag-handle:active {
+  cursor: grabbing;
+}
+
+.indicator-settings-menu .setting-row--disabled label,
+.indicator-settings-menu .setting-row--disabled input {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .indicator-settings-menu::-webkit-scrollbar {
   width: 5px;
 }
@@ -184,29 +206,54 @@
 
 .chart-legend {
   position: absolute;
-  top: 6px;
-  left: 8px;
+  top: 0;
+  left: 0;
   z-index: 12;
   display: flex;
+  gap: 0;
+  pointer-events: none;
+}
+
+/* Price pane: vertical stack (TradingView-style) */
+.chart-legend[data-pane="price"] {
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  pointer-events: none;
+  flex-wrap: nowrap;
+}
+
+.chart-legend[data-pane="price"] .legend-item + .legend-item {
+  margin-top: -1px;
+}
+
+/* Oscillator panes: horizontal row */
+.chart-legend[data-pane="wozduh"],
+.chart-legend[data-pane="rsx"] {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: calc(100% - 72px);
+}
+
+.chart-legend[data-pane="wozduh"] .legend-item + .legend-item,
+.chart-legend[data-pane="rsx"] .legend-item + .legend-item {
+  margin-left: -1px;
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: rgba(19, 23, 34, 0.82);
-  border: 1px solid var(--tv-border);
-  border-radius: 3px;
-  font-size: 0.68rem;
+  gap: 2px;
+  padding: 1px 4px;
+  background: rgba(19, 23, 34, 0.52);
+  border: 1px solid rgba(42, 46, 57, 0.65);
+  border-radius: 2px;
+  font-size: 0.64rem;
   font-weight: 600;
   color: var(--tv-muted);
   pointer-events: auto;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .legend-item--child {
@@ -430,11 +477,184 @@
   border-color: var(--tv-accent);
 }
 
-/* ── Score telemetry panel ── */
-.telemetry-bar-wrap {
-  padding: 0 12px 4px;
+/* ── Workspace layout (Phase 8 — pure flex) ── */
+:root {
+  --border-color: var(--tv-border, #2a2e39);
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-chrome {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 40;
   background: var(--tv-bg, #131722);
+}
+
+.command-bar,
+.toolbar,
+.indicator-bar {
+  flex-shrink: 0;
+}
+
+.telemetry-bar-wrap {
+  flex-shrink: 0;
+}
+
+.workspace-main {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--border-color);
+}
+
+.tab-content {
+  flex: 1 1 0;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-content.active {
+  display: flex;
+}
+
+.pro-chart-root,
+.charts-stack {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#live-chart-container,
+#backtest-chart-container {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.backtest-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chart-wrap,
+.chart-wrapper {
+  overflow: hidden;
+  position: relative;
+}
+
+#bt-chart-container,
+#chart-container,
+#osc-container,
+#rsx-container,
+#bt-osc-container,
+#bt-rsx-container {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Price scale controls (TradingView-style, bottom of Y-axis) ── */
+.scale-controls {
+  position: absolute;
+  right: 6px;
+  bottom: 22px;
+  z-index: 16;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  pointer-events: auto;
+}
+
+.scale-btn {
+  width: auto;
+  min-width: 30px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--tv-border, #2a2e39);
+  border-radius: 3px;
+  background: rgba(30, 34, 45, 0.92);
+  color: var(--tv-muted, #787b86);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.scale-btn:hover {
+  color: var(--tv-text, #d1d4dc);
+  border-color: var(--tv-muted, #787b86);
+}
+
+.scale-btn.active {
+  color: #fff;
+  background: rgba(41, 98, 255, 0.35);
+  border-color: rgba(41, 98, 255, 0.65);
+}
+
+.scale-btn:not(.active) {
+  opacity: 0.72;
+}
+
+/* ── Score telemetry panel (toggle via Facts) ── */
+.telemetry-bar-wrap {
+  display: none;
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 10px;
+  margin: 0;
+  background: var(--tv-bg, #131722);
+  border-bottom: none;
+  flex-shrink: 0;
+  transition: max-height 0.15s ease, padding 0.15s ease, border-color 0.15s ease;
+}
+
+.telemetry-bar-wrap.facts-visible:not(.is-hidden) {
+  display: block;
+  max-height: 48px;
+  padding: 0 10px 3px;
   border-bottom: 1px solid var(--tv-border, #2a2e39);
+}
+
+.telemetry-bar-wrap.is-hidden {
+  display: none !important;
+}
+
+#facts-toggle.active {
+  color: #fff;
+  border-color: rgba(41, 98, 255, 0.55);
+  background: rgba(41, 98, 255, 0.18);
+}
+
+#facts-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 #scoring-telemetry-card.card {
@@ -534,8 +754,6 @@
   font-weight: 700;
   white-space: nowrap;
 }
-
-.telemetry-bar-wrap.is-hidden { display: none; }
 
 /* ── Stats tab: mode selector ── */
 .stats-mode-selector {

@@ -10,9 +10,10 @@ func EnsureUnixMillis(ts int64) int64 {
 	return ts
 }
 
-// ChartTimeSec converts a kline open time (ms) to Lightweight Charts Unix seconds.
-func ChartTimeSec(openTimeMs int64) int64 {
-	return EnsureUnixMillis(openTimeMs) / 1000
+// ChartTimeSec converts any kline open time (sec or ms) to Lightweight Charts Unix seconds.
+// This is the SSOT wire-axis transform for ChartCandle.time and ChartOscillator.time.
+func ChartTimeSec(openTime int64) int64 {
+	return EnsureUnixMillis(openTime) / 1000
 }
 
 // NormalizeKline coerces OpenTime and CloseTime to Unix milliseconds.

@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июнь 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, live telemetry WS, gap-fill merge, Falcon/RSX snapshot isolation. Следующий фокус: **калибровка весов** + A/B backtest. Правила в `.cursor/rules/`.
+> **Снэпшот MEMORY (июнь 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT, gap-fill merge, Falcon/RSX snapshot isolation. **UI/Stats/Backtest tooling:** универсальный Stats Dashboard (Live/Paper/Backtest), Click-to-Lock Trade Inspector, anti-flicker телеметрия, остановка бэктеста. **CLI A/B:** `cmd/backtest` + `make ab-test` (вспомогательный; основной инструмент калибровки — UI). Следующий фокус: **калибровка весов** + персистентность trade history. Правила в `.cursor/rules/`.
 
 ---
 
@@ -79,7 +79,7 @@ UpdateKlineTick → ScoreEngine.Calculate → RawAction/FinalAction (same initia
 
 **Raw vs Final:** `RawAction` — телеметрия индикаторов; `FinalAction` — исполнение после veto. Factors/scores не затираются при veto.
 
-**Телеметрия (Phase 5.61–5.72):** `MarketState.factors`, `tickPayload.factors`, `BacktestChartPoint.Factors` → UI `#scoring-factors-list`. **Live:** `SetOnTelemetry` на каждый WS-тик рабочего TF (intra-bar + close); `ScoreDecisionForTelemetry` синхронизирует MTF **до** scoring на bar close. UI: серые inactive factors при WAIT/veto (`.factor-row--inactive`).
+**Телеметрия (Phase 5.61–6.0):** `MarketState.factors`, `tickPayload.factors`, `BacktestChartPoint.Factors` → UI `#telemetry-compact-line`. **Live SSOT (Phase 6):** scoring/regime — только **closed-bar snapshot** (`MasterGeneral.closedTelemetry`, `Marker.ClosedVolatilityRegime` из `layer2Snap`); `ScoreDecisionForTelemetry` — read-only, **без** `syncMTFState`; MTF sync только в `StartDataFeed` на `tick.IsClosed`. WS `tickPayload.isClosed` + `volatilityRegime`; UI обновляет панель скоринга/regime только при `isClosed` или `/api/state`. Toolbar R/G — единое поле `redLine`/`greenLine` (REST + WS). **CrosshairMove** — intra-bar preview hint, не DOM. **Click-to-Lock:** guard в `updateScoringUI` при `lockedHistoricalData`.
 
 **MTF:** см. раздел «MTF: Два режима» ниже.
 
@@ -159,7 +159,9 @@ HTFProvider.GetKlines / PinKlines (cache: symbol_interval)
 | `/api/state` | GET | `MarketState` — bootstrap дашборда: `candles`, `oscillators`, `navigators`, `longScore`, `shortScore`, **`factors`**, `fibZones`, `trades`. Query: `tf`, `endTime`, `rsxLookback`, limit |
 | `/api/history` | GET | `historyResponse` — lazy prepend истории |
 | `/api/history/chunk` | GET | `historyChunkResponse` — пагинация chart points |
-| `/api/backtest/run` | POST | `BacktestRequest` → `BacktestResult` с `chartData[]` (**`ChartPoint.factors`**), `trades`, `equityCurve`, `navigators` |
+| `/api/backtest/run` | POST | `BacktestRequest` → `BacktestResult` с `chartData[]` (**`ChartPoint.factors`**), `trades`, `equityCurve`, `navigators`, `cancelled?` |
+| `/api/backtest/stop` | POST | Отмена текущего прогона (`backtestRunManager` + `context.Cancel`); partial `BacktestResult` |
+| `/api/stats` | GET | `?mode=live\|paper` → `SessionStats` (метрики + trades + equity) из `domain.TradeHistoryStore` |
 | `/api/settings/*` | GET/POST | thresholds, matrix, indicators, risk, navigators |
 | `/api/cache/clear` | POST | сброс HTF cache + gap-fill flags |
 | `/ws` | WS | `wsEnvelope{ type, data }` |
@@ -175,7 +177,7 @@ HTFProvider.GetKlines / PinKlines (cache: symbol_interval)
 4. WS игнорируется до `chartInitialized`
 5. `pollLatestState` дополняет scoring на REST
 
-**Scoring на wire:** `scoreDecisionForAnalyst` → `master.ScoreDecisionForTelemetry` (MTF sync) → `ApplyExecutionVetoes` → `MarketState` / `tickPayload`.
+**Scoring на wire:** `scoreDecisionForAnalyst` → `master.ScoreDecisionForTelemetry` (closed-bar cache, read-only) → `MarketState` / `tickPayload`.
 
 ---
 
@@ -210,8 +212,9 @@ ScoreEngine.Calculate → ScoreDecision (Action BUY/SELL/WAIT)
 ```
 
 - **Vetoes:** `strategy/risk.go` `ApplyExecutionVetoes` — warmup + Analyst + Chief.
-- **Sandbox / ReadOnly:** virtual positions; `BroadcastMarker` + `ChartTrade` на UI.
-- **Backtest:** N+1 open entry (`btPendingEntry`), `SlippagePct` default 0.03%, PnL = Δprice × qty − fees.
+- **Sandbox / ReadOnly:** virtual positions; `BroadcastMarker` + `ChartTrade` на UI (chart markers, **не** stats history).
+- **Trade History (Stats):** `domain.TradeHistoryStore` — `RealTrades` / `VirtualTrades` раздельно; `SetOnClosedTrade` в `MasterGeneral` → `RecordClosedTrade` в dashboard.
+- **Backtest:** N+1 open entry (`btPendingEntry`), `SlippagePct` default 0.03%, PnL = Δprice × qty − fees; `Run(ctx, candles)` поддерживает cancel.
 
 **End-to-end (onboarding):**
 ```
@@ -225,7 +228,9 @@ Binance → Marker (Layer1/2 + snapshot) → ScoreEngine → ScoreDecision
 
 | Контур | Файлы | Суть |
 |--------|-------|------|
-| **Order Flow Store** | `domain/orderflow.go`, `exchange/ws.go` | Отдельный буфер aggTrade/liquidation тиков; агрегация в synthetic klines для tick-TF (`IsOrderFlowTimeframe`). Не смешивать с OHLCV `Marker` — параллельный data path в `DashboardServer.loadOrderFlowKlines`. |
+| **Order Flow Store** | `domain/orderflow.go`, `exchange/ws.go` | Отдельный буфер aggTrade/liquidation тиков. **Не** история сделок для Stats. |
+| **Trade History Store** | `domain/trade_history.go`, `server/webserver.go` | `RealTrades` (live) / `VirtualTrades` (paper/sandbox); `GET /api/stats?mode=` |
+| **CLI A/B Backtester** | `cmd/backtest/`, `strategy/backtest_ab.go`, `Makefile` | `make ab-test` — Baseline LTF vs HTF Regime; SQLite + optional REST; дублирует engine path UI |
 | **Настройки `/api/settings/*`** | `server/webserver.go` | **Обязательны** для matrix/thresholds/indicators/risk/navigators. Без POST matrix scoring на live не отражает UI-тогглы (`config/matrix.json`). |
 | **AI & Qdrant (долг #8)** | `vector_db/`, `Marker.VectorSnapshot()` | Векторный пайплайн: snapshot состояния → embedding → Qdrant similarity → будущий **AI veto** на входе (сейчас `memoryStore=nil` в main, veto off). |
 | **Layer 2 — repaint-by-design** | `zigzag`, `geometry` в `layer2.go` | **Намеренно вне Snapshot/Restore.** Swing nodes и geometry мутируют на открытом баре — это repaint, не баг. Не добавлять им snapshot при рефакторингах без явного архитектурного решения. |
@@ -327,7 +332,7 @@ targetFrom = targetTo - windowSize
 | Компонент | Файл | Fix |
 |-----------|------|-----|
 | `SmartDivergenceEngine` | `indicators/divergence.go` | Ring-buffer snapshot |
-| `rsxMarkerState` | `strategy/rsx_incremental.go` | Deep-copy; intra-bar не растит `prices[]` |
+| `rsxMarkerState` | `strategy/analyst.go` (Marker) | Deep-copy; intra-bar не растит `prices[]` |
 
 #### [Phase 5.59 — Walk-Forward MTF Tracker (P2) — ✅]
 **Файл:** `strategy/mtf_tracker.go` — `WalkForwardMTFTracker.Update(tickSec, chartKlines)` step-function на границе HTF; `GetCandlesStrictlyBefore`; wired в `backtest.go`; `marker.SetCurrentMTFState()` / `MTFStates()`. UI `BuildAllNavigators` в конце бэктеста не тронут.
@@ -377,10 +382,10 @@ targetFrom = targetTo - windowSize
 
 #### [Phase 5.61 — Score Factors telemetry export — ✅]
 **Backend:** `MarketState.factors`, `tickPayload.factors`, `BacktestChartPoint.Factors` → `ChartPoint.factors`.
-**Frontend:** `updateScoringUI` + `#scoring-factors-list`; backtest crosshair → historical factors.
+**Frontend:** `updateScoringUI` + telemetry panel. *(UI superseded 5.75–5.76: compact line + click-to-lock.)*
 
 #### [Phase 5.62 — Factors UI panel — ✅]
-**`web/index.html`:** `#scoring-telemetry-card`. **`web/style.css`:** factor badges. Backtest: crosshair scrubbing via `backtestChartPointsByTime`.
+**`web/index.html`:** `#scoring-telemetry-card`. Factor badges. *(Superseded: crosshair DOM scrub → click-to-lock + chart hint only.)*
 
 #### [Phase 5.63 — Backtest score per bar (SSOT) — ✅]
 **`BacktestChartPoint.LongScore` / `ShortScore`** → `ChartPoint` JSON. Фронт не суммирует факторы; `liveScoringData` при возврате на Live.
@@ -424,7 +429,103 @@ targetFrom = targetTo - windowSize
 - MTF sync **до** scoring на bar close (fix race vs `handleLiveTick`)
 - `ScoreDecisionForTelemetry` для `/api/state` + WS
 - `useHTFOscillators: true` в `matrix.json`
-- UI: gray inactive factors при WAIT/veto; HTF keys `RSX_{tf}`, `Wozduh_{tf}`
+- HTF keys `RSX_{tf}`, `Wozduh_{tf}`
+
+#### [Phase 5.73 — CLI A/B Backtester (Quant Lab) — ✅]
+**Файлы:** `cmd/backtest/main.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `Makefile`
+
+| Компонент | Поведение |
+|-----------|-----------|
+| **Config A (Baseline)** | `UseHTFOscillators=false`, веса из `matrix.json` |
+| **Config B (HTF Regime)** | `UseHTFOscillators=true`, quiet LTF (`WozduhCross/Spike/RedCross` off), MTF `4h`/`1d` |
+| **Engine SSOT** | `BuildBacktestEngineConfig` + `RunBacktestSimulation(ctx, …)` = тот же path что `POST /api/backtest/run` |
+| **Запуск** | `make ab-test` / `make ab-test-rest` |
+
+**Примечание:** заказчик предпочитает UI для калибровки; CLI остаётся batch-утилитой.
+
+#### [Phase 5.74 — Universal Stats Dashboard — ✅]
+**Backend:** `domain/trade_history.go` — `TradeHistoryStore`, `ClosedTrade`, `ComputeSessionStats`; `MasterGeneral.SetOnClosedTrade` → `RecordClosedTrade`; `GET /api/stats?mode=live|paper`.
+
+**Frontend (`web/index.html`, `web/app.js`):**
+| Режим | Источник данных |
+|-------|-----------------|
+| **Backtest** | `lastBacktestResult` после симуляции |
+| **Paper** | `/api/stats?mode=paper` |
+| **Live** | `/api/stats?mode=live` |
+
+`renderStatsDashboard(trades, mode)` — карточки метрик + Trade History table. Переключатель `.stats-mode-selector` на вкладке Stats.
+
+**Ограничение:** trade history только в RAM (сброс при рестарте бота).
+
+#### [Phase 5.75 — UX/UI: телеметрия + Stop Backtest — ✅]
+**Crosshair shake fix:** `subscribeCrosshairMove` → только `.crosshair-scoring-hint` на графике; `updateScoringUI` только из WS / `/api/state`.
+
+**Компактная телеметрия:** удалён заголовок и `#scoring-factors-list`; `#telemetry-compact-line` — одна строка (L/S, action, top-4 factors, veto).
+
+**Stop Backtest:**
+- `POST /api/backtest/stop` + `server/backtest_run.go` (`backtestRunManager`)
+- `BacktestEngine.Run(ctx, candles)` — cancel loop, partial result, `cancelled: true`
+- UI: `#btn-stop-backtest`, `AbortController` на fetch
+
+#### [Phase 5.76 — Trade Inspector (Click-to-Lock) — ✅]
+**Файлы:** `web/app.js`, `web/style.css`
+
+| Механизм | Детали |
+|----------|--------|
+| **Lookup** | `backtestChartPointsByTime` (Map O(1)) + `backtestTradeMarkerTimes` (Set entry/exit times) |
+| **Lock** | `lockedHistoricalData` → `renderLockedTelemetry()` → `#telemetry-compact-line` + `.telemetry-locked` |
+| **Unlock** | клик вне данных / повторный клик на ту же свечу / смена вкладки |
+| **SSOT guard** | `updateScoringUI` игнорирует live-тики при активном lock |
+| **Hover** | crosshair hint на графике (не DOM) — превью без тряски |
+
+**Не реализовано:** pixel hit-test по `TradeMarkerPrimitive` (клик = time бара под курсором); live history inspector (нет `ChartPoint` map на live).
+
+#### [Phase 6.0 — Telemetry SSOT + Anti-Flicker — ✅]
+**Файлы:** `strategy/master.go`, `strategy/analyst.go`, `server/webserver.go`, `web/app.js`, `main.go`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **UI R/G** | `applyLatestOscPoint` + `updateHeader` → `redLine`/`greenLine` |
+| **Backend SSOT** | `closedTelemetry` cache; `SeedClosedBarTelemetry`; `refreshClosedBarTelemetry` на bar close |
+| **Read-only API** | `ScoreDecisionForTelemetry` без `syncMTFState` |
+| **Scoring panel** | WS: `updateScoringUI` только при `isClosed`; poll без scoring |
+| **Regime** | `ClosedVolatilityRegime` из `layer2Snap` |
+
+#### [Phase 7.0 — Workspace Layout Polish — ✅]
+**Файлы:** `web/index.html`, `web/style.css`, `web/app.js`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **Layout** | `#app-chrome` + `.workspace-main`; flex chain; border-top |
+| **Backtest resize** | `.pane-resize` в bt-stack; `PANE_STACK_CONFIG` |
+| **Fullscreen dblclick** | `priceWrap` в `initPaneFullscreen`; inspector click deferred |
+| **Visual parity** | backtest padding/background = live |
+
+#### [Phase 8.0 — Price Scale UX + Hard Flex Layout — ✅]
+**Файлы:** `web/index.html`, `web/style.css`, `web/app.js`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **Hard flex** | `#app-container` flex column; удалён JS `--workspace-chrome-h` |
+| **Scale controls** | `.scale-controls` на price pane (Live + Backtest) |
+| **Auto / Log** | независимые режимы; dblclick на шкале → Auto |
+
+#### [Phase 9.0 — Scale Aesthetics (TV Polish) — ✅]
+**Файлы:** `web/app.js`, `web/style.css`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **PriceLine labels** | `normalizePriceLineLevel`: `axisLabelColor: TV.bg`, `axisLabelTextColor` = цвет линии |
+| **RSX levels** | убраны OB/MID/OS; линия 50 — `rgba(204,85,0,0.4)`, dashed, width 1 |
+| **Scale buttons** | `.scale-controls` → `flex-direction: row`; компактно над time scale |
+
+#### [Phase 9.1 — LC API fix (axis labels) — ✅]
+**Файлы:** `web/app.js`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **Axis labels** | `axisLabelColor` / `axisLabelTextColor` вместо несуществующего `labelBackgroundColor` |
+| **RSX 50** | `lineWidth: 1`, `color: rgba(204, 85, 0, 0.4)` |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
@@ -440,9 +541,9 @@ targetFrom = targetTo - windowSize
 | 7 | **SQLite clear в Cache** | `server/webserver.go` | 🟡 |
 | 8 | **Qdrant in main** | `main.go`, `vector_db/` | 🔜 |
 | 9 | **expose `masterState`** | `server/webserver.go` | 🔜 |
-| **10** | ~~**Factors UI panel**~~ | `web/app.js`, `index.html` | ✅ 5.62 + 5.72 gray WAIT |
+| **10** | ~~**Factors UI panel**~~ | `web/app.js`, `index.html` | ✅ 5.62 → 5.75 compact line |
 | **11** | ~~**MTF walk-forward на live**~~ | `master.go`, `mtf_tracker.go` | ✅ 5.68–5.70 |
-| **12** | **MTF scoring tune / weight calibration** | `scoring.go`, `matrix.json` | 🔜 NEXT |
+| **12** | **MTF scoring tune / weight calibration** | `scoring.go`, `matrix.json`, Stats A/B | 🔜 NEXT |
 | **13** | ~~**Backtest longScore/shortScore per bar**~~ | `backtest.go` | ✅ 5.63 |
 | **14** | ~~**RSX/Wozduh HTF в scoring**~~ | `mtf_tracker.go`, `scoring.go` | ✅ 5.69 + 5.72 |
 | **15** | **WS full Wozduh / mergeOsc** | `webserver.go`, `web/app.js` | 🟡 |
@@ -450,7 +551,11 @@ targetFrom = targetTo - windowSize
 | **17** | **max_drawdown enforcement** | `risk.go`, `master.go` | 🔜 |
 | **18** | **fixed_pct stop в UI** | `computePositionStop` | 🔜 |
 | **19** | **mergeKlines SSOT** | `kline_merge.go` vs `webserver.go` dup | 🟡 |
-| **20** | **Flaky tests** | `rsx_settings_test.go` | ✅ 5.71 fixed |
+| **20** | ~~**Flaky tests**~~ | `rsx_settings_test.go` | ✅ 5.71 fixed |
+| **21** | **Stats trade history persistence** | `domain/trade_history.go` | 🔜 SQLite |
+| **22** | **Live Trade Inspector** | `web/app.js` | 🔜 scoring history buffer |
+| **23** | **Backtest stop: await partial JSON** | `web/app.js` | 🟡 prefer server response over AbortController |
+| **24** | **Stats live initial balance sync** | `domain/trade_history.go` | 🟡 uses DefaultSessionCapital |
 
 ---
 
@@ -463,13 +568,14 @@ targetFrom = targetTo - windowSize
 | MTF | `strategy/mtf_tracker.go`, `navigator_defaults.go`, `trendline_navigator.go`, `exchange/htf_provider.go` |
 | Execution / Sizing | `execution/risk.go`, `strategy/risk_settings.go` |
 | Live | `strategy/master.go`, `main.go`, `config/config.go` |
-| Backtest | `strategy/backtest.go` |
+| Backtest | `strategy/backtest.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `cmd/backtest/` |
+| Stats / Trades | `domain/trade_history.go`, `server/backtest_run.go`, `server/stats_test.go` |
 | API / WS | `server/webserver.go`, `server/micro_broadcast.go`, `server/config/matrix.json` |
-| Frontend | `web/app.js`, `web/viewport.js`, `web/style.css` |
+| Frontend | `web/app.js`, `web/viewport.js`, `web/style.css`, `web/trade_marker_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
 **Env:** `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, `READ_ONLY`, `SANDBOX_MODE`.
 
-**Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, paper/sandbox via `.env`.
+**Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, paper/sandbox via `.env`. `make ab-test` — CLI A/B backtest (опционально).
 
-**Следующий шаг:** калибровка весов scoring (`LongScoreThreshold`, HTF Regime A/B) + валидация телеметрии на live с MTF checkboxes (`4h`/`1d`/`1w`).
+**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite; live Trade Inspector при необходимости.

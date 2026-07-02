@@ -25,31 +25,28 @@ func syntheticRSXKlines(n int) []exchange.Kline {
 	return klines
 }
 
-func TestRSXMarkerState_SaveRestore_IntraBarNoGrowth(t *testing.T) {
+func TestMarker_DataBus_SaveRestore_IntraBarNoGrowth(t *testing.T) {
 	t.Parallel()
 
-	s := newRSXMarkerState(14)
-	for i := 0; i < 20; i++ {
-		s.appendBar(100+float64(i), 99, 100, 50+float64(i)*0.1)
-		s.SaveState()
+	klines := syntheticRSXKlines(20)
+	m := NewMarker(nil, nil, "1m", "", ChaosConfig{})
+	for _, k := range klines {
+		m.UpdateKlineTick(k, true)
 	}
-	wantLen := len(s.rsx)
-
-	const intraTicks = 10
-	for i := 0; i < intraTicks; i++ {
-		s.appendBar(120, 115, 118, 55+float64(i)*0.01)
+	m.mu.Lock()
+	wantLen := len(m.JurikLines)
+	wantLast := m.JurikLines[wantLen-1]
+	m.saveLayer2StreamingState()
+	m.AppendJurikValue(len(m.klines)-1, wantLast+5)
+	if len(m.JurikLines) != wantLen {
+		t.Fatalf("open-bar update should not grow series: len %d want %d", len(m.JurikLines), wantLen)
 	}
-	if len(s.rsx) != wantLen+intraTicks {
-		t.Fatalf("poisoned growth: len %d, want %d before restore", len(s.rsx), wantLen+intraTicks)
+	m.restoreLayer2StreamingState()
+	if len(m.JurikLines) != wantLen {
+		t.Fatalf("restore len = %d, want %d", len(m.JurikLines), wantLen)
 	}
-
-	s.RestoreState()
-	if len(s.rsx) != wantLen {
-		t.Fatalf("restore len = %d, want %d", len(s.rsx), wantLen)
+	if m.JurikLines[wantLen-1] != wantLast {
+		t.Fatalf("restore should rollback open-bar mutation: got %f want %f", m.JurikLines[wantLen-1], wantLast)
 	}
-
-	s.appendBar(120, 115, 118, 55)
-	if len(s.rsx) != wantLen+1 {
-		t.Fatalf("after restore+append len = %d, want %d", len(s.rsx), wantLen+1)
-	}
+	m.mu.Unlock()
 }

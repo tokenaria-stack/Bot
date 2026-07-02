@@ -19,13 +19,7 @@ var (
 
 func GetRiskSettings() *RiskSettings {
 	riskSettingsOnce.Do(func() {
-		riskSettingsInstance = &RiskSettings{
-			RiskPerTrade:  1.0,
-			MaxDrawdown:   5.0,
-			Leverage:      10,
-			StopLossType:  "fractal_atr",
-			ATRMultiplier: 1.5,
-		}
+		riskSettingsInstance = defaultRiskSettings()
 	})
 
 	riskSettingsMutex.RLock()
@@ -35,9 +29,31 @@ func GetRiskSettings() *RiskSettings {
 	return &copy
 }
 
+func defaultRiskSettings() *RiskSettings {
+	return &RiskSettings{
+		RiskPerTrade:  1.0,
+		MaxDrawdown:   5.0,
+		Leverage:      10,
+		StopLossType:  "fractal_atr",
+		ATRMultiplier: 1.5,
+	}
+}
+
+func ensureRiskSettings() {
+	riskSettingsOnce.Do(func() {
+		riskSettingsInstance = defaultRiskSettings()
+	})
+}
+
 func UpdateRiskSettings(newSettings RiskSettings) {
+	ensureRiskSettings()
+
 	riskSettingsMutex.Lock()
 	defer riskSettingsMutex.Unlock()
+
+	if riskSettingsInstance == nil {
+		riskSettingsInstance = defaultRiskSettings()
+	}
 
 	riskSettingsInstance.RiskPerTrade = newSettings.RiskPerTrade
 	riskSettingsInstance.MaxDrawdown = newSettings.MaxDrawdown

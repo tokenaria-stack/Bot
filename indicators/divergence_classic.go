@@ -4,6 +4,12 @@ import "math"
 
 const priceEqualTolerance = 0.001 // 0.1% relative tolerance for Class B double top/bottom
 
+// DefaultMinPriceDeltaRatio is the minimum relative price change between pivots (0 = disabled).
+const DefaultMinPriceDeltaRatio = 0.0
+
+// DefaultMinOscDelta is the minimum absolute oscillator change between pivots (0 = disabled).
+const DefaultMinOscDelta = 0.0
+
 // DivDirection classifies divergence direction.
 type DivDirection string
 
@@ -34,7 +40,7 @@ type DivergenceResult struct {
 }
 
 // CheckClassicDivergence compares the last two aligned price/oscillator peaks for classic divergence.
-func CheckClassicDivergence(pricePeaks, oscPeaks []Peak, indexTolerance int) DivergenceResult {
+func CheckClassicDivergence(pricePeaks, oscPeaks []Peak, indexTolerance int, minPriceDeltaRatio, minOscDelta float64) DivergenceResult {
 	empty := DivergenceResult{Direction: NoDiv, Class: None}
 
 	if len(pricePeaks) < 2 || len(oscPeaks) < 2 {
@@ -67,22 +73,26 @@ func CheckClassicDivergence(pricePeaks, oscPeaks []Peak, indexTolerance int) Div
 	switch priceP2.Type {
 	case PeakHigh:
 		switch {
-		case priceP2.Value > priceP1.Value && oscP2.Value < oscP1.Value:
+		case priceP2.Value > priceP1.Value && oscP2.Value < oscP1.Value &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bearish
 			result.Class = ClassA
 			return result
-		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value < oscP1.Value:
+		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value < oscP1.Value &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bearish
 			result.Class = ClassB
 			return result
 		}
 	case PeakLow:
 		switch {
-		case priceP2.Value < priceP1.Value && oscP2.Value > oscP1.Value:
+		case priceP2.Value < priceP1.Value && oscP2.Value > oscP1.Value &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bullish
 			result.Class = ClassA
 			return result
-		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value > oscP1.Value:
+		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value > oscP1.Value &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bullish
 			result.Class = ClassB
 			return result
@@ -196,4 +206,20 @@ func pricesApproximatelyEqual(a, b float64) bool {
 
 	base := math.Max(math.Abs(a), math.Abs(b))
 	return math.Abs(a-b) <= base*priceEqualTolerance
+}
+
+func classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2 Peak, minPriceDeltaRatio, minOscDelta float64) bool {
+	if minPriceDeltaRatio > 0 {
+		denom := math.Abs(priceP1.Value)
+		if denom <= 0 {
+			return false
+		}
+		if math.Abs(priceP2.Value-priceP1.Value)/denom < minPriceDeltaRatio {
+			return false
+		}
+	}
+	if minOscDelta > 0 && math.Abs(oscP2.Value-oscP1.Value) < minOscDelta {
+		return false
+	}
+	return true
 }

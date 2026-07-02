@@ -1,0 +1,3230 @@
+{
+  "fetched_at": "2026-06-29T15:49:31.950349Z",
+  "testnet": false,
+  "limits": {
+    "0GUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "1000000BOBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "1000000MOGUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "1000BONKUSDC": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000BONKUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000CATUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000CHEEMSUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "1000FLOKIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "1000LUNCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "1000PEPEUSDC": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "1000PEPEUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "1000RATSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "1000SATSUSDT": {
+      "TickSize": 1e-8,
+      "StepSize": 1
+    },
+    "1000SHIBUSDC": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000SHIBUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000WHYUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "1000XECUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "1000XUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "1INCHUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "1MBABYDOGEUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "2ZUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "42USDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "4USDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "A2ZUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "AAOIUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AAPLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AAVEUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.1
+    },
+    "AAVEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.1
+    },
+    "ACEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.01
+    },
+    "ACHUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ACTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ACUUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ACXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ADAUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ADAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ADBEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AERGOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AEROUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "AEVOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "AGIXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "AGLDUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "AGTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "AI16ZUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "AIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AIGENSYNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AINUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AIOTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AIOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AIXBTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AKEUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "AKTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ALABUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ALCHUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ALGOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ALICEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ALLOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ALLUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ALPACAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ALPHAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ALPINEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ALTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "AMATUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AMBUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "AMDUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AMZNUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ANIMEUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ANKRUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ANTHROPICUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "APEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "API3USDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "APRUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "APTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ARBUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ARBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ARCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ARIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ARKMUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ARKUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ARMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ARPAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ARUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "ARXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ASMLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ASRUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "ASTERUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ASTRUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ASTSUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ATAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ATHUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ATOMUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "ATUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "AUCTIONUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "AUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AVAAIUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "AVAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "AVAXUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "AVAXUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "AVGOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AVNTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "AWEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "AXLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "AXSUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "AXTIUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "AZTECUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "B2USDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "B3USDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "BABAUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BABYUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BADGERUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "BAKEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "BALUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "BANANAS31USDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BANANAUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "BANDUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "BANKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BANUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BARDUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "BASEDUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BASUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BATUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "BBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BBXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BCHUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "BCHUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "BEAMXUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BEATUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "BELUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BERAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "BEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BICOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BIDUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BIGTIMEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BILLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BIOUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BIOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BIRBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BLESSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BLUAIUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BLURUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BLZUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BMNRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BMTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BNBUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BNBUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BNTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "BNXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "BOBUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BOMEUSDC": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "BOMEUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "BONDUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "BRETTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BREVUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BRKBUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BROCCOLI714USDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BROCCOLIF3BUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BSBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BSVUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.1
+    },
+    "BSWUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BTCDOMUSDT": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "BTCSTUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "BTCUSD1": {
+      "TickSize": 0.1,
+      "StepSize": 0.0001
+    },
+    "BTCUSDC": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "BTCUSDT": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "BTCUSDT_260925": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "BTCUSDT_261225": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "BTRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BTWUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "BULLAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "BUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "BXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "BZUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "C98USDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CAKEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "CAPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CARVUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CATIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CBRSUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CELOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "CELRUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "CETUSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CFGUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "CFXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CGPTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CHESSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CHILLGUYUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "CHIPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CHRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CHZUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CIENUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CKBUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "CLANKERUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CLOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "COAIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "COHRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "COINUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "COLLECTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "COMBOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "COMMONUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "COMPUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "COOKIEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "COPPERUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "COSTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "COSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "COTIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "COWUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "CRCLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CRDOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CRMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CROSSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CRVUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "CRVUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "CRWDUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CRWVUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CSCOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "CTKUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "CTRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CTSIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CUDISUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CVCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "CVXUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "CYBERUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "CYSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "DAMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DARUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "DASHUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "DEEPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DEFIUSDT": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "DEGENUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "DEGOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "DELLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "DENTUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "DEXEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "DFUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DGBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DIAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "DISUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "DKNGUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "DMCUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "DODOXUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "DOGEUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DOGEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DOGSUSDT": {
+      "TickSize": 1e-8,
+      "StepSize": 1
+    },
+    "DOLOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DOODUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "DOTUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "DRAMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "DRIFTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "DUSKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "DYDXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "DYMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "EBAYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "EDENUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "EDGEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "EDUUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "EGLDUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "EIGENUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ELSAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ENAUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ENAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ENJUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ENSOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ENSUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "EPICUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "EPTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ERAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ESPORTSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ESPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ETCUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "ETHBTC": {
+      "TickSize": 0.000001,
+      "StepSize": 0.01
+    },
+    "ETHFIUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ETHFIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ETHUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ETHUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ETHUSDT_260925": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ETHUSDT_261225": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ETHWUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "EULUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "EVAAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "EWJUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "EWTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "EWYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "EWZUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "FARTCOINUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "FETUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "FFUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FHEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FIDAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FIGHTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "FILUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "FILUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "FIOUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "FISUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FLMUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "FLNCUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "FLOCKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FLOWUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "FLUIDUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "FLUXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FOGOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "FOLKSUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "FORMUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "FORTHUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "FRAXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "FTMUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "FTTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "FUNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "FUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "FXSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "GAIBUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "GALAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "GASUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "GENIUSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "GHSTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "GIGGLEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "GLMRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "GLMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "GLWUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "GMEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "GMTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "GMXUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "GOATUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "GOOGLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "GPSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "GRASSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "GRIFFAINUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "GRTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "GTCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "GUAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "GUNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "GUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "GWEIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "HAEDALUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HANAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HBARUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HBARUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HDUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "HEIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "HEMIUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "HFTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HIFIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HIGHUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "HIMSUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "HIPPOUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "HIVEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HMSTRUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "HOLOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HOMEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HOODUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "HOOKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "HOTUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "HPEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "HUMAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "HUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HYPERUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "HYPEUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "HYUNDAIUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "IBMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ICNTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "ICPUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "ICXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "IDEXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "IDOLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "IDUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ILVUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "IMXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "INITUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "INJUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "INTCUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "INUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "INXUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "IOSTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "IOTAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "IOTXUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "IOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "IPUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "IPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "IRENUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "IRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "IRYSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "IWMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "JASMYUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "JCTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "JELLYJELLYUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "JOEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "JPMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "JSTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "JTOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "JUPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "KAIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KAITOUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "KAITOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "KASUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KATUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "KAVAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "KDAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KERNELUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KEYUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "KGENUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "KITEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KLACUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "KLAYUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "KMNOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "KNCUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "KOMAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "KORUUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "KSMUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "LABUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "LAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "LAYERUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "LDOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "LEVERUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "LIGHTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "LINAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 0.1
+    },
+    "LINEAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "LINKUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "LINKUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "LISTAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "LITEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "LITUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "LLYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "LOKAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "LOOMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "LPTUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "LQTYUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "LRCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "LRCXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "LSKUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "LTCUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "LTCUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "LUMIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "LUNA2USDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "LYNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MAGICUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "MAGMAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MANAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MANTAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "MANTRAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "MASKUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MAVIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MAVUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MBOXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MDTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MEGAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MELANIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.01
+    },
+    "MEMEFIUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "MEMEUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "MERLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "METAUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "METISUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "METUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "MEWUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "MILKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MINAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MIRAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MITOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MKRUSDT": {
+      "TickSize": 0.1,
+      "StepSize": 0.001
+    },
+    "MLNUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "MMTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MOCAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MONUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MOODENGUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MORPHOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "MOVEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MOVRUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "MRVLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "MSFTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "MSTRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "MTLUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MUBARAKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "MUUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "MVLLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "MYROUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "MYXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "NAORISUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NATGASUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "NBISUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NEARUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "NEARUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "NEIROETHUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NEIROUSDT": {
+      "TickSize": 1e-8,
+      "StepSize": 1
+    },
+    "NEOUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.001
+    },
+    "NEOUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "NEWTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NFLXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NFPUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 0.1
+    },
+    "NIGHTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NILUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "NKNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NMRUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "NOKUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NOMUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "NOTUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "NOWUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NTRNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "NULSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "NVDAUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NVOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "NXPCUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "OBOLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "OCEANUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "OGNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "OGUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "OLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "OMGUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "OMNIUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "OMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ONDOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ONDSUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ONEUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ONGUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ONTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ONUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "OPENAIUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "OPENUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "OPGUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "OPNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "OPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ORBSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ORCAUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "ORCLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ORDERUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ORDIUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "ORDIUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "OUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "OXTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PARTIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PAXGUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "PAYPUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "PENDLEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PENGUUSDC": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "PENGUUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "PEOPLEUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "PERPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "PHAROSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PHAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PHBUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PIEVERSEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PIPPINUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PIXELUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "PLAYUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PLTRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "PLUMEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PNUTUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PNUTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "POLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "POLYXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PONKEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "POPCATUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PORT3USDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PORTALUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "POWERUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "POWRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PRLUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PROMPTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PROMUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "PROVEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "PTBUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "PUFFERUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PUMPBTCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "PUMPUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "PUNDIXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "PYTHUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "QCOMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "QNTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.1
+    },
+    "QNTXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "QQQUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "QTUMUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "QUICKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "QUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RADUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "RAREUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "RAVEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "RAYSOLUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "RAYUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "RDNTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RECALLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "REDUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "REEFUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "REIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "RENDERUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "RENUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "RESOLVUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "REUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "REZUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RIFUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "RIVERUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "RIVNUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "RKLBUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "RLCUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "RLSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ROBOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "RONINUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ROSEUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RPLUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "RSRUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RUNEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "RVNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "RVVUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SAFEUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SAGAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "SAHARAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SAMSUNGUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SANDUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SANTOSUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "SAPIENUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SCRTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SCRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SCUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SEIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SENTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SFPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SHELLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SIGNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SIRENUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SKATEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SKHYNIXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SKLUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SKRUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SKYAIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SKYUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SLERFUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SLPUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "SLXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SMCIUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SNDKUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SNTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SNXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "SOLUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SOLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SOLVUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SOMIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SONICUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "SONYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SOONUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SOPHUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SOXLUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SPACEUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SPCXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SPELLUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "SPKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SPORTFUNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SPXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SPYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SQDUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SQQQUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SSVUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "STABLEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STARUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STBLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STEEMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STGUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "STMXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STORJUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "STOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STPTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "STRAXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "STRKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "STXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "STXXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "SUIUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "SUIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "SUNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SUPERUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SUSHIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "SWARMSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SWELLUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SXTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "SYNUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SYRUPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "SYSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TACUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TAGUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TAIKOUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "TAKEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TANSSIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TAOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "TAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "THETAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "THEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "TIAUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "TIAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "TLMUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TNSRUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "TOKENUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TONUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "TOSHIUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "TOWNSUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TQQQUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "TRADOORUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "TRBUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "TREEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TRIAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TROYUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TRUMPUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "TRUMPUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "TRUSTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TRUTHUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TRUUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TRXUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TSLAUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "TSMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "TSTUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TURBOUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "TURTLEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "TUTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "TWTUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "UAIUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "UBERUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "UBUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "UMAUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "UNFIUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "UNIUSDC": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "UNIUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 1
+    },
+    "URNMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "USARUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "USDCUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "USELESSUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "USTCUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "USUALUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "USUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "UVXYUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "UXLINKUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "VANAUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "VANRYUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "VELODROMEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VELVETUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "VETUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "VFYUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VICUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VIDTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VINEUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VIRTUALUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "VOXELUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "VTHOUSDT": {
+      "TickSize": 1e-7,
+      "StepSize": 1
+    },
+    "VUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "VVVUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.01
+    },
+    "WALUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WAVESUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "WAXPUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "WCTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WDCUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "WETUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WIFUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "WIFUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "WLDUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "WLDUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "WLFIUSDC": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WLFIUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WMTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "WOOUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "WUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "XAGUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XAIUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XANUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XAUTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XAUUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XCNUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XEMUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "XLEUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "XLMUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "XMRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XNYUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XPDUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XPINUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XPLUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "XPTUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "XRPUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "XRPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "XTZUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "XVGUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "XVSUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "YALAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "YBUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "YFIUSDT": {
+      "TickSize": 1,
+      "StepSize": 0.001
+    },
+    "YGGUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZAMAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZBTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZECUSDC": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ZECUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ZENUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
+    },
+    "ZEREBROUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ZESTUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZETAUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZILUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ZKCUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZKJUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 0.1
+    },
+    "ZKPUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZKUSDT": {
+      "TickSize": 0.00001,
+      "StepSize": 1
+    },
+    "ZMUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
+    "ZORAUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ZRCUSDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "ZROUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "ZRXUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 0.1
+    },
+    "币安人生USDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "我踏马来了USDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    },
+    "龙虾USDT": {
+      "TickSize": 0.000001,
+      "StepSize": 1
+    }
+  }
+}

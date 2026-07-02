@@ -5,10 +5,39 @@ import "strings"
 // BacktestRunSettings is the settings object sent by the dashboard (POST /api/backtest/run).
 // JSON keys must match web/app.js buildFinalBacktestPayload() exactly.
 type BacktestRunSettings struct {
-	Matrix      ScoringMatrix                  `json:"matrix"`
-	Navigators  map[string]NavigatorUISettings `json:"navigators"`
-	Risk        *RiskSettings                  `json:"risk,omitempty"`
-	SlippagePct float64                        `json:"slippage_pct,omitempty"`
+	Matrix         ScoringMatrix                  `json:"matrix"`
+	Navigators     map[string]NavigatorUISettings `json:"navigators"`
+	Risk           *RiskSettings                  `json:"risk,omitempty"`
+	SlippagePct    float64                        `json:"slippage_pct,omitempty"`
+	LongThreshold  int                            `json:"longThreshold,omitempty"`
+	ShortThreshold int                            `json:"shortThreshold,omitempty"`
+	RSXSettings    *RSXSettings                   `json:"rsxSettings,omitempty"`
+	WozduhSettings map[string]bool                `json:"wozduhSettings,omitempty"`
+}
+
+// ResolveBacktestThresholds returns isolated long/short entry thresholds for backtests.
+// Does not read global dynamic thresholds — defaults to DefaultScoreThreshold when unset.
+func ResolveBacktestThresholds(settings *BacktestRunSettings) (long, short int) {
+	long = DefaultScoreThreshold
+	short = DefaultScoreThreshold
+	if settings == nil {
+		return long, short
+	}
+	if settings.LongThreshold >= minScoreThreshold && settings.LongThreshold <= maxScoreThreshold {
+		long = settings.LongThreshold
+	}
+	if settings.ShortThreshold >= minScoreThreshold && settings.ShortThreshold <= maxScoreThreshold {
+		short = settings.ShortThreshold
+	}
+	return long, short
+}
+
+// ResolveBacktestRSXSettings returns clamped per-run RSX settings from the request payload.
+func ResolveBacktestRSXSettings(settings *BacktestRunSettings) (RSXSettings, bool) {
+	if settings == nil || settings.RSXSettings == nil {
+		return RSXSettings{}, false
+	}
+	return NormalizeRSXSettings(*settings.RSXSettings), true
 }
 
 // ResolveBacktestSlippage returns slippage % per fill from the request or the default.
@@ -56,6 +85,30 @@ func ResolveBacktestNavigators(settings *BacktestRunSettings, topLevel map[strin
 		out[pane] = normalizeNavigatorUISettings(ui)
 	}
 	return out
+}
+
+// EnsureBacktestNavigatorsForMatrix forces navigator panes on when their scoring factors are active.
+func EnsureBacktestNavigatorsForMatrix(navs map[string]NavigatorUISettings, matrix ScoringMatrix) {
+	if navs == nil {
+		return
+	}
+	if matrix.UseRSX {
+		ui := navs["rsx"]
+		ui.Enabled = true
+		ui.Source = "RSX"
+		navs["rsx"] = normalizeNavigatorUISettings(ui)
+	}
+	if matrix.UseWozduhCross || matrix.UseWozduhSpike || matrix.UseHTFOscillators {
+		ui := navs["wozduh"]
+		ui.Enabled = true
+		ui.Source = "Wozduh"
+		navs["wozduh"] = normalizeNavigatorUISettings(ui)
+	}
+	if matrix.UseTrendlines || matrix.UseHTFOscillators {
+		ui := navs["price"]
+		ui.Enabled = true
+		navs["price"] = normalizeNavigatorUISettings(ui)
+	}
 }
 
 // ApplyMtfOptionsToNavigators toggles higher-TF periods on the price navigator from mtfOptions.

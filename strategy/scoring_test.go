@@ -42,12 +42,46 @@ func scoreDecision(t *testing.T, m *Marker, matrix ScoringMatrix) ScoreDecision 
 	return DefaultScoreEngine.Calculate(m, matrix)
 }
 
+func injectRSXMarker(marker *Marker, barIndex int, label string) {
+	color, position, shape := rsxAnnotationStyle(label)
+	marker.Annotations = append(marker.Annotations, ChartAnnotation{
+		Time:     marker.klines[barIndex].OpenTime / 1000,
+		Pane:     "rsx",
+		Label:    label,
+		Color:    color,
+		Position: position,
+		Shape:    shape,
+	})
+}
+
+func TestActiveFactorsForSide(t *testing.T) {
+	t.Parallel()
+
+	decision := ScoreDecision{
+		LongScore: 80,
+		Factors: map[string]ScoreFactor{
+			"RSX":         {Name: "RSX LL", Direction: BuyAction, Score: 45},
+			"WozduhCross": {Name: "Wozduh cross", Direction: BuyAction, Score: 35},
+			"Divergence":  {Name: "Divergence", Direction: SellAction, Score: 25},
+		},
+	}
+	populateActiveFactors(&decision)
+
+	got := ActiveFactorsForSide(decision, "BUY")
+	if len(got) != 2 {
+		t.Fatalf("buy factors = %v, want 2", got)
+	}
+	if StrategySourceForSide(decision, "BUY") != "RSX+WozduhCross" {
+		t.Fatalf("strategy source = %q", StrategySourceForSide(decision, "BUY"))
+	}
+}
+
 func TestScoreEngine_BuyThreshold(t *testing.T) {
 	SetScoringMatrix(allEnabledScoringMatrix())
 	t.Cleanup(ResetScoringMatrix)
 
 	m := testMarkerWithFlags(t, func(marker *Marker) {
-		marker.rsxMarkers.markers[59] = "LL"
+		injectRSXMarker(marker, 59, "LL")
 		marker.falconSignals.VolCrossMarker = "lime"
 		marker.redLineCrossGreenUp = true
 		marker.geometryState.IsBullishBreakout = true
@@ -64,7 +98,7 @@ func TestScoreEngine_ShortThreshold(t *testing.T) {
 	t.Cleanup(ResetScoringMatrix)
 
 	m := testMarkerWithFlags(t, func(marker *Marker) {
-		marker.rsxMarkers.markers[59] = "SS"
+		injectRSXMarker(marker, 59, "SS")
 		marker.falconSignals.VolCrossMarker = "red"
 		marker.redLineCrossGreenDown = true
 		marker.geometryState.IsBearishBreakout = true
@@ -78,7 +112,7 @@ func TestScoreEngine_ShortThreshold(t *testing.T) {
 
 func TestScoreEngine_DisabledMatrixWaits(t *testing.T) {
 	m := testMarkerWithFlags(t, func(marker *Marker) {
-		marker.rsxMarkers.markers[59] = "LL"
+		injectRSXMarker(marker, 59, "LL")
 	})
 	decision := scoreDecision(t, m, ScoringMatrix{})
 	if decision.FinalAction != WaitAction {

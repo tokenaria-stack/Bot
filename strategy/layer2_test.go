@@ -28,9 +28,9 @@ func TestDetectRedLineCrossGreenUp(t *testing.T) {
 			want: false,
 		},
 		{
-			name:    "cross but above zone ceiling",
+			name:    "cross above zone ceiling",
 			prevRed: 28, prevGrn: 30, curRed: 42, curGrn: 32,
-			want: false,
+			want: true,
 		},
 		{
 			name:    "touch green no cross",
@@ -78,9 +78,9 @@ func TestDetectRedLineCrossGreenDown(t *testing.T) {
 			want: false,
 		},
 		{
-			name:    "cross but below zone floor",
+			name:    "cross below zone floor",
 			prevRed: 68, prevGrn: 65, curRed: 58, curGrn: 66,
-			want: false,
+			want: true,
 		},
 		{
 			name:    "cross from equal at overbought",
@@ -110,16 +110,16 @@ func TestDetectWozduxVolumeSpike(t *testing.T) {
 	t.Parallel()
 
 	if !detectWozduxVolumeSpikeUp(30, 50, 35) {
-		t.Fatal("expected volume spike up in oversold zone")
+		t.Fatal("expected volume spike up")
 	}
-	if detectWozduxVolumeSpikeUp(30, 50, 45) {
-		t.Fatal("spike up should require oversold red line")
+	if detectWozduxVolumeSpikeUp(30, 40, 35) {
+		t.Fatal("delta below threshold should not register spike up")
 	}
 	if !detectWozduxVolumeSpikeDown(70, 50, 65) {
-		t.Fatal("expected volume spike down in overbought zone")
+		t.Fatal("expected volume spike down")
 	}
-	if detectWozduxVolumeSpikeDown(70, 50, 55) {
-		t.Fatal("spike down should require overbought red line")
+	if detectWozduxVolumeSpikeDown(70, 60, 55) {
+		t.Fatal("delta below threshold should not register spike down")
 	}
 }
 

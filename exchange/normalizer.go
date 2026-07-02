@@ -68,11 +68,35 @@ func (n *Normalizer) LoadLimitsFromFutures(ctx context.Context, client *futures.
 		}
 	}
 
-	n.mu.Lock()
-	n.limits = parsed
-	n.mu.Unlock()
-
+	n.ApplyLimits(parsed)
 	return nil
+}
+
+// ApplyLimits replaces cached symbol limits (e.g. from disk cache).
+func (n *Normalizer) ApplyLimits(limits map[string]SymbolLimits) {
+	if n == nil {
+		return
+	}
+	n.mu.Lock()
+	n.limits = make(map[string]SymbolLimits, len(limits))
+	for sym, lim := range limits {
+		n.limits[sym] = lim
+	}
+	n.mu.Unlock()
+}
+
+// LimitsSnapshot returns a copy of cached limits.
+func (n *Normalizer) LimitsSnapshot() map[string]SymbolLimits {
+	if n == nil {
+		return nil
+	}
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	out := make(map[string]SymbolLimits, len(n.limits))
+	for sym, lim := range n.limits {
+		out[sym] = lim
+	}
+	return out
 }
 
 // FormatPrice formats a price according to the symbol tick size.

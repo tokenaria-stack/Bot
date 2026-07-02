@@ -212,6 +212,18 @@ func TestMergeDataAndExchangeCandles_Dedupes(t *testing.T) {
 	}
 }
 
+func TestAlignKlineRangeMs(t *testing.T) {
+	t.Parallel()
+	const step = 900_000 // 15m
+	start, end := alignKlineRangeMs(1_700_000_123_456, 1_700_900_789_012, step)
+	if start%step != 0 || end%step != 0 {
+		t.Fatalf("unaligned range: start=%d end=%d step=%d", start, end, step)
+	}
+	if start != (1_700_000_123_456/step)*step {
+		t.Fatalf("start = %d, want %d", start, (1_700_000_123_456/step)*step)
+	}
+}
+
 func TestFilterCandlesInRange(t *testing.T) {
 	t.Parallel()
 
@@ -224,5 +236,29 @@ func TestFilterCandlesInRange(t *testing.T) {
 	out := filterCandlesInRange(candles, 100, 250)
 	if len(out) != 2 || out[0].OpenTime != 100 || out[1].OpenTime != 200 {
 		t.Fatalf("unexpected filter result: %+v", out)
+	}
+}
+
+func TestFilterFetchableGaps_DropsZeroWidthAndFuture(t *testing.T) {
+	t.Parallel()
+
+	step := step15m()
+	lastClosed := int64(1_700_000_000_000)
+
+	in := []klineTimeRange{
+		{start: 100, end: 100},
+		{start: 200, end: 199},
+		{start: 300, end: 300 + step},
+		{start: lastClosed - step, end: lastClosed + step*10},
+	}
+	out := filterFetchableGaps(in, step, lastClosed)
+	if len(out) != 2 {
+		t.Fatalf("len(out) = %d, want 2 valid gaps, got %+v", len(out), out)
+	}
+	if out[0].start != 300 || out[0].end != 300+step {
+		t.Fatalf("gap[0] = %+v", out[0])
+	}
+	if out[1].end != lastClosed {
+		t.Fatalf("gap[1] end = %d, want capped %d", out[1].end, lastClosed)
 	}
 }

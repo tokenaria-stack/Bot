@@ -23,10 +23,12 @@ type ScoreDecision struct {
 	FinalAction ActionType             `json:"finalAction"` // after analyst/chief vetoes
 	IsVetoed    bool                   `json:"isVetoed"`
 	VetoReason  string                 `json:"vetoReason,omitempty"`
-	LongScore   int                    `json:"longScore"`
-	ShortScore  int                    `json:"shortScore"`
-	Factors     map[string]ScoreFactor `json:"factors"`
-	Reason      string                 `json:"reason"`
+	LongScore      int                    `json:"longScore"`
+	ShortScore     int                    `json:"shortScore"`
+	Factors        map[string]ScoreFactor `json:"factors"`
+	ActiveFactors  []string               `json:"activeFactors,omitempty"`
+	StrategySource string                 `json:"strategySource,omitempty"`
+	Reason         string                 `json:"reason"`
 	LotMod      float64                `json:"lotMod"`
 	StopDist    float64                `json:"stopDist"`
 }

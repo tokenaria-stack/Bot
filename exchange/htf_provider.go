@@ -47,7 +47,7 @@ func (p *HTFProvider) GetKlines(symbol, interval string, startMs int64) ([]Kline
 	}
 
 	endMs := time.Now().UnixMilli()
-	candles, err := LoadContinuousContractFromDB(symbol, interval, startMs, endMs)
+	candles, err := LoadContinuousContractFromDB(symbol, interval, startMs, endMs, 0)
 	if err != nil {
 		return nil, err
 	}

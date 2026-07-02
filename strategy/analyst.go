@@ -80,9 +80,20 @@ type Marker struct {
 	geometryState            GeometryState
 	prevZigNode              indicators.ZigZagNode
 	prevZigHas               bool
-	rsxMarkers               rsxMarkerState
+	rsxSettings              *RSXSettings
+	// DataBus — единый реестр синхронизированных серий (владелец — только Marker).
+	JurikLines               []float64
+	WozduhRed                []float64
+	WozduhGreen              []float64
+	chartExportPoints        []BacktestChartPoint
+	Annotations              []ChartAnnotation
 	layer2Snap               layer2StreamingSnapshot
 	mtfStates                map[string]*HTFState
+	cachedRSXMarkerBar       int
+	cachedRSXMarkerLabel     string
+	closeLines               []float64
+	rsxPriceLines            []float64
+	bulkReplayMode           bool
 }
 
 // NewMarker loads the initial candle history into a protected store.
@@ -96,10 +107,24 @@ func NewMarker(history []exchange.Kline, db *vector_db.DBClient, timeframe, coll
 		timeframe:  timeframe,
 		collection: collection,
 		config:     config,
-		rsxMarkers: newRSXMarkerStateFromSettings(GetRSXSettings()),
 	}
 	a.warmupStreaming(copied)
 	return a
+}
+
+// SetRSXSettings pins per-marker RSX config (backtest isolation). Call ReapplyRSXSettings after.
+func (a *Marker) SetRSXSettings(settings RSXSettings) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	normalized := NormalizeRSXSettings(settings)
+	a.rsxSettings = &normalized
+}
+
+func (a *Marker) effectiveRSXSettings() RSXSettings {
+	if a.rsxSettings != nil {
+		return *a.rsxSettings
+	}
+	return GetRSXSettings()
 }
 
 // ReapplyRSXSettings rebuilds RSX marker state and replays streaming engines after setting changes.
@@ -107,6 +132,52 @@ func (a *Marker) ReapplyRSXSettings() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.replayStreamingLocked()
+}
+
+// ApplyBacktestRSXConfig pins per-run RSX settings and replays engines for isolated backtests.
+func (a *Marker) ApplyBacktestRSXConfig(settings RSXSettings) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	normalized := NormalizeRSXSettings(settings)
+	a.rsxSettings = &normalized
+	a.falcon.SetRSXLength(normalized.Length)
+	a.falcon.SetRSXSignalLength(normalized.SignalLength)
+	a.falcon.SetRSXSource(normalized.Source)
+	if a.divEngine != nil {
+		a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
+	}
+	a.replayStreamingLocked()
+}
+
+// UpdateRSXScanConfig applies RSX settings on the fly: replays Jurik when length/signal/source
+// change, otherwise rebuilds divergence annotations only.
+func (a *Marker) UpdateRSXScanConfig(settings RSXSettings) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	prev := a.effectiveRSXSettings()
+	if a.rsxSettings != nil {
+		normalized := NormalizeRSXSettings(settings)
+		a.rsxSettings = &normalized
+	}
+	next := a.effectiveRSXSettings()
+
+	a.falcon.SetRSXLength(next.Length)
+	a.falcon.SetRSXSignalLength(next.SignalLength)
+	a.falcon.SetRSXSource(next.Source)
+
+	if a.divEngine != nil {
+		a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(next))
+	}
+
+	needsReplay := prev.Length != next.Length ||
+		prev.SignalLength != next.SignalLength ||
+		normalizeRSXSource(prev.Source) != normalizeRSXSource(next.Source)
+	if needsReplay {
+		a.replayStreamingLocked()
+		return
+	}
+	a.rebuildRSXAnnotationsLocked()
 }
 
 // JurikRSXColor returns the TradingView-style RSX line color for the latest bar.
@@ -128,8 +199,12 @@ func (a *Marker) LoadHistoricalKlines(klines []exchange.Kline) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	merged := mergeKlinesByOpenTime(klines, a.klines)
+	if len(merged) > LiveKlineRAMCap {
+		merged = merged[len(merged)-LiveKlineRAMCap:]
+	}
 	a.klines = merged
 	a.replayStreamingLocked()
+	a.ensureChartExportPointsAlignedLocked()
 }
 
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
@@ -151,7 +226,7 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 	if len(a.klines) == 0 {
 		a.klines = append(a.klines, k)
-		a.evaluateTickLocked(k, 0, isClosed)
+		a.evalTick(k, 0, isClosed)
 		return
 	}
 
@@ -160,20 +235,45 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 	if k.OpenTime == last.OpenTime {
 		a.klines[lastIdx] = k
-		a.evaluateTickLocked(k, lastIdx, isClosed)
+		a.evalTick(k, lastIdx, isClosed)
 		return
 	}
 
 	if k.OpenTime > last.OpenTime {
 		// Commit the previous bar into streaming snapshots before opening a new one.
-		a.evaluateTickLocked(last, lastIdx, true)
+		a.evalTick(last, lastIdx, true)
 		a.klines = append(a.klines, k)
-		a.evaluateTickLocked(k, len(a.klines)-1, isClosed)
+		a.evalTick(k, len(a.klines)-1, isClosed)
+		a.ensureChartExportPointsAlignedLocked()
+		a.trimKlinesToCapLocked()
+		a.clampDataBusToKlinesLocked()
 		return
 	}
 
 	// Out-of-order tick for an earlier period — drop.
 	_ = isClosed
+}
+
+func (a *Marker) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
+	if a.bulkReplayMode {
+		a.evaluateTickBulkChartLocked(k, barIndex)
+		return
+	}
+	a.evaluateTickLocked(k, barIndex, isClosed)
+}
+
+// evaluateTickBulkChartLocked is the chart-only cold replay path (falcon + RSX markers, zero snap churn).
+func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int) {
+	a.evaluateFalconSignalsLocked(k, true)
+	a.recordDataBusBarLocked(barIndex, a.falconSignals)
+	a.cachedRSXMarkerBar = barIndex
+	a.cachedRSXMarkerLabel = ""
+	if a.divEngine != nil {
+		hit := indicators.RSXHitAtDisplayBar(a, barIndex, a.divEngine.RSXConfig())
+		if hit.Label != "" {
+			a.cachedRSXMarkerLabel = hit.Label
+		}
+	}
 }
 
 // SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).
@@ -228,6 +328,26 @@ func (a *Marker) MTFStates() map[string]*HTFState {
 		out[tf] = &cp
 	}
 	return out
+}
+
+func (a *Marker) EffectiveRSXSettings() RSXSettings {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.effectiveRSXSettings()
+}
+
+// SetBulkReplayMode enables linear replay without per-bar snapshot restore/save (chart cold path).
+func (a *Marker) SetBulkReplayMode(enabled bool) {
+	a.mu.Lock()
+	a.bulkReplayMode = enabled
+	a.mu.Unlock()
+}
+
+// BarCount returns the number of klines held by the marker.
+func (a *Marker) BarCount() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return len(a.klines)
 }
 
 // GetKlines returns a defensive copy of the stored candles.
@@ -479,6 +599,38 @@ func (a *Marker) VolatilityStateSnapshot() VolatilityState {
 	return a.volatilityState
 }
 
+// ClosedVolatilityRegime returns the regime fixed at the last closed bar (layer2 snapshot).
+func (a *Marker) ClosedVolatilityRegime() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return string(a.layer2Snap.volatilityState.Regime)
+}
+
+// Timeframe returns the marker's candle interval.
+func (a *Marker) Timeframe() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.timeframe
+}
+
+// MarkerTailPollSnapshot holds tail-poll indicator values under one lock acquisition.
+type MarkerTailPollSnapshot struct {
+	Falcon    FalconSignals
+	RSXColor  string
+	RSXMarker string
+}
+
+// TailPollSnapshot copies the latest tail-poll fields for HTTP poll=1 responses.
+func (a *Marker) TailPollSnapshot() MarkerTailPollSnapshot {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return MarkerTailPollSnapshot{
+		Falcon:    a.falconSignals,
+		RSXColor:  RSXColor(a.jurikValue, a.jurikPrevBar),
+		RSXMarker: a.rsxTradingMarkerAtCurrentBarLocked(),
+	}
+}
+
 // FalconSnapshot returns a copy of the latest Falcon dashboard values.
 func (a *Marker) FalconSnapshot() FalconSignals {
 	a.mu.RLock()
@@ -500,11 +652,11 @@ func (a *Marker) FibZonesSnapshot() []indicators.FibZone {
 	return append([]indicators.FibZone(nil), a.fibZones...)
 }
 
-// RecentRSXMarker returns the latest RSX trading marker string (L/LL/S/SS).
+// RecentRSXMarker returns the RSX trading marker (L/LL/S/SS) on the current bar only.
 func (a *Marker) RecentRSXMarker() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.rsxMarkers.recentTradingMarker(RSXSignalMemoryBars)
+	return a.rsxTradingMarkerAtCurrentBarLocked()
 }
 
 // HasMinBars reports whether the marker has enough bars for scoring.

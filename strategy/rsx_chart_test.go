@@ -28,15 +28,15 @@ func TestRSXColor(t *testing.T) {
 
 func TestIsRSXPivotHigh(t *testing.T) {
 	rsx := []float64{50, 55, 58, 65, 63, 61, 59}
-	if !isRSXPivotHigh(rsx, 3, 2) {
+	if !indicators.IsRSXPivotHigh(rsx, 3, 2) {
 		t.Fatal("index 3 should be 5-bar pivot high")
 	}
-	if isRSXPivotHigh(rsx, 4, 2) {
+	if indicators.IsRSXPivotHigh(rsx, 4, 2) {
 		t.Fatal("index 4 should not be pivot high")
 	}
 }
 
-func TestScanRSXFractalMarkers_SingleP(t *testing.T) {
+func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 	ApplyRSXSettings(RSXSettings{DivMethod: "fractal", PivotRadius: 2})
@@ -46,12 +46,21 @@ func TestScanRSXFractalMarkers_SingleP(t *testing.T) {
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
 	}
-	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault, 2)
-	if markers[7] != "P" {
-		t.Fatalf("expected P at macro pivot index 7, got %q", markers[7])
+	cfg := RSXScanConfigFromSettings(GetRSXSettings())
+	engine := indicators.NewSmartDivergenceEngine(cfg)
+	bus := newBatchDataBus(rsx, prices, nil)
+	hits := engine.ScanRSX(bus)
+	var pAtPivot int
+	for _, h := range hits {
+		if h.Label == "P" && h.PivotBar == 7 {
+			pAtPivot++
+		}
 	}
-	if len(markers) != 1 {
-		t.Fatalf("expected exactly one marker, got %d: %v", len(markers), markers)
+	if pAtPivot != 1 {
+		t.Fatalf("expected exactly one P at pivot 7, got %d hits: %+v", pAtPivot, hits)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("expected exactly one marker, got %d: %+v", len(hits), hits)
 	}
 }
 
@@ -65,14 +74,16 @@ func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
 	}
-	markers := scanRSXFractalMarkers(prices, rsx, RSXLookbackDefault, 2)
-	if len(markers) != 0 {
-		t.Fatalf("expected no P without macro pivot, got %v", markers)
+	cfg := RSXScanConfigFromSettings(GetRSXSettings())
+	engine := indicators.NewSmartDivergenceEngine(cfg)
+	bus := newBatchDataBus(rsx, prices, nil)
+	if len(engine.ScanRSX(bus)) != 0 {
+		t.Fatalf("expected no P without macro pivot, got %+v", engine.ScanRSX(bus))
 	}
 }
 
 func TestBearishRSXMarker(t *testing.T) {
-	m := bearishRSXMarker(indicators.DivergenceResult{Class: indicators.ClassA})
+	m := indicators.BearishRSXMarkerLabel(indicators.DivergenceResult{Class: indicators.ClassA})
 	if m != "SS" {
 		t.Fatalf("ClassA bearish = SS, got %s", m)
 	}

@@ -215,7 +215,7 @@
       flex-shrink: 0;
       flex-wrap: nowrap;
       position: relative;
-      z-index: 9999;
+      z-index: 20;
       overflow: visible;
     }
 
@@ -690,6 +690,26 @@
       gap: 6px;
     }
 
+    .matrix-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 14px 14px;
+      border-top: 1px solid #2a2e39;
+    }
+
+    .matrix-save-btn {
+      background: #2962ff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .matrix-save-btn:hover { background: #1e53e5; }
+
     .matrix-toggle {
       display: flex;
       align-items: center;
@@ -713,7 +733,8 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: 4px;
+      padding: 0;
+      background: var(--tv-bg);
     }
 
     #backtest-chart-container {
@@ -721,10 +742,14 @@
       flex: 1;
       min-height: 0;
       display: flex;
-      border: 1px solid var(--tv-border);
-      border-radius: 4px;
-      overflow: hidden;
       flex-direction: column;
+      overflow: hidden;
+    }
+
+    #backtest-chart-container.pro-chart-root .charts-stack {
+      flex: 1;
+      min-height: 0;
+      padding: 4px 4px 0;
     }
 
     /* ── Console drawer (overlay) ── */
@@ -793,12 +818,7 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-    }
-
-    #backtest-chart-container.pro-chart-root .charts-stack {
-      flex: 1;
-      height: 100%;
-      padding: 0;
+      overflow: hidden;
     }
 
     #live-chart-container.pro-chart-root {
@@ -974,6 +994,17 @@
       overflow: hidden;
     }
 
+    .workspace-main {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--tv-border);
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
     @media (max-width: 900px) {
       .command-bar { gap: 10px; }
       .backtest-inline { flex-wrap: wrap; }
@@ -989,6 +1020,7 @@
     }
 
     .chart-wrap,
+    .chart-wrapper,
     .osc-wrap,
     .rsx-wrap {
       position: relative;
@@ -1137,6 +1169,8 @@
   </style>
 </head>
 <body>
+  <div id="app-container">
+  <header class="app-chrome" id="app-chrome">
   <div class="command-bar">
     <div class="command-tabs tabs-nav">
       <button type="button" class="tab-btn active" data-tab="tab-live">Live</button>
@@ -1234,15 +1268,8 @@
 
     <div class="command-spacer"></div>
 
+    <button type="button" class="btn-ghost" id="facts-toggle" title="Order facts / scoring telemetry">Facts</button>
     <button type="button" class="btn-ghost" id="console-toggle" title="Backtest console">Console</button>
-  </div>
-
-  <div class="telemetry-bar-wrap">
-    <div class="card" id="scoring-telemetry-card">
-      <div id="telemetry-compact-line" class="telemetry-compact-line" aria-live="polite">
-        <span class="telemetry-idle">—</span>
-      </div>
-    </div>
   </div>
 
   <div class="toolbar">
@@ -1272,11 +1299,6 @@
       Ruler
     </button>
 
-    <div class="seg-group" id="scale-group">
-      <button type="button" class="seg-btn active" data-scale="log">Log</button>
-      <button type="button" class="seg-btn" data-scale="auto">Auto</button>
-    </div>
-
     <button type="button" id="btn-clear-cache" class="tool-btn" title="Очистить серверный кэш HTF и Истории">🗑️ Cache</button>
 
     <div class="seg-group" id="chart-type-group">
@@ -1293,34 +1315,16 @@
     </div>
   </div>
 
-  <div id="matrix-modal" class="matrix-modal" aria-hidden="true">
-    <div class="matrix-modal-backdrop" id="matrix-modal-backdrop"></div>
-    <div class="matrix-modal-panel" role="dialog" aria-labelledby="matrix-modal-title">
-      <div class="matrix-modal-header">
-        <h3 id="matrix-modal-title">Signal Matrix</h3>
-        <button type="button" class="matrix-modal-close" id="matrix-modal-close" aria-label="Close">×</button>
-      </div>
-      <div class="matrix-modal-body" id="matrix-modal-body">
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRSX" data-matrix-key="useRSX" checked /> RSX L / S markers (+35/+45)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhCross" data-matrix-key="useWozduhCross" checked /> Wozduh vol cross lime/red (+35)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRedCross" data-matrix-key="useRedCross" checked /> Red × Green cross (+35)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometry" data-matrix-key="useGeometry" checked /> Geometry breakout (+30)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryBounce" data-matrix-key="useGeometryBounce" checked /> Geometry bounce (+25)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryTriangle" data-matrix-key="useGeometryTriangle" checked /> Geometry triangle (+10)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useHTFOscillators" data-matrix-key="useHTFOscillators" checked /> HTF RSX &amp; Wozduh (walk-forward MTF, +20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useDivergence" data-matrix-key="useDivergence" checked /> Divergence score (±)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useFib" data-matrix-key="useFib" checked /> Fib 0.618 active (+20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useExpRegime" data-matrix-key="useExpRegime" checked /> Regime EXPANSION (+15)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useJurikTrend" data-matrix-key="useJurikTrend" checked /> Jurik tailwind (+15/+20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhSpike" data-matrix-key="useWozduhSpike" checked /> Wozduh volume spike (+15)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAD" data-matrix-key="useAD" checked /> AD accumulation / distribution (+20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAOCross" data-matrix-key="useAOCross" checked /> AO cross zero (+15)</label>
+  <div class="telemetry-bar-wrap" id="telemetry-bar-wrap">
+    <div class="card" id="scoring-telemetry-card">
+      <div id="telemetry-compact-line" class="telemetry-compact-line" aria-live="polite">
+        <span class="telemetry-idle">—</span>
       </div>
     </div>
   </div>
+  </header>
 
-  <main>
+  <main class="workspace-main" id="workspace-main">
     <div id="tab-live" class="tab-content active">
       <div class="indicator-bar">
         <label class="ind-toggle active"><input type="checkbox" id="tog-jurik" checked /><span class="ind-dot" style="background:#c8a882"></span>RSX Jurik</label>
@@ -1331,15 +1335,19 @@
 
       <div id="live-chart-container" class="pro-chart-root">
       <div class="charts-stack" id="charts-stack">
-      <div class="chart-wrap" id="price-wrap">
+      <div class="chart-wrap chart-wrapper" id="price-wrap">
         <div class="pane-label" id="volume-label">Vol<span class="val" id="volume-val">—</span></div>
         <div class="chart-legend" data-pane="price" data-context="live"></div>
         <div id="chart-container"></div>
+        <div class="scale-controls" data-scale-context="live" aria-label="Price scale controls">
+          <button type="button" class="scale-btn scale-btn--auto active" data-action="auto" title="Auto scale (Y)">Auto</button>
+          <button type="button" class="scale-btn scale-btn--log active" data-action="log" title="Logarithmic scale">Log</button>
+        </div>
         <div id="orderflow-buffer">Buffering Order Flow data... Please wait.</div>
         <div id="ruler-shade" class="ruler-shade"></div>
         <div id="ruler-tooltip" class="ruler-tooltip"></div>
       </div>
-      <div class="pane-resize" data-resize="price-osc"></div>
+      <div class="pane-resize" data-resize="price-osc" data-pane-stack="live"></div>
       <div class="osc-wrap" id="osc-wrap">
         <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
         <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
@@ -1356,10 +1364,11 @@
           </div>
         <div id="osc-container"></div>
       </div>
-      <div class="pane-resize" data-resize="osc-rsx"></div>
+      <div class="pane-resize" data-resize="osc-rsx" data-pane-stack="live"></div>
       <div class="rsx-wrap" id="rsx-wrap">
         <div class="chart-legend" data-pane="rsx" data-context="live"></div>
         <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+            <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
             <div class="setting-row">
               <label>RSX Length:</label>
               <input type="number" class="rsx-length-input" min="3" max="100" step="1" value="14" />
@@ -1390,6 +1399,15 @@
                 <option value="fractal">Fractal</option>
               </select>
             </div>
+            <div class="setting-row">
+              <label>Min Price Delta Ratio:</label>
+              <input type="number" class="rsx-min-price-delta-input" min="0" step="0.0001" value="0.0" />
+            </div>
+            <div class="setting-row">
+              <label>Min Osc Delta:</label>
+              <input type="number" class="rsx-min-osc-delta-input" min="0" step="0.1" value="0.0" />
+            </div>
+            <label class="menu-row"><input type="checkbox" class="rsx-show-pivots-chk" checked /> Show Pivots</label>
             <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
           </div>
         <span class="val rsx-val-inline" id="rsx-val">—</span>
@@ -1464,12 +1482,17 @@
       <div class="backtest-panel">
         <div id="backtest-chart-container" class="pro-chart-root">
           <div class="charts-stack" id="bt-charts-stack">
-            <div class="chart-wrap" id="bt-price-wrap">
+            <div class="chart-wrap chart-wrapper" id="bt-price-wrap">
               <div class="chart-legend" data-pane="price" data-context="backtest"></div>
               <div id="bt-chart-container"></div>
+              <div class="scale-controls" data-scale-context="backtest" aria-label="Price scale controls">
+                <button type="button" class="scale-btn scale-btn--auto active" data-action="auto" title="Auto scale (Y)">Auto</button>
+                <button type="button" class="scale-btn scale-btn--log active" data-action="log" title="Logarithmic scale">Log</button>
+              </div>
               <div id="bt-ruler-shade" class="ruler-shade"></div>
               <div id="bt-ruler-tooltip" class="ruler-tooltip"></div>
             </div>
+            <div class="pane-resize" data-resize="price-osc" data-pane-stack="backtest"></div>
             <div class="osc-wrap" id="bt-osc-wrap">
               <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
               <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
@@ -1486,10 +1509,12 @@
                 </div>
               <div id="bt-osc-container"></div>
             </div>
+            <div class="pane-resize" data-resize="osc-rsx" data-pane-stack="backtest"></div>
             <div class="rsx-wrap" id="bt-rsx-wrap">
               <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
               <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
               <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+                  <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
                   <div class="setting-row">
                     <label>RSX Length:</label>
                     <input type="number" class="rsx-length-input" min="3" max="100" step="1" value="14" />
@@ -1520,6 +1545,15 @@
                       <option value="fractal">Fractal</option>
                     </select>
                   </div>
+                  <div class="setting-row">
+                    <label>Min Price Delta Ratio:</label>
+                    <input type="number" class="rsx-min-price-delta-input" min="0" step="0.0001" value="0.0" />
+                  </div>
+                  <div class="setting-row">
+                    <label>Min Osc Delta:</label>
+                    <input type="number" class="rsx-min-osc-delta-input" min="0" step="0.1" value="0.0" />
+                  </div>
+                  <label class="menu-row"><input type="checkbox" class="rsx-show-pivots-chk" checked /> Show Pivots</label>
                   <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
                 </div>
               <div id="bt-rsx-container"></div>
@@ -1529,6 +1563,37 @@
       </div>
     </div>
   </main>
+  </div>
+
+  <div id="matrix-modal" class="matrix-modal" aria-hidden="true">
+    <div class="matrix-modal-backdrop" id="matrix-modal-backdrop"></div>
+    <div class="matrix-modal-panel" role="dialog" aria-labelledby="matrix-modal-title">
+      <div class="matrix-modal-header">
+        <h3 id="matrix-modal-title">Signal Matrix</h3>
+        <button type="button" class="matrix-modal-close" id="matrix-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="matrix-modal-body" id="matrix-modal-body">
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRSX" data-matrix-key="useRSX" checked /> RSX L / S markers (+35/+45)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhCross" data-matrix-key="useWozduhCross" checked /> Wozduh vol cross lime/red (+35)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRedCross" data-matrix-key="useRedCross" checked /> Red × Green cross (+35)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometry" data-matrix-key="useGeometry" checked /> Geometry breakout (+30)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryBounce" data-matrix-key="useGeometryBounce" checked /> Geometry bounce (+25)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryTriangle" data-matrix-key="useGeometryTriangle" checked /> Geometry triangle (+10)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useHTFOscillators" data-matrix-key="useHTFOscillators" checked /> HTF RSX &amp; Wozduh (walk-forward MTF, +20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useDivergence" data-matrix-key="useDivergence" checked /> Divergence score (±)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useFib" data-matrix-key="useFib" checked /> Fib 0.618 active (+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useExpRegime" data-matrix-key="useExpRegime" checked /> Regime EXPANSION (+15)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useJurikTrend" data-matrix-key="useJurikTrend" checked /> Jurik tailwind (+15/+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhSpike" data-matrix-key="useWozduhSpike" checked /> Wozduh volume spike (+15)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAD" data-matrix-key="useAD" checked /> AD accumulation / distribution (+20)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAOCross" data-matrix-key="useAOCross" checked /> AO cross zero (+15)</label>
+      </div>
+      <div class="matrix-modal-footer">
+        <button type="button" class="matrix-save-btn" id="matrix-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Trendlines navigator popups (DOM must match app.js selectors: .navigator-popup, .btn-ok, [data-nav-field]) -->
   <div id="popup-price" class="popup-container navigator-popup" data-pane="price" hidden>
@@ -1743,6 +1808,7 @@
   </div>
 
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/indicators_dormant.js"></script>
   <script src="/trendline_plugin.js"></script>
   <script src="/trade_marker_plugin.js"></script>
   <script src="/viewport.js"></script>

@@ -81,21 +81,29 @@ func BuildBacktestEngineConfig(
 	htf *exchange.HTFProvider,
 	entryAnalyst *Analyst,
 	slippagePct float64,
+	longThreshold, shortThreshold int,
+	rsxSettings *RSXSettings,
 ) BacktestConfig {
 	navs := cloneNavigatorPanes(navigators)
 	if len(navs) == 0 {
 		navs = map[string]NavigatorUISettings{}
 	}
 	ApplyMtfOptionsToNavigators(navs, mtfOptions)
+	if matrix != nil {
+		EnsureBacktestNavigatorsForMatrix(navs, *matrix)
+	}
 
 	return BacktestConfig{
-		Symbol:       symbol,
-		Interval:     interval,
-		EntryAnalyst: entryAnalyst,
-		FeeRate:      DefaultScalpFeeRate,
-		SlippagePct:  slippagePct,
-		Matrix:       matrix,
-		Navigators:   navs,
-		HTF:          htf,
+		Symbol:         symbol,
+		Interval:       interval,
+		EntryAnalyst:   entryAnalyst,
+		FeeRate:        DefaultScalpFeeRate,
+		SlippagePct:    slippagePct,
+		Matrix:         matrix,
+		Navigators:     navs,
+		HTF:            htf,
+		LongThreshold:  longThreshold,
+		ShortThreshold: shortThreshold,
+		RSXSettings:    rsxSettings,
 	}
 }

@@ -84,6 +84,10 @@ func (b *BinanceExchange) GetKlinesBefore(symbol, interval string, limit int, en
 		Interval(interval).
 		Limit(limit)
 	if endTimeMs > 0 {
+		stepMs, err := data.IntervalDurationMs(interval)
+		if err == nil && stepMs > 0 {
+			endTimeMs = alignOpenTimeMs(endTimeMs, stepMs)
+		}
 		svc = svc.EndTime(endTimeMs)
 	}
 
@@ -123,11 +127,20 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 		return nil, nil
 	}
 
-	symbol = NormalizeFuturesSymbol(symbol)
+	if capped, capErr := data.CapKlineEndToLastClosed(endTimeMs, interval); capErr == nil {
+		endTimeMs = capped
+	}
+
 	stepMs, stepErr := data.IntervalDurationMs(interval)
 	if stepErr != nil {
 		return nil, stepErr
 	}
+	startTimeMs, endTimeMs = alignKlineRangeMs(startTimeMs, endTimeMs, stepMs)
+	if startTimeMs > endTimeMs {
+		return nil, fmt.Errorf("invalid kline range: start %d after capped end %d", startTimeMs, endTimeMs)
+	}
+
+	symbol = NormalizeFuturesSymbol(symbol)
 
 	bounds := queryContinuousContractCacheBounds(symbol, interval, startTimeMs, endTimeMs)
 	if bounds.HasData {
@@ -136,7 +149,7 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 	}
 
 	log.Printf("[Klines] loading SQLite (continuous): %s %s [%d .. %d]", symbol, interval, startTimeMs, endTimeMs)
-	dbCandles, err := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs)
+	dbCandles, err := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs, 0)
 	if err != nil {
 		log.Printf("[Klines] continuous cache read failed for %s %s: %v", symbol, interval, err)
 		dbCandles = nil
@@ -145,6 +158,7 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 	log.Printf("[Klines] SQLite returned %d stitched bars for requested range", len(dbKlines))
 
 	gaps := detectKlineGaps(dbKlines, startTimeMs, endTimeMs, bounds, stepMs)
+	gaps = filterFetchableGaps(gaps, stepMs, endTimeMs)
 	if len(gaps) == 0 {
 		log.Printf("[Klines] cache hit: %s %s (%d bars)", symbol, interval, len(dbKlines))
 		return candlesFromData(dbKlines), nil
@@ -162,6 +176,9 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 		apiOK := false
 
 		for _, seg := range segments {
+			if seg.start >= seg.end {
+				continue
+			}
 			storageSym := storageSymbolForSegment(symbol, seg)
 			market := "futures"
 			if seg.spotStorage {
@@ -222,7 +239,7 @@ func (b *BinanceExchange) FetchHistoricalKlines(symbol, interval string, startTi
 	}
 
 	if len(fetched) > 0 {
-		reloaded, reloadErr := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs)
+		reloaded, reloadErr := LoadContinuousContractFromDB(symbol, interval, startTimeMs, endTimeMs, 0)
 		if reloadErr != nil {
 			log.Printf("[Klines] continuous cache reload failed for %s %s: %v", symbol, interval, reloadErr)
 		} else {
@@ -293,6 +310,31 @@ func detectKlineGaps(dbKlines []data.Candle, startTimeMs, endTimeMs int64, bound
 	}
 
 	return gaps
+}
+
+// filterFetchableGaps drops zero-width holes and ranges beyond the last closed bar.
+func filterFetchableGaps(gaps []klineTimeRange, stepMs, lastClosedEndMs int64) []klineTimeRange {
+	if stepMs <= 0 {
+		stepMs = 60_000
+	}
+	out := make([]klineTimeRange, 0, len(gaps))
+	for _, g := range gaps {
+		start, end := g.start, g.end
+		if start >= end {
+			continue
+		}
+		if end > lastClosedEndMs {
+			end = lastClosedEndMs
+		}
+		if start >= end {
+			continue
+		}
+		if end-start < stepMs {
+			continue
+		}
+		out = append(out, klineTimeRange{start: start, end: end})
+	}
+	return out
 }
 
 func seedCandleForGap(merged, fetched []Candle, gapStart int64) (Candle, bool) {
@@ -377,6 +419,14 @@ func alignOpenTimeMs(t, stepMs int64) int64 {
 	return (t / stepMs) * stepMs
 }
 
+// alignKlineRangeMs floors start/end to candle open boundaries for REST API requests.
+func alignKlineRangeMs(startMs, endMs, stepMs int64) (int64, int64) {
+	if stepMs <= 0 {
+		return startMs, endMs
+	}
+	return alignOpenTimeMs(startMs, stepMs), alignOpenTimeMs(endMs, stepMs)
+}
+
 func mergeDataAndExchangeCandles(dbKlines []data.Candle, fetched []Candle) []Candle {
 	if len(dbKlines) == 0 {
 		return dedupeCandlesByOpenTime(fetched)
@@ -405,6 +455,15 @@ func filterCandlesInRange(candles []Candle, startTimeMs, endTimeMs int64) []Cand
 }
 
 func (b *BinanceExchange) fetchHistoricalKlinesFromAPI(symbol, interval string, startTimeMs, endTimeMs int64) ([]Candle, error) {
+	stepMs, err := data.IntervalDurationMs(interval)
+	if err != nil {
+		return nil, err
+	}
+	startTimeMs, endTimeMs = alignKlineRangeMs(startTimeMs, endTimeMs, stepMs)
+	if startTimeMs > endTimeMs {
+		return nil, nil
+	}
+
 	cursor := startTimeMs
 	all := make([]Candle, 0, historicalKlinesPageLimit)
 

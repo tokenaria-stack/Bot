@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"trading_bot/exchange"
+	"trading_bot/indicators"
 )
 
 func TestMarker_LoadHistoricalKlines_ConcurrentUpdateNoDeadlock(t *testing.T) {
@@ -51,23 +52,19 @@ func TestMarker_LoadHistoricalKlines_ConcurrentUpdateNoDeadlock(t *testing.T) {
 	}
 }
 
-func TestRSXMarkerState_SnapshotIgnoresGlobalMutation(t *testing.T) {
+func TestMarker_RSXSettingsPinnedIgnoresGlobalMutation(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 
 	ApplyRSXSettings(RSXSettings{DivLookback: 30, Source: "close", DivMethod: "tv"})
-	state := newRSXMarkerStateFromSettings(GetRSXSettings())
-	for i := 0; i < 40; i++ {
-		state.appendBar(120, 100, 118, 50+float64(i%5))
-	}
-	baseline := len(state.tvCloses)
+	klines := syntheticRSXKlines(40)
+	m := NewMarker(klines, nil, "1m", "", ChaosConfig{})
+	pinned := RSXSettings{DivLookback: 30, Source: "close", DivMethod: "tv"}
+	m.SetRSXSettings(pinned)
 
 	ApplyRSXSettings(RSXSettings{DivLookback: 30, Source: "hlc3", DivMethod: "fractal", PivotRadius: 3})
-	state.appendBar(120, 100, 118, 55)
-	if len(state.tvCloses) != baseline+1 {
-		t.Fatalf("fractal flip should not reset TV state: tv len %d want %d", len(state.tvCloses), baseline+1)
-	}
-	if state.cfg.useFractal {
-		t.Fatal("cfg.useFractal should remain false after global flip")
+	cfg := m.rsxScanConfigLocked()
+	if cfg.Mode != indicators.RSXScanTV {
+		t.Fatalf("pinned marker should keep TV mode, got %v", cfg.Mode)
 	}
 }

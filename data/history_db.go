@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -67,7 +69,15 @@ func InitDB() error {
 	if dbErr != nil {
 		return dbErr
 	}
-	db.SetMaxOpenConns(1)
+	// WAL allows concurrent readers; pool size tracks CPU count for parallel boot SELECTs.
+	maxConns := runtime.NumCPU()
+	if maxConns < 4 {
+		maxConns = 4
+	}
+	if maxConns > 16 {
+		maxConns = 16
+	}
+	db.SetMaxOpenConns(maxConns)
 
 	for _, pragma := range []string{
 		`PRAGMA journal_mode=WAL`,
@@ -232,7 +242,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 }
 
 // LoadKlines returns cached candles for [startTime, endTime] inclusive (Unix ms).
-func LoadKlines(symbol, interval string, startTime, endTime int64) ([]Candle, error) {
+// When limit > 0, returns at most the last limit bars in that window (ascending).
+func LoadKlines(symbol, interval string, startTime, endTime int64, limit int) ([]Candle, error) {
 	if err := InitDB(); err != nil {
 		return nil, err
 	}
@@ -251,13 +262,30 @@ func LoadKlines(symbol, interval string, startTime, endTime int64) ([]Candle, er
 	warnIfTimeLooksLikeSeconds("startTime", startTime)
 	warnIfTimeLooksLikeSeconds("endTime", endTime)
 
-	rows, err := db.Query(`
+	var rows *sql.Rows
+	var err error
+	if limit > 0 {
+		rows, err = db.Query(`
+SELECT open_time, open, high, low, close, volume, close_time
+FROM (
+	SELECT open_time, open, high, low, close, volume, close_time
+	FROM historical_klines
+	WHERE symbol = ? AND interval = ? AND open_time >= ? AND open_time <= ?
+	ORDER BY open_time DESC
+	LIMIT ?
+) sub
+ORDER BY open_time ASC`,
+			symbol, interval, startTime, endTime, limit,
+		)
+	} else {
+		rows, err = db.Query(`
 SELECT open_time, open, high, low, close, volume, close_time
 FROM historical_klines
 WHERE symbol = ? AND interval = ? AND open_time >= ? AND open_time <= ?
 ORDER BY open_time ASC`,
-		symbol, interval, startTime, endTime,
-	)
+			symbol, interval, startTime, endTime,
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("query klines: %w", err)
 	}
@@ -393,6 +421,31 @@ func intervalDurationMs(interval string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported interval %q", interval)
 	}
+}
+
+// CapKlineEndToLastClosed clamps endTimeMs to now and to the open time of the last fully
+// closed candle for interval. Prevents REST gap-fill from requesting in-progress bars.
+func CapKlineEndToLastClosed(endTimeMs int64, interval string) (int64, error) {
+	stepMs, err := IntervalDurationMs(interval)
+	if err != nil {
+		return endTimeMs, err
+	}
+	nowMs := time.Now().UnixMilli()
+	if endTimeMs > nowMs {
+		endTimeMs = nowMs
+	}
+	if stepMs <= 0 {
+		return endTimeMs, nil
+	}
+	currentOpen := (nowMs / stepMs) * stepMs
+	lastClosedOpen := currentOpen - stepMs
+	if lastClosedOpen < 0 {
+		lastClosedOpen = 0
+	}
+	if endTimeMs > lastClosedOpen {
+		endTimeMs = lastClosedOpen
+	}
+	return endTimeMs, nil
 }
 
 func normalizeSymbol(symbol string) string {

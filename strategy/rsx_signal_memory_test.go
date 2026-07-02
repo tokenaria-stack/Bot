@@ -4,66 +4,55 @@ import (
 	"testing"
 )
 
-func TestRecentRSXTradingMarker_FindsLaggedPivot(t *testing.T) {
-	t.Parallel()
-
-	klines := syntheticRSXKlines(120)
-	falcon := NewFalconEngine()
-	rsxValues := make([]float64, len(klines))
-	for i, k := range klines {
-		rsxValues[i] = falcon.Evaluate(k.High, k.Low, k.Close, k.Volume).JurikRSX
-	}
-	points := BuildRSXChart(klines, rsxValues, RSXLookbackDefault)
-
-	state := newRSXMarkerState(RSXLookbackDefault)
-	for i, k := range klines {
-		state.appendBar(k.High, k.Low, k.Close, rsxValues[i])
-	}
-
-	batchRecent := RecentRSXTradingMarker(points, RSXSignalMemoryBars)
-	streamRecent := state.recentTradingMarker(RSXSignalMemoryBars)
-	if batchRecent == "" {
-		t.Skip("synthetic series produced no recent trading markers")
-	}
-	if streamRecent != batchRecent {
-		t.Fatalf("streaming = %q, batch = %q", streamRecent, batchRecent)
-	}
-	if state.latest == streamRecent && streamRecent != "" {
-		// latest is only set when the marker sits on the current bar (rare with pivot lag)
-		lastIdx := len(points) - 1
-		if points[lastIdx].Marker != streamRecent {
-			t.Fatalf("latest=%q should not equal lagged recent=%q on last bar", state.latest, streamRecent)
-		}
-	}
-}
-
-func TestRecentRSXTradingMarker_PrefersStronger(t *testing.T) {
+func TestRSXTradingMarkerAtBar_CurrentBarOnly(t *testing.T) {
 	t.Parallel()
 
 	points := []RSXPoint{
-		{Marker: "L"},
 		{Marker: "LL"},
+		{Marker: "L"},
 	}
-	if got := RecentRSXTradingMarker(points, 3); got != "LL" {
-		t.Fatalf("got %q, want LL", got)
+	if got := RSXTradingMarkerAtBar(points, 1); got != "L" {
+		t.Fatalf("current bar = %q, want L", got)
+	}
+	if got := RSXTradingMarkerAtBar(points, 0); got != "LL" {
+		t.Fatalf("bar 0 = %q, want LL", got)
 	}
 }
 
-func TestRecentRSXTradingMarkerFromSeries(t *testing.T) {
+func TestRSXTradingMarker_StreamMatchesBatchOnCurrentBar(t *testing.T) {
 	t.Parallel()
 
 	klines := syntheticRSXKlines(120)
+	m := NewMarker(klines, nil, "1m", "", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	falcon := NewFalconEngine()
 	rsxValues := make([]float64, len(klines))
 	for i, k := range klines {
 		rsxValues[i] = falcon.Evaluate(k.High, k.Low, k.Close, k.Volume).JurikRSX
 	}
-	got := RecentRSXTradingMarkerFromSeries(klines, rsxValues, RSXLookbackDefault, RSXSignalMemoryBars)
 	points := BuildRSXChart(klines, rsxValues, RSXLookbackDefault)
-	want := RecentRSXTradingMarker(points, RSXSignalMemoryBars)
-	if got != want {
-		t.Fatalf("from series = %q, batch scan = %q", got, want)
+	batchCurrent := RSXTradingMarkerAtBar(points, len(points)-1)
+	streamCurrent := m.RecentRSXMarker()
+	if batchCurrent == "" && streamCurrent == "" {
+		t.Skip("synthetic series produced no trading marker on current bar")
+	}
+	if streamCurrent != batchCurrent {
+		t.Fatalf("streaming = %q, batch current bar = %q", streamCurrent, batchCurrent)
 	}
 }
 
-// Ensure syntheticRSXKlines is available (defined in rsx_incremental_test.go same package).
+func TestLatestRSXChartMarker_CurrentBar(t *testing.T) {
+	t.Parallel()
+
+	klines := syntheticRSXKlines(120)
+	got := LatestRSXChartMarker(klines, RSXLookbackDefault)
+	falcon := NewFalconEngine()
+	rsxValues := make([]float64, len(klines))
+	for i, k := range klines {
+		rsxValues[i] = falcon.Evaluate(k.High, k.Low, k.Close, k.Volume).JurikRSX
+	}
+	points := BuildRSXChart(klines, rsxValues, RSXLookbackDefault)
+	want := RSXTradingMarkerAtBar(points, len(points)-1)
+	if got != want {
+		t.Fatalf("chart marker = %q, want %q", got, want)
+	}
+}

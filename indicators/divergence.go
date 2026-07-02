@@ -49,6 +49,8 @@ type DivSignal struct {
 
 // SmartDivergenceEngine tracks ZigZag snapshots and micro tick history.
 type SmartDivergenceEngine struct {
+	rsxConfig RSXScanConfig
+
 	snapshots [maxDivSnapshots]Snapshot
 	snapIdx   int
 	snapCount int
@@ -67,9 +69,30 @@ type SmartDivergenceEngine struct {
 	savedTickCount   int
 }
 
-// NewSmartDivergenceEngine creates an empty divergence engine.
-func NewSmartDivergenceEngine() *SmartDivergenceEngine {
-	return &SmartDivergenceEngine{}
+// NewSmartDivergenceEngine creates a divergence engine with RSX scan configuration.
+func NewSmartDivergenceEngine(rsxCfg RSXScanConfig) *SmartDivergenceEngine {
+	return &SmartDivergenceEngine{rsxConfig: NormalizeRSXScanConfig(rsxCfg)}
+}
+
+// SetRSXConfig replaces the RSX divergence scan configuration.
+func (e *SmartDivergenceEngine) SetRSXConfig(cfg RSXScanConfig) {
+	if e == nil {
+		return
+	}
+	e.rsxConfig = NormalizeRSXScanConfig(cfg)
+}
+
+// UpdateRSXConfig hot-swaps RSX scan parameters without resetting ring buffers.
+func (e *SmartDivergenceEngine) UpdateRSXConfig(cfg RSXScanConfig) {
+	e.SetRSXConfig(cfg)
+}
+
+// RSXConfig returns the active RSX scan configuration.
+func (e *SmartDivergenceEngine) RSXConfig() RSXScanConfig {
+	if e == nil {
+		return RSXScanConfig{}
+	}
+	return e.rsxConfig
 }
 
 // UpdateSnapshot adds a ZigZag peak snapshot to the ring buffer.

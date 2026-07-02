@@ -116,7 +116,7 @@ func markerVolATR(m *Marker) float64 {
 func markerRSXBarCount(m *Marker) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return len(m.rsxMarkers.rsx)
+	return len(m.JurikLines)
 }
 
 func markerDivScore(m *Marker) int {

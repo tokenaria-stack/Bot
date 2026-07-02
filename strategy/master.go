@@ -11,7 +11,6 @@ import (
 
 	"trading_bot/exchange"
 	"trading_bot/execution"
-	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/vector_db"
 )
@@ -20,7 +19,7 @@ const (
 	positionSyncInterval = 5 * time.Second
 	defaultFeeRate       = 0.0012 // Binance USDⓈ-M Futures taker approx.
 	DefaultTradingTimeframe = "1m"
-	tradingHistoryPrefetchBars = 100 // aligned with dashboard indicatorWarmupBars
+	tradingHistoryPrefetchBars = IndicatorWarmupBars
 )
 
 type MasterState string
@@ -60,9 +59,15 @@ type MasterGeneral struct {
 
 	TickLiveCh chan struct{}
 
-	mtfTracker     *WalkForwardMTFTracker
-	navigatorPanes map[string]NavigatorUISettings
-	navMu          sync.RWMutex
+	mtfTracker      *WalkForwardMTFTracker
+	navigatorPanes  map[string]NavigatorUISettings
+	navMu           sync.RWMutex
+	closedTelemetry map[string]closedBarTelemetry
+}
+
+type closedBarTelemetry struct {
+	decision ScoreDecision
+	regime   string
 }
 
 func NewMasterGeneral(
@@ -95,7 +100,8 @@ func NewMasterGeneral(
 		symbol:         symbol,
 		timeframe:      timeframe,
 		feeRate:        defaultFeeRate,
-		TickLiveCh:     make(chan struct{}, 1000),
+		TickLiveCh:      make(chan struct{}, 1000),
+		closedTelemetry: make(map[string]closedBarTelemetry),
 	}
 }
 
@@ -206,33 +212,20 @@ func (m *MasterGeneral) NotifyKlineGapFillComplete(symbol, interval string) {
 }
 
 func (m *MasterGeneral) hydrateTradingHistoryFromStore(symbol, interval string) {
-	startMs, endMs := m.tradingHistoryWindowMs(interval)
-	candles, err := exchange.LoadContinuousContractFromDB(symbol, interval, startMs, endMs)
-	if err != nil || len(candles) == 0 {
-		log.Printf("[Master] hydrate %s %s: %v (%d bars)", symbol, interval, err, len(candles))
-		return
+	m.mu.RLock()
+	analyst := m.analysts[interval]
+	workTF := m.timeframe
+	m.mu.RUnlock()
+	if analyst == nil {
+		analyst = m.workAnalyst()
 	}
-	klines := exchange.KlinesFromCandles(candles)
-	analyst := m.workAnalyst()
 	if analyst == nil {
 		return
 	}
-	analyst.LoadHistoricalKlines(klines)
-	log.Printf("[Master] Hydrated trading history: %s %s (%d bars)", symbol, interval, len(klines))
-}
-
-func (m *MasterGeneral) tradingHistoryWindowMs(interval string) (startMs, endMs int64) {
-	endMs = time.Now().UnixMilli()
-	intervalMs, err := data.IntervalDurationMs(interval)
-	if err != nil || intervalMs <= 0 {
-		return 0, endMs
+	m.reconcileKlineGap(symbol, interval, analyst)
+	if interval == workTF {
+		log.Printf("[Master] Hydrated trading history: %s %s (%d bars)", symbol, interval, len(analyst.GetKlines()))
 	}
-	bars := int64(minScoreBars + tradingHistoryPrefetchBars + 500)
-	startMs = endMs - intervalMs*bars
-	if startMs < 0 {
-		startMs = 0
-	}
-	return startMs, endMs
 }
 
 func (m *MasterGeneral) ensureMTFTrackerReady(analyst *Marker) {
@@ -282,17 +275,74 @@ func (m *MasterGeneral) SetOnTelemetry(fn func(tick exchange.WsTick, falcon Falc
 	m.mu.Unlock()
 }
 
-// ScoreDecisionForTelemetry returns the live ScoreDecision for dashboard/API consumers.
-// Syncs walk-forward MTF state when marker is the active trading analyst.
+// ScoreDecisionForTelemetry returns the last closed-bar ScoreDecision for dashboard/API consumers.
+// Read-only: does not mutate MTF or marker streaming state.
 func (m *MasterGeneral) ScoreDecisionForTelemetry(marker *Marker) ScoreDecision {
 	if m == nil || marker == nil {
 		return ScoreDecision{Factors: make(map[string]ScoreFactor)}
 	}
-	if marker == m.workAnalyst() {
-		m.ensureMTFTrackerReady(marker)
-		m.syncMTFState(marker)
+	tf := marker.Timeframe()
+	if tf == "" {
+		tf = m.TradingTimeframe()
 	}
-	return m.evaluateScoreDecision(marker)
+	if t, ok := m.closedBarTelemetryFor(tf); ok {
+		return t.decision
+	}
+	return ScoreDecision{Factors: make(map[string]ScoreFactor)}
+}
+
+// ClosedVolatilityRegimeForTelemetry returns the regime fixed at the last closed bar.
+func (m *MasterGeneral) ClosedVolatilityRegimeForTelemetry(marker *Marker) string {
+	if m == nil || marker == nil {
+		return ""
+	}
+	tf := marker.Timeframe()
+	if tf == "" {
+		tf = m.TradingTimeframe()
+	}
+	if t, ok := m.closedBarTelemetryFor(tf); ok && t.regime != "" {
+		return t.regime
+	}
+	return marker.ClosedVolatilityRegime()
+}
+
+// SeedClosedBarTelemetry snapshots closed-bar scoring/regime from current analyst state.
+// Call once after history hydration (not on GET /api/state).
+func (m *MasterGeneral) SeedClosedBarTelemetry() {
+	if m == nil {
+		return
+	}
+	m.mu.RLock()
+	workTF := m.timeframe
+	analyst := m.analysts[workTF]
+	m.mu.RUnlock()
+	if analyst == nil {
+		return
+	}
+	m.ensureMTFTrackerReady(analyst)
+	m.syncMTFState(analyst)
+	m.refreshClosedBarTelemetry(workTF, analyst)
+}
+
+func (m *MasterGeneral) refreshClosedBarTelemetry(tf string, analyst *Marker) {
+	if m == nil || analyst == nil || tf == "" {
+		return
+	}
+	decision := m.evaluateScoreDecision(analyst)
+	regime := analyst.ClosedVolatilityRegime()
+	m.mu.Lock()
+	if m.closedTelemetry == nil {
+		m.closedTelemetry = make(map[string]closedBarTelemetry)
+	}
+	m.closedTelemetry[tf] = closedBarTelemetry{decision: decision, regime: regime}
+	m.mu.Unlock()
+}
+
+func (m *MasterGeneral) closedBarTelemetryFor(tf string) (closedBarTelemetry, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	t, ok := m.closedTelemetry[tf]
+	return t, ok
 }
 
 // SetOnKlineBar registers a callback for live kline updates on any subscribed timeframe.
@@ -446,6 +496,11 @@ func (m *MasterGeneral) getState() MasterState {
 	return m.state
 }
 
+// State returns the current master state machine value for dashboard telemetry.
+func (m *MasterGeneral) State() MasterState {
+	return m.getState()
+}
+
 func (m *MasterGeneral) setState(newState MasterState) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -496,13 +551,15 @@ func (m *MasterGeneral) tryForEntry() {
 		direction = "SHORT"
 	}
 	closePrice := analyst.LastClose()
+	barIndex := len(analyst.GetKlines()) - 1
+	logTradeSource(barIndex, entrySide, decision)
 	log.Printf("[Master] 🔥 ENTRY TRIGGER: %s | Score: %d | Entry: %.2f | LotMod: %.2f | %s",
 		direction, decision.WinningScore(), closePrice, decision.LotMod, decision.Reason)
 
 	klines := analyst.GetKlines()
 	stopLossPrice := computePositionStop(klines, len(klines)-1, entrySide == "BUY", analyst.LastATR(), GetRiskSettings())
 	if stopLossPrice <= 0 {
-		log.Println("[Master] ❌ Fractal stop level unavailable")
+		log.Printf("[VETO] Trade blocked: Stop is zero (side=%s tf=%s)", direction, m.timeframe)
 		return
 	}
 
@@ -547,20 +604,12 @@ func (m *MasterGeneral) openLivePosition(
 	closePrice := analyst.LastClose()
 	qty, leverage, err := m.calculateTargetQuantity(closePrice, stopLossPrice, decision.LotMod, availableBalance)
 	if err != nil {
-		log.Printf("[Master] ❌ Risk evaluation failed: %v", err)
+		log.Printf("[VETO] Trade blocked: Stop/Qty is zero (%v)", err)
 		return
 	}
 
 	log.Printf("[Master] 🔥 EXEC: %s | Fractal SL: %.2f | Qty: %.8f | Lev: %.0fx",
 		direction, stopLossPrice, qty, leverage)
-
-	m.fireTradeEvent(TradeEvent{
-		Side:    entrySide,
-		Price:   closePrice,
-		BarTime: barTimeFromAnalyst(analyst),
-		Reason:  decision.Reason,
-		Kind:    "entry",
-	})
 
 	levInt := int(leverage)
 	if levInt < 1 {
@@ -588,6 +637,14 @@ func (m *MasterGeneral) openLivePosition(
 		log.Printf("[Master] ✅ Order executed! OrderID=%d | %s %s qty=%.8f",
 			orderID, entrySide, m.symbol, qty)
 	}
+
+	m.fireTradeEvent(TradeEvent{
+		Side:    entrySide,
+		Price:   closePrice,
+		BarTime: barTimeFromAnalyst(analyst),
+		Reason:  decision.Reason,
+		Kind:    "entry",
+	})
 
 	m.mu.Lock()
 	m.positionQty = qty
@@ -955,6 +1012,7 @@ func (m *MasterGeneral) manageReversal() {
 	}
 
 	log.Printf("[Master] 🔄 Reverse: %s -> %s | %s", entrySide, newSide, decision.Reason)
+	logTradeSource(len(analyst.GetKlines())-1, newSide, decision)
 
 	closePrice := analyst.LastClose()
 	exitTime := barTimeFromAnalyst(analyst)
@@ -1123,6 +1181,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 					if tick.IsClosed {
 						m.ensureMTFTrackerReady(analyst)
 						m.syncMTFState(analyst)
+						m.refreshClosedBarTelemetry(tick.Timeframe, analyst)
 					}
 					m.mu.RLock()
 					telemetryCB := m.onTelemetry
@@ -1130,7 +1189,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 					m.mu.RUnlock()
 					if telemetryCB != nil {
 						falcon := analyst.FalconSnapshot()
-						decision := m.evaluateScoreDecision(analyst)
+						decision := m.ScoreDecisionForTelemetry(analyst)
 						telemetryCB(tick, falcon, decision)
 					} else if tick.IsClosed && tickCB != nil {
 						falcon := analyst.FalconSnapshot()

@@ -3,6 +3,8 @@ package strategy
 import (
 	"context"
 	"fmt"
+	"log"
+	"sort"
 	"strings"
 
 	"trading_bot/indicators"
@@ -109,7 +111,7 @@ func (a *Marker) scoreSnapshot() (markerScoreSnapshot, bool) {
 		divergenceScore: a.divSignal.Score,
 		geometry:        a.geometryState,
 		fibZones:        append([]indicators.FibZone(nil), a.fibZones...),
-		rsxMarker:       a.rsxMarkers.recentTradingMarker(RSXSignalMemoryBars),
+		rsxMarker:       a.rsxTradingMarkerAtCurrentBarLocked(),
 		redCrossUp:      a.redLineCrossGreenUp,
 		redCrossDown:    a.redLineCrossGreenDown,
 		jurikValue:      a.jurikValue,
@@ -128,6 +130,11 @@ func (a *Marker) scoreSnapshot() (markerScoreSnapshot, bool) {
 
 // Calculate evaluates Marker state against the scoring matrix and returns a decision.
 func (e *ScoreEngine) Calculate(marker *Marker, matrix ScoringMatrix) ScoreDecision {
+	return e.CalculateWithThresholds(marker, matrix, LongScoreThreshold(), ShortScoreThreshold())
+}
+
+// CalculateWithThresholds evaluates scoring using explicit thresholds (backtest / A/B isolation).
+func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatrix, longTh, shortTh int) ScoreDecision {
 	decision := ScoreDecision{
 		RawAction:   WaitAction,
 		FinalAction: WaitAction,
@@ -164,6 +171,8 @@ func (e *ScoreEngine) Calculate(marker *Marker, matrix ScoringMatrix) ScoreDecis
 		mergeHTFFactors(&decision, scoreHTFOscillatorFactors(marker))
 	}
 
+	populateActiveFactors(&decision)
+
 	for _, factor := range decision.Factors {
 		switch factor.Direction {
 		case BuyAction:
@@ -172,17 +181,23 @@ func (e *ScoreEngine) Calculate(marker *Marker, matrix ScoringMatrix) ScoreDecis
 			decision.ShortScore += factor.Score
 		}
 	}
-	longTh := LongScoreThreshold()
-	shortTh := ShortScoreThreshold()
+	if longTh <= 0 {
+		longTh = DefaultScoreThreshold
+	}
+	if shortTh <= 0 {
+		shortTh = DefaultScoreThreshold
+	}
 	if decision.LongScore >= longTh && decision.LongScore > decision.ShortScore {
 		decision.RawAction = BuyAction
 		decision.FinalAction = BuyAction
+		decision.StrategySource = StrategySourceForSide(decision, "BUY")
 		decision.Reason = decisionReason(decision, true)
 		return decision
 	}
 	if decision.ShortScore >= shortTh && decision.ShortScore > decision.LongScore {
 		decision.RawAction = SellAction
 		decision.FinalAction = SellAction
+		decision.StrategySource = StrategySourceForSide(decision, "SELL")
 		decision.Reason = decisionReason(decision, false)
 		return decision
 	}
@@ -207,7 +222,63 @@ func addScoreFactor(decision *ScoreDecision, key string, factor ScoreFactor) {
 	if factor.Score < minScoreThreshold {
 		return
 	}
+	if factor.Direction != BuyAction && factor.Direction != SellAction {
+		return
+	}
 	decision.Factors[key] = factor
+}
+
+func populateActiveFactors(decision *ScoreDecision) {
+	if decision == nil {
+		return
+	}
+	keys := make([]string, 0, len(decision.Factors))
+	for key, factor := range decision.Factors {
+		if factor.Score < minScoreThreshold {
+			continue
+		}
+		if factor.Direction != BuyAction && factor.Direction != SellAction {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	decision.ActiveFactors = keys
+}
+
+// ActiveFactorsForSide returns matrix factor keys that scored on the entry side.
+func ActiveFactorsForSide(decision ScoreDecision, side string) []string {
+	want := BuyAction
+	if side == "SELL" {
+		want = SellAction
+	}
+	out := make([]string, 0, len(decision.Factors))
+	for key, factor := range decision.Factors {
+		if factor.Direction == want && factor.Score >= minScoreThreshold {
+			out = append(out, key)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// StrategySourceForSide builds a compact source tag for trade audit logs.
+func StrategySourceForSide(decision ScoreDecision, side string) string {
+	factors := ActiveFactorsForSide(decision, side)
+	if len(factors) == 0 {
+		return "unknown"
+	}
+	return strings.Join(factors, "+")
+}
+
+func logTradeSource(barIndex int, side string, decision ScoreDecision) {
+	score := float64(decision.LongScore)
+	if side == "SELL" {
+		score = float64(decision.ShortScore)
+	}
+	factors := ActiveFactorsForSide(decision, side)
+	log.Printf("[TRADE SOURCE] Bar %d: Side=%s, Score=%.2f, Factors=%v",
+		barIndex, side, score, factors)
 }
 
 func collectScoreFactors(decision *ScoreDecision, snap markerScoreSnapshot, m ScoringMatrix) {

@@ -135,7 +135,7 @@ func TestLoadContinuousContractFromDB_StitchesWithoutDuplicateAtGenesis(t *testi
 
 	start := spotLast - step
 	end := BinanceFuturesGenesisMs + step
-	got, err := LoadContinuousContractFromDB(symbol, interval, start, end)
+	got, err := LoadContinuousContractFromDB(symbol, interval, start, end, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

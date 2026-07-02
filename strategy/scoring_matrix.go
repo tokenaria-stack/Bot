@@ -8,8 +8,8 @@ import (
 	"sync"
 )
 
-// MatrixConfigPath is the default location for persisted scoring matrix toggles.
-const MatrixConfigPath = "config/matrix.json"
+// MatrixConfigPath is the default location for persisted scoring matrix toggles (project root relative).
+const MatrixConfigPath = "server/config/matrix.json"
 
 // ScoringMatrix toggles individual scoring rule contributions.
 type ScoringMatrix struct {
