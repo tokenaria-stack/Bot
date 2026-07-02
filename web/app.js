@@ -1,38 +1,4 @@
-/* ── TradingView palette ── */
-const TV = {
-  bg: '#131722',
-  grid: '#1e222d',
-  border: '#2a2e39',
-  text: '#787b86',
-  green: '#089981',
-  red: '#f23645',
-  blue: '#2962ff',
-  cyan: '#00bcd4',
-  gold: '#f7931a',
-};
 
-const THRESHOLDS_KEY = 'bot_thresholds';
-const SCORING_MATRIX_KEY = 'bot_scoring_matrix';
-const LS_LIVE_STRATEGY_KEY = 'dashboard_live_strategy';
-const LS_BT_STRATEGY_KEY = 'dashboard_backtest_strategy';
-
-const DEFAULT_STRATEGY_THRESHOLDS = { long: 70, short: 70 };
-
-const SCORING_MATRIX_DEFAULTS = {
-  useRSX: false,
-  useWozduhCross: false,
-  useTrendlines: false,
-  useJurikTrend: false,
-  useWozduhSpike: false,
-};
-
-const SCORING_MATRIX_LABELS = [
-  { key: 'useRSX', label: 'RSX L / S markers (+35/+45)' },
-  { key: 'useWozduhCross', label: 'Wozduh vol cross lime/red (+35)' },
-  { key: 'useWozduhSpike', label: 'Wozduh volume spike (+15)' },
-  { key: 'useTrendlines', label: 'Trendlines breakout signals' },
-  { key: 'useJurikTrend', label: 'Jurik tailwind (+15/+20)' },
-];
 
 let liveStrategyState = null;
 let backtestStrategyState = null;
@@ -53,19 +19,7 @@ function strategyStorageKey(context) {
   return context === 'backtest' ? LS_BT_STRATEGY_KEY : LS_LIVE_STRATEGY_KEY;
 }
 
-function normalizeStrategyThresholds(raw) {
-  const long = Number(raw?.long ?? raw?.longThreshold);
-  const short = Number(raw?.short ?? raw?.shortThreshold);
-  return {
-    long: Number.isFinite(long) && long > 0 ? long : DEFAULT_STRATEGY_THRESHOLDS.long,
-    short: Number.isFinite(short) && short > 0 ? short : DEFAULT_STRATEGY_THRESHOLDS.short,
-  };
-}
 
-function normalizeStrategyMatrix(raw) {
-  if (!raw || typeof raw !== 'object') return { ...SCORING_MATRIX_DEFAULTS };
-  return { ...SCORING_MATRIX_DEFAULTS, ...raw };
-}
 
 function persistStrategyState(context) {
   const state = getStrategyState(context);
@@ -154,24 +108,9 @@ function getMatrixFromStrategyState(context = 'backtest') {
   return normalizeStrategyMatrix(getStrategyState(context)?.matrix);
 }
 
-const LS_NAV_SETTINGS_PREFIX = 'dashboard_nav_settings_';
-const LS_NAV_SETTINGS_LIVE_PREFIX = 'dashboard_nav_settings_live_';
-const LS_NAV_POPUP_POS_PREFIX = 'dashboard_nav_popup_pos_';
-const LS_NAV_DEFAULTS_PREFIX = 'nav_defaults_';
 
-const NAVIGATOR_PANES = ['price', 'rsx', 'wozduh'];
 
-const NAVIGATOR_SOURCE_MAP = {
-  price: 'Price',
-  rsx: 'RSX',
-  wozduh: 'Wozduh',
-};
 
-const CHART_LEGEND_DEFS = {
-  price: [{ id: 'price', label: 'Price', kind: 'price' }],
-  wozduh: [{ id: 'wozduh', label: 'Wozd', kind: 'wozduh' }],
-  rsx: [{ id: 'rsx', label: 'RSX', kind: 'rsx' }],
-};
 
 const chartLegendState = {
   live: { price: {}, wozduh: {}, rsx: {} },
@@ -180,32 +119,6 @@ const chartLegendState = {
 
 let openNavigatorPopupEl = null;
 
-function defaultNavigatorPaneSettings(pane = 'price') {
-  return {
-    targetPrice: pane === 'price',
-    targetRSX: false,
-    targetWozduh: false,
-    periods: [],
-    trendType: 'Wicks',
-    useLong: true,
-    longLen: 60,
-    useMedium: true,
-    mediumLen: 30,
-    useShort: true,
-    shortLen: 10,
-    term: 'Long',
-    hhll: 'None',
-    momentumEnabled: false,
-    momentumBars: 14,
-    momentumPercent: 100,
-    timeHoldEnabled: false,
-    timeHoldBars: 2,
-    backgroundColor: false,
-    barColor: false,
-    linesVisible: true,
-    backgroundVisible: true,
-  };
-}
 
 function navigatorSettingsStorageKey(pane, context = 'backtest') {
   const prefix = context === 'live' ? LS_NAV_SETTINGS_LIVE_PREFIX : LS_NAV_SETTINGS_PREFIX;
@@ -635,15 +548,7 @@ function buildNavigatorPayloadFromUI(context = getNavigatorContext()) {
 
 async function syncLiveNavigatorSettingsToServer() {
   const navigators = buildNavigatorPayloadFromUI('live');
-  const resp = await fetch('/api/settings/navigators', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ navigators }),
-  });
-  if (!resp.ok) {
-    throw new Error(`navigator settings sync failed: ${resp.status}`);
-  }
-  return resp.json().catch(() => ({}));
+  return API.postNavigatorSettings(navigators);
 }
 
 let navigatorAutoUpdateTimer = null;
@@ -1338,281 +1243,7 @@ function initChartLegends() {
   renderChartLegends('backtest');
 }
 
-const TF_DISPLAY = {
-  '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
-  '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H',
-  '1d': 'D', '1w': 'W',
-  '1tick': '1 tick', '10ticks': '10 ticks', '100ticks': '100 ticks', '1000ticks': '1000 ticks',
-  '1s': '1s', '5s': '5s', '10s': '10s', '15s': '15s', '30s': '30s', '45s': '45s',
-};
 
-const TF_MENU = {
-  TICKS: [
-    { id: '1tick', label: '1 tick' }, { id: '10ticks', label: '10 ticks' },
-    { id: '100ticks', label: '100 ticks' }, { id: '1000ticks', label: '1000 ticks' },
-  ],
-  SECONDS: [
-    { id: '1s', label: '1 second' }, { id: '5s', label: '5 seconds' },
-    { id: '10s', label: '10 seconds' }, { id: '15s', label: '15 seconds' },
-    { id: '30s', label: '30 seconds' }, { id: '45s', label: '45 seconds' },
-  ],
-  MINUTES: [
-    { id: '1m', label: '1 minute' }, { id: '2m', label: '2 minutes' },
-    { id: '3m', label: '3 minutes' }, { id: '5m', label: '5 minutes' },
-    { id: '10m', label: '10 minutes' }, { id: '15m', label: '15 minutes' },
-    { id: '30m', label: '30 minutes' }, { id: '45m', label: '45 minutes' },
-  ],
-  HOURS: [
-    { id: '1h', label: '1 hour' }, { id: '2h', label: '2 hours' },
-    { id: '3h', label: '3 hours' }, { id: '4h', label: '4 hours' },
-  ],
-  DAYS: [
-    { id: '1d', label: '1 day' }, { id: '1w', label: '1 week' },
-  ],
-};
-
-const LS_FAV_KEY = 'dashboard_tf_favorites';
-const LS_TF_KEY = 'dashboard_tf_current';
-const LS_PANE_KEY = 'dashboard_pane_heights';
-const LS_PANE_KEY_BT = 'dashboard_pane_heights_bt';
-const LS_RSX_SETTINGS_LIVE_KEY = 'dashboard_rsx_settings_live';
-const LS_RSX_SETTINGS_BACKTEST_KEY = 'dashboard_rsx_settings_backtest';
-const LS_RSX_LOOKBACK_KEY = 'dashboard_rsx_lookback';
-const LS_RSX_SIGNAL_LENGTH_KEY = 'dashboard_rsx_signal_length';
-const LS_RSX_LENGTH_KEY = 'dashboard_rsx_length';
-const WOZDUH_PREFS_LIVE_KEY = 'wozduh_visibility_prefs_live';
-const WOZDUH_PREFS_BACKTEST_KEY = 'wozduh_visibility_prefs_backtest';
-const WOZDUH_PREFS_KEY = 'wozduh_visibility_prefs';
-const DEFAULT_FAVS = ['1m', '3m', '15m', '1h', '4h', '1d', '1w'];
-/** Higher-TF quick-sync toggles in trendlines menu (any period can be added here). */
-const MTF_SYNC_QUICK_PERIODS = ['4h', '1d', '1w'];
-const MTF_PERIOD_COLORS = {
-  '1m': '#787b86',
-  '3m': '#5b9cf6',
-  '5m': '#2962ff',
-  '15m': '#089981',
-  '30m': '#00bcd4',
-  '1h': '#9c27b0',
-  '2h': '#e040fb',
-  '4h': '#ff9800',
-  '6h': '#ffb74d',
-  '8h': '#ffa726',
-  '12h': '#ff7043',
-  '1d': '#f23645',
-  '3d': '#e91e63',
-  '1w': '#ab47bc',
-};
-const LIVE_STATE_CANDLE_LIMIT = 3000;
-const LIVE_POLL_CANDLE_LIMIT = 5;
-const DEFAULT_RSX_LOOKBACK = 90;
-const DEFAULT_RSX_SIGNAL_LENGTH = 9;
-const DEFAULT_RSX_LENGTH = 14;
-const MIN_RSX_LENGTH = 3;
-const MAX_RSX_LENGTH = 100;
-const MIN_RSX_DIV_LOOKBACK = 10;
-const MAX_RSX_DIV_LOOKBACK = 200;
-const MIN_RSX_SIGNAL_LENGTH = 2;
-const MAX_RSX_SIGNAL_LENGTH = 50;
-
-const RSX_DEFAULT_COLOR = '#e1d2b5';
-
-/** Lazy-built after LightweightCharts CDN loads (see ensureChartLibraryStyles). */
-let CHART_STYLES = null;
-let INDICATOR_CONFIG = null;
-let SHARED_CROSSHAIR = null;
-let WOZDUX_LINE_DEFS = null;
-let WOZDUX_LINE_KEYS = [];
-
-function ensureChartLibraryStyles() {
-  if (CHART_STYLES) return true;
-  if (typeof LightweightCharts === 'undefined') return false;
-
-  const LC = LightweightCharts;
-  const oscMidline50Level = {
-    price: 50,
-    color: 'rgba(204, 85, 0, 0.55)',
-    lineStyle: LC.LineStyle.Dashed,
-    lineWidth: 1,
-    axisLabelVisible: true,
-  };
-
-  CHART_STYLES = {
-  seriesDefaults: {
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerRadius: 1,
-    crosshairMarkerBorderWidth: 1,
-    crosshairMarkerBorderColor: '#90ee90',
-  },
-  candle: {
-    upColor: TV.green,
-    downColor: TV.red,
-    borderVisible: false,
-    wickUpColor: TV.green,
-    wickDownColor: TV.red,
-  },
-  bar: {
-    upColor: TV.green,
-    downColor: TV.red,
-    visible: false,
-  },
-  priceLine: {
-    color: TV.blue,
-    lineWidth: 2,
-    visible: false,
-    priceLineVisible: false,
-    lastValueVisible: true,
-    autoscaleInfoProvider: () => null,
-  },
-  volume: {
-    priceFormat: { type: 'volume' },
-    priceScaleId: 'volume',
-    lastValueVisible: false,
-    priceLineVisible: false,
-  },
-  volumeBar: {
-    upColor: 'rgba(8,153,129,0.55)',
-    downColor: 'rgba(242,54,69,0.55)',
-  },
-  rsx: {
-    color: RSX_DEFAULT_COLOR,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  rsxSignal: {
-    color: '#ff9800',
-    lineWidth: 1,
-    lineStyle: LC.LineStyle.Dashed,
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhUp: {
-    color: 'blue',
-    lineWidth: 2,
-    lineStyle: LC.LineStyle.Solid,
-    title: 'wt11 (Blue)',
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhDown: {
-    color: 'aqua',
-    lineWidth: 2,
-    lineStyle: LC.LineStyle.Solid,
-    title: 'wt22 (Aqua)',
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhLevels: [
-    { price: 70, color: 'rgba(255, 255, 255, 0.4)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { ...oscMidline50Level },
-    { price: 30, color: 'rgba(255, 255, 255, 0.4)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 92, color: 'rgba(240, 220, 140, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 8, color: 'rgba(240, 220, 140, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-  ],
-  rsxLevels: [
-    { price: 80, color: 'rgba(255, 190, 120, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 70, color: 'rgba(255, 255, 255, 0.2)', lineStyle: LC.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true },
-    { ...oscMidline50Level },
-    { price: 30, color: 'rgba(255, 255, 255, 0.2)', lineStyle: LC.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true },
-    { price: 20, color: 'rgba(255, 190, 120, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-  ],
-  wozdux: {
-    rsiPrice: { color: 'red', lineWidth: 2, title: 'RSI(C)', priceLineVisible: false, lastValueVisible: false },
-    rsiHl2: { color: 'purple', lineWidth: 2, title: 'RSI(HL2)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolFast: { color: 'blue', lineWidth: 2, title: 'wt11 (Blue)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolSlow: { color: 'aqua', lineWidth: 2, title: 'wt22 (Aqua)', priceLineVisible: false, lastValueVisible: false },
-  },
-};
-
-  /**
-   * Single source of truth for indicator layers on Live and Backtest charts.
-   * initProfessionalChart builds every series, area fill, and level line from here.
-   */
-  INDICATOR_CONFIG = {
-  price: {
-    candle: CHART_STYLES.candle,
-    bar: CHART_STYLES.bar,
-    line: CHART_STYLES.priceLine,
-    volume: CHART_STYLES.volume,
-    volumeBar: CHART_STYLES.volumeBar,
-    volumeScale: { scaleMargins: { top: 0.82, bottom: 0 } },
-    priceScale: { scaleMargins: { top: 0.05, bottom: 0.22 } },
-  },
-  rsx: {
-    lines: {
-      rsx_main: {
-        dataKey: 'rsx',
-        style: CHART_STYLES.rsx,
-      },
-      rsx_signal: {
-        dataKey: 'rsx_signal',
-        style: CHART_STYLES.rsxSignal,
-      },
-    },
-    levels: CHART_STYLES.rsxLevels,
-    areas: [
-      {
-        id: 'rsx_neutral_zone',
-        top: 60,
-        bottom: 40,
-        topColor: 'rgba(225, 210, 181, 0.08)',
-        bottomColor: 'rgba(225, 210, 181, 0.04)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-    ],
-  },
-  wozduh: {
-    lines: {
-      wozduh_wt1: { dataKey: 'rsiVolFast', style: CHART_STYLES.wozdux.rsiVolFast },
-      wozduh_wt2: { dataKey: 'rsiVolSlow', style: CHART_STYLES.wozdux.rsiVolSlow },
-      rsiPrice: { dataKey: 'rsiPrice', style: CHART_STYLES.wozdux.rsiPrice },
-      rsiHl2: { dataKey: 'rsiHl2', style: CHART_STYLES.wozdux.rsiHl2 },
-    },
-    markerSeriesKey: 'rsiVolSlow',
-    levels: CHART_STYLES.wozduhLevels,
-    areas: [
-      {
-        id: 'wozduh_ob_zone',
-        top: 100,
-        bottom: 70,
-        topColor: 'rgba(255, 255, 0, 0.04)',
-        bottomColor: 'rgba(255, 255, 0, 0.02)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-      {
-        id: 'wozduh_os_zone',
-        top: 30,
-        bottom: 0,
-        topColor: 'rgba(255, 255, 0, 0.02)',
-        bottomColor: 'rgba(255, 255, 0, 0.04)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-    ],
-  },
-};
-
-  WOZDUX_LINE_DEFS = CHART_STYLES.wozdux;
-  WOZDUX_LINE_KEYS = Object.keys(WOZDUX_LINE_DEFS);
-
-  SHARED_CROSSHAIR = {
-    mode: LC.CrosshairMode.Normal,
-    vertLine: { width: 1, color: '#555', style: LC.LineStyle.Dashed },
-    horzLine: { width: 1, color: '#555', style: LC.LineStyle.Dashed },
-  };
-
-  return true;
-}
-
-/** PineScript default visibility (klrscena, dada, qdada, klemarsi, etc.) */
-const WOZDUH_MENU_ITEMS = [
-  { prefKey: 'rsiPrice', keys: ['rsiPrice'], default: true },
-  { prefKey: 'rsiHl2', keys: ['rsiHl2'], default: true },
-  { prefKey: 'rsiVol', keys: ['rsiVolFast', 'rsiVolSlow'], default: true },
-];
 
 function withSeriesDefaults(style) {
   ensureChartLibraryStyles();
@@ -1628,14 +1259,6 @@ function wozduxLineSeriesOptions(def) {
   });
 }
 
-const SHARED_TIME_SCALE = {
-  borderColor: TV.border,
-  timeVisible: true,
-  secondsVisible: false,
-  minBarSpacing: 0.001,
-  fixLeftEdge: false,
-  fixRightEdge: false,
-};
 
 function unixChartTimeToDate(time) {
   if (typeof time === 'object' && time !== null && 'year' in time) {
@@ -1780,13 +1403,9 @@ let historyLoading = false;
 let historyHasMore = true;
 let currentLiveRequestId = 0;
 let navigatorRequestId = 0;
-const LIVE_STATE_FETCH_TIMEOUT_MS = 10000;
-let liveStateAbort = null;
-let liveStateInflight = new Map();
 let chartInitialized = false;
 let isAppInitialized = false;
 let chartType = 'candles';
-let dashboardSocket = null;
 let livePollSuppressedByWs = false;
 let lastTickBufferLen = 0;
 let orderFlowPollTimer = null;
@@ -1799,185 +1418,11 @@ let pendingHistoryLoad = null;
 let liveHistoryScrollArmed = false;
 /** Suppresses subscribeVisibleLogicalRangeChange history fetch during programmatic viewport updates. */
 let liveHistorySuppressRangeHook = false;
-const LIVE_HISTORY_SCROLL_THRESHOLD = 50;
 let cachedSandboxMode = false;
 
 if (typeof window !== 'undefined') {
   window.__isSettingsUpdating = false;
   window.__pendingAnchor = null;
-}
-
-class ChartDataStore {
-  constructor(context) {
-    this.context = context;
-    this.candles = new Map(); // Map<ms, Candle>
-    this.osc = new Map(); // Map<ms, OscPoint>
-    // Map<ms, Map<text, Annotation>>
-    this.annotations = new Map();
-  }
-
-  static toMs(t) {
-    const n = Number(t);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
-  }
-
-  static msToChartSec(ms) {
-    return Math.floor(ms / 1000);
-  }
-
-  clear() {
-    this.candles.clear();
-    this.osc.clear();
-    this.annotations.clear();
-  }
-
-  candleCount() {
-    return this.candles.size;
-  }
-
-  sortedCandleTimesMs() {
-    return Array.from(this.candles.keys()).sort((a, b) => a - b);
-  }
-
-  firstCandleTimeSec() {
-    const times = this.sortedCandleTimesMs();
-    return times.length ? ChartDataStore.msToChartSec(times[0]) : null;
-  }
-
-  lastCandleTimeSec() {
-    const times = this.sortedCandleTimesMs();
-    return times.length ? ChartDataStore.msToChartSec(times[times.length - 1]) : null;
-  }
-
-  lastCandleChartSec() {
-    const times = this.sortedCandleTimesMs();
-    if (!times.length) return null;
-    const ms = times[times.length - 1];
-    const bar = this.candles.get(ms);
-    if (!bar) return null;
-    return { ...bar, time: ChartDataStore.msToChartSec(ms) };
-  }
-
-  annotationCount() {
-    let count = 0;
-    this.annotations.forEach((textMap) => { count += textMap.size; });
-    return count;
-  }
-
-  _ingestAnnotations(annArray, anchorMs = null) {
-    if (!Array.isArray(annArray)) return;
-    annArray.forEach((a) => {
-      const ms = ChartDataStore.toMs(a.time ?? a.Time);
-      if (!ms) return;
-      if (anchorMs != null && ms >= anchorMs) return;
-      const text = (a.text ?? a.label ?? a.Label ?? '').trim().substring(0, 2);
-      if (!text) return;
-
-      if (!this.annotations.has(ms)) this.annotations.set(ms, new Map());
-      this.annotations.get(ms).set(text, { ...a, timeMs: ms, text });
-    });
-  }
-
-  _ingestCandle(c, { allowOverwrite = true, anchorMs = null } = {}) {
-    const bar = normalizeCandle(c);
-    if (!bar) return;
-    const ms = ChartDataStore.toMs(bar.time);
-    if (!ms) return;
-    if (anchorMs != null && ms >= anchorMs) return;
-    if (!allowOverwrite && this.candles.has(ms)) return;
-    this.candles.set(ms, { ...bar, timeMs: ms });
-  }
-
-  _ingestOsc(o, { allowOverwrite = true, anchorMs = null } = {}) {
-    const norm = normalizeOscPoint(o);
-    if (!norm) return;
-    const ms = ChartDataStore.toMs(norm.time);
-    if (!ms) return;
-    if (anchorMs != null && ms >= anchorMs) return;
-    if (!allowOverwrite && this.osc.has(ms)) return;
-    this.osc.set(ms, { ...norm, timeMs: ms });
-  }
-
-  replaceFromServer(payload) {
-    this.candles.clear();
-    this.osc.clear();
-    this.annotations.clear();
-
-    (payload.candles || []).forEach((c) => {
-      this._ingestCandle(c, { allowOverwrite: true });
-    });
-    (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: true });
-    });
-    this._ingestAnnotations(payload.annotations);
-  }
-
-  prependHistory(payload) {
-    const anchorMs = this.sortedCandleTimesMs()[0] ?? null;
-
-    (payload.candles || []).forEach((c) => {
-      this._ingestCandle(c, { allowOverwrite: false, anchorMs });
-    });
-    (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: false, anchorMs });
-    });
-    this._ingestAnnotations(payload.annotations, anchorMs);
-  }
-
-  upsertCandle(c) {
-    const bar = normalizeCandle(c);
-    if (!bar) return null;
-    const ms = ChartDataStore.toMs(bar.time);
-    if (!ms) return null;
-    this.candles.set(ms, { ...bar, timeMs: ms });
-    return bar;
-  }
-
-  upsertOscPoint(o) {
-    const norm = normalizeOscPoint(o);
-    if (!norm) return null;
-    const ms = ChartDataStore.toMs(norm.time);
-    if (!ms) return null;
-    this.osc.set(ms, { ...norm, timeMs: ms });
-    return norm;
-  }
-
-  replaceOscAndAnnotations(payload) {
-    if (Array.isArray(payload.annotations)) {
-      this.annotations.clear();
-      this._ingestAnnotations(payload.annotations);
-    }
-    (payload.oscillators || []).forEach((o) => {
-      this._ingestOsc(o, { allowOverwrite: true });
-    });
-  }
-
-  getForLightweightCharts() {
-    const sortedCandles = Array.from(this.candles.values()).sort((a, b) => a.timeMs - b.timeMs);
-    const chartCandles = sortedCandles.map((c) => ({
-      ...c,
-      time: ChartDataStore.msToChartSec(c.timeMs),
-    }));
-
-    const chartOsc = sortedCandles.map((c) => {
-      const oscPoint = this.osc.get(c.timeMs);
-      if (oscPoint) {
-        return { ...oscPoint, time: ChartDataStore.msToChartSec(c.timeMs) };
-      }
-      return { time: ChartDataStore.msToChartSec(c.timeMs) };
-    });
-
-    const chartAnnotations = [];
-    Array.from(this.annotations.values()).forEach((textMap) => {
-      Array.from(textMap.values()).forEach((a) => {
-        chartAnnotations.push({ ...a, time: ChartDataStore.msToChartSec(a.timeMs) });
-      });
-    });
-    chartAnnotations.sort((a, b) => a.time - b.time);
-
-    return { candles: chartCandles, osc: chartOsc, annotations: chartAnnotations };
-  }
 }
 
 const liveStore = new ChartDataStore('live');
@@ -1991,12 +1436,71 @@ function getStoreDataForChart(chartData) {
   return getDataStoreForChart(chartData).getForLightweightCharts();
 }
 
-function chartPointsToStorePayload(points, annotations) {
-  return {
-    candles: chartPointsToCandles(points),
-    oscillators: chartPointsToOsc(points),
-    annotations,
-  };
+
+function applyOscPointDelta(oscPt, chartData = liveChartData) {
+  if (!oscPt || !chartData) return;
+  const time = chartTime(oscPt.time);
+  if (time == null) return;
+
+  WOZDUX_LINE_KEYS.forEach((key) => {
+    const value = Number(oscPt[key]);
+    if (!Number.isFinite(value) || !chartData.wozduxSeries?.[key]) return;
+    chartData.wozduxSeries[key].update({ time, value });
+  });
+  if (oscPt.volCrossMarker) {
+    applyWozduxMarkers(getStoreDataForChart(chartData).osc, chartData);
+  }
+
+  const rsxVal = parseFloat(oscPt.rsx ?? oscPt.jurik);
+  if (Number.isFinite(rsxVal) && chartData.rsxSeries) {
+    const ptColor = oscPt.color || RSX_DEFAULT_COLOR;
+    chartData.rsxSeries.update({ time, value: rsxVal, color: ptColor });
+    const signalVal = parseFloat(oscPt.rsx_signal ?? oscPt.rsxSignal);
+    if (chartData.rsxSignalSeries && Number.isFinite(signalVal)) {
+      chartData.rsxSignalSeries.update({ time, value: signalVal });
+    }
+    if (chartData === liveChartData) {
+      const rsxEl = document.getElementById('rsx-val');
+      if (rsxEl) {
+        rsxEl.textContent = rsxVal.toFixed(1);
+        rsxEl.style.color = ptColor;
+      }
+    }
+  }
+}
+
+function applyLiveChartDelta(delta) {
+  if (!delta || !shouldPaintLiveChart()) return;
+
+  if (delta.candle) {
+    if (liveStore.candleCount() <= 1) {
+      const candles = liveStore.getForLightweightCharts().candles;
+      setAllPriceData(candles);
+      liveChartData.volumeSeries.setData(toVolumeBars(candles));
+      updateVolumeLabel(candles);
+    } else {
+      updateAllPriceSeries(delta.candle);
+    }
+  }
+
+  if (delta.osc) {
+    applyOscPointDelta(delta.osc, liveChartData);
+  }
+
+  if (delta.fullAnnotations) {
+    const showPivots = rsxShowPivotsFrom(getRsxSettingsState('live'), true);
+    const rsxTimes = delta.osc?.time != null
+      ? new Set([delta.osc.time])
+      : new Set();
+    applyUniversalAnnotations(
+      getChartAnnotationPanes(liveChartData),
+      delta.fullAnnotations,
+      { rsx: rsxTimes },
+      { showPivots },
+    );
+  }
+
+  updateBufferingOverlay();
 }
 
 function canPatchBacktestIndicatorsOnly(options = {}) {
@@ -2007,19 +1511,6 @@ function canPatchBacktestIndicatorsOnly(options = {}) {
     && !!backtestChartData?.candleSeries;
 }
 
-function defaultRsxSettings() {
-  return {
-    length: DEFAULT_RSX_LENGTH,
-    div_lookback: DEFAULT_RSX_LOOKBACK,
-    signal_length: DEFAULT_RSX_SIGNAL_LENGTH,
-    source: 'close',
-    pivot_radius: 2,
-    div_method: 'tv',
-    min_price_delta_ratio: 0,
-    min_osc_delta: 0,
-    show_pivots: true,
-  };
-}
 
 let liveRsxSettings = defaultRsxSettings();
 let backtestRsxSettings = defaultRsxSettings();
@@ -2031,8 +1522,6 @@ let currentBacktestPayload = null;
 if (typeof window !== 'undefined') {
   window.currentBacktestPayload = window.currentBacktestPayload || null;
 }
-const BACKTEST_HISTORY_CHUNK_LIMIT = 5000;
-const LS_RISK_SETTINGS_KEY = 'dashboard_risk_settings';
 
 const ruler = { active: false, state: RULER_IDLE, p1: null, p2: null, chartData: null };
 
@@ -2073,38 +1562,8 @@ function getActiveTfFromToolbar() {
   return activeBtn?.dataset?.tf || null;
 }
 
-function normalizeTf(tf) {
-  return resolveTf(tf);
-}
 
 /** Client-side TF resolver (mirrors server/timeframes.go aliases). */
-function resolveTf(tf) {
-  const raw = String(tf || '').trim();
-  if (!raw) return '';
-
-  const lower = raw.toLowerCase();
-  const alias = {
-    '1min': '1m', '1minute': '1m', m: '1m',
-    '1hour': '1h', h: '1h',
-    d: '1d', day: '1d',
-    w: '1w', week: '1w',
-  };
-  if (alias[lower]) return alias[lower];
-  if (TF_DISPLAY[raw]) return raw;
-
-  const all = Object.values(TF_MENU).flat();
-  const hit = all.find((item) => item.id === raw || item.id.toLowerCase() === lower);
-  if (hit) return hit.id;
-
-  if (/^\d+s$/i.test(raw)) return lower;
-  if (/^\d+tick(s)?$/i.test(lower)) return lower === '1tick' ? '1tick' : lower;
-  if (/^\d+M$/.test(raw)) return raw;
-  if (/^\d+m$/i.test(raw) && raw !== 'M') return lower;
-  if (/^\d+h$/i.test(lower)) return lower;
-  if (/^\d+d$/i.test(lower)) return lower;
-
-  return raw;
-}
 
 function parseBacktestDateInput(value) {
   if (!value) return null;
@@ -2490,54 +1949,15 @@ function getOscWrap(context = 'live') {
   return document.getElementById(context === 'backtest' ? 'bt-osc-wrap' : 'osc-wrap');
 }
 
-function clampRsxLength(val) {
-  const n = parseInt(val, 10);
-  if (!Number.isFinite(n)) return DEFAULT_RSX_LENGTH;
-  return Math.min(MAX_RSX_LENGTH, Math.max(MIN_RSX_LENGTH, n));
-}
 
-function clampRsxDivLookback(val) {
-  const n = parseInt(val, 10);
-  if (!Number.isFinite(n)) return DEFAULT_RSX_LOOKBACK;
-  return Math.min(MAX_RSX_DIV_LOOKBACK, Math.max(MIN_RSX_DIV_LOOKBACK, n));
-}
 
-function clampRsxSignalLength(val) {
-  const n = parseInt(val, 10);
-  if (!Number.isFinite(n)) return DEFAULT_RSX_SIGNAL_LENGTH;
-  return Math.min(MAX_RSX_SIGNAL_LENGTH, Math.max(MIN_RSX_SIGNAL_LENGTH, n));
-}
 
 function getRsxSettingsMenu(wrap) {
   if (!wrap) return null;
   return wrap.querySelector('.indicator-settings-menu');
 }
 
-function rsxShowPivotsFrom(settings, fallback = true) {
-  if (typeof settings?.show_pivots === 'boolean') return settings.show_pivots;
-  if (typeof settings?.showPivots === 'boolean') return settings.showPivots;
-  return fallback;
-}
 
-function normalizeRsxSettingsFromAPI(raw, defaults = defaultRsxSettings()) {
-  if (!raw || typeof raw !== 'object') return coerceRsxSettingsForAPI(defaults, defaults);
-  const num = (v, fallback) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  };
-  const divMethod = raw.div_method || raw.divMethod || defaults.div_method;
-  return coerceRsxSettingsForAPI({
-    length: num(raw.length ?? raw.rsxLength, defaults.length),
-    div_lookback: num(raw.div_lookback ?? raw.divLookback, defaults.div_lookback),
-    signal_length: num(raw.signal_length ?? raw.signalLineLength, defaults.signal_length),
-    source: raw.source || raw.rsxSource || defaults.source,
-    pivot_radius: num(raw.pivot_radius ?? raw.pivotRadius, defaults.pivot_radius),
-    div_method: divMethod,
-    min_price_delta_ratio: num(raw.min_price_delta_ratio ?? raw.minPriceDeltaRatio, defaults.min_price_delta_ratio),
-    min_osc_delta: num(raw.min_osc_delta ?? raw.minOscDelta, defaults.min_osc_delta),
-    show_pivots: rsxShowPivotsFrom(raw, rsxShowPivotsFrom(defaults, true)),
-  }, defaults);
-}
 
 function readRsxFloatDeltaInput(el, fallback = 0) {
   if (!el) return fallback;
@@ -2576,32 +1996,7 @@ function readRsxSettingsFromMenu(contextOrWrap, context = 'live') {
   }, defaults);
 }
 
-function coerceRsxSettingsForAPI(settings, defaults = defaultRsxSettings()) {
-  const pivotRadius = Number(clampRsxPivotRadius(Number(settings?.pivot_radius ?? settings?.pivotRadius)));
-  const minPriceDelta = Number(settings?.min_price_delta_ratio ?? settings?.minPriceDeltaRatio ?? 0);
-  const minOscDelta = Number(settings?.min_osc_delta ?? settings?.minOscDelta ?? 0);
-  return {
-    length: Number(clampRsxLength(Number(settings?.length))),
-    div_lookback: Number(clampRsxDivLookback(Number(settings?.div_lookback))),
-    signal_length: Number(clampRsxSignalLength(Number(settings?.signal_length))),
-    source: settings?.source === 'hlc3' ? 'hlc3' : 'close',
-    pivot_radius: pivotRadius,
-    pivotRadius,
-    div_method: settings?.div_method === 'fractal' ? 'fractal' : 'tv',
-    min_price_delta_ratio: Number.isFinite(minPriceDelta) ? minPriceDelta : 0,
-    min_osc_delta: Number.isFinite(minOscDelta) ? minOscDelta : 0,
-    minPriceDeltaRatio: Number.isFinite(minPriceDelta) ? minPriceDelta : 0,
-    minOscDelta: Number.isFinite(minOscDelta) ? minOscDelta : 0,
-    show_pivots: rsxShowPivotsFrom(settings, rsxShowPivotsFrom(defaults, true)),
-    showPivots: rsxShowPivotsFrom(settings, rsxShowPivotsFrom(defaults, true)),
-  };
-}
 
-function clampRsxPivotRadius(val) {
-  const n = parseInt(val, 10);
-  if (!Number.isFinite(n)) return 2;
-  return Math.min(10, Math.max(1, n));
-}
 
 function applyRsxSettingsToMenu(context, settings, defaults = defaultRsxSettings()) {
   const wrap = getRsxWrap(context);
@@ -2660,16 +2055,8 @@ let backtestIntervalChangeInFlight = false;
 async function pushRsxSettingsToServer(settings) {
   const payload = coerceRsxSettingsForAPI(settings);
   try {
-    const resp = await fetch('/api/settings/indicators', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
-      throw new Error(`RSX settings POST failed (${resp.status}): ${errText || 'no body'}`);
-    }
-    return coerceRsxSettingsForAPI(await resp.json());
+    const applied = await API.pushRsxSettings(payload);
+    return coerceRsxSettingsForAPI(applied);
   } catch (err) {
     console.warn('Failed to push RSX settings:', err);
     throw err;
@@ -2680,9 +2067,7 @@ async function fetchRsxIndicatorSettings() {
   const version = ++rsxSettingsFetchVersion;
   const localBeforeFetch = { ...getRsxSettingsState('live') };
   try {
-    const resp = await fetch('/api/settings/indicators');
-    if (!resp.ok || version !== rsxSettingsFetchVersion) return;
-    const serverSettings = await resp.json();
+    const serverSettings = await API.fetchRsxSettings();
     if (version !== rsxSettingsFetchVersion) return;
     const merged = normalizeRsxSettingsFromAPI(
       { ...serverSettings, ...localBeforeFetch },
@@ -2822,36 +2207,30 @@ function isLiveTickGapTooLarge(lastTimeSec, newTimeSec) {
   return gapMs > maxGapMs;
 }
 
-function apiQueryParams(extra = {}) {
-  const params = {
+function buildLiveStateQueryParams(extra = {}) {
+  return API.apiQueryParams({
     tf: currentTf,
     rsxLookback: liveRsxSettings.div_lookback,
     limit: LIVE_STATE_CANDLE_LIMIT,
-    ...extra,
-  };
+    extra,
+    pendingAnchor: window.__pendingAnchor,
+    intervalMs: getIntervalMs(currentTf),
+  });
+}
 
-  const anchor = window.__pendingAnchor;
-  if (anchor?.type === 'center' && anchor.targetTime != null && params.endTime == null) {
-    const halfLimit = LIVE_STATE_CANDLE_LIMIT / 2;
-    const tfMs = getIntervalMs(currentTf);
-    const centerSec = Number(anchor.targetTime);
-    if (Number.isFinite(centerSec) && tfMs > 0) {
-      const centerMs = centerSec * 1000;
+function abortLiveStateFetch() {
+  API.abortLiveStateFetch();
+}
 
-      // Смещение в будущее на половину запрашиваемых баров нового ТФ
-      let targetEndTimeMs = centerMs + (halfLimit * tfMs);
-
-      // Глубокая история: не уходим в будущее дальше текущего момента
-      if (targetEndTimeMs > Date.now()) {
-        targetEndTimeMs = Date.now();
-      }
-
-      // /api/state endTime is Unix seconds (server SSOT).
-      params.endTime = Math.floor(targetEndTimeMs / 1000);
-    }
-  }
-
-  return params;
+async function fetchLiveState(options = {}) {
+  return API.fetchLiveState({
+    tf: currentTf,
+    userTfChange: options.userTfChange === true,
+    navigatorsOnly: options.navigatorsOnly === true,
+    signal: options.signal,
+    params: buildLiveStateQueryParams(options.params || {}),
+    timeoutMs: options.timeoutMs,
+  });
 }
 
 function setTfDropdownOpen(open) {
@@ -2905,77 +2284,8 @@ function endDataUpdate(delayMs = 50) {
   }, delayMs);
 }
 
-function abortLiveStateFetch() {
-  if (liveStateAbort) {
-    liveStateAbort.abort();
-    liveStateAbort = null;
-  }
-  liveStateInflight.clear();
-}
 
-function liveStateRequestKey(options = {}) {
-  if (options.navigatorsOnly) return `nav:${currentTf}`;
-  return `tf:${currentTf}`;
-}
 
-async function fetchLiveState(options = {}) {
-  const userTfChange = options.userTfChange === true;
-  const key = liveStateRequestKey(options);
-
-  if (userTfChange) {
-    abortLiveStateFetch();
-    liveStateAbort = new AbortController();
-  } else if (liveStateInflight.has(key)) {
-    return liveStateInflight.get(key);
-  }
-
-  const signal = userTfChange ? liveStateAbort.signal : options.signal;
-  const promise = fetchState({ ...options, signal }).finally(() => {
-    if (liveStateInflight.get(key) === promise) {
-      liveStateInflight.delete(key);
-    }
-  });
-
-  if (!userTfChange) {
-    liveStateInflight.set(key, promise);
-  }
-  return promise;
-}
-
-const LIVE_CHART_SELECTORS = {
-  priceWrap: 'price-wrap',
-  oscWrap: 'osc-wrap',
-  rsxWrap: 'rsx-wrap',
-  chartContainer: 'chart-container',
-  oscContainer: 'osc-container',
-  rsxContainer: 'rsx-container',
-};
-
-const BACKTEST_CHART_SELECTORS = {
-  priceWrap: 'bt-price-wrap',
-  oscWrap: 'bt-osc-wrap',
-  rsxWrap: 'bt-rsx-wrap',
-  chartContainer: 'bt-chart-container',
-  oscContainer: 'bt-osc-container',
-  rsxContainer: 'bt-rsx-container',
-};
-
-const PANE_STACK_CONFIG = {
-  live: {
-    price: 'price-wrap',
-    osc: 'osc-wrap',
-    rsx: 'rsx-wrap',
-    lsKey: LS_PANE_KEY,
-    defaults: { price: 55, osc: 22, rsx: 23 },
-  },
-  backtest: {
-    price: 'bt-price-wrap',
-    osc: 'bt-osc-wrap',
-    rsx: 'bt-rsx-wrap',
-    lsKey: LS_PANE_KEY_BT,
-    defaults: { price: 55, osc: 22, rsx: 23 },
-  },
-};
 
 function destroyChartInstance(chartData) {
   if (!chartData?.allCharts?.length) return;
@@ -4145,9 +3455,7 @@ function applyRiskSettingsToForm(settings) {
 
 async function fetchRiskSettings() {
   try {
-    const resp = await fetch('/api/settings/risk');
-    if (!resp.ok) return;
-    const settings = await resp.json();
+    const settings = await API.fetchRiskSettings();
     applyRiskSettingsToForm(settings);
     localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(settings));
   } catch (err) {
@@ -4167,17 +3475,10 @@ async function saveRiskSettings() {
   }
   const payload = readRiskSettingsFromForm();
   try {
-    const resp = await fetch('/api/settings/risk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (resp.ok) {
-      const applied = await resp.json();
-      applyRiskSettingsToForm(applied);
-      localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(applied));
-      hideRiskSettingsMenu();
-    }
+    const applied = await API.postRiskSettings(payload);
+    applyRiskSettingsToForm(applied);
+    localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(applied));
+    hideRiskSettingsMenu();
     if (isBacktestTabActive() && backtestStore.candleCount() > 0) {
       buildFinalBacktestPayload();
     }
@@ -4228,9 +3529,6 @@ function getWozduhSettingsMenu(wrap) {
   return wrap?.querySelector('.wozduh-settings-menu');
 }
 
-function defaultWozduhPrefs() {
-  return Object.fromEntries(WOZDUH_MENU_ITEMS.map((item) => [item.prefKey, item.default]));
-}
 
 function wozduhStorageKey(context) {
   return context === 'backtest' ? WOZDUH_PREFS_BACKTEST_KEY : WOZDUH_PREFS_LIVE_KEY;
@@ -4700,7 +3998,7 @@ function switchLiveTimeframe(tf) {
   if (refreshTimer) clearInterval(refreshTimer);
   if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);
   wsSubscribeTf(resolved);
-  if (!isDashboardWsOpen()) {
+  if (!WS.isOpen()) {
     startLivePollTimer();
   }
   if (isOrderFlowTf(resolved)) {
@@ -4721,7 +4019,7 @@ function applyOrderFlowTimeScale(enabled) {
 }
 
 function isDashboardWsOpen() {
-  return dashboardSocket?.readyState === WebSocket.OPEN;
+  return WS.isOpen();
 }
 
 function shouldRunLivePoll() {
@@ -4782,15 +4080,7 @@ function updateBufferingOverlay() {
 }
 
 function wsSubscribeTf(tf) {
-  const send = () => {
-    if (dashboardSocket && dashboardSocket.readyState === WebSocket.OPEN) {
-      dashboardSocket.send(JSON.stringify({ type: 'subscribe', tf: resolveTf(tf) || currentTf }));
-    }
-  };
-  send();
-  if (dashboardSocket && dashboardSocket.readyState === WebSocket.CONNECTING) {
-    dashboardSocket.addEventListener('open', send, { once: true });
-  }
+  WS.subscribe(tf, resolveTf(tf) || currentTf);
 }
 
 function clearChartData() {
@@ -4837,53 +4127,10 @@ function clearFibLines() {
   fibPriceLines = [];
 }
 
-function chartTime(raw) {
-  const t = Number(raw);
-  if (!Number.isFinite(t)) return null;
-  // Navigator trendlines / fib zones may arrive in ms; candles & oscillators use seconds (API SSOT).
-  return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
-}
 
 /** RSX/Wozduh warmup sentinel — 0 is never a valid live oscillator reading. */
-function isWarmupOscValue(value) {
-  return value == null || !Number.isFinite(value) || value === 0 || value === 50;
-}
 
-function isValidOHLC(open, high, low, close) {
-  return (
-    Number.isFinite(open) && Number.isFinite(high) &&
-    Number.isFinite(low) && Number.isFinite(close) &&
-    open > 0 && high > 0 && low > 0 && close > 0
-  );
-}
 
-function apiFetchUrl(path, params = {}) {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value != null && value !== '') qs.set(key, String(value));
-  });
-  qs.set('_t', String(Date.now()));
-  return `${path}?${qs.toString()}`;
-}
-
-function normalizeCandle(c) {
-  if (!c) return null;
-  const time = chartTime(c?.time ?? c?.Time);
-  const open = Number(c.open);
-  const high = Number(c.high);
-  const low = Number(c.low);
-  const close = Number(c.close);
-  if (time == null) return null;
-  if (!isValidOHLC(open, high, low, close)) return null;
-  return {
-    time,
-    open,
-    high,
-    low,
-    close,
-    volume: Number.isFinite(Number(c.volume)) ? Number(c.volume) : 0,
-  };
-}
 
 function applyPriceBar(bar) {
   if (!bar) return;
@@ -4902,17 +4149,8 @@ function applyPriceBar(bar) {
 
   if (!shouldPaintLiveChart()) return;
 
-  const candles = liveStore.getForLightweightCharts().candles;
-  if (candles.length <= 1) {
-    beginDataUpdate();
-    setAllPriceData(candles);
-    liveChartData.volumeSeries.setData(toVolumeBars(candles));
-    updateVolumeLabel(candles);
-    endDataUpdate();
-  } else {
-    updateAllPriceSeries(bar);
-  }
-  updateBufferingOverlay();
+  const delta = liveStore.getLatestDeltaForChart();
+  applyLiveChartDelta(delta);
 }
 
 function fmt(v) {
@@ -4925,76 +4163,11 @@ function fmtPrice(v) {
     : '—';
 }
 
-function toCandles(raw) {
-  return (raw || [])
-    .map(normalizeCandle)
-    .filter(Boolean);
-}
 
-function toLineClose(candles) {
-  return candles.map((c) => ({ time: Number(c.time), value: Number(c.close) }));
-}
 
-function toLine(raw, key) {
-  return (raw || []).map((p) => {
-    const time = chartTime(p?.time);
-    if (time == null) return { time: 0 };
-    const value = Number(p[key]);
-    if (isWarmupOscValue(value)) return { time: Number(time) };
-    return { time: Number(time), value };
-  });
-}
 
-function normalizeOscPoint(p) {
-  const time = chartTime(p?.time ?? p?.Time);
-  if (time == null) return null;
-  return {
-    time: Number(time),
-    jurik: p.jurik,
-    rsx: p.rsx,
-    rsx_signal: p.rsx_signal ?? p.rsxSignal,
-    rsiPrice: p.rsiPrice,
-    rsiHl2: p.rsiHl2,
-    rsiVolFast: p.rsiVolFast,
-    rsiVolSlow: p.rsiVolSlow,
-    volCrossMarker: p.volCrossMarker,
-    color: p.color,
-    marker: p.marker,
-    volumeSpikeUp: p.volumeSpikeUp,
-    volumeSpikeDown: p.volumeSpikeDown,
-  };
-}
 
-function chartPointsToOsc(points) {
-  return (points || [])
-    .map((p) => normalizeOscPoint({
-      time: chartTime(p.time ?? p.Time),
-      jurik: p.jurik,
-      rsx: p.rsx,
-      rsx_signal: p.rsx_signal ?? p.rsxSignal,
-      rsiPrice: p.rsiPrice,
-      rsiHl2: p.rsiHl2,
-      rsiVolFast: p.rsiVolFast ?? p.wozduh_up,
-      rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down,
-      volCrossMarker: p.volCrossMarker,
-      color: p.color,
-      marker: p.marker,
-      volumeSpikeUp: p.volumeSpikeUp,
-      volumeSpikeDown: p.volumeSpikeDown,
-    }))
-    .filter(Boolean);
-}
 
-function chartPointsToCandles(points) {
-  return toCandles((points || []).map((p) => ({
-    time: p.time ?? p.Time,
-    open: p.open,
-    high: p.high,
-    low: p.low,
-    close: p.close,
-    volume: p.volume,
-  })));
-}
 
 function applyPriceToChart(chartData, candles, options = {}) {
   if (!chartData?.candleSeries) return;
@@ -5079,13 +4252,6 @@ function fmtVolume(v) {
   return v.toFixed(2);
 }
 
-function toVolumeBars(candles) {
-  return (candles || []).map((c) => ({
-    time: c.time,
-    value: c.volume || 0,
-    color: c.close >= c.open ? CHART_STYLES.volumeBar.upColor : CHART_STYLES.volumeBar.downColor,
-  }));
-}
 
 function updateVolumeLabel(candles) {
   const el = document.getElementById('volume-val');
@@ -5095,47 +4261,8 @@ function updateVolumeLabel(candles) {
   el.style.color = last.close >= last.open ? TV.green : TV.red;
 }
 
-function mapRSXSignalData(osc) {
-  return (osc || []).map((d) => {
-    const time = chartTime(d?.time);
-    if (time == null) return { time: 0 };
-    const raw = d.rsx_signal ?? d.rsxSignal;
-    const value = parseFloat(raw);
-    if (isWarmupOscValue(value)) return { time: Number(time) };
-    return { time: Number(time), value };
-  });
-}
 
-function mapRSXData(osc) {
-  return (osc || []).map((d) => {
-    const time = chartTime(d?.time);
-    if (time == null) return { time: 0 };
-    const value = parseFloat(d.rsx);
-    if (isWarmupOscValue(value)) {
-      return { time: Number(time) };
-    }
-    return {
-      time: Number(time),
-      value,
-      color: d.color || RSX_DEFAULT_COLOR,
-      marker: d.marker || '',
-    };
-  });
-}
 
-function rsxMarkerStyle(marker) {
-  const m = String(marker || '').toUpperCase();
-  if (m === 'S' || m === 'SS') {
-    return { position: 'aboveBar', color: '#b71c1c', shape: 'circle', size: 1 };
-  }
-  if (m === 'L' || m === 'LL') {
-    return { position: 'belowBar', color: '#004d40', shape: 'circle', size: 1 };
-  }
-  if (m === 'P') {
-    return { position: 'belowBar', color: '#1565c0', shape: 'circle', size: 1 };
-  }
-  return { position: 'belowBar', color: '#2962ff', shape: 'circle', size: 1 };
-}
 
 function getChartAnnotationPanes(chartData) {
   const wozduhMarkerKey = INDICATOR_CONFIG.wozduh.markerSeriesKey;
@@ -5149,29 +4276,7 @@ function getChartAnnotationPanes(chartData) {
   );
 }
 
-function normalizeAnnotationPane(pane) {
-  const key = String(pane || 'rsx').trim().toLowerCase();
-  if (key === 'price' || key === 'wozduh') return key;
-  return 'rsx';
-}
 
-function annotationToNativeMarker(ann) {
-  const rawTime = ann?.time ?? ann?.Time;
-  const time = chartTime(rawTime);
-  if (time == null || !Number.isFinite(time)) return null;
-  const label = String(ann?.label ?? ann?.Label ?? ann?.text ?? '').toUpperCase();
-  const style = rsxMarkerStyle(label);
-  const useRsxStyle = ['S', 'SS', 'L', 'LL', 'P'].includes(label);
-  return {
-    time: Number(time),
-    position: useRsxStyle ? style.position : (ann?.position || 'belowBar'),
-    color: useRsxStyle ? style.color : (ann?.color || '#26a69a'),
-    shape: useRsxStyle ? style.shape : (ann?.shape || 'circle'),
-    size: useRsxStyle ? (style.size ?? 1) : undefined,
-    text: label,
-    _rawTime: rawTime,
-  };
-}
 
 function rsxSettingsContextForChart(chartData) {
   return chartData === backtestChartData ? 'backtest' : 'live';
@@ -5520,11 +4625,7 @@ function loadThresholdsFromStorage() {
 async function postThresholdsToServer(thresholds) {
   const t = normalizeStrategyThresholds(thresholds);
   try {
-    await fetch('/api/settings/thresholds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ long: t.long, short: t.short }),
-    });
+    await API.postThresholds({ long: t.long, short: t.short });
   } catch (err) {
     console.warn('Failed to sync thresholds:', err);
   }
@@ -5593,11 +4694,7 @@ function loadScoringMatrixFromStorage() {
 async function postMatrixToServer(matrix) {
   const payload = normalizeStrategyMatrix(matrix);
   try {
-    await fetch('/api/settings/matrix', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    await API.postMatrix(payload);
   } catch (err) {
     console.warn('Failed to sync scoring matrix:', err);
   }
@@ -5748,43 +4845,7 @@ function filterNavigatorMarkersByHHLL(markers, pane) {
   return markers || [];
 }
 
-function mapNavigatorBackgroundZones(zones) {
-  return (zones || []).map((zone) => {
-    const time1 = chartTime(zone.startTime);
-    const time2 = chartTime(zone.endTime);
-    if (time1 == null || time2 == null) return null;
-    return {
-      startTime: Math.floor(time1),
-      endTime: Math.floor(time2),
-      time1: Math.floor(time1),
-      time2: Math.floor(time2),
-      color: zone.color,
-    };
-  }).filter(Boolean);
-}
 
-function navigatorBarColorMap(barColors, candles) {
-  const colorByTime = new Map();
-  if (!barColors) return colorByTime;
-
-  if (Array.isArray(barColors)) {
-    barColors.forEach((entry) => {
-      if (!entry?.color) return;
-      const t = chartTime(entry.time)
-        ?? navigatorBarIndexToTime(entry.index, candles);
-      if (t != null) colorByTime.set(t, entry.color);
-    });
-    return colorByTime;
-  }
-
-  if (typeof barColors === 'object') {
-    Object.entries(barColors).forEach(([rawTime, color]) => {
-      const t = chartTime(rawTime);
-      if (t != null && color) colorByTime.set(t, color);
-    });
-  }
-  return colorByTime;
-}
 
 function applyNavigatorBarColors(chartData, barColors, candles, enabled) {
   const colorByTime = navigatorBarColorMap(barColors, candles);
@@ -5816,63 +4877,8 @@ function applyNavigatorBarColors(chartData, barColors, candles, enabled) {
   return colored;
 }
 
-function navigatorBarIndexToTime(index, candles) {
-  const idx = Number(index);
-  if (!Number.isInteger(idx) || idx < 0 || !candles || idx >= candles.length) return null;
-  return chartTime(candles[idx].time);
-}
 
-function mapNavigatorLinesForChart(lines, candles) {
-  const minTime = candles?.length ? chartTime(candles[0].time) : null;
-  return (lines || []).map((line) => {
-    let time1 = chartTime(line.time1);
-    let time2 = chartTime(line.time2);
-    if (time1 == null) time1 = navigatorBarIndexToTime(line.x1, candles);
-    if (time2 == null) time2 = navigatorBarIndexToTime(line.x2, candles);
-    if (time1 == null || time2 == null) return null;
-    if (minTime != null) {
-      if (time2 < minTime) return null;
-      if (time1 < minTime) {
-        const y1 = Number(line.y1);
-        const y2 = Number(line.y2);
-        if (Number.isFinite(y1) && Number.isFinite(y2) && time2 !== time1) {
-          line = {
-            ...line,
-            y1: y1 + (y2 - y1) * (minTime - time1) / (time2 - time1),
-          };
-        }
-        time1 = minTime;
-      }
-    }
-    return {
-      time1: Math.floor(time1),
-      time2: Math.floor(time2),
-      x1: Math.floor(time1),
-      y1: line.y1,
-      x2: Math.floor(time2),
-      y2: line.y2,
-      barX1: line.x1,
-      barX2: line.x2,
-      slope: Number.isFinite(line.slope) ? line.slope : barSlopeFromLine(line),
-      isActive: line.isActive === true,
-      color: line.color,
-      style: line.style,
-    };
-  }).filter(Boolean);
-}
 
-function barSlopeFromLine(line) {
-  const y1 = Number(line.y1);
-  const y2 = Number(line.y2);
-  const x1 = Number(line.x1);
-  const x2 = Number(line.x2);
-  if (!Number.isFinite(y1) || !Number.isFinite(y2) || !Number.isFinite(x1) || !Number.isFinite(x2)) {
-    return 0;
-  }
-  const dx = x2 - x1;
-  if (dx === 0) return 0;
-  return (y2 - y1) / dx;
-}
 
 function buildNavigatorMarkers(navigatorData, candles, pane = 'price') {
   const filtered = filterNavigatorMarkersByHHLL(navigatorData?.markers, pane);
@@ -6271,21 +5277,6 @@ function formatStatTime(sec) {
   return new Date(n * 1000).toLocaleString();
 }
 
-function normalizeTradeRow(t) {
-  const pnl = Number(t.pnl ?? 0);
-  return {
-    entryTime: t.entryTime ?? 0,
-    exitTime: t.exitTime ?? t.time ?? 0,
-    side: t.side || '—',
-    entryPrice: t.entryPrice,
-    exitPrice: t.exitPrice,
-    fee: t.fee,
-    slippagePct: t.slippagePct,
-    pnl,
-    exitReason: t.exitReason || t.reason || '—',
-    duration: t.duration,
-  };
-}
 
 function renderStatsDashboard(data, mode) {
   if (!data) {
@@ -6366,9 +5357,7 @@ async function refreshStatsForMode(mode) {
   }
 
   try {
-    const resp = await fetch(`/api/stats?mode=${encodeURIComponent(statsMode)}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const payload = await resp.json();
+    const payload = await API.fetchStats(statsMode);
     renderStatsDashboard(payload, statsMode);
   } catch (err) {
     console.warn('Stats fetch failed:', err);
@@ -6428,7 +5417,7 @@ function setBacktestRunState(active) {
 async function stopBacktest() {
   if (!backtestRunActive) return;
   try {
-    await fetch('/api/backtest/stop', { method: 'POST' });
+    await API.stopBacktest();
   } catch (err) {
     console.warn('Backtest stop request failed:', err);
   }
@@ -6493,29 +5482,24 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     }
 
     let result;
-    let rawText = '';
     for (let attempt = 0; attempt < 2; attempt++) {
-      const resp = await fetch('/api/backtest/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: backtestAbortController?.signal,
-      });
+      const { ok, status, result: respResult, rawText } = await API.runBacktest(
+        payload,
+        backtestAbortController?.signal,
+      );
+      result = respResult;
 
-      rawText = await resp.text();
-      try {
-        result = rawText ? JSON.parse(rawText) : {};
-      } catch (parseErr) {
+      if (result?._parseError) {
         console.error('[FALCON NETWORK] Server returned invalid JSON. Raw response:', rawText);
-        throw new Error(`Server response is not valid JSON. Check console for raw text. Status: ${resp.status}`);
+        throw new Error(`Server response is not valid JSON. Check console for raw text. Status: ${status}`);
       }
 
-      if (resp.ok) {
+      if (ok) {
         break;
       }
 
       const errText = result.error || result.message || rawText || '';
-      const notEnoughCandles = resp.status === 400 && /not enough candles/i.test(errText);
+      const notEnoughCandles = status === 400 && /not enough candles/i.test(errText);
       if (attempt === 0 && notEnoughCandles) {
         const expanded = expandBacktestStartDate(payload.startDate, payload.endDate, 90);
         if (expanded && expanded !== payload.startDate) {
@@ -6532,7 +5516,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
         }
       }
 
-      const errorText = errText || `HTTP error ${resp.status}`;
+      const errorText = errText || `HTTP error ${status}`;
       alert(`Ошибка Бэктеста:\n${errorText}`);
       return;
     }
@@ -6634,70 +5618,6 @@ function updateHeader(state) {
     if (sandboxEl.classList.contains('active') !== isSandbox) {
       sandboxEl.classList.toggle('active', isSandbox);
     }
-  }
-}
-
-async function fetchPollState() {
-  if (!shouldRunLivePoll()) {
-    return { warmingUp: false, data: {} };
-  }
-  const resp = await fetch(apiFetchUrl('/api/state', {
-    tf: currentTf,
-    limit: LIVE_POLL_CANDLE_LIMIT,
-    poll: '1',
-    rsxLookback: liveRsxSettings.div_lookback,
-  }), { cache: 'no-store' });
-  const data = await resp.json().catch(() => ({}));
-  if (resp.status === 400 && data.status === 'unavailable') {
-    throw new Error(`Timeframe ${data.timeframe} not available`);
-  }
-  if (resp.status === 503 || data.status === 'warming_up') {
-    return { warmingUp: true, data };
-  }
-  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-  return { warmingUp: false, data };
-}
-
-async function fetchState(options = {}) {
-  const params = apiQueryParams(options.params || {});
-  if (options.navigatorsOnly) {
-    params.navigators = '1';
-    params.limit = 0;
-  }
-
-  const timeoutMs = options.timeoutMs ?? LIVE_STATE_FETCH_TIMEOUT_MS;
-  const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    timeoutController.abort(new DOMException('fetchState timeout', 'TimeoutError'));
-  }, timeoutMs);
-
-  let signal = options.signal;
-  if (signal) {
-    const combined = new AbortController();
-    const abortCombined = () => combined.abort();
-    signal.addEventListener('abort', abortCombined, { once: true });
-    timeoutController.signal.addEventListener('abort', abortCombined, { once: true });
-    signal = combined.signal;
-  } else {
-    signal = timeoutController.signal;
-  }
-
-  try {
-    const resp = await fetch(apiFetchUrl('/api/state', params), {
-      cache: 'no-store',
-      signal,
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (resp.status === 400 && data.status === 'unavailable') {
-      throw new Error(`Timeframe ${data.timeframe} not available`);
-    }
-    if (resp.status === 503 || data.status === 'warming_up') {
-      return { warmingUp: true, data };
-    }
-    if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-    return { warmingUp: false, data };
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
@@ -6807,21 +5727,9 @@ function applyLatestOscPoint(pt) {
   if (latestCandleTime != null && pt.time !== latestCandleTime) {
     pt = { ...pt, time: latestCandleTime };
   }
-  const time = chartTime(pt?.time ?? pt?.Time);
-  if (time == null) return;
-
   liveStore.upsertOscPoint(pt);
-  const oscPoint = liveStore.getForLightweightCharts().osc.at(-1) ?? { ...pt, time };
-  updateWozduxPoint(oscPoint);
-
-  const rsxVal = parseFloat(pt.rsx ?? pt.jurik);
-  if (Number.isFinite(rsxVal)) {
-    updateRsxPoint(time, rsxVal, pt.color, pt.marker, pt.rsx_signal ?? pt.rsxSignal);
-  }
-
-  setTextIfChanged(document.getElementById('jurik-val'), fmt(rsxVal));
-  setTextIfChanged(document.getElementById('red-val'), fmt(pt.redLine));
-  setTextIfChanged(document.getElementById('green-val'), fmt(pt.greenLine));
+  const delta = liveStore.getLatestDeltaForChart();
+  applyLiveChartDelta(delta);
 }
 
 function renderState(data, options = {}) {
@@ -6920,7 +5828,11 @@ async function pollLatestState() {
   if (liveChartUpdating) return;
   if (!shouldRunLivePoll()) return;
   try {
-    const { warmingUp, data } = await fetchPollState();
+    const { warmingUp, data } = await API.fetchPollState({
+      tf: currentTf,
+      limit: LIVE_POLL_CANDLE_LIMIT,
+      rsxLookback: liveRsxSettings.div_lookback,
+    });
     if (!shouldRunLivePoll()) return;
     if (warmingUp || !data.candles?.length) return;
 
@@ -6944,14 +5856,23 @@ async function pollLatestState() {
     }
 
     beginDataUpdate();
-    updateAllPriceSeries(latest);
-
     const osc = data.oscillators || [];
     if (osc.length > 0) {
       const latestOsc = osc[osc.length - 1];
-      liveStore.upsertOscPoint(latestOsc);
-      applyLatestOscPoint(latestOsc);
+      const latestCandleTime = liveStore.lastCandleTimeSec();
+      let pt = latestOsc;
+      if (latestCandleTime != null && pt.time !== latestCandleTime) {
+        pt = { ...pt, time: latestCandleTime };
+      }
+      liveStore.upsertOscPoint(pt);
+      const rsxVal = parseFloat(pt.rsx ?? pt.jurik);
+      setTextIfChanged(document.getElementById('jurik-val'), fmt(rsxVal));
+      setTextIfChanged(document.getElementById('red-val'), fmt(pt.redLine));
+      setTextIfChanged(document.getElementById('green-val'), fmt(pt.greenLine));
     }
+
+    const delta = liveStore.getLatestDeltaForChart();
+    applyLiveChartDelta(delta);
     endDataUpdate();
   } catch (err) {
     liveChartUpdating = false;
@@ -7040,9 +5961,8 @@ async function maybeLoadBacktestHistory(range) {
       limit: String(BACKTEST_HISTORY_CHUNK_LIMIT),
     });
     appendBacktestRsxSettingsToParams(params);
-    const resp = await fetch(`/api/history/chunk?${params.toString()}`, { cache: 'no-store' });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !Array.isArray(data.chartData) || data.chartData.length === 0) {
+    const { ok, data } = await API.fetchBacktestHistoryChunk(params);
+    if (!ok || !Array.isArray(data.chartData) || data.chartData.length === 0) {
       backtestHistoryHasMore = false;
       return;
     }
@@ -7092,24 +6012,12 @@ async function maybeLoadBacktestHistory(range) {
 }
 
 async function fetchLiveHistory(endTimeSec) {
-  const settings = coerceRsxSettingsForAPI(getRsxSettingsState('live'));
-  const params = new URLSearchParams({
+  return API.fetchLiveHistory({
     tf: currentTf,
-    endTime: String(endTimeSec),
-    limit: String(LIVE_STATE_CANDLE_LIMIT),
-    rsx_length: String(settings.length),
-    rsx_signal_length: String(settings.signal_length),
-    rsx_source: settings.source,
-    rsx_method: settings.div_method,
-    rsx_pivot_radius: String(settings.pivot_radius),
-    rsx_div_lookback: String(settings.div_lookback),
-    min_price_delta_ratio: String(settings.min_price_delta_ratio),
-    min_osc_delta: String(settings.min_osc_delta),
+    endTimeSec,
+    limit: LIVE_STATE_CANDLE_LIMIT,
+    rsxSettings: coerceRsxSettingsForAPI(getRsxSettingsState('live')),
   });
-  const resp = await fetch(`/api/history?${params.toString()}`, { cache: 'no-store' });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(`history API: ${resp.status}`);
-  return data;
 }
 
 async function maybeLoadHistory(range, options = {}) {
@@ -7192,31 +6100,21 @@ function isLiveTf() {
   return scoringTf.toLowerCase() === currentTf.toLowerCase();
 }
 
-function handleWSMessage(event) {
-  let msg;
-  try { msg = JSON.parse(event.data); } catch { return; }
-  if (msg.type !== 'tick' || !msg.data) return;
-
-  const tickTf = (msg.data.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
+function handleLiveTick(d) {
+  const tickTf = (d.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
   if (tickTf !== currentTf.toLowerCase()) return;
 
-  const d = msg.data;
   const time = chartTime(d.time);
   if (time == null) return;
 
   if (isLiveTf()) {
     updateHeader({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
-    if (d.isClosed) {
-      if (d.volatilityRegime) {
-        updateHeader({ volatilityRegime: d.volatilityRegime });
-      }
+    if (d.isClosed && d.volatilityRegime) {
+      updateHeader({ volatilityRegime: d.volatilityRegime });
     }
   }
 
   if (!shouldPaintLiveChart()) return;
-
-  // Игнорируем любые тики по WS, пока HTTP-запрос /api/state не принесет исторический фундамент.
-  // Бэкенд уже включает самые свежие тики в HTTP-ответ, поэтому мы ничего не теряем.
   if (!chartInitialized) return;
 
   const bar = normalizeCandle({
@@ -7227,12 +6125,8 @@ function handleWSMessage(event) {
   applyPriceBar(bar);
 }
 
-function handleWSMarker(event) {
+function handleLiveMarker(d) {
   if (!shouldPaintLiveChart()) return;
-  let msg;
-  try { msg = JSON.parse(event.data); } catch { return; }
-  if (msg.type !== 'marker' || !msg.data) return;
-  const d = msg.data;
   mergeSessionTrades([{
     time: chartTime(d.time),
     side: d.side || d.action,
@@ -7242,30 +6136,24 @@ function handleWSMarker(event) {
   applyTradeMarkers();
 }
 
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  if (dashboardSocket) {
-    dashboardSocket.onopen = null;
-    dashboardSocket.onclose = null;
-    dashboardSocket.onerror = null;
-    dashboardSocket.onmessage = null;
-    if (dashboardSocket.readyState === WebSocket.OPEN || dashboardSocket.readyState === WebSocket.CONNECTING) {
-      dashboardSocket.close();
-    }
-  }
-  dashboardSocket = new WebSocket(`${proto}://${location.host}/ws`);
-  dashboardSocket.onopen = () => {
-    wsSubscribeTf(currentTf);
-    suppressLivePollForWs();
-  };
-  dashboardSocket.onmessage = (e) => { handleWSMessage(e); handleWSMarker(e); };
-  dashboardSocket.onerror = () => {
-    resumeLivePollAfterWs();
-  };
-  dashboardSocket.onclose = () => {
-    resumeLivePollAfterWs();
-    setTimeout(connectWS, 3000);
-  };
+function initLiveWebSocket() {
+  WS.connect({
+    onTick: handleLiveTick,
+    onMarker: handleLiveMarker,
+    onOpen: () => {
+      wsSubscribeTf(currentTf);
+      suppressLivePollForWs();
+    },
+    onError: () => {
+      resumeLivePollAfterWs();
+    },
+    onClose: () => {
+      resumeLivePollAfterWs();
+    },
+    onReconnect: () => {
+      wsSubscribeTf(currentTf);
+    },
+  });
 }
 
 function ensureRulerElements(chartData) {
@@ -7512,7 +6400,7 @@ function boot() {
       }
 
       await loadDashboard();
-      connectWS();
+      initLiveWebSocket();
       if (isOrderFlowTf()) {
         orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
       }
