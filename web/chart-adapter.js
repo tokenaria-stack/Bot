@@ -1176,16 +1176,10 @@ function resizeAllCharts() {
 
 function applyWozduhVisibilityToChart(chartData, context = 'live') {
   if (!chartData?.wozduxSeries) return;
-  const menu = getWozduhSettingsMenu(getOscWrap(context));
-  WOZDUH_MENU_ITEMS.forEach((item) => {
-    const el = menu?.querySelector(`.wozduh-chk[data-pref-key="${item.prefKey}"]`);
-    const visible = el ? el.checked : item.default;
-    item.keys.forEach((key) => {
-      if (chartData.wozduxSeries[key]) {
-        chartData.wozduxSeries[key].applyOptions({ visible });
-      }
-    });
-  });
+  const prefs = (typeof window.WozduhController !== 'undefined')
+    ? window.WozduhController.getSettingsFromUI(context)
+    : (typeof CONFIG !== 'undefined' ? CONFIG.defaultWozduhPrefs() : {});
+  applyWozduhVisibilityFromPrefs(chartData, prefs);
 }
 
 function setChartType(type) {
@@ -1575,11 +1569,6 @@ function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, opti
       ),
     );
   });
-
-  if (pane === 'price' && allMappedLines.length) {
-    console.log('Lines received:', allMappedLines.length);
-    console.log('First line sample:', allMappedLines[0]);
-  }
 
   if (pane === 'price' && settings.barColor && navigatorHasBarColors(navigatorData.barColors)) {
     const colored = applyNavigatorBarColors(

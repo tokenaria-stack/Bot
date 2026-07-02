@@ -1,116 +1,18 @@
 
 
-let liveStrategyState = null;
-let backtestStrategyState = null;
-let matrixModalContext = 'live';
-
-function defaultStrategyState() {
-  return {
-    matrix: { ...SCORING_MATRIX_DEFAULTS },
-    thresholds: { ...DEFAULT_STRATEGY_THRESHOLDS },
-  };
-}
-
-function getStrategyState(context = 'live') {
-  return context === 'backtest' ? backtestStrategyState : liveStrategyState;
-}
-
-function strategyStorageKey(context) {
-  return context === 'backtest' ? LS_BT_STRATEGY_KEY : LS_LIVE_STRATEGY_KEY;
-}
-
-
-
-function persistStrategyState(context) {
-  const state = getStrategyState(context);
-  if (!state) return;
-  try {
-    localStorage.setItem(strategyStorageKey(context), JSON.stringify(state));
-  } catch {
-    /* noop */
-  }
-}
-
-function loadStrategyState(context) {
-  let state = defaultStrategyState();
-  try {
-    const raw = localStorage.getItem(strategyStorageKey(context));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        state = {
-          matrix: normalizeStrategyMatrix(parsed.matrix),
-          thresholds: normalizeStrategyThresholds(parsed.thresholds),
-        };
-      }
-    } else if (context === 'live') {
-      const legacyMatrix = loadLegacyScoringMatrixFromStorage();
-      const legacyThresholds = loadLegacyThresholdsFromStorage();
-      if (legacyMatrix) state.matrix = legacyMatrix;
-      if (legacyThresholds) state.thresholds = legacyThresholds;
-    } else if (context === 'backtest' && liveStrategyState) {
-      state = {
-        matrix: { ...liveStrategyState.matrix },
-        thresholds: { ...liveStrategyState.thresholds },
-      };
-    }
-  } catch {
-    /* defaults */
-  }
-  if (context === 'backtest') backtestStrategyState = state;
-  else liveStrategyState = state;
-  persistStrategyState(context);
-  return state;
-}
-
-function initStrategyState() {
-  loadStrategyState('live');
-  loadStrategyState('backtest');
-}
-
-function getActiveStrategyContext() {
-  return isBacktestTfContext() ? 'backtest' : 'live';
-}
-
-function readThresholdsFromHeader() {
-  const longEl = document.getElementById('ui-threshold-long');
-  const shortEl = document.getElementById('ui-threshold-short');
-  return normalizeStrategyThresholds({
-    long: longEl ? Number(longEl.value) : NaN,
-    short: shortEl ? Number(shortEl.value) : NaN,
-  });
-}
-
-function applyThresholdsToHeader(thresholds) {
-  const longEl = document.getElementById('ui-threshold-long');
-  const shortEl = document.getElementById('ui-threshold-short');
-  const t = normalizeStrategyThresholds(thresholds);
-  if (longEl) longEl.value = String(t.long);
-  if (shortEl) shortEl.value = String(t.short);
-}
-
-function saveThresholdsFromHeaderToState(context = getActiveStrategyContext()) {
-  const state = getStrategyState(context);
-  if (!state) return;
-  state.thresholds = readThresholdsFromHeader();
-  persistStrategyState(context);
-}
-
-function getThresholdsFromStrategyState(context = 'backtest') {
-  const t = normalizeStrategyThresholds(getStrategyState(context)?.thresholds);
-  return {
-    longThreshold: t.long,
-    shortThreshold: t.short,
-  };
-}
-
-function getMatrixFromStrategyState(context = 'backtest') {
-  return normalizeStrategyMatrix(getStrategyState(context)?.matrix);
-}
-
-
-
-
+// ── UI controller delegates (Phase 19.5) ────────────────────────────────────
+function getActiveTabId() { return TabsController.getActiveTabId(); }
+function isBacktestTabActive() { return TabsController.isBacktestTabActive(); }
+function isBacktestTfContext() { return TabsController.isBacktestTfContext(); }
+function isLiveTabActive() { return TabsController.isLiveTabActive(); }
+function getActiveStrategyContext() { return TabsController.getActiveStrategyContext(); }
+function switchTab(targetId) { return TabsController.switchTab(targetId); }
+function getActiveTf() { return TimeframeController.getActiveTf(); }
+function getActiveTfFromToolbar() { return TimeframeController.getActiveTfFromToolbar(); }
+function syncToolbarToActiveContext() { return TimeframeController.syncToolbar(); }
+function switchTimeframe(tf, event) { return TimeframeController.switchTimeframe(tf, event); }
+function hideWozduhSettingsMenus() { return WozduhController.hideMenus(); }
+function hideRiskSettingsMenu() { return RiskController.hideMenu(); }
 
 const chartLegendState = {
   live: { price: {}, wozduh: {}, rsx: {} },
@@ -514,27 +416,8 @@ function flushNavigatorAutoUpdate() {
   return triggerNavigatorAutoUpdate();
 }
 
-function getMatrixSettingsFromUI(context = getActiveStrategyContext()) {
-  return getMatrixFromStrategyState(context);
-}
-
 function getRiskSettingsFromUI() {
-  try {
-    return readRiskSettingsFromForm();
-  } catch (err) {
-    console.warn('getRiskSettingsFromUI failed:', err);
-    try {
-      const raw = localStorage.getItem(LS_RISK_SETTINGS_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch {
-      /* noop */
-    }
-    return {};
-  }
-}
-
-function getThresholdsFromUI(context = getActiveStrategyContext()) {
-  return getThresholdsFromStrategyState(context);
+  return RiskController.getSettingsFromUI();
 }
 
 function getRSXSettingsFromUI(context = 'backtest') {
@@ -542,9 +425,7 @@ function getRSXSettingsFromUI(context = 'backtest') {
 }
 
 function getWozduhSettingsFromUI(context = 'backtest') {
-  const menu = getWozduhSettingsMenu(getOscWrap(context));
-  if (menu) return readWozduhPrefsFromMenu(menu);
-  return loadWozduhPrefsForContext(context) || defaultWozduhPrefs();
+  return WozduhController.getSettingsFromUI(context);
 }
 
 function buildFinalBacktestPayload(overrides = {}) {
@@ -554,7 +435,7 @@ function buildFinalBacktestPayload(overrides = {}) {
     ? window.currentBacktestPayload.settings
     : {};
 
-  const matrix = getMatrixFromStrategyState('backtest');
+  const matrix = StrategyController.getMatrixPayload('backtest');
   const navigators = buildNavigatorPayloadFromUI();
   const risk = getRiskSettingsFromUI();
 
@@ -563,7 +444,7 @@ function buildFinalBacktestPayload(overrides = {}) {
     risk,
     matrix,
     navigators,
-    ...getThresholdsFromStrategyState('backtest'),
+    ...StrategyController.getThresholdsPayload('backtest'),
     rsxSettings: getRSXSettingsFromUI('backtest'),
     wozduhSettings: getWozduhSettingsFromUI('backtest'),
   };
@@ -594,18 +475,6 @@ function buildFinalBacktestPayload(overrides = {}) {
   window.currentBacktestPayload = finalPayload;
   currentBacktestPayload = finalPayload;
   return finalPayload;
-}
-
-function matrixHasEntrySources(matrix) {
-  if (!matrix) return false;
-  return !!(matrix.useRSX || matrix.useWozduhCross || matrix.useTrendlines);
-}
-
-function readMatrixCheckbox(key) {
-  const el = document.getElementById(`matrix-${key}`)
-    || document.querySelector(`input[type="checkbox"][data-matrix-key="${key}"]`);
-  if (!el) return null;
-  return !!el.checked;
 }
 
 function injectBacktestPayloadFromPaneUI(pane) {
@@ -676,13 +545,13 @@ function buildBacktestSettingsPayload() {
     return payload.settings;
   } catch (err) {
     console.error('buildBacktestSettingsPayload failed:', err);
-    const matrix = getMatrixFromStrategyState('backtest');
+    const matrix = StrategyController.getMatrixPayload('backtest');
     try {
       return {
         matrix,
         navigators: buildNavigatorPayloadFromUI(),
         risk: getRiskSettingsFromUI(),
-        ...getThresholdsFromStrategyState('backtest'),
+        ...StrategyController.getThresholdsPayload('backtest'),
       };
     } catch {
       const priceUI = defaultNavigatorPaneSettings('price');
@@ -1059,7 +928,7 @@ function renderLegendItem(context, pane, def, isChild = false) {
     if (def.kind === 'wozduh') {
       hideRsxSettingsMenus();
       hideRiskSettingsMenu();
-      const menu = getWozduhSettingsMenu(wrap);
+      const menu = WozduhController.getSettingsMenu(wrap);
       if (!menu) return;
       const willOpen = menu.hidden;
       hideWozduhSettingsMenus();
@@ -1145,7 +1014,6 @@ let lastFibZones = [];
 let currentTf = '1m';
 let backendTradingTimeframe = null;
 let tradingTimeframeSynced = false;
-let tfFavorites = [];
 let refreshTimer = null;
 let historyHasMore = true;
 let currentLiveRequestId = 0;
@@ -1198,25 +1066,6 @@ if (typeof window !== 'undefined') {
 
 const ruler = { active: false, state: RULER_IDLE, p1: null, p2: null, chartData: null };
 
-function getActiveTabId() {
-  const active = document.querySelector('.tab-content.active');
-  return active?.id || 'tab-live';
-}
-
-function isBacktestTabActive() {
-  return getActiveTabId() === 'tab-backtest';
-}
-
-/** Backtest workflow tabs where toolbar TF controls the backtest interval (not live). */
-function isBacktestTfContext() {
-  const tab = getActiveTabId();
-  return tab === 'tab-backtest' || tab === 'tab-stats';
-}
-
-function isLiveTabActive() {
-  return getActiveTabId() === 'tab-live';
-}
-
 function shouldPaintLiveChart() {
   return isLiveTabActive();
 }
@@ -1229,14 +1078,6 @@ function getBacktestInterval() {
   const el = document.getElementById('bt-interval');
   return el?.value || backtestTf;
 }
-
-function getActiveTfFromToolbar() {
-  const activeBtn = document.querySelector('#tf-favorites .tf-btn.active');
-  return activeBtn?.dataset?.tf || null;
-}
-
-
-/** Client-side TF resolver (mirrors server/timeframes.go aliases). */
 
 function parseBacktestDateInput(value) {
   if (!value) return null;
@@ -1297,13 +1138,6 @@ function syncTradingTimeframeFromState(data) {
   return true;
 }
 
-function getActiveTf() {
-  if (isBacktestTfContext()) {
-    return normalizeTf(getBacktestInterval() || backtestTf || getActiveTfFromToolbar());
-  }
-  return currentTf;
-}
-
 function applyTfToBacktestSelect(tf) {
   const el = document.getElementById('bt-interval');
   if (!el) return false;
@@ -1311,7 +1145,7 @@ function applyTfToBacktestSelect(tf) {
   if (!hasOption) {
     const opt = document.createElement('option');
     opt.value = tf;
-    opt.textContent = tfLabel(tf);
+    opt.textContent = TF_DISPLAY[tf] || tf;
     el.appendChild(opt);
   }
   el.value = tf;
@@ -1319,83 +1153,8 @@ function applyTfToBacktestSelect(tf) {
   return true;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-function syncToolbarToActiveContext() {
-  const activeTf = getActiveTf();
-  const tfBtn = document.getElementById('tf-current-btn');
-  const tfLabelEl = document.getElementById('timeframe-label');
-  if (tfBtn) tfBtn.textContent = `${tfLabel(activeTf)} ▾`;
-  if (tfLabelEl) tfLabelEl.textContent = tfLabel(activeTf);
-  renderTfBar();
-  renderTfMenu();
-}
-
-function tfLabel(id) {
-  return TF_DISPLAY[id] || id;
-}
-
-function tfSortKey(id) {
-  const s = id.toLowerCase();
-  if (s.includes('tick')) return 100 + (parseInt(s, 10) || 1);
-  if (/^\d+s$/.test(s)) return 1000 + parseInt(s, 10);
-  if (/^\d+m$/.test(s)) return 2000 + parseInt(s, 10);
-  if (/^\d+h$/.test(s)) return 3000 + parseInt(s, 10);
-  if (s === '1d') return 4001;
-  if (s === '1w') return 4002;
-  return 9000;
-}
-
-function sortFavorites() {
-  tfFavorites.sort((a, b) => tfSortKey(a) - tfSortKey(b));
-}
-
-function loadFavorites() {
-  try {
-    const raw = localStorage.getItem(LS_FAV_KEY);
-    tfFavorites = raw ? JSON.parse(raw) : [...DEFAULT_FAVS];
-  } catch {
-    tfFavorites = [...DEFAULT_FAVS];
-  }
-  tfFavorites = tfFavorites.filter((id) => id !== '1M');
-  sortFavorites();
-}
-
-function saveFavorites() {
-  sortFavorites();
-  localStorage.setItem(LS_FAV_KEY, JSON.stringify(tfFavorites));
-}
-
-function isFavorite(id) {
-  return tfFavorites.includes(id);
-}
-
-function toggleFavorite(id) {
-  if (isFavorite(id)) {
-    tfFavorites = tfFavorites.filter((f) => f !== id);
-  } else {
-    tfFavorites.push(id);
-  }
-  saveFavorites();
-  renderTfBar();
-  renderTfMenu();
-}
-
 function rsxContextFromWrap(wrap) {
   return wrap?.id === 'bt-rsx-wrap' ? 'backtest' : 'live';
-}
-
-function oscContextFromWrap(wrap) {
-  return wrap?.id === 'bt-osc-wrap' ? 'backtest' : 'live';
 }
 
 function getActiveUiContext() {
@@ -1744,13 +1503,6 @@ async function fetchLiveState(options = {}) {
   });
 }
 
-function setTfDropdownOpen(open) {
-  const dd = document.getElementById('tf-dropdown');
-  if (!dd) return;
-  dd.hidden = !open;
-  dd.classList.toggle('open', open);
-}
-
 function runWithSuppressedHistoryLoad(fn) {
   liveHistorySuppressRangeHook = true;
   try {
@@ -1938,20 +1690,7 @@ function initPaneResize() {
   });
 }
 
-function initControls(options = {}) {
-  const { useServerTf = false } = options;
-  loadFavorites();
-  if (!useServerTf) {
-    currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
-    if (currentTf === '1M') {
-      currentTf = '1w';
-      localStorage.setItem(LS_TF_KEY, currentTf);
-    }
-  }
-  renderTfBar();
-  renderTfMenu();
-  initTfBarInteraction();
-
+function initControls() {
   const toggles = {
     'tog-jurik': 'rsx',
     'tog-volume': 'volume',
@@ -2218,92 +1957,6 @@ function notifyChartsLayoutChange() {
   });
 }
 
-function hideRiskSettingsMenu() {
-  const riskMenu = document.getElementById('risk-settings-menu');
-  if (riskMenu) riskMenu.hidden = true;
-}
-
-function readRiskSettingsFromForm() {
-  return {
-    risk_per_trade: parseFloat(document.getElementById('risk-per-trade')?.value) || 1,
-    max_drawdown: parseFloat(document.getElementById('risk-max-drawdown')?.value) || 5,
-    leverage: parseInt(document.getElementById('risk-leverage')?.value, 10) || 10,
-    stop_loss_type: document.getElementById('risk-stop-loss-type')?.value || 'fractal_atr',
-    atr_multiplier: parseFloat(document.getElementById('risk-atr-multiplier')?.value) || 1.5,
-  };
-}
-
-function applyRiskSettingsToForm(settings) {
-  if (!settings) return;
-  const map = [
-    ['risk-per-trade', settings.risk_per_trade],
-    ['risk-max-drawdown', settings.max_drawdown],
-    ['risk-leverage', settings.leverage],
-    ['risk-atr-multiplier', settings.atr_multiplier],
-  ];
-  map.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el && val != null) el.value = String(val);
-  });
-  const typeEl = document.getElementById('risk-stop-loss-type');
-  if (typeEl && settings.stop_loss_type) typeEl.value = settings.stop_loss_type;
-}
-
-async function fetchRiskSettings() {
-  try {
-    const settings = await API.fetchRiskSettings();
-    applyRiskSettingsToForm(settings);
-    localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(settings));
-  } catch (err) {
-    console.warn('Failed to load risk settings:', err);
-    try {
-      const raw = localStorage.getItem(LS_RISK_SETTINGS_KEY);
-      if (raw) applyRiskSettingsToForm(JSON.parse(raw));
-    } catch { /* noop */ }
-  }
-}
-
-async function saveRiskSettings() {
-  const menu = document.getElementById('risk-settings-menu');
-  const active = document.activeElement;
-  if (menu && active && menu.contains(active) && typeof active.blur === 'function') {
-    active.blur();
-  }
-  const payload = readRiskSettingsFromForm();
-  try {
-    const applied = await API.postRiskSettings(payload);
-    applyRiskSettingsToForm(applied);
-    localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(applied));
-    hideRiskSettingsMenu();
-    if (isBacktestTabActive() && backtestStore.candleCount() > 0) {
-      buildFinalBacktestPayload();
-    }
-  } catch (err) {
-    console.warn('Failed to save risk settings:', err);
-  }
-}
-
-function initRiskSettings() {
-  const btn = document.getElementById('btn-risk-menu');
-  const menu = document.getElementById('risk-settings-menu');
-  if (!btn || !menu) return;
-
-  fetchRiskSettings();
-
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideRsxSettingsMenus();
-    hideWozduhSettingsMenus();
-    const willOpen = menu.hidden;
-    if (willOpen) openFloatingMenu(menu, btn);
-    else menu.hidden = true;
-  });
-
-  menu.addEventListener('mousedown', (e) => e.stopPropagation());
-  menu.addEventListener('click', (e) => e.stopPropagation());
-  document.getElementById('risk-save-btn')?.addEventListener('click', () => { saveRiskSettings(); });
-}
-
 async function saveRsxSettingsFromMenu(menu, context) {
   if (!menu) return;
   const active = document.activeElement;
@@ -2319,105 +1972,6 @@ async function saveRsxSettingsFromMenu(menu, context) {
   } finally {
     menu.hidden = true;
   }
-}
-
-function getWozduhSettingsMenu(wrap) {
-  return wrap?.querySelector('.wozduh-settings-menu');
-}
-
-
-function wozduhStorageKey(context) {
-  return context === 'backtest' ? WOZDUH_PREFS_BACKTEST_KEY : WOZDUH_PREFS_LIVE_KEY;
-}
-
-function applyWozduhPrefsToMenu(menu, prefs) {
-  if (!menu) return;
-  WOZDUH_MENU_ITEMS.forEach((item) => {
-    const el = menu.querySelector(`.wozduh-chk[data-pref-key="${item.prefKey}"]`);
-    if (!el) return;
-    el.checked = typeof prefs[item.prefKey] === 'boolean' ? prefs[item.prefKey] : item.default;
-  });
-}
-
-function readWozduhPrefsFromMenu(menu) {
-  const prefs = {};
-  if (!menu) return prefs;
-  menu.querySelectorAll('.wozduh-chk').forEach((el) => {
-    const key = el.dataset.prefKey;
-    if (key) prefs[key] = el.checked;
-  });
-  return prefs;
-}
-
-function saveWozduhPrefs(context, prefs) {
-  localStorage.setItem(wozduhStorageKey(context), JSON.stringify(prefs));
-}
-
-function loadWozduhPrefsForContext(context) {
-  try {
-    const raw = localStorage.getItem(wozduhStorageKey(context));
-    if (raw) {
-      const prefs = JSON.parse(raw);
-      if (prefs && typeof prefs === 'object') return prefs;
-    }
-    if (context === 'live') {
-      const legacy = localStorage.getItem(WOZDUH_PREFS_KEY);
-      if (legacy) {
-        const prefs = JSON.parse(legacy);
-        if (prefs && typeof prefs === 'object') return prefs;
-      }
-    }
-  } catch {
-    /* use defaults */
-  }
-  return null;
-}
-
-
-function hideWozduhSettingsMenus() {
-  document.querySelectorAll('.osc-wrap .wozduh-settings-menu').forEach((menu) => {
-    menu.hidden = true;
-  });
-}
-
-function initWozduhSettings() {
-  document.querySelectorAll('.osc-wrap').forEach((wrap) => {
-    const context = oscContextFromWrap(wrap);
-    const menu = getWozduhSettingsMenu(wrap);
-    if (!menu) return;
-    const prefs = loadWozduhPrefsForContext(context) || defaultWozduhPrefs();
-    applyWozduhPrefsToMenu(menu, prefs);
-    saveWozduhPrefs(context, prefs);
-    ChartAdapter.applyWozduhVisibility(context);
-  });
-
-  document.querySelectorAll('.osc-wrap').forEach((wrap) => {
-    const context = oscContextFromWrap(wrap);
-    const toggle = wrap.querySelector('.wozduh-settings-toggle');
-    const menu = getWozduhSettingsMenu(wrap);
-    if (!menu) return;
-
-    toggle?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hideRsxSettingsMenus();
-      hideRiskSettingsMenu();
-      const willOpen = menu.hidden;
-      hideWozduhSettingsMenus();
-      if (willOpen) openFloatingMenu(menu, toggle);
-      else menu.hidden = true;
-    });
-
-    menu.addEventListener('mousedown', (e) => e.stopPropagation());
-    menu.addEventListener('click', (e) => e.stopPropagation());
-
-    menu.querySelectorAll('.wozduh-chk').forEach((el) => {
-      el.addEventListener('change', () => {
-        const prefs = readWozduhPrefsFromMenu(menu);
-        saveWozduhPrefs(context, prefs);
-        ChartAdapter.applyWozduhVisibility(context, prefs);
-      });
-    });
-  });
 }
 
 function hideRsxSettingsMenus() {
@@ -2491,162 +2045,6 @@ function initRsxSettings() {
 }
 
 
-function applyCustomTf() {
-  const input = document.getElementById('tf-custom-input');
-  const val = input.value.trim();
-  if (!val) return;
-  input.value = '';
-  switchTimeframe(val);
-  setTfDropdownOpen(false);
-}
-
-function initTfBarInteraction() {
-  if (window.__tfBarInteractionBound) return;
-
-  const tfBar = document.getElementById('tf-bar');
-  const tfDropdown = document.getElementById('tf-dropdown');
-  const tfCurrentBtn = document.getElementById('tf-current-btn');
-  if (!tfBar || !tfDropdown || !tfCurrentBtn) {
-    console.warn('[initTfBarInteraction] TF bar elements missing (#tf-bar, #tf-dropdown, or #tf-current-btn)');
-    return;
-  }
-
-  window.__tfBarInteractionBound = true;
-
-  const handleTfBarClick = (e) => {
-    console.log('TF Menu Clicked', e.target);
-
-    if (e.target.closest('#tf-current-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setTfDropdownOpen(tfDropdown.hidden);
-      return;
-    }
-
-    const favBtn = e.target.closest('.tf-btn');
-    if (favBtn?.dataset?.tf) {
-      e.preventDefault();
-      e.stopPropagation();
-      switchTimeframe(favBtn.dataset.tf, e);
-      return;
-    }
-
-    const menuBtn = e.target.closest('.tf-menu-name');
-    if (menuBtn?.dataset?.tf) {
-      e.preventDefault();
-      e.stopPropagation();
-      switchTimeframe(menuBtn.dataset.tf, e);
-      setTfDropdownOpen(false);
-      return;
-    }
-
-    const starBtn = e.target.closest('.tf-star');
-    if (starBtn?.dataset?.tf) {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleFavorite(starBtn.dataset.tf);
-    }
-  };
-
-  tfBar.addEventListener('click', handleTfBarClick, true);
-
-  document.getElementById('tf-custom-add')?.addEventListener('click', (e) => {
-    console.log('TF Menu Clicked', e.target);
-    applyCustomTf();
-  });
-
-  document.getElementById('tf-custom-input')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') applyCustomTf();
-  });
-
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('#tf-bar')) return;
-    setTfDropdownOpen(false);
-  });
-}
-
-function renderTfBar() {
-  const favEl = document.getElementById('tf-favorites');
-  if (!favEl) {
-    console.warn('[renderTfBar] #tf-favorites not found');
-    return;
-  }
-  const activeTf = getActiveTf();
-  favEl.innerHTML = '';
-  tfFavorites.forEach((id) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'tf-btn' + (id === activeTf ? ' active' : '');
-    btn.textContent = tfLabel(id);
-    btn.dataset.tf = id;
-    favEl.appendChild(btn);
-  });
-  const tfBtn = document.getElementById('tf-current-btn');
-  const tfLabelEl = document.getElementById('timeframe-label');
-  if (tfBtn) tfBtn.textContent = `${tfLabel(activeTf)} ▾`;
-  if (tfLabelEl) tfLabelEl.textContent = tfLabel(activeTf);
-}
-
-function renderTfMenu() {
-  const body = document.getElementById('tf-menu-body');
-  if (!body) return;
-  const activeTf = getActiveTf();
-  body.innerHTML = '';
-
-  Object.entries(TF_MENU).forEach(([group, items]) => {
-    const label = document.createElement('div');
-    label.className = 'tf-group-label';
-    label.textContent = group;
-    body.appendChild(label);
-
-    items.forEach((item) => {
-      const row = document.createElement('div');
-      row.className = 'tf-menu-item' + (item.id === activeTf ? ' selected' : '');
-
-      const name = document.createElement('button');
-      name.type = 'button';
-      name.className = 'tf-menu-name';
-      name.textContent = item.label;
-      name.dataset.tf = item.id;
-
-      const star = document.createElement('button');
-      star.type = 'button';
-      star.className = 'tf-star' + (isFavorite(item.id) ? ' fav' : '');
-      star.textContent = '★';
-      star.title = 'Add to favorites';
-      star.dataset.tf = item.id;
-
-      row.appendChild(name);
-      row.appendChild(star);
-      body.appendChild(row);
-    });
-  });
-}
-
-function switchTimeframe(tf, event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const nextTf = resolveTf(tf);
-  if (!nextTf) return;
-
-  if (isBacktestTfContext()) {
-    switchBacktestTimeframe(nextTf, event);
-    return;
-  }
-
-  switchLiveTimeframe(nextTf);
-}
-
-function switchBacktestTimeframe(tf, event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  handleBacktestIntervalChange(tf);
-}
-
 function resetBacktestClientCacheForTfChange() {
   backtestStore.clear();
   backtestNavigatorChartLines = [];
@@ -2712,52 +2110,6 @@ function initBacktestIntervalHandler() {
     handleBacktestIntervalChange(el.value);
   });
 }
-
-function switchLiveTimeframe(tf) {
-  const resolved = resolveTf(tf);
-  if (!resolved) return;
-  if (resolved === '1M') return;
-
-  const changed = resolved !== currentTf;
-
-  if (changed) {
-    window.__pendingAnchor = null;
-    abortLiveStateFetch();
-    ++currentLiveRequestId;
-    if (ChartAdapter.isInitialized('live')) {
-      window.__pendingAnchor = ChartAdapter.captureViewport('live');
-    }
-  }
-
-  currentTf = resolved;
-  localStorage.setItem(LS_TF_KEY, resolved);
-  historyHasMore = true;
-  disarmLiveHistoryScroll();
-
-  syncToolbarToActiveContext();
-
-  if (changed) {
-    clearChartData();
-    ChartAdapter.setChartInitialized(false);
-  }
-
-  loadDashboard({ userTfChange: changed });
-
-  if (refreshTimer) clearInterval(refreshTimer);
-  if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);
-  wsSubscribeTf(resolved);
-  if (!WS.isOpen()) {
-    startLivePollTimer();
-  }
-  if (isOrderFlowTf(resolved)) {
-    orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
-    ChartAdapter.applyOrderFlowTimeScale(true);
-  } else {
-    ChartAdapter.applyOrderFlowTimeScale(false);
-  }
-  updateBufferingOverlay();
-}
-
 
 function isDashboardWsOpen() {
   return WS.isOpen();
@@ -3035,251 +2387,6 @@ function deriveBotStatus(data) {
   const sorted = [...trades].sort((a, b) => a.time - b.time);
   const last = sorted[sorted.length - 1];
   return last.kind === 'exit' ? 'IDLE' : 'IN_POSITION';
-}
-
-function switchTab(targetId) {
-  saveThresholdsFromHeaderToState(getActiveStrategyContext());
-  const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
-  const panels = document.querySelectorAll('.tab-content');
-  tabs.forEach((b) => b.classList.toggle('active', b.dataset.tab === targetId));
-  panels.forEach((panel) => {
-    const isActive = panel.id === targetId;
-    panel.classList.toggle('active', isActive);
-    panel.style.display = isActive ? '' : 'none';
-  });
-
-  const backtestControls = document.getElementById('backtest-controls');
-  if (backtestControls) {
-    backtestControls.classList.toggle('visible', targetId === 'tab-backtest');
-  }
-
-  if (ruler.active) {
-    ruler.active = false;
-    document.getElementById('ruler-btn')?.classList.remove('active');
-    setRulerCursor(false);
-  }
-  resetRuler();
-  syncToolbarToActiveContext();
-  ChartAdapter.applyWozduhVisibility(getActiveUiContext());
-
-  const nextStrategyContext = (targetId === 'tab-backtest' || targetId === 'tab-stats') ? 'backtest' : 'live';
-  applyThresholdsToHeader(getStrategyState(nextStrategyContext).thresholds);
-
-  if (targetId === 'tab-live') {
-    pushRsxSettingsToServer(coerceRsxSettingsForAPI(liveRsxSettings))
-      .then(() => {
-        if (ChartAdapter.chartInitialized() && isLiveTabActive()) {
-          reloadRsxChartFromServer();
-        }
-      })
-      .catch((err) => console.warn('Failed to restore live RSX settings:', err));
-  }
-
-  requestAnimationFrame(() => {
-    ChartAdapter.handleResize();
-
-    if (targetId === 'tab-live' && ChartAdapter.getChartHandle('live').chart) {
-      wsSubscribeTf(currentTf);
-      if (!ChartAdapter.chartInitialized()) {
-        loadDashboard();
-      } else {
-        beginDataUpdate();
-        try {
-          applySeriesData();
-          ChartAdapter.syncLivePanesFromPrice();
-        } finally {
-          endDataUpdate(0);
-        }
-        if (shouldRunLivePoll()) {
-          pollLatestState();
-        }
-      }
-    } else if (targetId === 'tab-backtest' && ChartAdapter.getChartHandle('backtest').chart) {
-      ChartAdapter.forceSyncTimeScales(ChartAdapter.getChartHandle('backtest' === ChartAdapter.getChartHandle('backtest') ? 'backtest' : 'live'));
-    } else if (targetId === 'tab-stats') {
-      ChartAdapter.resizeEquity();
-      ChartAdapter.fitEquityContent();
-      refreshStatsForMode(statsMode);
-    }
-  });
-}
-
-function initTabs() {
-  const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
-  if (!tabs.length) {
-    console.warn('[initTabs] No tab buttons found (.tabs-nav .tab-btn)');
-    return;
-  }
-  tabs.forEach((btn) => {
-    if (!btn.dataset.tab) {
-      console.warn('[initTabs] Tab button missing data-tab attribute', btn);
-      return;
-    }
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-  });
-  try {
-    switchTab('tab-live');
-  } catch (err) {
-    console.error('[initTabs] switchTab(tab-live) failed:', err);
-  }
-}
-
-function loadLegacyThresholdsFromStorage() {
-  try {
-    const raw = localStorage.getItem(THRESHOLDS_KEY);
-    if (!raw) return null;
-    const saved = JSON.parse(raw);
-    return normalizeStrategyThresholds(saved);
-  } catch {
-    return null;
-  }
-}
-
-function loadThresholdsFromStorage() {
-  applyThresholdsToHeader(liveStrategyState?.thresholds || DEFAULT_STRATEGY_THRESHOLDS);
-}
-
-async function postThresholdsToServer(thresholds) {
-  const t = normalizeStrategyThresholds(thresholds);
-  try {
-    await API.postThresholds({ long: t.long, short: t.short });
-  } catch (err) {
-    console.warn('Failed to sync thresholds:', err);
-  }
-}
-
-async function syncThresholds() {
-  const context = getActiveStrategyContext();
-  const thresholds = readThresholdsFromHeader();
-  const state = getStrategyState(context);
-  if (!state) return;
-  state.thresholds = thresholds;
-  persistStrategyState(context);
-
-  if (context === 'live') {
-    await postThresholdsToServer(thresholds);
-  }
-}
-
-function initThresholdInputs() {
-  loadThresholdsFromStorage();
-  if (isLiveTabActive()) {
-    postThresholdsToServer(liveStrategyState.thresholds);
-  }
-
-  ['ui-threshold-long', 'ui-threshold-short'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('change', () => syncThresholds());
-  });
-}
-
-function collectMatrixFromUI() {
-  const matrix = { ...SCORING_MATRIX_DEFAULTS };
-  SCORING_MATRIX_LABELS.forEach(({ key }) => {
-    const checked = readMatrixCheckbox(key);
-    if (checked !== null) {
-      matrix[key] = checked;
-    }
-  });
-  return matrix;
-}
-
-function applyMatrixToUI(matrix) {
-  const merged = { ...SCORING_MATRIX_DEFAULTS, ...matrix };
-  SCORING_MATRIX_LABELS.forEach(({ key }) => {
-    const el = document.getElementById(`matrix-${key}`)
-      || document.querySelector(`input[type="checkbox"][data-matrix-key="${key}"]`);
-    if (el) el.checked = !!merged[key];
-  });
-}
-
-function loadLegacyScoringMatrixFromStorage() {
-  try {
-    const raw = localStorage.getItem(SCORING_MATRIX_KEY);
-    if (!raw) return null;
-    return normalizeStrategyMatrix(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-function loadScoringMatrixFromStorage() {
-  return getMatrixFromStrategyState('live');
-}
-
-async function postMatrixToServer(matrix) {
-  const payload = normalizeStrategyMatrix(matrix);
-  try {
-    await API.postMatrix(payload);
-  } catch (err) {
-    console.warn('Failed to sync scoring matrix:', err);
-  }
-}
-
-async function saveMatrixForContext(context = matrixModalContext) {
-  const matrix = collectMatrixFromUI();
-  const state = getStrategyState(context);
-  if (!state) return;
-  state.matrix = normalizeStrategyMatrix(matrix);
-  persistStrategyState(context);
-
-  if (context === 'live') {
-    await postMatrixToServer(state.matrix);
-  }
-}
-
-function openMatrixModal() {
-  matrixModalContext = getActiveStrategyContext();
-  applyMatrixToUI(getStrategyState(matrixModalContext).matrix);
-  const title = document.getElementById('matrix-modal-title');
-  if (title) {
-    title.textContent = matrixModalContext === 'backtest'
-      ? 'Signal Matrix (Backtest)'
-      : 'Signal Matrix (Live)';
-  }
-  const modal = document.getElementById('matrix-modal');
-  if (!modal) return;
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-}
-
-function closeMatrixModal() {
-  const modal = document.getElementById('matrix-modal');
-  if (!modal) return;
-  modal.classList.remove('open');
-  modal.setAttribute('aria-hidden', 'true');
-}
-
-function initScoringMatrix() {
-  const body = document.getElementById('matrix-modal-body');
-  if (!body) return;
-
-  if (!body.querySelector('[data-matrix-key]')) {
-    body.innerHTML = SCORING_MATRIX_LABELS.map(({ key, label }) => `
-      <label class="matrix-toggle">
-        <input type="checkbox" id="matrix-${key}" data-matrix-key="${key}" checked />
-        ${label}
-      </label>
-    `).join('');
-  }
-
-  applyMatrixToUI(liveStrategyState?.matrix || SCORING_MATRIX_DEFAULTS);
-
-  document.getElementById('matrix-open-btn')?.addEventListener('click', openMatrixModal);
-  document.getElementById('matrix-modal-close')?.addEventListener('click', closeMatrixModal);
-  document.getElementById('matrix-modal-backdrop')?.addEventListener('click', closeMatrixModal);
-  document.getElementById('matrix-save-btn')?.addEventListener('click', async () => {
-    try {
-      await saveMatrixForContext(matrixModalContext);
-      closeMatrixModal();
-    } catch (err) {
-      console.warn('Failed to save scoring matrix:', err);
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMatrixModal();
-  });
 }
 
 function estimateCandleIntervalSec(candles) {
@@ -3760,7 +2867,8 @@ function updateHeader(state) {
   if (state.timeframe || state.tradingTimeframe) {
     setTextIfChanged(
       document.getElementById('timeframe-label'),
-      tfLabel(state.timeframe || state.tradingTimeframe || currentTf),
+      TF_DISPLAY[state.timeframe || state.tradingTimeframe || currentTf]
+        || state.timeframe || state.tradingTimeframe || currentTf,
     );
   }
 
@@ -4425,11 +3533,9 @@ function safeInit(moduleName, fn) {
 }
 
 function boot() {
-  safeInit('strategy state', initStrategyState);
-  safeInit('threshold inputs', initThresholdInputs);
-  safeInit('tabs', initTabs);
-  safeInit('scoring matrix', initScoringMatrix);
-  safeInit('risk settings', initRiskSettings);
+  safeInit('UI strategy', () => StrategyController.init());
+  safeInit('UI tabs', () => TabsController.init());
+  safeInit('UI risk', () => RiskController.init());
   safeInit('equity chart', initEquityChart);
   safeInit('stats mode selector', initStatsModeSelector);
   safeInit('backtest', initBacktest);
@@ -4481,7 +3587,7 @@ function boot() {
             },
           });
           initRsxSettings();
-          initWozduhSettings();
+          WozduhController.init();
           initChartLegends();
           ChartAdapter.initRuler();
           initPaneResize();
@@ -4495,7 +3601,8 @@ function boot() {
         return;
       }
 
-      safeInit('toolbar/controls', () => initControls({ useServerTf: true }));
+      safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: true }));
+      safeInit('toolbar/controls', () => initControls());
       syncToolbarToActiveContext();
 
       if (isOrderFlowTf()) {
