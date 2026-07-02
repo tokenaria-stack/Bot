@@ -149,7 +149,7 @@ const NavigatorController = (() => {
   function resolveChartTfForNavigator(context) {
     if (context === 'backtest') {
       return normalizeTf(
-        document.getElementById('bt-interval')?.value || backtestTf || '15m',
+        BacktestController.getFormValues().interval || '15m',
       );
     }
     return normalizeTf(currentTf || TimeframeController.getActiveTfFromToolbar() || '15m');

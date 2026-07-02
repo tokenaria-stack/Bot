@@ -455,3 +455,14 @@
 {"data":{"klines":3006,"ms":8314,"source":"sqlite","tf":"3m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783017690797}
 {"data":{"klines":3019,"ms":8353,"source":"sqlite","tf":"1m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783017690836}
 {"data":{"cpus":8,"tfs":10,"totalMs":8354},"hypothesisId":"boot","location":"main.go:boot","message":"parallel boot complete","sessionId":"39f875","timestamp":1783017690836}
+{"data":{"klines":106,"ms":41,"source":"sqlite","tf":"1M"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018446954}
+{"data":{"klines":462,"ms":278,"source":"sqlite","tf":"1w"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018447191}
+{"data":{"klines":3000,"ms":7566,"source":"sqlite","tf":"30m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454479}
+{"data":{"klines":3000,"ms":7675,"source":"sqlite","tf":"4h"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454589}
+{"data":{"klines":2999,"ms":7720,"source":"sqlite","tf":"1h"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454634}
+{"data":{"klines":2999,"ms":7741,"source":"sqlite","tf":"15m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454654}
+{"data":{"klines":3000,"ms":7747,"source":"sqlite","tf":"1d"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454660}
+{"data":{"klines":3002,"ms":7752,"source":"sqlite","tf":"5m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454666}
+{"data":{"klines":3005,"ms":7891,"source":"sqlite","tf":"3m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454804}
+{"data":{"klines":3013,"ms":7957,"source":"sqlite","tf":"1m"},"hypothesisId":"boot","location":"main.go:boot","message":"tf boot complete","sessionId":"39f875","timestamp":1783018454870}
+{"data":{"cpus":8,"tfs":10,"totalMs":7957},"hypothesisId":"boot","location":"main.go:boot","message":"parallel boot complete","sessionId":"39f875","timestamp":1783018454870}

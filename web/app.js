@@ -189,7 +189,6 @@ let pendingHistoryLoad = null;
 let liveHistoryScrollArmed = false;
 /** Suppresses subscribeVisibleLogicalRangeChange history fetch during programmatic viewport updates. */
 let liveHistorySuppressRangeHook = false;
-let cachedSandboxMode = false;
 
 if (typeof window !== 'undefined') {
   window.__isSettingsUpdating = false;
@@ -439,6 +438,18 @@ function disarmLiveHistoryScroll() {
   pendingHistoryLoad = null;
 }
 
+function updateBufferingOverlay() {
+  ToolbarController.setBuffering(isOrderFlowTf() && (
+    liveStore.candleCount() < 5 ||
+    lastTickBufferLen < 500
+  ));
+}
+
+function syncLiveRsxToolbarFromOsc(pt) {
+  if (!pt) return;
+  ToolbarController.updateOscHeader(pt);
+}
+
 function attachLiveHistoryScrollArm() {
   const root = document.getElementById('live-chart-container');
   if (!root || root._historyScrollArmBound) return;
@@ -506,190 +517,6 @@ function endDataUpdate(delayMs = 50) {
 
 
 
-
-function validPaneFlexGrow(value, fallback) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-function loadPaneHeightsForStack(stackKey) {
-  const cfg = PANE_STACK_CONFIG[stackKey];
-  if (!cfg) return;
-  try {
-    const raw = localStorage.getItem(cfg.lsKey);
-    const defaults = cfg.defaults;
-    const h = raw ? JSON.parse(raw) : defaults;
-    const price = validPaneFlexGrow(h?.price, defaults.price);
-    const osc = validPaneFlexGrow(h?.osc, defaults.osc);
-    const rsx = validPaneFlexGrow(h?.rsx, defaults.rsx);
-    const priceEl = document.getElementById(cfg.price);
-    const oscEl = document.getElementById(cfg.osc);
-    const rsxEl = document.getElementById(cfg.rsx);
-    if (priceEl) priceEl.style.flex = `${price} 1 0`;
-    if (oscEl) oscEl.style.flex = `${osc} 1 0`;
-    if (rsxEl) rsxEl.style.flex = `${rsx} 1 0`;
-  } catch { /* noop */ }
-}
-
-function loadPaneHeights() {
-  loadPaneHeightsForStack('live');
-  loadPaneHeightsForStack('backtest');
-}
-
-function savePaneHeightsForStack(stackKey) {
-  const cfg = PANE_STACK_CONFIG[stackKey];
-  if (!cfg) return;
-  const priceEl = document.getElementById(cfg.price);
-  const oscEl = document.getElementById(cfg.osc);
-  const rsxEl = document.getElementById(cfg.rsx);
-  if (!priceEl || !oscEl || !rsxEl) return;
-  const price = parseFloat(getComputedStyle(priceEl).flexGrow) || cfg.defaults.price;
-  const osc = parseFloat(getComputedStyle(oscEl).flexGrow) || cfg.defaults.osc;
-  const rsx = parseFloat(getComputedStyle(rsxEl).flexGrow) || cfg.defaults.rsx;
-  localStorage.setItem(cfg.lsKey, JSON.stringify({ price, osc, rsx }));
-}
-
-function initPaneResize() {
-  document.querySelectorAll('.pane-resize').forEach((handle) => {
-    if (handle._paneResizeBound) return;
-    handle._paneResizeBound = true;
-    const stackKey = handle.dataset.paneStack || 'live';
-    const cfg = PANE_STACK_CONFIG[stackKey];
-    if (!cfg) return;
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const kind = handle.dataset.resize;
-      const priceWrap = document.getElementById(cfg.price);
-      const oscWrap = document.getElementById(cfg.osc);
-      const rsxWrap = document.getElementById(cfg.rsx);
-      if (!priceWrap || !oscWrap || !rsxWrap) return;
-
-      const startY = e.clientY;
-      const startPrice = priceWrap.getBoundingClientRect().height;
-      const startOsc = oscWrap.getBoundingClientRect().height;
-      const startRsx = rsxWrap.getBoundingClientRect().height;
-      handle.classList.add('dragging');
-
-      function onMove(ev) {
-        const dy = ev.clientY - startY;
-        const minH = 72;
-        if (kind === 'price-osc') {
-          const newPrice = Math.max(minH, startPrice + dy);
-          const newOsc = Math.max(minH, startOsc - dy);
-          priceWrap.style.flex = `0 0 ${newPrice}px`;
-          oscWrap.style.flex = `0 0 ${newOsc}px`;
-        } else if (kind === 'osc-rsx') {
-          const newOsc = Math.max(minH, startOsc + dy);
-          const newRsx = Math.max(minH, startRsx - dy);
-          oscWrap.style.flex = `0 0 ${newOsc}px`;
-          rsxWrap.style.flex = `0 0 ${newRsx}px`;
-        }
-        resizeAllCharts();
-      }
-
-      function onUp() {
-        handle.classList.remove('dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        const price = priceWrap.getBoundingClientRect().height;
-        const osc = oscWrap.getBoundingClientRect().height;
-        const rsx = rsxWrap.getBoundingClientRect().height;
-        priceWrap.style.flex = `${price} 1 0`;
-        oscWrap.style.flex = `${osc} 1 0`;
-        rsxWrap.style.flex = `${rsx} 1 0`;
-        savePaneHeightsForStack(stackKey);
-        resizeAllCharts();
-      }
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
-}
-
-function initControls() {
-  const toggles = {
-    'tog-jurik': 'rsx',
-    'tog-volume': 'volume',
-  };
-
-  Object.entries(toggles).forEach(([id, seriesKey]) => {
-    const el = document.getElementById(id);
-    if (!el) {
-      console.warn(`[initControls] #${id} not found`);
-      return;
-    }
-    const applyVisibility = () => {
-      el.closest('.ind-toggle')?.classList.toggle('active', el.checked);
-      ChartAdapter.setToggleSeriesVisible('live', seriesKey, el.checked);
-    };
-    applyVisibility();
-    el.addEventListener('change', applyVisibility);
-  });
-
-  const togSpike = document.getElementById('tog-spike');
-  if (togSpike) {
-    togSpike.addEventListener('change', (e) => {
-      e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-      ChartAdapter.applyAllMarkers();
-    });
-  } else {
-    console.warn('[initControls] #tog-spike not found');
-  }
-
-  const togFib = document.getElementById('tog-fib');
-  if (togFib) {
-    togFib.addEventListener('change', (e) => {
-      e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-      ChartAdapter.renderFib(lastFibZones);
-    });
-  } else {
-    console.warn('[initControls] #tog-fib not found');
-  }
-
-  const rulerBtn = document.getElementById('ruler-btn');
-  if (rulerBtn) {
-    rulerBtn.addEventListener('click', toggleRuler);
-  } else {
-    console.warn('[initControls] #ruler-btn not found');
-  }
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (document.querySelector('.fullscreen-pane')) {
-      exitFullscreenPane();
-      return;
-    }
-    if (ruler.active) resetRuler();
-  });
-
-  const chartTypeGroup = document.getElementById('chart-type-group');
-  if (chartTypeGroup) {
-    chartTypeGroup.querySelectorAll('.seg-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        ChartAdapter.setChartType(btn.dataset.chart);
-        chartTypeGroup.querySelectorAll('.seg-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
-  } else {
-    console.warn('[initControls] #chart-type-group not found');
-  }
-
-  document.getElementById('btn-clear-cache')?.addEventListener('click', async () => {
-    if (!confirm('Очистить кэш базы данных и памяти на сервере?')) return;
-    try {
-      const resp = await fetch('/api/cache/clear', { method: 'POST' });
-      if (resp.ok) {
-        alert('Кэш успешно очищен!');
-      } else {
-        alert('Ошибка очистки: ' + await resp.text());
-      }
-    } catch (err) {
-      console.error('Ошибка:', err);
-    }
-  });
-}
 
 function hidePanelSettingsMenus() {
   RsxController.hideMenus();
@@ -866,15 +693,6 @@ function initFloatingMenuDrag(menu) {
   });
 }
 
-function notifyChartsLayoutChange() {
-  requestAnimationFrame(() => {
-    ChartAdapter.handleResize();
-    try {
-      window.dispatchEvent(new Event('resize'));
-    } catch { /* noop */ }
-  });
-}
-
 function resetBacktestClientCacheForTfChange() {
   backtestStore.clear();
   backtestNavigatorChartLines = [];
@@ -983,16 +801,6 @@ function isOrderFlowTf(tf) {
   return /^\d+s$/.test(id);
 }
 
-function updateBufferingOverlay() {
-  const el = document.getElementById('orderflow-buffer');
-  if (!el) return;
-  const buffering = isOrderFlowTf() && (
-    liveStore.candleCount() < 5 ||
-    lastTickBufferLen < 500
-  );
-  el.style.display = buffering ? 'flex' : 'none';
-}
-
 function wsSubscribeTf(tf) {
   WS.subscribe(tf, resolveTf(tf) || currentTf);
 }
@@ -1047,54 +855,6 @@ function applyPriceBar(bar) {
   const delta = liveStore.getLatestDeltaForChart();
   ChartAdapter.applyDelta('live', delta);
 }
-
-function fmt(v) {
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '—';
-}
-
-function fmtPrice(v) {
-  return typeof v === 'number' && Number.isFinite(v)
-    ? v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-    : '—';
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function fmtVolume(v) {
-  if (!Number.isFinite(v) || v <= 0) return '—';
-  if (v >= 1e9) return `${(v / 1e9).toFixed(2)} B`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(2)} M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(2)} K`;
-  return v.toFixed(2);
-}
-
-
-function updateVolumeLabel(candles) {
-  const el = document.getElementById('volume-val');
-  if (!el || !candles?.length) return;
-  const last = candles[candles.length - 1];
-  el.textContent = fmtVolume(last.volume);
-  el.style.color = last.close >= last.open ? TV.green : TV.red;
-}
-
-
-
-
-
-
-
-
 
 function mergeAnnotations(existing, incoming) {
   const map = new Map();
@@ -1379,62 +1139,6 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
   }
 }
 
-function setTextIfChanged(el, next) {
-  if (el && el.textContent !== next) el.textContent = next;
-}
-
-function updateHeader(state) {
-  if (!state) return;
-
-  if (typeof state.sandboxMode !== 'undefined') {
-    cachedSandboxMode = !!state.sandboxMode;
-  }
-  const isSandbox = typeof state.sandboxMode !== 'undefined'
-    ? !!state.sandboxMode
-    : cachedSandboxMode;
-
-  if (state.symbol) {
-    setTextIfChanged(document.getElementById('symbol'), state.symbol || 'BTCUSDT');
-  }
-  if (state.timeframe || state.tradingTimeframe) {
-    setTextIfChanged(
-      document.getElementById('timeframe-label'),
-      TF_DISPLAY[state.timeframe || state.tradingTimeframe || currentTf]
-        || state.timeframe || state.tradingTimeframe || currentTf,
-    );
-  }
-
-  if ('volatilityRegime' in state) {
-    const regime = state.volatilityRegime || '';
-    const regimeEl = document.getElementById('regime');
-    if (regimeEl) {
-      setTextIfChanged(regimeEl, regime || '—');
-      const regimeClass = regime ? `regime meta-val ${regime}` : 'regime meta-val';
-      if (regimeEl.className !== regimeClass) regimeEl.className = regimeClass;
-    }
-  }
-
-  if (state.jurik != null) {
-    setTextIfChanged(document.getElementById('jurik-val'), fmt(state.jurik));
-  }
-  if (state.redLine != null) {
-    setTextIfChanged(document.getElementById('red-val'), fmt(state.redLine));
-  }
-  if (state.greenLine != null) {
-    setTextIfChanged(document.getElementById('green-val'), fmt(state.greenLine));
-  }
-
-  const sandboxEl = document.getElementById('sandbox-badge');
-  if (sandboxEl) {
-    if (sandboxEl.classList.contains('active') !== isSandbox) {
-      sandboxEl.classList.toggle('active', isSandbox);
-    }
-  }
-}
-
-
-
-
 function applySeriesData(options = {}) {
   const {
     isPrepend = false,
@@ -1502,13 +1206,14 @@ function applyLatestOscPoint(pt) {
     pt = { ...pt, time: latestCandleTime };
   }
   liveStore.upsertOscPoint(pt);
+  syncLiveRsxToolbarFromOsc(pt);
   const delta = liveStore.getLatestDeltaForChart();
   ChartAdapter.applyDelta('live', delta);
 }
 
 function renderState(data, options = {}) {
   syncTradingTimeframeFromState(data);
-  updateHeader(data);
+  ToolbarController.updateHeaderData(data);
   if (typeof data.tickBufferLen === 'number') {
     lastTickBufferLen = data.tickBufferLen;
   }
@@ -1518,6 +1223,8 @@ function renderState(data, options = {}) {
     oscillators: data.oscillators || [],
     annotations: data.annotations,
   });
+  const oscPts = data.oscillators || [];
+  if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
   const storeData = liveStore.getForLightweightCharts();
   const candles = storeData.candles;
   const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
@@ -1610,7 +1317,7 @@ async function pollLatestState() {
     if (!shouldRunLivePoll()) return;
     if (warmingUp || !data.candles?.length) return;
 
-    updateHeader({ jurik: data.jurik, redLine: data.redLine, greenLine: data.greenLine });
+    ToolbarController.updateHeaderData({ jurik: data.jurik, redLine: data.redLine, greenLine: data.greenLine });
 
     const candles = toCandles(data.candles);
     const latest = candles[candles.length - 1];
@@ -1639,10 +1346,7 @@ async function pollLatestState() {
         pt = { ...pt, time: latestCandleTime };
       }
       liveStore.upsertOscPoint(pt);
-      const rsxVal = parseFloat(pt.rsx ?? pt.jurik);
-      setTextIfChanged(document.getElementById('jurik-val'), fmt(rsxVal));
-      setTextIfChanged(document.getElementById('red-val'), fmt(pt.redLine));
-      setTextIfChanged(document.getElementById('green-val'), fmt(pt.greenLine));
+      syncLiveRsxToolbarFromOsc(pt);
     }
 
     const delta = liveStore.getLatestDeltaForChart();
@@ -1890,9 +1594,9 @@ function handleLiveTick(d) {
   if (time == null) return;
 
   if (isLiveTf()) {
-    updateHeader({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
+    ToolbarController.updateHeaderData({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
     if (d.isClosed && d.volatilityRegime) {
-      updateHeader({ volatilityRegime: d.volatilityRegime });
+      ToolbarController.updateHeaderData({ volatilityRegime: d.volatilityRegime });
     }
   }
 
@@ -1983,7 +1687,7 @@ function setRulerCursor(active) {
 function toggleRuler() {
   ruler.active = !ruler.active;
   ruler.chartData = ChartAdapter.getChartHandle(isBacktestTabActive() ? 'backtest' : 'live');
-  document.getElementById('ruler-btn')?.classList.toggle('active', ruler.active);
+  ToolbarController.setRulerActive(ruler.active);
   setRulerCursor(ruler.active);
   if (!ruler.active) resetRuler();
 }
@@ -2088,6 +1792,8 @@ function boot() {
     BacktestController.onIntervalChange((tf) => handleBacktestIntervalChange(tf));
     backtestTf = getBacktestInterval();
   });
+  safeInit('UI toolbar', () => ToolbarController.init());
+  safeInit('UI layout', () => LayoutController.init());
 
   (async () => {
     try {
@@ -2100,7 +1806,11 @@ function boot() {
       try {
         chartsReady = ChartAdapter.initLiveCharts(LIVE_CHART_SELECTORS, {
           shouldPaint: shouldPaintLiveChart,
-          onAfterDelta: updateBufferingOverlay,
+          onAfterDelta: () => {
+            updateBufferingOverlay();
+            const osc = liveStore.getForLightweightCharts().osc;
+            if (osc?.length) syncLiveRsxToolbarFromOsc(osc[osc.length - 1]);
+          },
           crosshairPriceSeries: () => {
             const t = ChartAdapter.getChartType();
             const h = ChartAdapter.getChartHandle('live');
@@ -2136,8 +1846,6 @@ function boot() {
           WozduhController.init();
           NavigatorController.initLegends();
           ChartAdapter.initRuler();
-          initPaneResize();
-          loadPaneHeights();
         }
       } catch (err) {
         console.error('Failed to init charts:', err);
@@ -2148,7 +1856,6 @@ function boot() {
       }
 
       safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: true }));
-      safeInit('toolbar/controls', () => initControls());
       syncToolbarToActiveContext();
 
       if (isOrderFlowTf()) {

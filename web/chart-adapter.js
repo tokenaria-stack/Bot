@@ -276,13 +276,6 @@ function applyOscPointDelta(oscPt, chartData = _live) {
     if (chartData.rsxSignalSeries && Number.isFinite(signalVal)) {
       chartData.rsxSignalSeries.update({ time, value: signalVal });
     }
-    if (_chartContext(chartData) === 'live') {
-      const rsxEl = document.getElementById('rsx-val');
-      if (rsxEl) {
-        rsxEl.textContent = rsxVal.toFixed(1);
-        rsxEl.style.color = ptColor;
-      }
-    }
   }
 }
 
@@ -1346,15 +1339,6 @@ function applyRsxData(osc, chartData = _live, annotations = null) {
     true,
   );
   applyUniversalAnnotations(getChartAnnotationPanes(chartData), resolved, seriesTimesByPane, { showPivots });
-
-  if (_chartContext(chartData) === 'live') {
-    const last = mappedRSX.length ? mappedRSX[mappedRSX.length - 1] : null;
-    const rsxEl = document.getElementById('rsx-val');
-    if (rsxEl && last) {
-      rsxEl.textContent = Number.isFinite(last.value) ? last.value.toFixed(1) : '—';
-      rsxEl.style.color = last.color || RSX_DEFAULT_COLOR;
-    }
-  }
 }
 
 function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = _live) {
@@ -1382,18 +1366,10 @@ function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = _live
       { showPivots },
     );
   }
-
-  if (chartData === _live) {
-    const rsxEl = document.getElementById('rsx-val');
-    if (rsxEl) {
-      rsxEl.textContent = value.toFixed(1);
-      rsxEl.style.color = ptColor;
-    }
-  }
 }
 
 function applyAllMarkers() {
-  const showSpike = document.getElementById('tog-spike').checked;
+  const showSpike = ToolbarController.isSpikeEnabled();
   const combined = [...tradeMarkers];
   if (showSpike) combined.push(...spikeMarkers);
   combined.sort((a, b) => a.time - b.time);
@@ -1403,7 +1379,7 @@ function applyAllMarkers() {
 function renderFibZones(zones) {
   lastFibZones = zones || [];
   clearFibLines();
-  if (!document.getElementById('tog-fib').checked) return;
+  if (!ToolbarController.isFibEnabled()) return;
   lastFibZones.forEach((z) => {
     if (!z.isActive || !Number.isFinite(z.price)) return;
     const color = z.ratio === 0.618 ? '#e3b341' : 'rgba(120,123,134,0.7)';
@@ -1790,7 +1766,7 @@ function updateAllPriceSeries(bar) {
       value: normalized.volume,
       color: normalized.close >= normalized.open ? CHART_STYLES.volumeBar.upColor : CHART_STYLES.volumeBar.downColor,
     });
-    updateVolumeLabel(liveStore.candleCount() ? liveStore.getForLightweightCharts().candles : [normalized]);
+    ToolbarController.updateVolume(liveStore.candleCount() ? liveStore.getForLightweightCharts().candles : [normalized]);
   }
   if (tradeMarkers.length > 0) {
     applyAllMarkers();
@@ -1821,6 +1797,12 @@ function attachRulerToChart(chartData) {
   chartData._rulerClickHandler = clickHandler;
   chartData._rulerMoveHandler = moveHandler;
   chartData.rulerAttached = true;
+}
+
+function fmtPrice(v) {
+  return typeof v === 'number' && Number.isFinite(v)
+    ? v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    : '—';
 }
 
 function updateRulerOverlay(chartData) {
@@ -1884,8 +1866,8 @@ function _applyFullDataInternal(context, storeData, options = {}) {
   const chartData = _ctxData(context);
   if (!chartData?.candleSeries) return;
   applyPriceToChart(chartData, storeData.candles, options);
-  if (context === 'live' && typeof updateVolumeLabel === 'function') {
-    updateVolumeLabel(storeData.candles);
+  if (context === 'live' && typeof ToolbarController !== 'undefined') {
+    ToolbarController.updateVolume(storeData.candles);
   }
   applyOscillatorToChart(chartData, storeData.osc, storeData.annotations);
   const wozPrefs = options.wozduhPrefs;
@@ -1938,7 +1920,7 @@ function applyWozduhVisibilityFromPrefs(chartData, prefs) {
 }
 
 function applyAllMarkersFromState() {
-  const showSpike = document.getElementById('tog-spike')?.checked;
+  const showSpike = ToolbarController.isSpikeEnabled();
   const combined = [..._tradeMarkers];
   if (showSpike) combined.push(..._spikeMarkers);
   combined.sort((a, b) => a.time - b.time);
@@ -1955,7 +1937,7 @@ function _applyDeltaInternal(context, delta, options = {}) {
       const candles = liveStore.getForLightweightCharts().candles;
       setAllPriceData(candles);
       _live.volumeSeries?.setData(toVolumeBars(candles));
-      if (typeof updateVolumeLabel === 'function') updateVolumeLabel(candles);
+      if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
     } else {
       updateAllPriceSeries(delta.candle);
     }
@@ -2241,7 +2223,7 @@ const ChartAdapter = {
     const candles = storeData.candles;
     if (!_shouldPaint('live')) return;
     applyPriceToChart(_live, candles);
-    if (typeof updateVolumeLabel === 'function') updateVolumeLabel(candles);
+    if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
     applyOscillatorToChart(_live, storeData.osc, storeData.annotations);
     applyWozduhVisibilityToChart(_live, 'live');
     _spikeMarkers = buildSpikeMarkers(storeData.osc);
