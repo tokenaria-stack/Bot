@@ -554,40 +554,10 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      flex: 0 0 58px;
-      width: 58px;
+      flex: 0 0 16px;
+      width: 16px;
+      font-weight: 600;
     }
-
-    #hdr-score-long,
-    #hdr-score-short {
-      display: inline-block;
-      flex: 0 0 4ch;
-      width: 4ch;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    #hdr-score-long { color: #089981; font-weight: 700; }
-    #hdr-score-short { color: #f23645; font-weight: 700; }
-
-    .mini-bar-bg {
-      width: 56px;
-      height: 8px;
-      background: #2b313f;
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .mini-bar-fill {
-      height: 100%;
-      width: 100%;
-      transform: scaleX(0);
-      transform-origin: left center;
-      will-change: transform;
-    }
-
-    .long-fill { background: #089981; }
-    .short-fill { background: #f23645; }
 
     .mini-input {
       width: 42px;
@@ -752,67 +722,7 @@
       padding: 4px 4px 0;
     }
 
-    /* ── Console drawer (overlay) ── */
-    .console-drawer {
-      position: fixed;
-      left: 8px;
-      right: 8px;
-      bottom: 8px;
-      height: 160px;
-      max-height: 35vh;
-      background: rgba(13, 17, 23, 0.94);
-      border: 1px solid var(--tv-border);
-      border-radius: 6px;
-      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
-      z-index: 600;
-      display: flex;
-      flex-direction: column;
-      backdrop-filter: blur(6px);
-    }
-
-    .console-drawer[hidden] { display: none !important; }
-
-    .console-drawer-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 10px;
-      border-bottom: 1px solid var(--tv-border);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--tv-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      flex-shrink: 0;
-    }
-
-    .console-drawer-close {
-      background: none;
-      border: none;
-      color: var(--tv-muted);
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
-      padding: 0 4px;
-    }
-
-    .console-drawer-close:hover { color: #fff; }
-
-    #backtest-logs {
-      flex: 1;
-      min-height: 0;
-      margin: 0;
-      padding: 8px 10px;
-      overflow: auto;
-      background: transparent;
-      border: none;
-      color: #9db0cb;
-      font-size: 11px;
-      line-height: 1.45;
-      white-space: pre-wrap;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-
+    /* ── Statistics tab ── */
     .pro-chart-root {
       flex: 1;
       display: flex;
@@ -1181,22 +1091,19 @@
     <div class="command-sep"></div>
 
     <div class="command-cluster">
-      <span class="status-badge idle" id="bot-status">IDLE</span>
       <span id="sandbox-badge" class="sandbox-badge">SANDBOX</span>
     </div>
 
     <div class="command-cluster score-block">
       <div class="score-row">
-        <span class="score-label">L <span id="hdr-score-long">0</span></span>
-        <div class="mini-bar-bg"><div class="mini-bar-fill long-fill" id="bar-long"></div></div>
+        <span class="score-label">L</span>
         <input type="number" id="ui-threshold-long" value="70" min="10" max="200" step="5" class="mini-input" title="Long threshold" />
       </div>
     </div>
 
     <div class="command-cluster score-block">
       <div class="score-row">
-        <span class="score-label">S <span id="hdr-score-short">0</span></span>
-        <div class="mini-bar-bg"><div class="mini-bar-fill short-fill" id="bar-short"></div></div>
+        <span class="score-label">S</span>
         <input type="number" id="ui-threshold-short" value="70" min="10" max="200" step="5" class="mini-input" title="Short threshold" />
       </div>
     </div>
@@ -1267,9 +1174,6 @@
     </form>
 
     <div class="command-spacer"></div>
-
-    <button type="button" class="btn-ghost" id="facts-toggle" title="Order facts / scoring telemetry">Facts</button>
-    <button type="button" class="btn-ghost" id="console-toggle" title="Backtest console">Console</button>
   </div>
 
   <div class="toolbar">
@@ -1315,13 +1219,6 @@
     </div>
   </div>
 
-  <div class="telemetry-bar-wrap" id="telemetry-bar-wrap">
-    <div class="card" id="scoring-telemetry-card">
-      <div id="telemetry-compact-line" class="telemetry-compact-line" aria-live="polite">
-        <span class="telemetry-idle">—</span>
-      </div>
-    </div>
-  </div>
   </header>
 
   <main class="workspace-main" id="workspace-main">
@@ -1359,7 +1256,6 @@
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
-            <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="volChan" checked /> Голубой — RSI(vol) Канал</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
           </div>
         <div id="osc-container"></div>
@@ -1504,7 +1400,6 @@
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
-                  <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="volChan" checked /> Голубой — RSI(vol) Канал</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
                 </div>
               <div id="bt-osc-container"></div>
@@ -1575,19 +1470,9 @@
       <div class="matrix-modal-body" id="matrix-modal-body">
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useRSX" data-matrix-key="useRSX" checked /> RSX L / S markers (+35/+45)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhCross" data-matrix-key="useWozduhCross" checked /> Wozduh vol cross lime/red (+35)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useRedCross" data-matrix-key="useRedCross" checked /> Red × Green cross (+35)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometry" data-matrix-key="useGeometry" checked /> Geometry breakout (+30)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryBounce" data-matrix-key="useGeometryBounce" checked /> Geometry bounce (+25)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useGeometryTriangle" data-matrix-key="useGeometryTriangle" checked /> Geometry triangle (+10)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useHTFOscillators" data-matrix-key="useHTFOscillators" checked /> HTF RSX &amp; Wozduh (walk-forward MTF, +20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useDivergence" data-matrix-key="useDivergence" checked /> Divergence score (±)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useFib" data-matrix-key="useFib" checked /> Fib 0.618 active (+20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useExpRegime" data-matrix-key="useExpRegime" checked /> Regime EXPANSION (+15)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useJurikTrend" data-matrix-key="useJurikTrend" checked /> Jurik tailwind (+15/+20)</label>
         <label class="matrix-toggle"><input type="checkbox" id="matrix-useWozduhSpike" data-matrix-key="useWozduhSpike" checked /> Wozduh volume spike (+15)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAD" data-matrix-key="useAD" checked /> AD accumulation / distribution (+20)</label>
-        <label class="matrix-toggle"><input type="checkbox" id="matrix-useAOCross" data-matrix-key="useAOCross" checked /> AO cross zero (+15)</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useTrendlines" data-matrix-key="useTrendlines" checked /> Trendlines breakout signals</label>
+        <label class="matrix-toggle"><input type="checkbox" id="matrix-useJurikTrend" data-matrix-key="useJurikTrend" checked /> Jurik tailwind (+15/+20)</label>
       </div>
       <div class="matrix-modal-footer">
         <button type="button" class="matrix-save-btn" id="matrix-save-btn">Save</button>
@@ -1799,16 +1684,7 @@
     </div>
   </div>
 
-  <div id="console-drawer" class="console-drawer" hidden>
-    <div class="console-drawer-header">
-      <span>Backtest Console</span>
-      <button type="button" class="console-drawer-close" id="console-close" aria-label="Close">×</button>
-    </div>
-    <pre id="backtest-logs">Ready. Configure parameters and click Run.</pre>
-  </div>
-
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="/indicators_dormant.js"></script>
   <script src="/trendline_plugin.js"></script>
   <script src="/trade_marker_plugin.js"></script>
   <script src="/viewport.js"></script>

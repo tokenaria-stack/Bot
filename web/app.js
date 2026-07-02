@@ -21,37 +21,17 @@ const DEFAULT_STRATEGY_THRESHOLDS = { long: 70, short: 70 };
 const SCORING_MATRIX_DEFAULTS = {
   useRSX: false,
   useWozduhCross: false,
-  useRedCross: false,
-  useGeometry: false,
-  useGeometryBounce: false,
-  useGeometryTriangle: false,
   useTrendlines: false,
-  useHTFOscillators: false,
-  useDivergence: false,
-  useFib: false,
-  useExpRegime: false,
   useJurikTrend: false,
   useWozduhSpike: false,
-  useAD: false,
-  useAOCross: false,
 };
 
 const SCORING_MATRIX_LABELS = [
   { key: 'useRSX', label: 'RSX L / S markers (+35/+45)' },
   { key: 'useWozduhCross', label: 'Wozduh vol cross lime/red (+35)' },
-  { key: 'useRedCross', label: 'Red × Green cross (+35)' },
-  { key: 'useGeometry', label: 'Geometry breakout (+30)' },
-  { key: 'useGeometryBounce', label: 'Geometry bounce (+25)' },
-  { key: 'useGeometryTriangle', label: 'Geometry triangle (+10)' },
-  { key: 'useTrendlines', label: 'Trendlines breakout signals' },
-  { key: 'useHTFOscillators', label: 'HTF RSX & Wozduh (walk-forward MTF, +20)' },
-  { key: 'useDivergence', label: 'Divergence score (±)' },
-  { key: 'useFib', label: 'Fib 0.618 active (+20)' },
-  { key: 'useExpRegime', label: 'Regime EXPANSION (+15)' },
-  { key: 'useJurikTrend', label: 'Jurik tailwind (+15/+20)' },
   { key: 'useWozduhSpike', label: 'Wozduh volume spike (+15)' },
-  { key: 'useAD', label: 'AD accumulation / distribution (+20)' },
-  { key: 'useAOCross', label: 'AO cross zero (+15)' },
+  { key: 'useTrendlines', label: 'Trendlines breakout signals' },
+  { key: 'useJurikTrend', label: 'Jurik tailwind (+15/+20)' },
 ];
 
 let liveStrategyState = null;
@@ -198,7 +178,6 @@ const chartLegendState = {
   backtest: { price: {}, wozduh: {}, rsx: {} },
 };
 
-let factsBarUserVisible = false;
 let openNavigatorPopupEl = null;
 
 function defaultNavigatorPaneSettings(pane = 'price') {
@@ -674,14 +653,14 @@ async function triggerNavigatorAutoUpdate() {
   if (context === 'live') {
     const viewportSnapshot = captureLiveViewportSnapshot();
     await syncLiveNavigatorSettingsToServer();
-    if (chartInitialized && loadedCandles.length > 0 && shouldPaintLiveChart()) {
+    if (chartInitialized && liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
       await refreshLiveNavigatorFromServer(viewportSnapshot);
     } else {
       await loadDashboard({ preserveViewport: viewportSnapshot });
     }
     return;
   }
-  await flushIndicatorSettingsAutoUpdate();
+  buildFinalBacktestPayload();
 }
 
 async function refreshLiveNavigatorFromServer(viewportSnapshot) {
@@ -695,7 +674,7 @@ async function refreshLiveNavigatorFromServer(viewportSnapshot) {
     try {
       applyNavigatorOverlays(
         { navigators: liveNavigatorResult },
-        loadedCandles,
+        liveStore.getForLightweightCharts().candles,
         liveChartData,
         { context: 'live', updateLoadedCandles: false },
       );
@@ -869,12 +848,11 @@ function initNavigatorPopupOkHandlers() {
       popup.hidden = true;
       if (openNavigatorPopupEl === popup) openNavigatorPopupEl = null;
 
-      if (getNavigatorContext() === 'backtest') {
-        setBacktestLoading(true);
+      if (getNavigatorContext() === 'live') {
+        flushNavigatorAutoUpdate().catch((err) => {
+          console.error('[UI] Navigator Ok pipeline failed:', err);
+        });
       }
-      flushNavigatorAutoUpdate().catch((err) => {
-        console.error('[UI] Navigator Ok pipeline failed:', err);
-      });
     } catch (err) {
       console.error('[UI] Navigator popup Ok failed:', err);
     }
@@ -1397,8 +1375,6 @@ const LS_FAV_KEY = 'dashboard_tf_favorites';
 const LS_TF_KEY = 'dashboard_tf_current';
 const LS_PANE_KEY = 'dashboard_pane_heights';
 const LS_PANE_KEY_BT = 'dashboard_pane_heights_bt';
-const LS_FACTS_BAR_KEY = 'dashboard_facts_bar_visible';
-const INSPECTOR_CLICK_DELAY_MS = 280;
 const LS_RSX_SETTINGS_LIVE_KEY = 'dashboard_rsx_settings_live';
 const LS_RSX_SETTINGS_BACKTEST_KEY = 'dashboard_rsx_settings_backtest';
 const LS_RSX_LOOKBACK_KEY = 'dashboard_rsx_lookback';
@@ -1546,24 +1522,6 @@ function ensureChartLibraryStyles() {
     rsiHl2: { color: 'purple', lineWidth: 2, title: 'RSI(HL2)', priceLineVisible: false, lastValueVisible: false },
     rsiVolFast: { color: 'blue', lineWidth: 2, title: 'wt11 (Blue)', priceLineVisible: false, lastValueVisible: false },
     rsiVolSlow: { color: 'aqua', lineWidth: 2, title: 'wt22 (Aqua)', priceLineVisible: false, lastValueVisible: false },
-    volChanMid: { color: 'orange', lineWidth: 2, title: 'Vol Chan Mid', priceLineVisible: false, lastValueVisible: false },
-    volChanUp: {
-      color: '#00FA9A',
-      lineWidth: 1,
-      lineStyle: LC.LineStyle.Dashed,
-      title: 'Vol Chan Up',
-      priceLineVisible: false,
-      lastValueVisible: false,
-    },
-    volChanDn: {
-      color: '#00FA9A',
-      lineWidth: 1,
-      lineStyle: LC.LineStyle.Dashed,
-      title: 'Vol Chan Dn',
-      priceLineVisible: false,
-      lastValueVisible: false,
-    },
-    ...(window.DormantIndicators?.WOZDUX_DORMANT_LINE_STYLES || {}),
   },
 };
 
@@ -1611,10 +1569,6 @@ function ensureChartLibraryStyles() {
       wozduh_wt2: { dataKey: 'rsiVolSlow', style: CHART_STYLES.wozdux.rsiVolSlow },
       rsiPrice: { dataKey: 'rsiPrice', style: CHART_STYLES.wozdux.rsiPrice },
       rsiHl2: { dataKey: 'rsiHl2', style: CHART_STYLES.wozdux.rsiHl2 },
-      volChanMid: { dataKey: 'volChanMid', style: CHART_STYLES.wozdux.volChanMid },
-      volChanUp: { dataKey: 'volChanUp', style: CHART_STYLES.wozdux.volChanUp },
-      volChanDn: { dataKey: 'volChanDn', style: CHART_STYLES.wozdux.volChanDn },
-      ...(window.DormantIndicators?.WOZDUH_DORMANT_LINE_CONFIG || {}),
     },
     markerSeriesKey: 'rsiVolSlow',
     levels: CHART_STYLES.wozduhLevels,
@@ -1658,8 +1612,6 @@ const WOZDUH_MENU_ITEMS = [
   { prefKey: 'rsiPrice', keys: ['rsiPrice'], default: true },
   { prefKey: 'rsiHl2', keys: ['rsiHl2'], default: true },
   { prefKey: 'rsiVol', keys: ['rsiVolFast', 'rsiVolSlow'], default: true },
-  { prefKey: 'volChan', keys: ['volChanMid', 'volChanUp', 'volChanDn'], default: true },
-  ...((window.DormantIndicators && window.DormantIndicators.WOZDUH_DORMANT_MENU_ITEMS) || []),
 ];
 
 function withSeriesDefaults(style) {
@@ -1799,7 +1751,6 @@ let liveChartData = {};
 let backtestChartData = {};
 
 const LOGICAL_RANGE_EPS = 0.01;
-let backtestLoadedCandles = [];
 let backtestNavigatorChartLines = [];
 let backtestNavigatorChartMarkers = [];
 let liveNavigatorResult = null;
@@ -1810,7 +1761,6 @@ let equityChart;
 let equitySeries;
 let lastBacktestResult = null;
 let statsMode = 'backtest';
-let lastTelemetrySignature = '';
 let backtestAbortController = null;
 let backtestRunActive = false;
 
@@ -1821,9 +1771,6 @@ let sessionTrades = [];
 let spikeMarkers = [];
 let fibPriceLines = [];
 let lastFibZones = [];
-let loadedCandles = [];
-let loadedOsc = [];
-let liveAnnotations = [];
 let currentTf = '1m';
 let backendTradingTimeframe = null;
 let tradingTimeframeSynced = false;
@@ -1853,8 +1800,6 @@ let liveHistoryScrollArmed = false;
 /** Suppresses subscribeVisibleLogicalRangeChange history fetch during programmatic viewport updates. */
 let liveHistorySuppressRangeHook = false;
 const LIVE_HISTORY_SCROLL_THRESHOLD = 50;
-let lastScoringData = null;
-let liveScoringData = null;
 let cachedSandboxMode = false;
 
 if (typeof window !== 'undefined') {
@@ -1862,11 +1807,203 @@ if (typeof window !== 'undefined') {
   window.__pendingAnchor = null;
 }
 
+class ChartDataStore {
+  constructor(context) {
+    this.context = context;
+    this.candles = new Map(); // Map<ms, Candle>
+    this.osc = new Map(); // Map<ms, OscPoint>
+    // Map<ms, Map<text, Annotation>>
+    this.annotations = new Map();
+  }
+
+  static toMs(t) {
+    const n = Number(t);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
+  }
+
+  static msToChartSec(ms) {
+    return Math.floor(ms / 1000);
+  }
+
+  clear() {
+    this.candles.clear();
+    this.osc.clear();
+    this.annotations.clear();
+  }
+
+  candleCount() {
+    return this.candles.size;
+  }
+
+  sortedCandleTimesMs() {
+    return Array.from(this.candles.keys()).sort((a, b) => a - b);
+  }
+
+  firstCandleTimeSec() {
+    const times = this.sortedCandleTimesMs();
+    return times.length ? ChartDataStore.msToChartSec(times[0]) : null;
+  }
+
+  lastCandleTimeSec() {
+    const times = this.sortedCandleTimesMs();
+    return times.length ? ChartDataStore.msToChartSec(times[times.length - 1]) : null;
+  }
+
+  lastCandleChartSec() {
+    const times = this.sortedCandleTimesMs();
+    if (!times.length) return null;
+    const ms = times[times.length - 1];
+    const bar = this.candles.get(ms);
+    if (!bar) return null;
+    return { ...bar, time: ChartDataStore.msToChartSec(ms) };
+  }
+
+  annotationCount() {
+    let count = 0;
+    this.annotations.forEach((textMap) => { count += textMap.size; });
+    return count;
+  }
+
+  _ingestAnnotations(annArray, anchorMs = null) {
+    if (!Array.isArray(annArray)) return;
+    annArray.forEach((a) => {
+      const ms = ChartDataStore.toMs(a.time ?? a.Time);
+      if (!ms) return;
+      if (anchorMs != null && ms >= anchorMs) return;
+      const text = (a.text ?? a.label ?? a.Label ?? '').trim().substring(0, 2);
+      if (!text) return;
+
+      if (!this.annotations.has(ms)) this.annotations.set(ms, new Map());
+      this.annotations.get(ms).set(text, { ...a, timeMs: ms, text });
+    });
+  }
+
+  _ingestCandle(c, { allowOverwrite = true, anchorMs = null } = {}) {
+    const bar = normalizeCandle(c);
+    if (!bar) return;
+    const ms = ChartDataStore.toMs(bar.time);
+    if (!ms) return;
+    if (anchorMs != null && ms >= anchorMs) return;
+    if (!allowOverwrite && this.candles.has(ms)) return;
+    this.candles.set(ms, { ...bar, timeMs: ms });
+  }
+
+  _ingestOsc(o, { allowOverwrite = true, anchorMs = null } = {}) {
+    const norm = normalizeOscPoint(o);
+    if (!norm) return;
+    const ms = ChartDataStore.toMs(norm.time);
+    if (!ms) return;
+    if (anchorMs != null && ms >= anchorMs) return;
+    if (!allowOverwrite && this.osc.has(ms)) return;
+    this.osc.set(ms, { ...norm, timeMs: ms });
+  }
+
+  replaceFromServer(payload) {
+    this.candles.clear();
+    this.osc.clear();
+    this.annotations.clear();
+
+    (payload.candles || []).forEach((c) => {
+      this._ingestCandle(c, { allowOverwrite: true });
+    });
+    (payload.oscillators || []).forEach((o) => {
+      this._ingestOsc(o, { allowOverwrite: true });
+    });
+    this._ingestAnnotations(payload.annotations);
+  }
+
+  prependHistory(payload) {
+    const anchorMs = this.sortedCandleTimesMs()[0] ?? null;
+
+    (payload.candles || []).forEach((c) => {
+      this._ingestCandle(c, { allowOverwrite: false, anchorMs });
+    });
+    (payload.oscillators || []).forEach((o) => {
+      this._ingestOsc(o, { allowOverwrite: false, anchorMs });
+    });
+    this._ingestAnnotations(payload.annotations, anchorMs);
+  }
+
+  upsertCandle(c) {
+    const bar = normalizeCandle(c);
+    if (!bar) return null;
+    const ms = ChartDataStore.toMs(bar.time);
+    if (!ms) return null;
+    this.candles.set(ms, { ...bar, timeMs: ms });
+    return bar;
+  }
+
+  upsertOscPoint(o) {
+    const norm = normalizeOscPoint(o);
+    if (!norm) return null;
+    const ms = ChartDataStore.toMs(norm.time);
+    if (!ms) return null;
+    this.osc.set(ms, { ...norm, timeMs: ms });
+    return norm;
+  }
+
+  replaceOscAndAnnotations(payload) {
+    if (Array.isArray(payload.annotations)) {
+      this.annotations.clear();
+      this._ingestAnnotations(payload.annotations);
+    }
+    (payload.oscillators || []).forEach((o) => {
+      this._ingestOsc(o, { allowOverwrite: true });
+    });
+  }
+
+  getForLightweightCharts() {
+    const sortedCandles = Array.from(this.candles.values()).sort((a, b) => a.timeMs - b.timeMs);
+    const chartCandles = sortedCandles.map((c) => ({
+      ...c,
+      time: ChartDataStore.msToChartSec(c.timeMs),
+    }));
+
+    const chartOsc = sortedCandles.map((c) => {
+      const oscPoint = this.osc.get(c.timeMs);
+      if (oscPoint) {
+        return { ...oscPoint, time: ChartDataStore.msToChartSec(c.timeMs) };
+      }
+      return { time: ChartDataStore.msToChartSec(c.timeMs) };
+    });
+
+    const chartAnnotations = [];
+    Array.from(this.annotations.values()).forEach((textMap) => {
+      Array.from(textMap.values()).forEach((a) => {
+        chartAnnotations.push({ ...a, time: ChartDataStore.msToChartSec(a.timeMs) });
+      });
+    });
+    chartAnnotations.sort((a, b) => a.time - b.time);
+
+    return { candles: chartCandles, osc: chartOsc, annotations: chartAnnotations };
+  }
+}
+
+const liveStore = new ChartDataStore('live');
+const backtestStore = new ChartDataStore('backtest');
+
+function getDataStoreForChart(chartData) {
+  return chartData === backtestChartData ? backtestStore : liveStore;
+}
+
+function getStoreDataForChart(chartData) {
+  return getDataStoreForChart(chartData).getForLightweightCharts();
+}
+
+function chartPointsToStorePayload(points, annotations) {
+  return {
+    candles: chartPointsToCandles(points),
+    oscillators: chartPointsToOsc(points),
+    annotations,
+  };
+}
+
 function canPatchBacktestIndicatorsOnly(options = {}) {
   if (options.patchIndicatorsOnly === false) return false;
   if (options.patchIndicatorsOnly === true) return true;
   return options.preserveView === true
-    && backtestLoadedCandles.length > 0
+    && backtestStore.candleCount() > 0
     && !!backtestChartData?.candleSeries;
 }
 
@@ -1887,14 +2024,9 @@ function defaultRsxSettings() {
 let liveRsxSettings = defaultRsxSettings();
 let backtestRsxSettings = defaultRsxSettings();
 
-let backtestAnnotations = [];
-let backtestLoadedOsc = [];
 let backtestHistoryHasMore = true;
 let backtestHistoryLoading = false;
 let backtestLastTrades = [];
-let backtestChartPointsByTime = new Map();
-let backtestTradeMarkerTimes = new Set();
-let lockedHistoricalData = null;
 let currentBacktestPayload = null;
 if (typeof window !== 'undefined') {
   window.currentBacktestPayload = window.currentBacktestPayload || null;
@@ -2523,8 +2655,6 @@ let rsxSettingsSyncTimer = null;
 let rsxSettingsFetchVersion = 0;
 let rsxChartReloadVersion = 0;
 
-let settingsUpdateTimeout = null;
-let backtestAutoUpdateInFlight = false;
 let backtestIntervalChangeInFlight = false;
 
 async function pushRsxSettingsToServer(settings) {
@@ -2584,14 +2714,17 @@ async function reloadRsxChartFromServer() {
     if (warmingUp || !data?.oscillators?.length) return;
 
     if (Array.isArray(data.annotations)) {
-      liveAnnotations = (Array.isArray(data.annotations) ? data.annotations : [])
-        .map(normalizeAnnotation)
-        .filter(Boolean);
+      liveStore.replaceOscAndAnnotations({
+        oscillators: data.oscillators,
+        annotations: data.annotations,
+      });
+    } else if (data?.oscillators?.length) {
+      liveStore.replaceOscAndAnnotations({ oscillators: data.oscillators });
     }
 
     beginDataUpdate();
-    loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators), loadedCandles);
-    applyRsxData(loadedOsc, liveChartData, liveAnnotations);
+    const storeData = liveStore.getForLightweightCharts();
+    applyRsxData(storeData.osc, liveChartData, storeData.annotations);
     endDataUpdate();
     forceSyncChartTimeScales(liveChartData);
   } catch (err) {
@@ -2652,186 +2785,11 @@ function scheduleRsxSettingsSync(context = 'live') {
   }, 350);
 }
 
-function scheduleIndicatorSettingsAutoUpdate() {
-  clearTimeout(settingsUpdateTimeout);
-  settingsUpdateTimeout = setTimeout(() => {
-    settingsUpdateTimeout = null;
-    if (typeof runBacktestAutoUpdatePipeline === 'function') {
-      runBacktestAutoUpdatePipeline().catch((err) => {
-        console.error('[UI] Indicator settings auto-update failed:', err);
-      });
-    } else {
-      runBacktest(false, { preserveView: true, patchIndicatorsOnly: true }).catch((err) => {
-        console.error('[UI] Indicator settings auto-update failed:', err);
-      });
-    }
-  }, 500);
-}
-
-function flushIndicatorSettingsAutoUpdate() {
-  clearTimeout(settingsUpdateTimeout);
-  settingsUpdateTimeout = null;
-  setBacktestLoading(true);
-  return runBacktestAutoUpdatePipeline();
-}
-
 function persistBacktestRsxFromMenu() {
   const settings = readRsxSettingsFromMenu('backtest');
   const applied = setRsxSettingsState('backtest', settings);
   persistRsxSettings('backtest', applied);
   return applied;
-}
-
-async function runBacktestAutoUpdatePipeline() {
-  if (backtestAutoUpdateInFlight) {
-    clearTimeout(settingsUpdateTimeout);
-    settingsUpdateTimeout = setTimeout(() => {
-      settingsUpdateTimeout = null;
-      runBacktestAutoUpdatePipeline();
-    }, 500);
-    return;
-  }
-  backtestAutoUpdateInFlight = true;
-  try {
-    window.__isSettingsUpdating = true;
-    console.log('[Pipeline] starting auto-update, navigators:', window.currentBacktestPayload?.settings?.navigators);
-    await syncBacktestRsxSettingsLocal();
-    await runBacktest(false, {
-      manageLoading: false,
-      skipSettingsPush: true,
-      preserveView: true,
-      patchIndicatorsOnly: true,
-    });
-  } catch (error) {
-    console.error('Pipeline Fatal Error:', error);
-    alert(`🚨 ОШИБКА В БРАУЗЕРЕ: ${error.message}\nПосмотри консоль (F12) для деталей.`);
-  } finally {
-    window.__isSettingsUpdating = false;
-    backtestAutoUpdateInFlight = false;
-    setBacktestLoading(false);
-    setBacktestButtonDisabled(false);
-  }
-}
-
-function initIndicatorSettingsAutoUpdate() {
-  if (window.__indicatorSettingsAutoUpdateBound) return;
-  window.__indicatorSettingsAutoUpdateBound = true;
-
-  const onIndicatorSettingChange = (event) => {
-    const target = event?.target;
-    if (!target?.matches('input, select, textarea')) return;
-
-    const navPopup = target.closest('.navigator-popup');
-    if (navPopup) {
-      const pane = navPopup.dataset.pane || navPopup.id?.replace(/^popup-/, '') || '';
-      if (!pane) return;
-      const context = getNavigatorContext();
-      try {
-        const settings = normalizeNavigatorPaneSettings(
-          readNavigatorSettingsFromPopup(navPopup, pane),
-          pane,
-        );
-        saveNavigatorPaneSettings(pane, settings, context);
-        injectBacktestPayloadFromPaneUI(pane);
-      } catch (err) {
-        console.warn('[UI] Navigator settings persist failed:', err);
-      }
-      if (context === 'backtest') {
-        setBacktestLoading(true);
-      }
-      scheduleNavigatorAutoUpdate();
-      return;
-    }
-
-    if (target.closest('#bt-rsx-wrap')) {
-      persistBacktestRsxFromMenu();
-      setBacktestLoading(true);
-      scheduleIndicatorSettingsAutoUpdate();
-      return;
-    }
-
-    if (target.closest('#rsx-wrap')) {
-      scheduleRsxSettingsSync('live');
-      return;
-    }
-
-    if (target.matches('.wozduh-chk')) {
-      const wrap = target.closest('.osc-wrap');
-      if (!wrap) return;
-      const context = oscContextFromWrap(wrap);
-      const menu = getWozduhSettingsMenu(wrap);
-      if (!menu) return;
-      const prefs = readWozduhPrefsFromMenu(menu);
-      saveWozduhPrefs(context, prefs);
-      applyWozduhVisibilityToChart(
-        context === 'backtest' ? backtestChartData : liveChartData,
-        context,
-      );
-    }
-  };
-
-  document.addEventListener('input', onIndicatorSettingChange);
-  document.addEventListener('change', onIndicatorSettingChange);
-}
-
-function initBacktestAutoUpdateDelegation() {
-  initIndicatorSettingsAutoUpdate();
-}
-
-async function refreshBacktestIndicatorSeries() {
-  if (!backtestChartData?.rsxSeries || backtestLoadedCandles.length === 0) {
-    return false;
-  }
-
-  const firstTime = chartTime(backtestLoadedCandles[0].time);
-  const lastTime = chartTime(backtestLoadedCandles[backtestLoadedCandles.length - 1].time);
-  if (firstTime == null || lastTime == null) return false;
-
-  const symbol = document.getElementById('bt-symbol')?.value.trim() || 'BTCUSDT';
-  const interval = getBacktestInterval();
-  const intervalMs = estimateCandleIntervalSec(backtestLoadedCandles) * 1000;
-  const endTimeMs = (lastTime < 1e12 ? lastTime * 1000 : lastTime) + intervalMs * 2;
-  const limit = Math.min(
-    BACKTEST_HISTORY_CHUNK_LIMIT,
-    backtestLoadedCandles.length + 300,
-  );
-
-  const params = new URLSearchParams({
-    symbol,
-    interval,
-    endTime: String(endTimeMs),
-    limit: String(limit),
-  });
-  appendBacktestRsxSettingsToParams(params);
-
-  const resp = await fetch(`/api/history/chunk?${params.toString()}`, { cache: 'no-store' });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok || !Array.isArray(data.chartData) || data.chartData.length === 0) {
-    console.warn('refreshBacktestIndicatorSeries failed:', resp.status);
-    return false;
-  }
-
-  const inRange = (t) => t != null && t >= firstTime && t <= lastTime;
-  const osc = chartPointsToOsc(data.chartData).filter((p) => inRange(chartTime(p.time)));
-  if (osc.length === 0) return false;
-
-  backtestLoadedOsc = mergeOsc(backtestLoadedOsc, osc);
-
-  const mappedRSX = mapRSXData(backtestLoadedOsc);
-  backtestChartData.rsxSeries.setData(
-    mappedRSX.map(({ time, value, color }) => ({ time, value, color })),
-  );
-  if (backtestChartData.rsxSignalSeries) {
-    backtestChartData.rsxSignalSeries.setData(mapRSXSignalData(backtestLoadedOsc));
-  }
-
-  applyUniversalAnnotations(
-    getChartAnnotationPanes(backtestChartData),
-    data.annotations,
-    { rsx: new Set(mappedRSX.map((d) => d.time)) },
-  );
-
-  return true;
 }
 
 function setBacktestLoading(visible) {
@@ -3063,10 +3021,6 @@ function initPaneFullscreen(chartData) {
     wrap._fullscreenBound = true;
     wrap.addEventListener('dblclick', (e) => {
       if (e.target.closest('.indicator-settings-menu, button')) return;
-      if (chartData._inspectorClickTimer) {
-        clearTimeout(chartData._inspectorClickTimer);
-        chartData._inspectorClickTimer = null;
-      }
       toggleFullscreenPane(wrap, chartData);
     });
   });
@@ -3176,7 +3130,6 @@ function reinitBacktestChart() {
     },
   });
   attachRulerToChart(backtestChartData);
-  attachBacktestScoringCrosshair(backtestChartData);
   renderChartLegends('backtest');
   return backtestChartData;
 }
@@ -4159,51 +4112,6 @@ function notifyChartsLayoutChange() {
   });
 }
 
-function syncFactsBarVisibility() {
-  const wrap = document.getElementById('telemetry-bar-wrap');
-  const btn = document.getElementById('facts-toggle');
-  const onStats = getActiveTabId() === 'tab-stats';
-  if (!wrap) return;
-  wrap.classList.toggle('facts-visible', factsBarUserVisible && !onStats);
-  wrap.classList.toggle('is-hidden', onStats);
-  if (btn) {
-    btn.classList.toggle('active', factsBarUserVisible && !onStats);
-    btn.disabled = onStats;
-  }
-  if (liveChartData?.chart || backtestChartData?.chart) {
-    notifyChartsLayoutChange();
-  }
-}
-
-function toggleFactsPanel() {
-  factsBarUserVisible = !factsBarUserVisible;
-  try {
-    localStorage.setItem(LS_FACTS_BAR_KEY, factsBarUserVisible ? '1' : '0');
-  } catch { /* noop */ }
-  syncFactsBarVisibility();
-}
-
-function initFactsBar() {
-  const wrap = document.getElementById('telemetry-bar-wrap');
-  if (!wrap) {
-    console.warn('[initFactsBar] #telemetry-bar-wrap not found');
-    return;
-  }
-
-  try {
-    factsBarUserVisible = localStorage.getItem(LS_FACTS_BAR_KEY) === '1';
-  } catch {
-    factsBarUserVisible = false;
-  }
-
-  syncFactsBarVisibility();
-
-  const btn = document.getElementById('facts-toggle');
-  if (btn) {
-    btn.addEventListener('click', () => toggleFactsPanel());
-  }
-}
-
 function hideRiskSettingsMenu() {
   const riskMenu = document.getElementById('risk-settings-menu');
   if (riskMenu) riskMenu.hidden = true;
@@ -4270,8 +4178,8 @@ async function saveRiskSettings() {
       localStorage.setItem(LS_RISK_SETTINGS_KEY, JSON.stringify(applied));
       hideRiskSettingsMenu();
     }
-    if (isBacktestTabActive() && backtestLoadedCandles.length > 0) {
-      await runBacktest(false, { switchTab: false, preserveView: true, patchIndicatorsOnly: true });
+    if (isBacktestTabActive() && backtestStore.candleCount() > 0) {
+      buildFinalBacktestPayload();
     }
   } catch (err) {
     console.warn('Failed to save risk settings:', err);
@@ -4308,7 +4216,6 @@ async function saveRsxSettingsFromMenu(menu, context) {
   try {
     if (context === 'backtest') {
       persistBacktestRsxFromMenu();
-      await flushIndicatorSettingsAutoUpdate();
     } else {
       await syncRsxIndicatorSettings('live');
     }
@@ -4421,6 +4328,17 @@ function initWozduhSettings() {
 
     menu.addEventListener('mousedown', (e) => e.stopPropagation());
     menu.addEventListener('click', (e) => e.stopPropagation());
+
+    menu.querySelectorAll('.wozduh-chk').forEach((el) => {
+      el.addEventListener('change', () => {
+        const prefs = readWozduhPrefsFromMenu(menu);
+        saveWozduhPrefs(context, prefs);
+        applyWozduhVisibilityToChart(
+          context === 'backtest' ? backtestChartData : liveChartData,
+          context,
+        );
+      });
+    });
   });
 }
 
@@ -4467,8 +4385,9 @@ function initRsxSettings() {
           const applied = setRsxSettingsState(context, settings);
           persistRsxSettings(context, applied);
           const chartData = context === 'backtest' ? backtestChartData : liveChartData;
-          const osc = context === 'backtest' ? backtestLoadedOsc : loadedOsc;
-          const anns = context === 'backtest' ? backtestAnnotations : liveAnnotations;
+          const storeData = getStoreDataForChart(chartData);
+          const osc = storeData.osc;
+          const anns = storeData.annotations;
           if (chartData?.rsxSeries && osc?.length) {
             applyRsxData(osc, chartData, anns);
           }
@@ -4489,7 +4408,6 @@ function initRsxSettings() {
     });
   });
 
-  initBacktestAutoUpdateDelegation();
   initPanelSettingsOutsideClose();
   initPanelSettingsEnterNavigation();
 }
@@ -4657,24 +4575,8 @@ function switchBacktestTimeframe(tf, event) {
   handleBacktestIntervalChange(tf);
 }
 
-function cancelBacktestAutoUpdatePipeline() {
-  if (settingsUpdateTimeout) {
-    clearTimeout(settingsUpdateTimeout);
-    settingsUpdateTimeout = null;
-  }
-  if (navigatorAutoUpdateTimer) {
-    clearTimeout(navigatorAutoUpdateTimer);
-    navigatorAutoUpdateTimer = null;
-  }
-  window.__isSettingsUpdating = false;
-}
-
 function resetBacktestClientCacheForTfChange() {
-  backtestLoadedCandles = [];
-  backtestLoadedOsc = [];
-  backtestChartPointsByTime = new Map();
-  backtestTradeMarkerTimes = new Set();
-  lockedHistoricalData = null;
+  backtestStore.clear();
   backtestNavigatorChartLines = [];
   backtestNavigatorChartMarkers = [];
   backtestLastTrades = [];
@@ -4712,13 +4614,12 @@ async function handleBacktestIntervalChange(newTf) {
   const tf = normalizeTf(newTf || getBacktestInterval());
   if (!tf) return;
 
-  if (tf === normalizeTf(backtestTf) && tf === normalizeTf(getBacktestInterval()) && backtestLoadedCandles.length > 0) {
+  if (tf === normalizeTf(backtestTf) && tf === normalizeTf(getBacktestInterval()) && backtestStore.candleCount() > 0) {
     return;
   }
 
   if (backtestIntervalChangeInFlight) return;
 
-  cancelBacktestAutoUpdatePipeline();
   backtestIntervalChangeInFlight = true;
 
   applyTfToBacktestSelect(tf);
@@ -4752,7 +4653,6 @@ async function handleBacktestIntervalChange(newTf) {
   } finally {
     backtestIntervalChangeInFlight = false;
     setBacktestLoading(false);
-    setBacktestButtonDisabled(false);
   }
 }
 
@@ -4875,7 +4775,7 @@ function updateBufferingOverlay() {
   const el = document.getElementById('orderflow-buffer');
   if (!el) return;
   const buffering = isOrderFlowTf() && (
-    loadedCandles.length < 5 ||
+    liveStore.candleCount() < 5 ||
     lastTickBufferLen < 500
   );
   el.style.display = buffering ? 'flex' : 'none';
@@ -4897,8 +4797,7 @@ function clearChartData() {
   liveHistoryEpoch += 1;
   disarmLiveHistoryScroll();
   beginDataUpdate();
-  loadedCandles = [];
-  loadedOsc = [];
+  liveStore.clear();
   liveNavigatorResult = null;
   liveNavigatorChartLines = [];
   liveNavigatorChartMarkers = [];
@@ -4986,40 +4885,29 @@ function normalizeCandle(c) {
   };
 }
 
-function normalizeAnnotation(a) {
-  if (!a) return null;
-  const time = chartTime(a.time ?? a.Time);
-  if (time == null) return null;
-  return {
-    ...a,
-    time,
-    text: a.text ?? a.label ?? a.Label ?? '',
-  };
-}
-
 function applyPriceBar(bar) {
   if (!bar) return;
-  const last = loadedCandles[loadedCandles.length - 1];
+  const last = liveStore.lastCandleChartSec();
   if (last && last.time === bar.time) {
-    // Same bar: full replace (never merge OHLC fields from partial ticks).
-    loadedCandles[loadedCandles.length - 1] = { ...bar };
+    liveStore.upsertCandle(bar);
   } else if (!last || bar.time >= last.time) {
     if (last && isLiveTickGapTooLarge(last.time, bar.time)) {
       console.warn(`Time gap too large (${bar.time} vs ${last.time}). Ignoring live tick in history mode.`);
       return;
     }
-    loadedCandles.push(bar);
+    liveStore.upsertCandle(bar);
   } else {
     return;
   }
 
   if (!shouldPaintLiveChart()) return;
 
-  if (loadedCandles.length <= 1) {
+  const candles = liveStore.getForLightweightCharts().candles;
+  if (candles.length <= 1) {
     beginDataUpdate();
-    setAllPriceData(loadedCandles);
-    liveChartData.volumeSeries.setData(toVolumeBars(loadedCandles));
-    updateVolumeLabel(loadedCandles);
+    setAllPriceData(candles);
+    liveChartData.volumeSeries.setData(toVolumeBars(candles));
+    updateVolumeLabel(candles);
     endDataUpdate();
   } else {
     updateAllPriceSeries(bar);
@@ -5047,98 +4935,6 @@ function toLineClose(candles) {
   return candles.map((c) => ({ time: Number(c.time), value: Number(c.close) }));
 }
 
-function dedupeCandles(candles) {
-  const map = new Map();
-  (candles || []).forEach((c) => {
-    const bar = normalizeCandle(c);
-    if (!bar) return;
-    map.set(bar.time, bar);
-  });
-  const data = Array.from(map.values());
-  data.sort((a, b) => a.time - b.time);
-  return data;
-}
-
-/** One oscillator row per candle time (same length as candles; gaps use time-only placeholders). */
-function alignOscillatorsToCandles(osc, candles) {
-  const bars = dedupeCandles(candles);
-  if (!bars.length) return [];
-  const byTime = new Map();
-  (osc || []).forEach((p) => {
-    const norm = normalizeOscPoint(p);
-    if (norm) byTime.set(norm.time, norm);
-  });
-  return bars.map((c) => {
-    const hit = byTime.get(c.time);
-    if (hit) return hit;
-    return { time: c.time };
-  });
-}
-
-function stripOlderThanBars(bars, anchorTime) {
-  const anchor = Number(chartTime(anchorTime));
-  if (!Number.isFinite(anchor)) {
-    return (bars || []).map(normalizeCandle).filter(Boolean);
-  }
-  return (bars || [])
-    .map((item) => normalizeCandle(item))
-    .filter((bar) => bar && bar.time < anchor);
-}
-
-/** Prepend history with zero overlap: incoming bars must be strictly older than existing[0]. */
-function prependCandlesZeroOverlap(existing, incoming) {
-  const existingBars = dedupeCandles(existing);
-  if (!existingBars.length) return dedupeCandles(incoming);
-  const anchor = existingBars[0].time;
-  const clean = stripOlderThanBars(incoming, anchor);
-  return dedupeCandles([...clean, ...existingBars]);
-}
-
-function stripOlderThanOscPoints(osc, anchorTime) {
-  const anchor = Number(chartTime(anchorTime));
-  if (!Number.isFinite(anchor)) return osc || [];
-  return (osc || [])
-    .map((p) => normalizeOscPoint(p))
-    .filter((p) => p && p.time < anchor);
-}
-
-function prependOscZeroOverlap(existing, incoming, anchorTime) {
-  const clean = stripOlderThanOscPoints(incoming, anchorTime);
-  return mergeOsc(clean, existing);
-}
-
-function prependAnnotationsZeroOverlap(incoming, existing, anchorTime) {
-  if (!existing) existing = [];
-  if (!incoming) incoming = [];
-
-  const normOld = existing.map(normalizeAnnotation).filter(Boolean);
-  const normNew = incoming.map(normalizeAnnotation).filter(Boolean);
-
-  const anchor = chartTime(anchorTime);
-  const filteredNew = Number.isFinite(anchor)
-    ? normNew.filter((a) => a.time < anchor)
-    : normNew;
-
-  return [...filteredNew, ...normOld].sort((a, b) => a.time - b.time);
-}
-
-function mergeCandles(existing, incoming) {
-  const map = new Map();
-  (existing || []).forEach((c) => {
-    const bar = normalizeCandle(c);
-    if (!bar) return;
-    map.set(bar.time, bar);
-  });
-  (incoming || []).forEach((c) => {
-    const bar = normalizeCandle(c);
-    if (!bar) return;
-    map.set(bar.time, bar);
-  });
-  const data = Array.from(map.values());
-  data.sort((a, b) => a.time - b.time);
-  return data;
-}
-
 function toLine(raw, key) {
   return (raw || []).map((p) => {
     const time = chartTime(p?.time);
@@ -5158,20 +4954,9 @@ function normalizeOscPoint(p) {
     rsx: p.rsx,
     rsx_signal: p.rsx_signal ?? p.rsxSignal,
     rsiPrice: p.rsiPrice,
-    emaRsi: p.emaRsi,
-    rsiRsi: p.rsiRsi,
     rsiHl2: p.rsiHl2,
     rsiVolFast: p.rsiVolFast,
     rsiVolSlow: p.rsiVolSlow,
-    macdRsi: p.macdRsi,
-    rsiAd: p.rsiAd,
-    rsiHl2Vol: p.rsiHl2Vol,
-    volChanMid: p.volChanMid,
-    volChanUp: p.volChanUp,
-    volChanDn: p.volChanDn,
-    priceChanMid: p.priceChanMid,
-    priceChanUp: p.priceChanUp,
-    priceChanDn: p.priceChanDn,
     volCrossMarker: p.volCrossMarker,
     color: p.color,
     marker: p.marker,
@@ -5188,20 +4973,9 @@ function chartPointsToOsc(points) {
       rsx: p.rsx,
       rsx_signal: p.rsx_signal ?? p.rsxSignal,
       rsiPrice: p.rsiPrice,
-      emaRsi: p.emaRsi,
-      rsiRsi: p.rsiRsi,
       rsiHl2: p.rsiHl2,
       rsiVolFast: p.rsiVolFast ?? p.wozduh_up,
       rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down,
-      macdRsi: p.macdRsi,
-      rsiAd: p.rsiAd,
-      rsiHl2Vol: p.rsiHl2Vol,
-      volChanMid: p.volChanMid,
-      volChanUp: p.volChanUp,
-      volChanDn: p.volChanDn,
-      priceChanMid: p.priceChanMid,
-      priceChanUp: p.priceChanUp,
-      priceChanDn: p.priceChanDn,
       volCrossMarker: p.volCrossMarker,
       color: p.color,
       marker: p.marker,
@@ -5212,21 +4986,19 @@ function chartPointsToOsc(points) {
 }
 
 function chartPointsToCandles(points) {
-  return dedupeCandles(
-    (points || []).map((p) => ({
-      time: chartTime(p.time ?? p.Time),
-      open: p.open,
-      high: p.high,
-      low: p.low,
-      close: p.close,
-      volume: p.volume,
-    })),
-  );
+  return toCandles((points || []).map((p) => ({
+    time: p.time ?? p.Time,
+    open: p.open,
+    high: p.high,
+    low: p.low,
+    close: p.close,
+    volume: p.volume,
+  })));
 }
 
 function applyPriceToChart(chartData, candles, options = {}) {
   if (!chartData?.candleSeries) return;
-  const sorted = dedupeCandles(candles);
+  const sorted = [...(candles || [])].sort((a, b) => a.time - b.time);
   const lineData = toLineClose(sorted);
   lineData.sort((a, b) => a.time - b.time);
   chartData.candleSeries.setData(sorted);
@@ -5295,7 +5067,7 @@ function updateWozduxPoint(pt, chartData = liveChartData) {
     chartData.wozduxSeries[key].update({ time, value });
   });
   if (pt.volCrossMarker) {
-    applyWozduxMarkers(loadedOsc, chartData);
+    applyWozduxMarkers(getStoreDataForChart(chartData).osc, chartData);
   }
 }
 
@@ -5470,8 +5242,6 @@ function applyRsxData(osc, chartData = liveChartData, annotations = null) {
     if (isWarmupOscValue(value)) return { time };
     return { time, value, color };
   });
-  console.log('[X-Ray MAPPED] First mapped point:', lineData[0]);
-  console.log('[X-Ray MAPPED] Last mapped point:', lineData[lineData.length - 1]);
   chartData.rsxSeries.setData(lineData);
   if (chartData.rsxSignalSeries) {
     chartData.rsxSignalSeries.setData(mapRSXSignalData(osc));
@@ -5480,8 +5250,7 @@ function applyRsxData(osc, chartData = liveChartData, annotations = null) {
   const seriesTimesByPane = {
     rsx: new Set(lineData.map((d) => d.time)),
   };
-  const resolved = annotations
-    ?? (chartData === liveChartData ? liveAnnotations : backtestAnnotations);
+  const resolved = annotations ?? getStoreDataForChart(chartData).annotations;
   const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
   applyUniversalAnnotations(getChartAnnotationPanes(chartData), resolved, seriesTimesByPane, { showPivots });
 
@@ -5506,12 +5275,13 @@ function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = liveC
     chartData.rsxSignalSeries.update({ time: t, value: signalVal });
   }
 
-  if (marker || (chartData === liveChartData && liveAnnotations.length > 0)) {
-    const mapped = mapRSXData(chartData === liveChartData ? loadedOsc : backtestLoadedOsc);
+  if (marker || getDataStoreForChart(chartData).annotationCount() > 0) {
+    const storeData = getStoreDataForChart(chartData);
+    const mapped = mapRSXData(storeData.osc);
     const showPivots = rsxShowPivotsFrom(getRsxSettingsState(rsxSettingsContextForChart(chartData)), true);
     applyUniversalAnnotations(
       getChartAnnotationPanes(chartData),
-      chartData === liveChartData ? liveAnnotations : backtestAnnotations,
+      storeData.annotations,
       { rsx: new Set(mapped.map((d) => d.time)) },
       { showPivots },
     );
@@ -5524,16 +5294,6 @@ function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = liveC
       rsxEl.style.color = ptColor;
     }
   }
-}
-
-function mergeOsc(existing, incoming) {
-  const map = new Map();
-  [...incoming, ...existing].forEach((p) => {
-    const norm = normalizeOscPoint(p);
-    if (!norm) return;
-    map.set(norm.time, norm);
-  });
-  return Array.from(map.values()).sort((a, b) => a.time - b.time);
 }
 
 function tradeSide(trade) {
@@ -5655,380 +5415,8 @@ function deriveBotStatus(data) {
   return last.kind === 'exit' ? 'IDLE' : 'IN_POSITION';
 }
 
-function getScoreThreshold(side) {
-  const context = getActiveStrategyContext();
-  const thresholds = normalizeStrategyThresholds(getStrategyState(context)?.thresholds);
-  const val = side === 'long' ? thresholds.long : thresholds.short;
-  return Number.isFinite(val) && val > 0 ? val : DEFAULT_STRATEGY_THRESHOLDS.long;
-}
-
-function resetScoringTelemetryPlaceholder() {
-  lastTelemetrySignature = '';
-  const line = document.getElementById('telemetry-compact-line');
-  if (line) line.innerHTML = '<span class="telemetry-idle">—</span>';
-}
-
-function buildTelemetrySignature(data) {
-  if (!data) return '';
-  const factorKeys = data.factors && typeof data.factors === 'object'
-    ? Object.keys(data.factors).sort().join(',')
-    : '';
-  return [
-    data.longScore,
-    data.shortScore,
-    data.rawAction,
-    data.finalAction,
-    data.isVetoed,
-    data.vetoReason,
-    factorKeys,
-  ].join('|');
-}
-
-function topTelemetryFactors(factors, limit = 4) {
-  if (!factors || typeof factors !== 'object') return [];
-  return Object.entries(factors)
-    .map(([key, factor]) => ({
-      key,
-      name: factor?.name || key,
-      score: Number(factor?.score) || 0,
-      direction: (factor?.direction || 'WAIT').toUpperCase(),
-    }))
-    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
-    .slice(0, limit);
-}
-
-function buildCompactTelemetryHTML(data, options = {}) {
-  if (!data) {
-    return '<span class="telemetry-idle">—</span>';
-  }
-
-  const long = Number(data.longScore) || 0;
-  const short = Number(data.shortScore) || 0;
-  const raw = (data.rawAction || 'WAIT').toUpperCase();
-  const final = (data.finalAction || 'WAIT').toUpperCase();
-  const action = data.isVetoed ? `${raw}→${final}` : final;
-  const actionClass = data.isVetoed ? 'telemetry-vetoed' : (
-    final === 'BUY' ? 'telemetry-buy' : final === 'SELL' ? 'telemetry-sell' : 'telemetry-wait'
-  );
-
-  const factorChips = topTelemetryFactors(data.factors).map((f) => {
-    const pts = f.score > 0 ? `+${f.score}` : f.score < 0 ? String(f.score) : '·';
-    return `<span class="telemetry-chip" title="${f.name}">${f.name} ${pts}</span>`;
-  }).join('');
-
-  const veto = data.isVetoed
-    ? `<span class="telemetry-veto">⛔ ${data.vetoReason || 'Veto'}</span>`
-    : '';
-
-  if (!factorChips && action === 'WAIT' && long === 0 && short === 0) {
-    return options.locked
-      ? '<span class="telemetry-lock-badge">🔍 History</span><span class="telemetry-sep">·</span><span class="telemetry-idle">No signal data</span>'
-      : '<span class="telemetry-idle">WAIT — no signal</span>';
-  }
-
-  const lockPrefix = options.locked
-    ? `<span class="telemetry-lock-badge">🔍 History${data.inspectLabel ? ` · ${data.inspectLabel}` : ''}</span><span class="telemetry-sep">·</span>`
-    : '';
-
-  return `
-    ${lockPrefix}
-    <span class="telemetry-score">L <strong>${long}</strong></span>
-    <span class="telemetry-sep">·</span>
-    <span class="telemetry-score">S <strong>${short}</strong></span>
-    <span class="telemetry-sep">·</span>
-    <span class="telemetry-action ${actionClass}">${action}</span>
-    ${factorChips ? `<span class="telemetry-sep">·</span><span class="telemetry-factors">${factorChips}</span>` : ''}
-    ${veto}
-  `;
-}
-
-function renderCompactTelemetry(data, options = {}) {
-  if (lockedHistoricalData && !options.force) return;
-
-  const line = document.getElementById('telemetry-compact-line');
-  const card = document.getElementById('scoring-telemetry-card');
-  if (!line) return;
-
-  const signature = buildTelemetrySignature(data);
-  if (signature === lastTelemetrySignature) return;
-  lastTelemetrySignature = signature;
-
-  card?.classList.remove('telemetry-locked');
-  line.innerHTML = buildCompactTelemetryHTML(data);
-}
-
-function chartPointToScoringData(point) {
-  if (!point) return null;
-  return {
-    longScore: point.longScore,
-    shortScore: point.shortScore,
-    rawAction: point.rawAction,
-    finalAction: point.finalAction,
-    isVetoed: point.isVetoed,
-    vetoReason: point.vetoReason,
-    factors: point.factors,
-    inspectTime: chartTime(point.time),
-    inspectLabel: null,
-  };
-}
-
-function isInspectableChartPoint(point) {
-  if (!point) return false;
-  const hasFactors = point.factors && typeof point.factors === 'object' && Object.keys(point.factors).length > 0;
-  const hasScores = (Number(point.longScore) || 0) > 0 || (Number(point.shortScore) || 0) > 0;
-  const raw = (point.rawAction || 'WAIT').toUpperCase();
-  const final = (point.finalAction || 'WAIT').toUpperCase();
-  const hasAction = raw !== 'WAIT' || final !== 'WAIT';
-  return hasFactors || hasScores || hasAction || !!point.isVetoed;
-}
-
-function rebuildBacktestTradeMarkerTimes(trades) {
-  backtestTradeMarkerTimes = new Set();
-  (trades || []).forEach((trade) => {
-    const entryT = chartTime(trade.entryTime || trade.EntryTime);
-    const exitT = chartTime(trade.time || trade.Time);
-    if (entryT != null) backtestTradeMarkerTimes.add(entryT);
-    if (exitT != null) backtestTradeMarkerTimes.add(exitT);
-  });
-}
-
-function findBacktestTradeAtTime(t) {
-  return (backtestLastTrades || []).find((trade) => {
-    const entryT = chartTime(trade.entryTime || trade.EntryTime);
-    const exitT = chartTime(trade.time || trade.Time);
-    return t === entryT || t === exitT;
-  }) || null;
-}
-
-function formatTradeInspectLabel(trade, t) {
-  const entryT = chartTime(trade.entryTime || trade.EntryTime);
-  const side = String(trade.side || trade.Side || '—').toUpperCase();
-  if (t === entryT) return `Entry ${side}`;
-  return `Exit ${side}`;
-}
-
-function resolveInspectablePointAtTime(t) {
-  if (t == null) return null;
-
-  const point = backtestChartPointsByTime.get(t);
-  const onTradeMarker = backtestTradeMarkerTimes.has(t);
-
-  if (isInspectableChartPoint(point)) {
-    return { point, tradeHint: onTradeMarker };
-  }
-  if (onTradeMarker && point) {
-    return { point, tradeHint: true };
-  }
-  return null;
-}
-
-function renderLockedTelemetry() {
-  const line = document.getElementById('telemetry-compact-line');
-  const card = document.getElementById('scoring-telemetry-card');
-  if (!line || !lockedHistoricalData) return;
-
-  lastTelemetrySignature = `locked|${lockedHistoricalData.inspectTime}|${buildTelemetrySignature(lockedHistoricalData)}`;
-  card?.classList.add('telemetry-locked');
-  line.innerHTML = buildCompactTelemetryHTML(lockedHistoricalData, { locked: true });
-}
-
-function getDefaultBacktestTelemetryData() {
-  const chartData = lastBacktestResult?.chartData;
-  if (!Array.isArray(chartData) || chartData.length === 0) return null;
-  return chartPointToScoringData(chartData[chartData.length - 1]);
-}
-
-function refreshTelemetryAfterUnlock() {
-  if (isBacktestTabActive()) {
-    const endData = getDefaultBacktestTelemetryData();
-    if (endData) {
-      updateScoringUI(endData, { source: 'backtest', force: true });
-      return;
-    }
-  }
-  if (liveScoringData) {
-    updateScoringUI(liveScoringData, { force: true });
-    return;
-  }
-  resetScoringTelemetryPlaceholder();
-}
-
-function clearHistoricalInspection(refresh = true) {
-  if (!lockedHistoricalData) return;
-  lockedHistoricalData = null;
-  document.getElementById('scoring-telemetry-card')?.classList.remove('telemetry-locked');
-  lastTelemetrySignature = '';
-  if (refresh) refreshTelemetryAfterUnlock();
-}
-
-function lockHistoricalInspection(data) {
-  if (!data) return;
-  lockedHistoricalData = data;
-  renderLockedTelemetry();
-}
-
-function handleBacktestInspectorClick(param) {
-  if (!isBacktestTabActive() || isUpdatingData) return;
-  if (ruler.active) return;
-
-  if (param.time == null) {
-    clearHistoricalInspection();
-    return;
-  }
-
-  const t = chartTime(param.time);
-  const resolved = resolveInspectablePointAtTime(t);
-  if (!resolved) {
-    clearHistoricalInspection();
-    return;
-  }
-
-  if (lockedHistoricalData?.inspectTime === t) {
-    clearHistoricalInspection();
-    return;
-  }
-
-  const data = chartPointToScoringData(resolved.point);
-  if (!data) {
-    clearHistoricalInspection();
-    return;
-  }
-
-  if (resolved.tradeHint) {
-    const trade = findBacktestTradeAtTime(t);
-    if (trade) data.inspectLabel = formatTradeInspectLabel(trade, t);
-  }
-
-  lockHistoricalInspection(data);
-}
-
-function ensureCrosshairScoringHint(chartData) {
-  const wrap = chartData?.elements?.priceWrap;
-  if (!wrap || chartData.crosshairScoringHint) return;
-
-  const hint = document.createElement('div');
-  hint.className = 'crosshair-scoring-hint';
-  hint.hidden = true;
-  wrap.appendChild(hint);
-  chartData.crosshairScoringHint = hint;
-}
-
-function updateCrosshairScoringHint(chartData, param, point) {
-  ensureCrosshairScoringHint(chartData);
-  const hint = chartData?.crosshairScoringHint;
-  if (!hint) return;
-
-  if (!point || !param?.point || param.time == null) {
-    hint.hidden = true;
-    return;
-  }
-
-  const long = Number(point.longScore) || 0;
-  const short = Number(point.shortScore) || 0;
-  const final = (point.finalAction || 'WAIT').toUpperCase();
-  const veto = point.isVetoed ? ` · ⛔ ${point.vetoReason || 'Veto'}` : '';
-  hint.textContent = `L ${long} · S ${short} · ${final}${veto}`;
-  hint.hidden = false;
-
-  const wrap = chartData.elements?.priceWrap;
-  if (!wrap) return;
-  const x = Math.min(Math.max(8, param.point.x + 12), wrap.clientWidth - 180);
-  const y = Math.max(8, param.point.y - 28);
-  hint.style.left = `${x}px`;
-  hint.style.top = `${y}px`;
-}
-
-function attachBacktestScoringCrosshair(chartData) {
-  if (!chartData?.priceChart || chartData._scoringCrosshairBound) return;
-  chartData._scoringCrosshairBound = true;
-  ensureCrosshairScoringHint(chartData);
-
-  chartData.priceChart.subscribeCrosshairMove((param) => {
-    if (!isBacktestTabActive() || isUpdatingData) return;
-
-    if (param.time == null) {
-      updateCrosshairScoringHint(chartData, param, null);
-      return;
-    }
-
-    const t = chartTime(param.time);
-    if (t == null) {
-      updateCrosshairScoringHint(chartData, param, null);
-      return;
-    }
-    const point = backtestChartPointsByTime.get(t);
-    // updateCrosshairScoringHint(chartData, param, point);
-  });
-
-  chartData.priceChart.subscribeClick((param) => {
-    if (chartData !== backtestChartData) return;
-    if (chartData._inspectorClickTimer) {
-      clearTimeout(chartData._inspectorClickTimer);
-    }
-    chartData._inspectorClickTimer = setTimeout(() => {
-      chartData._inspectorClickTimer = null;
-      handleBacktestInspectorClick(param);
-    }, INSPECTOR_CLICK_DELAY_MS);
-  });
-}
-
-function updateScoringUI(data, options = {}) {
-  if (!data || options.source === 'crosshair') return;
-  if (lockedHistoricalData && !options.force) return;
-
-  lastScoringData = data;
-  if (options.source !== 'backtest') {
-    liveScoringData = data;
-  }
-  // renderCompactTelemetry(data, options);
-  const long = Number(data.longScore) || 0;
-  const short = Number(data.shortScore) || 0;
-  const longThreshold = getScoreThreshold('long');
-  const shortThreshold = getScoreThreshold('short');
-
-  const longEl = document.getElementById('hdr-score-long');
-  const shortEl = document.getElementById('hdr-score-short');
-  if (longEl) {
-    const nextLong = String(long);
-    if (longEl.textContent !== nextLong) longEl.textContent = nextLong;
-    const longColor = long >= longThreshold ? '#00e676' : long > 50 ? TV.green : TV.text;
-    if (longEl.style.color !== longColor) longEl.style.color = longColor;
-  }
-  if (shortEl) {
-    const nextShort = String(short);
-    if (shortEl.textContent !== nextShort) shortEl.textContent = nextShort;
-    const shortColor = short >= shortThreshold ? '#ff1744' : short > 50 ? TV.red : TV.text;
-    if (shortEl.style.color !== shortColor) shortEl.style.color = shortColor;
-  }
-
-  const barLong = document.getElementById('bar-long');
-  const barShort = document.getElementById('bar-short');
-  const longScale = Math.min(1, long / longThreshold);
-  const shortScale = Math.min(1, short / shortThreshold);
-  const longTransform = `scaleX(${longScale})`;
-  const shortTransform = `scaleX(${shortScale})`;
-  if (barLong && barLong.style.transform !== longTransform) {
-    barLong.style.transform = longTransform;
-  }
-  if (barShort && barShort.style.transform !== shortTransform) {
-    barShort.style.transform = shortTransform;
-  }
-
-  const botEl = document.getElementById('bot-status');
-  if (botEl) {
-    const status = deriveBotStatus(data);
-    if (botEl.textContent !== status) botEl.textContent = status;
-    const statusClass = `status-badge ${status === 'IN_POSITION' ? 'in-position' : 'idle'}`;
-    if (botEl.className !== statusClass) botEl.className = statusClass;
-  }
-}
-
 function switchTab(targetId) {
-  const prevTab = document.querySelector('.tab-content.active')?.id || 'tab-live';
   saveThresholdsFromHeaderToState(getActiveStrategyContext());
-  if (prevTab !== targetId) {
-    clearHistoricalInspection(false);
-  }
   const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
   const panels = document.querySelectorAll('.tab-content');
   tabs.forEach((b) => b.classList.toggle('active', b.dataset.tab === targetId));
@@ -6043,19 +5431,6 @@ function switchTab(targetId) {
     backtestControls.classList.toggle('visible', targetId === 'tab-backtest');
   }
 
-  const telemetryWrap = document.getElementById('telemetry-bar-wrap');
-  if (telemetryWrap) {
-    syncFactsBarVisibility();
-  }
-
-  if (targetId === 'tab-live' && prevTab !== 'tab-live') {
-    if (liveScoringData) {
-      updateScoringUI(liveScoringData);
-    } else {
-      resetScoringTelemetryPlaceholder();
-    }
-  }
-
   if (ruler.active) {
     ruler.active = false;
     document.getElementById('ruler-btn')?.classList.remove('active');
@@ -6067,12 +5442,6 @@ function switchTab(targetId) {
 
   const nextStrategyContext = (targetId === 'tab-backtest' || targetId === 'tab-stats') ? 'backtest' : 'live';
   applyThresholdsToHeader(getStrategyState(nextStrategyContext).thresholds);
-  if (lastScoringData && (targetId === 'tab-live' || targetId === 'tab-backtest')) {
-    updateScoringUI(lastScoringData, {
-      source: targetId === 'tab-backtest' ? 'backtest' : undefined,
-      force: targetId === 'tab-backtest',
-    });
-  }
 
   if (targetId === 'tab-live') {
     pushRsxSettingsToServer(coerceRsxSettingsForAPI(liveRsxSettings))
@@ -6105,10 +5474,6 @@ function switchTab(targetId) {
       }
     } else if (targetId === 'tab-backtest' && backtestChartData.chart) {
       forceSyncChartTimeScales(backtestChartData);
-      if (!lockedHistoricalData) {
-        const endData = getDefaultBacktestTelemetryData();
-        if (endData) updateScoringUI(endData, { source: 'backtest', force: true });
-      }
     } else if (targetId === 'tab-stats') {
       resizeEquityChart();
       equityChart?.timeScale().fitContent();
@@ -6176,8 +5541,6 @@ async function syncThresholds() {
   if (context === 'live') {
     await postThresholdsToServer(thresholds);
   }
-
-  if (lastScoringData) updateScoringUI(lastScoringData);
 }
 
 function initThresholdInputs() {
@@ -6249,9 +5612,6 @@ async function saveMatrixForContext(context = matrixModalContext) {
 
   if (context === 'live') {
     await postMatrixToServer(state.matrix);
-  } else if (backtestLoadedCandles.length > 0) {
-    setBacktestLoading(true);
-    scheduleIndicatorSettingsAutoUpdate();
   }
 }
 
@@ -6316,7 +5676,30 @@ function estimateCandleIntervalSec(candles) {
   return Math.max(1, t1 - t0);
 }
 
+function tradesToStoreAnnotations(trades) {
+  const anns = [];
+  (trades || []).forEach((trade) => {
+    const side = String(trade.side || trade.Side || '').toUpperCase();
+    const isLong = side === 'LONG' || side === 'BUY';
+    const entryT = trade.entryTime || trade.EntryTime;
+    const exitT = trade.time || trade.Time;
+    if (entryT) {
+      anns.push({
+        time: entryT,
+        text: isLong ? 'L' : 'S',
+        pane: 'rsx',
+        position: isLong ? 'belowBar' : 'aboveBar',
+      });
+    }
+    if (exitT) {
+      anns.push({ time: exitT, text: 'X', pane: 'rsx', position: 'inBar' });
+    }
+  });
+  return anns;
+}
+
 function buildBacktestTradeMarkers(trades) {
+  backtestStore._ingestAnnotations(tradesToStoreAnnotations(trades));
   return buildTradeMarkerPrimitiveData(trades);
 }
 
@@ -6560,7 +5943,7 @@ function resolveNavigatorResults(result) {
 }
 
 function reapplyCachedNavigatorPlugins(chartData = backtestChartData) {
-  if (!chartData || !backtestLoadedCandles.length) return;
+  if (!chartData || !backtestStore.candleCount()) return;
 
   const pricePlugin = chartData.priceNavigatorPlugin;
   if (pricePlugin && backtestNavigatorChartLines?.length) {
@@ -6570,7 +5953,8 @@ function reapplyCachedNavigatorPlugins(chartData = backtestChartData) {
 
   const navMarkers = backtestNavigatorChartMarkers || [];
   if (navMarkers.length) {
-    applyBacktestCandleMarkers(chartData, backtestLastTrades, backtestLoadedOsc, navMarkers);
+    const storeOsc = backtestStore.getForLightweightCharts().osc;
+    applyBacktestCandleMarkers(chartData, backtestLastTrades, storeOsc, navMarkers);
   }
 }
 
@@ -6678,8 +6062,8 @@ function applyNavigatorPaneOverlay(pane, navigatorData, candles, chartData, opti
       candles,
       true,
     );
-    if (colored && options.updateLoadedCandles !== false) {
-      backtestLoadedCandles = colored;
+    if (colored && options.updateLoadedCandles !== false && context === 'backtest') {
+      colored.forEach((c) => backtestStore.upsertCandle(c));
     }
   }
 
@@ -6730,121 +6114,35 @@ function applyBacktestTradeMarkerPrimitive(chartData, trades) {
   chartData.tradeMarkerPlugin.setData(buildTradeMarkerPrimitiveData(trades));
 }
 
-function buildBacktestEntryOverlay(trades) {
-  const data = [];
-  const markers = [];
-  (trades || []).forEach((trade) => {
-    const entryT = chartTime(trade.entryTime || trade.EntryTime);
-    const entryP = parseFloat(trade.entryPrice ?? trade.EntryPrice);
-    const side = String(trade.side || trade.Side || '').toUpperCase();
-    const isLong = side === 'LONG' || side === 'BUY';
-    if (!entryT || !Number.isFinite(entryP)) return;
-    data.push({ time: entryT, value: entryP });
-    markers.push({
-      time: entryT,
-      position: 'inBar',
-      shape: 'circle',
-      color: isLong ? '#9C27B0' : '#E91E63',
-      size: 1,
-    });
-  });
-  return {
-    data: data.sort((a, b) => a.time - b.time),
-    markers: markers.sort((a, b) => a.time - b.time),
-  };
-}
-
-function applyBacktestEntryMarkers(chartData, trades) {
-  applyBacktestTradeMarkerPrimitive(chartData, trades);
-  if (!chartData?.entryMarkerSeries) return;
-  chartData.entryMarkerSeries.setData([]);
-  chartData.entryMarkerSeries.setMarkers([]);
-}
-
-function captureBacktestChartView() {
-  if (!backtestChartData?.chart || !backtestChartData?.candleSeries) return null;
-  const anchor = window.Viewport?.captureViewport(backtestChartData.chart, backtestChartData.candleSeries);
-  return {
-    anchor,
-    priceScaleState: capturePriceScaleState(backtestChartData),
-  };
-}
-
-function restoreBacktestChartView(view, options = {}) {
-  if (window.__isSettingsUpdating) return;
-  if (!backtestChartData?.allCharts?.length) return;
-
-  applyPriceScaleState(backtestChartData, view?.priceScaleState ?? view);
-
-  const anchor = view?.anchor ?? null;
-  if (!anchor && !backtestLoadedCandles.length) return;
-
-  const apply = () => {
-    window.Viewport?.restoreViewportToCharts(
-      backtestChartData,
-      backtestChartData.candleSeries,
-      anchor,
-      { candles: backtestLoadedCandles, chartTime, animate: false },
-    );
-  };
-
-  if (options.immediate) {
-    apply();
-    return;
-  }
-
-  requestAnimationFrame(apply);
-  setTimeout(apply, 10);
-  setTimeout(apply, 50);
-}
-
-function scheduleRestoreBacktestChartView(view, options = {}) {
-  if (window.__isSettingsUpdating) return;
-  if (!view?.anchor && !view?.timeRange) return;
-  if (view.anchor) {
-    restoreBacktestChartView(view, options);
-    return;
-  }
-  if (view.timeRange?.from != null && view.timeRange?.to != null) {
-    const range = { from: view.timeRange.from, to: view.timeRange.to };
-    const applyRange = () => {
-      backtestChartData.allCharts.forEach((chart) => syncVisibleTimeRange(chart, range));
-    };
-    requestAnimationFrame(applyRange);
-    setTimeout(applyRange, 10);
-  }
-}
-
 function applyBacktestIndicatorPatch(result) {
   if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-  if (!backtestChartData?.candleSeries || backtestLoadedCandles.length === 0) return;
-
-  console.log('[Backtest patch] raw navigatorData:', result.navigatorData, 'navigators:', result.navigators);
+  if (!backtestChartData?.candleSeries || backtestStore.candleCount() === 0) return;
 
   const trades = result.trades || [];
   backtestLastTrades = trades;
-  indexBacktestChartPoints(result.chartData);
 
-  const osc = chartPointsToOsc(result.chartData);
-  backtestLoadedOsc = alignOscillatorsToCandles(
-    mergeOsc(backtestLoadedOsc, osc),
-    backtestLoadedCandles,
-  );
+  const patchPayload = { oscillators: chartPointsToOsc(result.chartData) };
+  if (Array.isArray(result.annotations)) {
+    patchPayload.annotations = result.annotations;
+  }
+  backtestStore.replaceOscAndAnnotations(patchPayload);
+  buildBacktestTradeMarkers(trades);
 
+  const storeData = backtestStore.getForLightweightCharts();
   const priceChart = backtestChartData.priceChart;
   const prevRange = priceChart?.timeScale()?.getVisibleLogicalRange();
 
   isUpdatingData = true;
   try {
-    applyOscillatorToChart(backtestChartData, backtestLoadedOsc, result.annotations);
+    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
     applyWozduhVisibilityToChart(backtestChartData, 'backtest');
 
-    applyNavigatorOverlays(result, backtestLoadedCandles, backtestChartData, {
+    applyNavigatorOverlays(result, storeData.candles, backtestChartData, {
       preserveView: true,
       updateLoadedCandles: true,
     });
-    applyBacktestCandleMarkers(backtestChartData, trades, backtestLoadedOsc, backtestNavigatorChartMarkers);
-    applyBacktestEntryMarkers(backtestChartData, trades);
+    applyBacktestCandleMarkers(backtestChartData, trades, storeData.osc, backtestNavigatorChartMarkers);
+    applyBacktestTradeMarkerPrimitive(backtestChartData, trades);
   } finally {
     setTimeout(() => { isUpdatingData = false; }, 0);
   }
@@ -6858,10 +6156,6 @@ function applyBacktestIndicatorPatch(result) {
 
 function applyBacktestResultToChart(result, options = {}, viewportAnchor = null) {
   if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-
-  if (Array.isArray(result.annotations)) {
-    backtestAnnotations = result.annotations;
-  }
 
   const anchor = viewportAnchor ?? options.viewportAnchor ?? null;
 
@@ -6882,26 +6176,25 @@ function applyBacktestResultToChart(result, options = {}, viewportAnchor = null)
     return;
   }
 
-  const candles = chartPointsToCandles(result.chartData);
-  const osc = alignOscillatorsToCandles(chartPointsToOsc(result.chartData), candles);
-  backtestLoadedCandles = candles;
-  backtestLoadedOsc = osc;
+  backtestStore.replaceFromServer(chartPointsToStorePayload(result.chartData, result.annotations));
   backtestLastTrades = result.trades || [];
-  indexBacktestChartPoints(result.chartData);
   backtestHistoryHasMore = true;
   backtestHistoryLoading = false;
+  buildBacktestTradeMarkers(result.trades);
+
+  const storeData = backtestStore.getForLightweightCharts();
 
   isUpdatingData = true;
   try {
-    applyPriceToChart(backtestChartData, candles);
-    applyOscillatorToChart(backtestChartData, osc, result.annotations);
+    applyPriceToChart(backtestChartData, storeData.candles);
+    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
     applyWozduhVisibilityToChart(backtestChartData, 'backtest');
 
-    applyNavigatorOverlays(result, candles, backtestChartData, {
+    applyNavigatorOverlays(result, storeData.candles, backtestChartData, {
       updateLoadedCandles: true,
     });
-    applyBacktestCandleMarkers(backtestChartData, result.trades, osc, backtestNavigatorChartMarkers);
-    applyBacktestEntryMarkers(backtestChartData, result.trades);
+    applyBacktestCandleMarkers(backtestChartData, result.trades, storeData.osc, backtestNavigatorChartMarkers);
+    applyBacktestTradeMarkerPrimitive(backtestChartData, result.trades);
     renderChartLegends('backtest');
 
     applyIndicatorConfigStyles(backtestChartData);
@@ -6910,17 +6203,12 @@ function applyBacktestResultToChart(result, options = {}, viewportAnchor = null)
       backtestChartData,
       backtestChartData.candleSeries,
       anchor,
-      { candles, chartTime, animate: false },
+      { candles: storeData.candles, chartTime, animate: false },
     );
   } finally {
     setTimeout(() => { isUpdatingData = false; }, 0);
   }
 }
-
-function renderBacktestChart(result) {
-  applyBacktestResultToChart(result, {});
-}
-
 
 function initEquityChart() {
   const container = document.getElementById('equity-chart');
@@ -7110,17 +6398,9 @@ function initStatsModeSelector() {
 
 function renderBacktestStats(result) {
   lastBacktestResult = result;
-  backtestAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
   if (statsMode === 'backtest') {
     renderStatsDashboard(result, 'backtest');
   }
-}
-
-function appendBacktestLog(message) {
-  const el = document.getElementById('backtest-logs');
-  if (!el) return;
-  el.textContent += `${message}\n`;
-  el.scrollTop = el.scrollHeight;
 }
 
 function setDefaultBacktestDates() {
@@ -7132,19 +6412,6 @@ function setDefaultBacktestDates() {
   const endEl = document.getElementById('bt-end');
   if (startEl && !startEl.value) startEl.value = fmt(start);
   if (endEl && !endEl.value) endEl.value = fmt(end);
-}
-
-function indexBacktestChartPoints(points) {
-  backtestChartPointsByTime = new Map();
-  if (!Array.isArray(points)) {
-    rebuildBacktestTradeMarkerTimes(backtestLastTrades);
-    return;
-  }
-  points.forEach((p) => {
-    const t = chartTime(p?.time ?? p?.Time);
-    if (t != null) backtestChartPointsByTime.set(t, p);
-  });
-  rebuildBacktestTradeMarkerTimes(backtestLastTrades);
 }
 
 function setBacktestRunState(active) {
@@ -7160,7 +6427,6 @@ function setBacktestRunState(active) {
 
 async function stopBacktest() {
   if (!backtestRunActive) return;
-  appendBacktestLog('[Backtest] Stop requested…');
   try {
     await fetch('/api/backtest/stop', { method: 'POST' });
   } catch (err) {
@@ -7190,7 +6456,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
   const forceFullReload = options.patchIndicatorsOnly === false;
   const patchIndicatorsOnly = !forceFullReload && (
     options.patchIndicatorsOnly === true
-    || (canPatchBacktestIndicatorsOnly(options) && backtestLoadedCandles.length > 0)
+    || (canPatchBacktestIndicatorsOnly(options) && backtestStore.candleCount() > 0)
   );
 
   const anchor = options.viewportAnchor
@@ -7205,39 +6471,18 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
   applyBacktestDateRangeLimits(interval);
   const startDate = document.getElementById('bt-start')?.value || '';
   const endDate = document.getElementById('bt-end')?.value || '';
-  const isSettingsRefresh = patchIndicatorsOnly && backtestLoadedCandles.length > 0;
+  const isSettingsRefresh = patchIndicatorsOnly && backtestStore.candleCount() > 0;
 
   if (manageLoading) {
     setBacktestLoading(true);
   }
 
-  const logs = document.getElementById('backtest-logs');
-  if (!isSettingsRefresh && logs) logs.textContent = '';
-
-  if (!isSettingsRefresh) {
-    appendBacktestLog(`[Backtest] Symbol: ${symbol} | TF: ${interval}`);
-    appendBacktestLog(`[Backtest] Range: ${startDate || '?'} → ${endDate || '?'}`);
-    appendBacktestLog('[Backtest] Downloading historical data...');
-  } else {
-    appendBacktestLog('[Backtest] Recalculating with updated settings...');
-  }
-
   if (!isSettingsRefresh) setBacktestRunState(true);
   backtestAbortController = new AbortController();
-
-  const slowMsgTimer = isSettingsRefresh
-    ? null
-    : setTimeout(() => {
-        appendBacktestLog('Downloading data... This may take time for large ranges');
-      }, 5000);
 
   try {
     let payload = buildFinalBacktestPayload({ symbol, interval, startDate, endDate });
     const settingsPayload = payload.settings;
-
-    console.log('[FALCON SEND] Final payload built:', payload);
-    console.log('[FALCON SEND] Matrix keys:', Object.keys(settingsPayload.matrix || {}));
-    console.log('[FALCON SEND] Navigator panes:', Object.keys(settingsPayload.navigators || {}));
 
     if (!settingsPayload?.matrix || !settingsPayload?.navigators) {
       throw new Error('Backtest payload missing matrix or navigators in settings');
@@ -7275,7 +6520,6 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
         const expanded = expandBacktestStartDate(payload.startDate, payload.endDate, 90);
         if (expanded && expanded !== payload.startDate) {
           console.warn(`[Backtest] Auto-expanding startDate ${payload.startDate} → ${expanded} (retry after: ${errText})`);
-          appendBacktestLog(`[Backtest] Extending range: start → ${expanded}`);
           payload = buildFinalBacktestPayload({
             symbol: payload.symbol,
             interval: payload.interval,
@@ -7290,75 +6534,26 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
 
       const errorText = errText || `HTTP error ${resp.status}`;
       alert(`Ошибка Бэктеста:\n${errorText}`);
-      appendBacktestLog(`[Backtest] Error: ${errorText}`);
       return;
-    }
-
-    const navResults = resolveNavigatorResults(result);
-    const priceLineCount = navResults.price?.lines?.length
-      ?? result.navigatorData?.price?.lines?.length
-      ?? result.navigatorData?.lines?.length
-      ?? result.navigatorPrice?.lines?.length
-      ?? 0;
-    console.log('Lines received:', priceLineCount);
-
-    appendBacktestLog(result.cancelled
-      ? `[Backtest] Stopped early. Trades: ${result.totalTrades} | Win Rate: ${result.winRate}%`
-      : '[Backtest] Simulation complete.');
-    if (!result.cancelled) {
-      appendBacktestLog(`[Backtest] Trades: ${result.totalTrades} | Win Rate: ${result.winRate}%`);
-    }
-    if (Array.isArray(result.chartData)) {
-      appendBacktestLog(`[Backtest] Chart points: ${result.chartData.length}`);
     }
 
     applyBacktestResultToChart(result, {
       patchIndicatorsOnly,
     }, anchor);
     renderBacktestStats(result);
-    clearHistoricalInspection(false);
-    if (!shouldSwitchTab) {
-      const endData = getDefaultBacktestTelemetryData();
-      if (endData) updateScoringUI(endData, { source: 'backtest', force: true });
-    }
     if (shouldSwitchTab) {
       switchTab('tab-stats');
     }
   } catch (err) {
     if (err?.name === 'AbortError') {
-      appendBacktestLog('[Backtest] Client request aborted.');
       return;
     }
     const msg = err?.message || String(err);
-    appendBacktestLog(`[Backtest] Error: ${msg}`);
     console.error('Backtest failed:', err);
     alert(`Ошибка Бэктеста:\n${msg}`);
   } finally {
-    if (slowMsgTimer) clearTimeout(slowMsgTimer);
     resetBacktestRunUi();
   }
-}
-
-function initConsoleDrawer() {
-  const drawer = document.getElementById('console-drawer');
-  const toggle = document.getElementById('console-toggle');
-  const closeBtn = document.getElementById('console-close');
-  if (!drawer) return;
-
-  const open = () => {
-    drawer.hidden = false;
-    toggle?.classList.add('active');
-  };
-  const close = () => {
-    drawer.hidden = true;
-    toggle?.classList.remove('active');
-  };
-
-  toggle?.addEventListener('click', () => {
-    if (drawer.hidden) open();
-    else close();
-  });
-  closeBtn?.addEventListener('click', close);
 }
 
 function shiftBacktestDate(inputId, deltaMonths) {
@@ -7388,7 +6583,6 @@ function initBacktest() {
   initBacktestIntervalHandler();
   document.getElementById('btn-run-backtest')?.addEventListener('click', () => runBacktest(true));
   document.getElementById('btn-stop-backtest')?.addEventListener('click', () => stopBacktest());
-  initConsoleDrawer();
 }
 
 function setTextIfChanged(el, next) {
@@ -7508,7 +6702,7 @@ async function fetchState(options = {}) {
 }
 
 function setAllPriceData(candles) {
-  const sorted = dedupeCandles(candles);
+  const sorted = [...(candles || [])].sort((a, b) => a.time - b.time);
   const lineData = toLineClose(sorted);
   lineData.sort((a, b) => a.time - b.time);
   liveChartData.candleSeries.setData(sorted);
@@ -7528,7 +6722,7 @@ function updateAllPriceSeries(bar) {
       value: normalized.volume,
       color: normalized.close >= normalized.open ? CHART_STYLES.volumeBar.upColor : CHART_STYLES.volumeBar.downColor,
     });
-    updateVolumeLabel(loadedCandles.length ? loadedCandles : [normalized]);
+    updateVolumeLabel(liveStore.candleCount() ? liveStore.getForLightweightCharts().candles : [normalized]);
   }
   if (tradeMarkers.length > 0) {
     applyAllMarkers();
@@ -7560,22 +6754,21 @@ function applySeriesData(options = {}) {
     prependOldRange = liveChartData.priceChart.timeScale().getVisibleLogicalRange();
   }
 
-  const candles = dedupeCandles(loadedCandles);
-  loadedCandles = candles;
+  const storeData = liveStore.getForLightweightCharts();
+  const candles = storeData.candles;
 
   if (!shouldPaintLiveChart()) return;
 
   applyPriceToChart(liveChartData, candles);
   updateVolumeLabel(candles);
-  loadedOsc = alignOscillatorsToCandles(mergeOsc([], loadedOsc), candles);
-  applyOscillatorToChart(liveChartData, loadedOsc, liveAnnotations);
+  applyOscillatorToChart(liveChartData, storeData.osc, storeData.annotations);
   applyWozduhVisibilityToChart(liveChartData, 'live');
-  spikeMarkers = buildSpikeMarkers(loadedOsc);
+  spikeMarkers = buildSpikeMarkers(storeData.osc);
   applyTradeMarkers();
   if (liveNavigatorResult) {
     applyNavigatorOverlays(
       { navigators: liveNavigatorResult },
-      loadedCandles,
+      candles,
       liveChartData,
       { context: 'live', updateLoadedCandles: false },
     );
@@ -7610,17 +6803,16 @@ function applySeriesData(options = {}) {
 
 function applyLatestOscPoint(pt) {
   if (!pt) return;
-  if (loadedCandles && loadedCandles.length > 0) {
-    const latestCandleTime = loadedCandles[loadedCandles.length - 1].time;
-    if (pt.time !== latestCandleTime) {
-      pt.time = latestCandleTime;
-    }
+  const latestCandleTime = liveStore.lastCandleTimeSec();
+  if (latestCandleTime != null && pt.time !== latestCandleTime) {
+    pt = { ...pt, time: latestCandleTime };
   }
   const time = chartTime(pt?.time ?? pt?.Time);
   if (time == null) return;
 
-  loadedOsc = mergeOsc(loadedOsc, [pt]);
-  updateWozduxPoint(loadedOsc[loadedOsc.length - 1]);
+  liveStore.upsertOscPoint(pt);
+  const oscPoint = liveStore.getForLightweightCharts().osc.at(-1) ?? { ...pt, time };
+  updateWozduxPoint(oscPoint);
 
   const rsxVal = parseFloat(pt.rsx ?? pt.jurik);
   if (Number.isFinite(rsxVal)) {
@@ -7633,17 +6825,19 @@ function applyLatestOscPoint(pt) {
 }
 
 function renderState(data, options = {}) {
-  console.log('[X-Ray RAW] First raw osc point:', data?.oscillators?.[0]);
-  console.log('[X-Ray RAW] Last raw osc point:', data?.oscillators?.[data?.oscillators?.length - 1]);
-
   syncTradingTimeframeFromState(data);
   updateHeader(data);
-  // updateScoringUI(data);
   if (typeof data.tickBufferLen === 'number') {
     lastTickBufferLen = data.tickBufferLen;
   }
 
-  const candles = dedupeCandles(toCandles(data.candles));
+  liveStore.replaceFromServer({
+    candles: toCandles(data.candles),
+    oscillators: data.oscillators || [],
+    annotations: data.annotations,
+  });
+  const storeData = liveStore.getForLightweightCharts();
+  const candles = storeData.candles;
   const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
   mergeSessionTrades(data.trades, {
     masterState,
@@ -7660,19 +6854,6 @@ function renderState(data, options = {}) {
     return;
   }
 
-  loadedCandles = candles;
-  loadedOsc = alignOscillatorsToCandles(mergeOsc([], data.oscillators || []), loadedCandles);
-  const incomingAnnotations = (Array.isArray(data.annotations) ? data.annotations : [])
-    .map(normalizeAnnotation)
-    .filter(Boolean);
-
-  if (!liveAnnotations) liveAnnotations = [];
-  const annMap = new Map();
-  liveAnnotations.map(normalizeAnnotation).filter(Boolean).forEach((a) => {
-    annMap.set(`${a.time}-${a.text}`, a);
-  });
-  incomingAnnotations.forEach((a) => annMap.set(`${a.time}-${a.text}`, a));
-  liveAnnotations = Array.from(annMap.values()).sort((a, b) => a.time - b.time);
   historyHasMore = hasMore;
   if (data.navigators) {
     liveNavigatorResult = data.navigators;
@@ -7686,7 +6867,7 @@ function renderState(data, options = {}) {
       prependPrevRange: options.prependPrevRange ?? null,
     });
     renderFibZones(data.fibZones);
-    if (loadedCandles.length > 0 && shouldPaintLiveChart()) {
+    if (liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
       if (!options.preserveViewport?.logicalRange && !options.isPrepend) {
         syncLiveChartPanesFromPrice();
       }
@@ -7709,13 +6890,16 @@ async function pollOrderFlowState() {
     if (typeof data.tickBufferLen === 'number') {
       lastTickBufferLen = data.tickBufferLen;
     }
-    const candles = dedupeCandles(toCandles(data.candles));
+    const candles = toCandles(data.candles);
     if (candles.length === 0) {
       updateBufferingOverlay();
       return;
     }
-    loadedCandles = candles;
-    loadedOsc = mergeOsc([], data.oscillators || []);
+    liveStore.replaceFromServer({
+      candles,
+      oscillators: data.oscillators || [],
+      annotations: data.annotations,
+    });
     beginDataUpdate();
     try {
       applySeriesData();
@@ -7742,19 +6926,19 @@ async function pollLatestState() {
 
     updateHeader({ jurik: data.jurik, redLine: data.redLine, greenLine: data.greenLine });
 
-    const candles = dedupeCandles(toCandles(data.candles));
+    const candles = toCandles(data.candles);
     const latest = candles[candles.length - 1];
     if (!latest) return;
 
-    const last = loadedCandles[loadedCandles.length - 1];
+    const last = liveStore.lastCandleChartSec();
     if (last && last.time === latest.time) {
-      loadedCandles[loadedCandles.length - 1] = latest;
+      liveStore.upsertCandle(latest);
     } else if (!last || latest.time > last.time) {
       if (last && isLiveTickGapTooLarge(last.time, latest.time)) {
         console.warn(`Time gap too large (${latest.time} vs ${last.time}). Ignoring live poll tick in history mode.`);
         return;
       }
-      loadedCandles.push(latest);
+      liveStore.upsertCandle(latest);
     } else {
       return;
     }
@@ -7765,8 +6949,8 @@ async function pollLatestState() {
     const osc = data.oscillators || [];
     if (osc.length > 0) {
       const latestOsc = osc[osc.length - 1];
+      liveStore.upsertOscPoint(latestOsc);
       applyLatestOscPoint(latestOsc);
-      loadedOsc = mergeOsc(loadedOsc, [latestOsc]);
     }
     endDataUpdate();
   } catch (err) {
@@ -7837,10 +7021,10 @@ async function loadDashboard(options = {}) {
 async function maybeLoadBacktestHistory(range) {
   if (window.__isSettingsUpdating) return;
   if (!isBacktestTabActive()) return;
-  if (!range || backtestHistoryLoading || !backtestHistoryHasMore || backtestLoadedCandles.length === 0) return;
+  if (!range || backtestHistoryLoading || !backtestHistoryHasMore || backtestStore.candleCount() === 0) return;
   if (range.from >= 50) return;
 
-  const firstTime = chartTime(backtestLoadedCandles[0].time);
+  const firstTime = backtestStore.firstCandleTimeSec();
   if (firstTime == null) return;
 
   const symbol = document.getElementById('bt-symbol')?.value.trim() || 'BTCUSDT';
@@ -7864,36 +7048,21 @@ async function maybeLoadBacktestHistory(range) {
     }
 
     const prependOldRange = backtestChartData.priceChart?.timeScale()?.getVisibleLogicalRange() ?? null;
-    const newCandles = chartPointsToCandles(data.chartData);
-    const newOsc = chartPointsToOsc(data.chartData);
-    const oldLen = backtestLoadedCandles.length;
-    const anchorTime = backtestLoadedCandles[0].time;
-
-    const cleanCandles = stripOlderThanBars(newCandles, anchorTime);
-    if (cleanCandles.length === 0) {
+    const oldLen = backtestStore.candleCount();
+    backtestStore.prependHistory(chartPointsToStorePayload(data.chartData, data.annotations));
+    const added = backtestStore.candleCount() - oldLen;
+    if (added === 0) {
       backtestHistoryHasMore = data.hasMore !== false;
       return;
     }
 
-    backtestLoadedCandles = prependCandlesZeroOverlap(backtestLoadedCandles, newCandles);
-    backtestLoadedOsc = alignOscillatorsToCandles(
-      prependOscZeroOverlap(backtestLoadedOsc, newOsc, anchorTime),
-      backtestLoadedCandles,
-    );
-    if (Array.isArray(data.annotations)) {
-      backtestAnnotations = prependAnnotationsZeroOverlap(
-        data.annotations,
-        backtestAnnotations,
-        anchorTime,
-      );
-    }
-    const added = backtestLoadedCandles.length - oldLen;
+    const storeData = backtestStore.getForLightweightCharts();
 
-    applyPriceToChart(backtestChartData, backtestLoadedCandles);
-    applyOscillatorToChart(backtestChartData, backtestLoadedOsc, backtestAnnotations);
+    applyPriceToChart(backtestChartData, storeData.candles);
+    applyOscillatorToChart(backtestChartData, storeData.osc, storeData.annotations);
     applyWozduhVisibilityToChart(backtestChartData, 'backtest');
-    applyBacktestCandleMarkers(backtestChartData, backtestLastTrades, backtestLoadedOsc);
-    applyBacktestEntryMarkers(backtestChartData, backtestLastTrades);
+    applyBacktestCandleMarkers(backtestChartData, backtestLastTrades, storeData.osc);
+    applyBacktestTradeMarkerPrimitive(backtestChartData, backtestLastTrades);
 
     if (prependOldRange != null && added > 0) {
       const nextRange = {
@@ -7905,7 +7074,7 @@ async function maybeLoadBacktestHistory(range) {
       });
     }
 
-    backtestHistoryHasMore = data.hasMore !== false && cleanCandles.length > 0;
+    backtestHistoryHasMore = data.hasMore !== false && added > 0;
 
     if (added > 0 && backtestHistoryHasMore) {
       requestAnimationFrame(() => {
@@ -7948,16 +7117,15 @@ async function maybeLoadHistory(range, options = {}) {
   if (isLoadingHistory || historyLoading || !historyHasMore) return Promise.resolve();
   if (!shouldPaintLiveChart()) return;
   if (!chartInitialized || !liveHistoryScrollArmed) return;
-  if (!range || loadedCandles.length === 0) return;
+  if (!range || liveStore.candleCount() === 0) return;
   if (!force && range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
 
-  const firstTime = loadedCandles[0].time;
+  const firstTime = liveStore.firstCandleTimeSec();
   if (firstTime == null) return;
   const endTimeSec = Number(firstTime);
   const epoch = liveHistoryEpoch;
   const reqId = currentLiveRequestId;
-  const oldLen = loadedCandles.length;
-  const anchorTime = loadedCandles[0].time;
+  const oldLen = liveStore.candleCount();
 
   isLoadingHistory = true;
   historyLoading = true;
@@ -7965,29 +7133,16 @@ async function maybeLoadHistory(range, options = {}) {
   try {
     const data = await fetchLiveHistory(endTimeSec);
     if (epoch !== liveHistoryEpoch || reqId !== currentLiveRequestId) return;
-    const newCandles = dedupeCandles(toCandles(data.candles));
-    const newOsc = (data.oscillators || [])
-      .map((p) => normalizeOscPoint(p))
-      .filter(Boolean);
-    if (newCandles.length === 0) {
+    if (!Array.isArray(data.candles) || data.candles.length === 0) {
       historyHasMore = false;
       return;
     }
 
-    const cleanCandles = stripOlderThanBars(newCandles, anchorTime);
-    if (cleanCandles.length === 0) {
-      historyHasMore = data.hasMore !== false;
-      return;
-    }
-
-    loadedCandles = prependCandlesZeroOverlap(loadedCandles, newCandles);
-    loadedOsc = alignOscillatorsToCandles(
-      prependOscZeroOverlap(loadedOsc, newOsc, anchorTime),
-      loadedCandles,
-    );
-    if (Array.isArray(data.annotations)) {
-      liveAnnotations = prependAnnotationsZeroOverlap(data.annotations, liveAnnotations, anchorTime);
-    }
+    liveStore.prependHistory({
+      candles: toCandles(data.candles),
+      oscillators: data.oscillators || [],
+      annotations: data.annotations,
+    });
     historyHasMore = data.hasMore !== false;
 
     beginDataUpdate();
@@ -8002,7 +7157,7 @@ async function maybeLoadHistory(range, options = {}) {
     updateBufferingOverlay();
     if (!historyHasMore || epoch !== liveHistoryEpoch) return;
 
-    const added = loadedCandles.length - oldLen;
+    const added = liveStore.candleCount() - oldLen;
     if (added > 0) {
       requestAnimationFrame(() => {
         if (epoch !== liveHistoryEpoch || !liveHistoryScrollArmed) return;
@@ -8055,7 +7210,6 @@ function handleWSMessage(event) {
       if (d.volatilityRegime) {
         updateHeader({ volatilityRegime: d.volatilityRegime });
       }
-      // updateScoringUI(d);
     }
   }
 
@@ -8161,7 +7315,6 @@ function attachRulerToChart(chartData) {
 function initRuler() {
   attachRulerToChart(liveChartData);
   attachRulerToChart(backtestChartData);
-  attachBacktestScoringCrosshair(backtestChartData);
 }
 
 function setRulerCursor(active) {
@@ -8234,7 +7387,9 @@ function onRulerMove(param, chartData) {
 function countBarsBetween(t1, t2, chartData) {
   const lo = Math.min(t1, t2);
   const hi = Math.max(t1, t2);
-  const candles = chartData === backtestChartData ? backtestLoadedCandles : loadedCandles;
+  const candles = chartData === backtestChartData
+    ? backtestStore.getForLightweightCharts().candles
+    : liveStore.getForLightweightCharts().candles;
   return candles.filter((c) => c.time >= lo && c.time <= hi).length;
 }
 
@@ -8323,7 +7478,6 @@ function boot() {
   safeInit('backtest', initBacktest);
   safeInit('navigator popup handlers', initNavigatorPopupOkHandlers);
   safeInit('MTF sync checkboxes', initMtfSyncCheckboxes);
-  safeInit('facts bar', initFactsBar);
 
   (async () => {
     try {

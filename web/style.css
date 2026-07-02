@@ -506,10 +506,6 @@
   flex-shrink: 0;
 }
 
-.telemetry-bar-wrap {
-  flex-shrink: 0;
-}
-
 .workspace-main {
   flex: 1 1 0;
   min-height: 0;
@@ -622,118 +618,6 @@
   opacity: 0.72;
 }
 
-/* ── Score telemetry panel (toggle via Facts) ── */
-.telemetry-bar-wrap {
-  display: none;
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 10px;
-  margin: 0;
-  background: var(--tv-bg, #131722);
-  border-bottom: none;
-  flex-shrink: 0;
-  transition: max-height 0.15s ease, padding 0.15s ease, border-color 0.15s ease;
-}
-
-.telemetry-bar-wrap.facts-visible:not(.is-hidden) {
-  display: block;
-  max-height: 48px;
-  padding: 0 10px 3px;
-  border-bottom: 1px solid var(--tv-border, #2a2e39);
-}
-
-.telemetry-bar-wrap.is-hidden {
-  display: none !important;
-}
-
-#facts-toggle.active {
-  color: #fff;
-  border-color: rgba(41, 98, 255, 0.55);
-  background: rgba(41, 98, 255, 0.18);
-}
-
-#facts-toggle:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-#scoring-telemetry-card.card {
-  background: var(--tv-panel, #1e222d);
-  border: 1px solid var(--tv-border, #2a2e39);
-  border-radius: 6px;
-  padding: 4px 10px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.telemetry-compact-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--tv-muted, #787b86);
-  min-height: 22px;
-}
-
-.telemetry-compact-line strong {
-  color: var(--tv-text, #d1d4dc);
-  font-weight: 700;
-}
-
-.telemetry-idle {
-  color: var(--tv-muted, #787b86);
-  font-style: italic;
-}
-
-.telemetry-sep {
-  opacity: 0.45;
-  user-select: none;
-}
-
-.telemetry-action.telemetry-buy { color: var(--tv-green, #26a69a); font-weight: 700; }
-.telemetry-action.telemetry-sell { color: var(--tv-red, #ef5350); font-weight: 700; }
-.telemetry-action.telemetry-wait { color: var(--tv-muted, #787b86); }
-.telemetry-action.telemetry-vetoed { color: #ffb74d; font-weight: 600; }
-
-.telemetry-factors {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.telemetry-chip {
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 10px;
-  color: #b0b8c4;
-  white-space: nowrap;
-}
-
-.telemetry-veto {
-  color: #ffb74d;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.crosshair-scoring-hint {
-  position: absolute;
-  z-index: 12;
-  pointer-events: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(19, 23, 34, 0.92);
-  border: 1px solid var(--tv-border, #363a45);
-  color: #d1d4dc;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
 .btn-stop {
   color: #ef5350;
   border-color: rgba(239, 83, 80, 0.45);
@@ -741,18 +625,6 @@
 
 .btn-stop:disabled {
   opacity: 0.45;
-}
-
-#scoring-telemetry-card.telemetry-locked {
-  background: rgba(41, 98, 255, 0.14);
-  border-color: rgba(41, 98, 255, 0.5);
-  box-shadow: inset 0 0 0 1px rgba(41, 98, 255, 0.25);
-}
-
-.telemetry-lock-badge {
-  color: #7eb7ff;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 /* ── Stats tab: mode selector ── */
