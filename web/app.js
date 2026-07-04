@@ -22,19 +22,19 @@ async function syncLiveNavigatorSettingsToServer() {
 async function triggerNavigatorAutoUpdate() {
   const context = NavigatorController.getContext();
   if (context === 'live') {
-    const viewportSnapshot = ChartAdapter.captureLiveViewport();
+    const viewportAnchor = ViewportManager.capture('live');
     await syncLiveNavigatorSettingsToServer();
     if (ChartAdapter.chartInitialized() && liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
-      await refreshLiveNavigatorFromServer(viewportSnapshot);
+      await refreshLiveNavigatorFromServer(viewportAnchor);
     } else {
-      await loadDashboard({ preserveViewport: viewportSnapshot });
+      await loadDashboard({ viewportAnchor });
     }
     return;
   }
   buildFinalBacktestPayload();
 }
 
-async function refreshLiveNavigatorFromServer(viewportSnapshot) {
+async function refreshLiveNavigatorFromServer(viewportAnchor) {
   const reqId = ++navigatorRequestId;
   try {
     const { warmingUp, data } = await fetchLiveState({ navigatorsOnly: true });
@@ -47,9 +47,9 @@ async function refreshLiveNavigatorFromServer(viewportSnapshot) {
         context: 'live',
         updateLoadedCandles: false,
       });
-      ChartAdapter.restoreLiveViewportTwice(viewportSnapshot);
+      ViewportManager.restore('live', viewportAnchor, liveStore);
     } finally {
-      endDataUpdate(0);
+      endDataUpdate();
     }
   } catch (err) {
     if (err?.name === 'AbortError') return;
@@ -183,16 +183,14 @@ let lastTickBufferLen = 0;
 let orderFlowPollTimer = null;
 let isUpdatingData = false;
 let isLoadingHistory = false;
+let _microscopeTickMuted = false;
 let liveHistoryEpoch = 0;
 let pendingHistoryLoad = null;
 /** History lazy-load is armed only after the user scrolls/zooms the live chart (not on TF init). */
 let liveHistoryScrollArmed = false;
-/** Suppresses subscribeVisibleLogicalRangeChange history fetch during programmatic viewport updates. */
-let liveHistorySuppressRangeHook = false;
 
 if (typeof window !== 'undefined') {
   window.__isSettingsUpdating = false;
-  window.__pendingAnchor = null;
 }
 
 const liveStore = new ChartDataStore('live');
@@ -322,7 +320,6 @@ async function reloadRsxChartFromServer() {
     const storeData = liveStore.getForLightweightCharts();
     ChartAdapter.applyRsxData('live', storeData.osc, storeData.annotations);
     endDataUpdate();
-    ChartAdapter.forceSyncTimeScales('live');
   } catch (err) {
     console.warn('Failed to reload RSX chart:', err);
   }
@@ -397,7 +394,6 @@ function buildLiveStateQueryParams(extra = {}) {
     rsxLookback: RsxController.getSettings('live').div_lookback,
     limit: LIVE_STATE_CANDLE_LIMIT,
     extra,
-    pendingAnchor: window.__pendingAnchor,
     intervalMs: getIntervalMs(currentTf),
   });
 }
@@ -415,19 +411,6 @@ async function fetchLiveState(options = {}) {
     params: buildLiveStateQueryParams(options.params || {}),
     timeoutMs: options.timeoutMs,
   });
-}
-
-function runWithSuppressedHistoryLoad(fn) {
-  liveHistorySuppressRangeHook = true;
-  try {
-    return fn();
-  } finally {
-    queueMicrotask(() => {
-      requestAnimationFrame(() => {
-        liveHistorySuppressRangeHook = false;
-      });
-    });
-  }
 }
 
 function disarmLiveHistoryScroll() {
@@ -462,15 +445,13 @@ function beginDataUpdate() {
   ChartAdapter.setLiveUpdating(true);
 }
 
-function endDataUpdate(delayMs = 50) {
-  setTimeout(() => {
-    ChartAdapter.setLiveUpdating(false);
-    if (pendingHistoryLoad) {
-      const job = pendingHistoryLoad;
-      pendingHistoryLoad = null;
-      scheduleHistoryLoad(job.range, job.options);
-    }
-  }, delayMs);
+function endDataUpdate() {
+  ChartAdapter.setLiveUpdating(false);
+  if (pendingHistoryLoad) {
+    const job = pendingHistoryLoad;
+    pendingHistoryLoad = null;
+    Promise.resolve().then(() => scheduleHistoryLoad(job.range, job.options));
+  }
 }
 
 
@@ -718,7 +699,7 @@ async function handleBacktestIntervalChange(newTf) {
   BacktestController.applyDateRangeLimits(tf);
 
   const anchor = ChartAdapter.isInitialized('backtest')
-    ? ChartAdapter.captureViewport('backtest')
+    ? ViewportManager.capture('backtest')
     : null;
 
   resetBacktestClientCacheForTfChange();
@@ -803,6 +784,7 @@ function wsSubscribeTf(tf) {
 }
 
 function clearChartData() {
+  _microscopeTickMuted = false;
   liveHistoryEpoch += 1;
   disarmLiveHistoryScroll();
   beginDataUpdate();
@@ -815,12 +797,7 @@ function clearChartData() {
   spikeMarkers = [];
   isLoadingHistory = false;
   ChartAdapter.setChartInitialized(false);
-  if (!ChartAdapter.isInitialized('live')) {
-    endDataUpdate();
-    return;
-  }
-  ChartAdapter.clearSeries('live');
-  ChartAdapter.clearFib();
+  ChartAdapter.destroyLiveCharts();
   resetRuler();
   updateBufferingOverlay();
   endDataUpdate();
@@ -839,7 +816,10 @@ function applyPriceBar(bar) {
     liveStore.upsertCandle(bar, getLiveStoreTf());
   } else if (!last || bar.time >= last.time) {
     if (last && isLiveTickGapTooLarge(last.time, bar.time)) {
-      console.warn(`Time gap too large (${bar.time} vs ${last.time}). Ignoring live tick in history mode.`);
+      if (!_microscopeTickMuted) {
+        console.log(`[Mode Switch] Time gap too large (${bar.time} vs ${last.time}). Entering historical microscope mode. Live WS ticks will be silently ignored until return to live edge.`);
+        _microscopeTickMuted = true;
+      }
       return;
     }
     liveStore.upsertCandle(bar, getLiveStoreTf());
@@ -1048,7 +1028,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     || (canPatchBacktestIndicatorsOnly(options) && backtestStore.candleCount() > 0)
   );
 
-  const anchor = options.viewportAnchor ?? ChartAdapter.captureViewport('backtest');
+  const anchor = options.viewportAnchor ?? ViewportManager.capture('backtest');
 
   const form = BacktestController.getFormValues();
   const symbol = form.symbol;
@@ -1088,17 +1068,9 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       );
       result = respResult;
 
-      if (result?._parseError) {
-        console.error('[FALCON NETWORK] Server returned invalid JSON. Raw response:', rawText);
-        throw new Error(`Server response is not valid JSON. Check console for raw text. Status: ${status}`);
-      }
-
-      if (ok) {
-        break;
-      }
-
-      const errText = result.error || result.message || rawText || '';
+      const errText = result?.error || result?.message || rawText || '';
       const notEnoughCandles = status === 400 && /not enough candles/i.test(errText);
+
       if (attempt === 0 && notEnoughCandles) {
         const expanded = BacktestController.expandBacktestStartDate(payload.startDate, payload.endDate, 90);
         if (expanded && expanded !== payload.startDate) {
@@ -1114,6 +1086,15 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
         }
       }
 
+      if (result?._parseError) {
+        console.error('[FALCON NETWORK] Server returned invalid JSON. Raw response:', rawText);
+        throw new Error(`Server response is not valid JSON. Check console for raw text. Status: ${status}`);
+      }
+
+      if (ok) {
+        break;
+      }
+
       const errorText = errText || `HTTP error ${status}`;
       alert(`Ошибка Бэктеста:\n${errorText}`);
       return;
@@ -1123,6 +1104,9 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       patchIndicatorsOnly,
     }, anchor);
     renderBacktestStats(result);
+    if (typeof NavigatorController !== 'undefined') {
+      NavigatorController.renderChartLegends('backtest');
+    }
     if (shouldSwitchTab) {
       switchTab('tab-stats');
     }
@@ -1139,22 +1123,6 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
 }
 
 function applySeriesData(options = {}) {
-  const {
-    isPrepend = false,
-    prependPrevRange = null,
-    preserveViewport = null,
-  } = options;
-  let prevRange = preserveViewport?.logicalRange ?? null;
-  if (!prevRange && !isPrepend && shouldPaintLiveChart()) {
-    prevRange = ChartAdapter.getVisibleLogicalRange('live');
-  }
-
-  const prependOldTotal = prependPrevRange?.oldTotal;
-  let prependOldRange = null;
-  if (isPrepend) {
-    prependOldRange = ChartAdapter.getVisibleLogicalRange('live');
-  }
-
   const storeData = liveStore.getForLightweightCharts();
   const candles = storeData.candles;
 
@@ -1168,32 +1136,6 @@ function applySeriesData(options = {}) {
     });
   }
   updateBufferingOverlay();
-
-  if (isPrepend && prependOldRange != null && prependOldTotal != null) {
-    const shiftCount = candles.length - prependOldTotal;
-    if (shiftCount > 0) {
-      const nextRange = {
-        from: prependOldRange.from + shiftCount,
-        to: prependOldRange.to + shiftCount,
-      };
-      runWithSuppressedHistoryLoad(() => {
-        const liveHandle = ChartAdapter.getChartHandle('live');
-        liveHandle.allCharts.forEach((chart) => {
-          ChartAdapter.syncVisibleLogicalRange(chart, nextRange, { animate: false });
-        });
-      });
-    }
-    return;
-  }
-
-  ChartAdapter.applyLiveViewportAfterData(candles, {
-    prevRange,
-    isPrepend,
-  });
-
-  if (preserveViewport?.logicalRange) {
-    ChartAdapter.restoreLiveViewportTwice(preserveViewport);
-  }
 }
 
 function applyLatestOscPoint(pt) {
@@ -1217,14 +1159,17 @@ function renderState(data, options = {}) {
     lastTickBufferLen = data.tickBufferLen;
   }
 
-  liveStore.seal();
+  const manageSeal = !options.storeReady;
+  if (manageSeal) liveStore.seal();
   beginDataUpdate();
   try {
-    liveStore.replaceFromServer({
-      candles: toCandles(data.candles),
-      oscillators: data.oscillators || [],
-      annotations: data.annotations,
-    }, getLiveStoreTf());
+    if (!options.storeReady) {
+      liveStore.replaceFromServer({
+        candles: toCandles(data.candles),
+        oscillators: data.oscillators || [],
+        annotations: data.annotations,
+      }, getLiveStoreTf());
+    }
     const oscPts = data.oscillators || [];
     if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
     const storeData = liveStore.getForLightweightCharts();
@@ -1237,48 +1182,33 @@ function renderState(data, options = {}) {
 
     const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
 
-    if (candles.length > 0 && candles.length < 20 && hasMore) {
-      // Бэкенд отдал слишком мало свечей (вероятно, только live-буфер), потому что в фоне
-      // прямо сейчас идет скачивание истории (gap fill). Одна свеча растянется на весь экран.
-      setTimeout(() => loadDashboard(), 500);
-      updateBufferingOverlay();
-      return;
-    }
-
     historyHasMore = hasMore;
     if (data.navigators) {
       liveNavigatorResult = data.navigators;
     }
 
-    applySeriesData({
-      preserveViewport: options.preserveViewport ?? null,
-      isPrepend: options.isPrepend === true,
-      prependPrevRange: options.prependPrevRange ?? null,
-    });
+    applySeriesData();
     ChartAdapter.renderFib(data.fibZones);
-    if (liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
-      if (!options.preserveViewport?.logicalRange && !options.isPrepend) {
-        ChartAdapter.syncLivePanesFromPrice();
-      }
+    if (options.viewportAnchor) {
+      window.ViewportManager.restore('live', options.viewportAnchor, liveStore);
+    } else if (options.isPreFetch) {
+      const charts = [
+        ChartAdapter.getChart('live', 'price'),
+        ChartAdapter.getChart('live', 'osc'),
+        ChartAdapter.getChart('live', 'rsx'),
+      ];
+      charts.forEach((chart) => {
+        chart?.timeScale()?.scrollToPosition(0, false);
+      });
     }
   } finally {
-    liveStore.unseal();
-    endDataUpdate(0);
+    if (manageSeal) liveStore.unseal();
+    endDataUpdate();
   }
 
   // График полностью загружен историей, теперь WebSocket может рисовать новые тики
   ChartAdapter.setChartInitialized(true);
   updateBufferingOverlay();
-
-  if (historyHasMore && shouldPaintLiveChart()) {
-    requestAnimationFrame(() => {
-      const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
-      if (viewportRange && viewportRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
-        liveHistoryScrollArmed = true;
-        scheduleHistoryLoad(viewportRange);
-      }
-    });
-  }
 }
 
 async function pollOrderFlowState() {
@@ -1303,9 +1233,8 @@ async function pollOrderFlowState() {
     beginDataUpdate();
     try {
       applySeriesData();
-      ChartAdapter.syncLivePanesFromPrice();
     } finally {
-      endDataUpdate(0);
+      endDataUpdate();
     }
     ChartAdapter.setChartInitialized(true);
   } catch (err) {
@@ -1339,7 +1268,10 @@ async function pollLatestState() {
       liveStore.upsertCandle(latest, getLiveStoreTf());
     } else if (!last || latest.time > last.time) {
       if (last && isLiveTickGapTooLarge(last.time, latest.time)) {
-        console.warn(`Time gap too large (${latest.time} vs ${last.time}). Ignoring live poll tick in history mode.`);
+        if (!_microscopeTickMuted) {
+          console.log(`[Mode Switch] Time gap too large. Entering historical microscope mode. Live poll ticks will be silently ignored.`);
+          _microscopeTickMuted = true;
+        }
         return;
       }
       liveStore.upsertCandle(latest, getLiveStoreTf());
@@ -1375,6 +1307,13 @@ let liveNavigatorSettingsSynced = false;
 
 async function loadDashboard(options = {}) {
   const reqId = ++currentLiveRequestId;
+  if (!options.navigatorsOnly && shouldPaintLiveChart() && !ChartAdapter.isInitialized('live')) {
+    const chartsReady = ChartAdapter.initLiveCharts();
+    if (!chartsReady) {
+      setTimeout(() => loadDashboard(options), 500);
+      return;
+    }
+  }
   if (!liveNavigatorSettingsSynced && shouldPaintLiveChart()) {
     liveNavigatorSettingsSynced = true;
     try {
@@ -1383,42 +1322,12 @@ async function loadDashboard(options = {}) {
       console.warn('live navigator settings sync:', err);
     }
   }
-  try {
-    const { warmingUp, data } = await fetchLiveState({
-      userTfChange: options.userTfChange === true,
-      navigatorsOnly: options.navigatorsOnly,
-    });
-    if (reqId !== currentLiveRequestId) return;
-    if (syncTradingTimeframeFromState(data) && !options._tfSyncRetried) {
-      clearChartData();
-      ChartAdapter.setChartInitialized(false);
-      return loadDashboard({ ...options, _tfSyncRetried: true });
-    }
-    if (reqId !== currentLiveRequestId) return;
-    if (warmingUp) {
-      setTimeout(() => loadDashboard(options), 2000);
-      return;
-    }
-    if (!data.candles || data.candles.length === 0) {
-      if (data.status === 'ready') {
-        renderState({ ...data, candles: data.candles || [], oscillators: data.oscillators || [] }, options);
-        if (isOrderFlowTf(currentTf)) {
-          ChartAdapter.setChartInitialized(true);
-          updateBufferingOverlay();
-        }
-        return;
-      }
-      setTimeout(() => loadDashboard(options), 2000);
-      return;
-    }
-    renderState(data, options);
-  } catch (err) {
+
+  const handleLoadError = (err) => {
     if (reqId !== currentLiveRequestId) return;
     const isTimeout = err?.name === 'TimeoutError';
-    if (err?.name === 'AbortError' && !isTimeout) {
-      return;
-    }
-    console.error('loadDashboard:', err);
+    if (err?.name === 'AbortError' && !isTimeout) return;
+    console.error('Dashboard load failed:', err);
     if (isOrderFlowTf(currentTf)) {
       clearChartData();
       ChartAdapter.setChartInitialized(true);
@@ -1427,6 +1336,118 @@ async function loadDashboard(options = {}) {
     }
     const retryMs = isTimeout ? 1500 : 3000;
     setTimeout(() => loadDashboard(options), retryMs);
+  };
+
+  if (options.navigatorsOnly) {
+    try {
+      const { warmingUp, data } = await fetchLiveState({
+        userTfChange: options.userTfChange === true,
+        navigatorsOnly: true,
+      });
+      if (reqId !== currentLiveRequestId) return;
+      if (warmingUp) {
+        setTimeout(() => loadDashboard(options), 2000);
+        return;
+      }
+      renderState(data, options);
+    } catch (err) {
+      handleLoadError(err);
+    }
+    return;
+  }
+
+  window.__isDashboardLoading = true;
+  ToolbarController.setBuffering(true);
+  try {
+    const TARGET_BARS = 3000;
+    const tf = getLiveStoreTf();
+    const anchor = options.viewportAnchor;
+    const isMicroscope = anchor && !anchor.isAtRightEdge && anchor.centerTimeMs;
+
+    let stateData = null;
+    let historyData = null;
+
+    if (isMicroscope) {
+      const intervalMs = getIntervalMs(tf);
+      const halfWindowMs = (TARGET_BARS / 2) * intervalMs;
+      const targetEndTimeSec = Math.floor((anchor.centerTimeMs + halfWindowMs) / 1000);
+
+      try {
+        historyData = await fetchLiveHistory(targetEndTimeSec, TARGET_BARS);
+      } catch (histErr) {
+        console.warn('Dashboard microscope history:', histErr);
+      }
+      if (reqId !== currentLiveRequestId) return;
+
+      liveStore.seal();
+      liveStore.replaceFromServer({
+        candles: toCandles(historyData?.candles || []),
+        oscillators: historyData?.oscillators || [],
+        annotations: historyData?.annotations,
+      }, tf);
+
+      stateData = {
+        candles: historyData?.candles || [],
+        oscillators: historyData?.oscillators || [],
+        annotations: historyData?.annotations,
+        hasMore: historyData?.hasMore,
+        status: 'ready',
+      };
+    } else {
+      const { warmingUp, data } = await fetchLiveState({
+        userTfChange: options.userTfChange === true,
+      });
+      if (reqId !== currentLiveRequestId) return;
+      stateData = data;
+
+      if (_microscopeTickMuted && !warmingUp && stateData.candles?.length) {
+        console.log(`[Mode Switch] Returned to Live edge. Accepting WS ticks again.`);
+        _microscopeTickMuted = false;
+      }
+
+      if (syncTradingTimeframeFromState(stateData) && !options._tfSyncRetried) {
+        clearChartData();
+        ChartAdapter.setChartInitialized(false);
+        return loadDashboard({ ...options, _tfSyncRetried: true });
+      }
+      if (reqId !== currentLiveRequestId) return;
+      if (warmingUp) {
+        setTimeout(() => loadDashboard(options), 2000);
+        return;
+      }
+      if (!stateData.candles || stateData.candles.length === 0) {
+        if (stateData.status === 'ready') {
+          if (reqId !== currentLiveRequestId) return;
+          await renderState(
+            { ...stateData, candles: stateData.candles || [], oscillators: stateData.oscillators || [] },
+            options,
+          );
+          if (isOrderFlowTf(currentTf)) {
+            ChartAdapter.setChartInitialized(true);
+            updateBufferingOverlay();
+          }
+          return;
+        }
+        setTimeout(() => loadDashboard(options), 2000);
+        return;
+      }
+
+      liveStore.seal();
+      liveStore.replaceFromServer({
+        candles: toCandles(stateData.candles),
+        oscillators: stateData.oscillators || [],
+        annotations: stateData.annotations,
+      }, tf);
+    }
+
+    if (reqId !== currentLiveRequestId) return;
+    await renderState(stateData, { ...options, isPreFetch: !isMicroscope, storeReady: true });
+  } catch (err) {
+    handleLoadError(err);
+  } finally {
+    liveStore.unseal();
+    ToolbarController.setBuffering(false);
+    window.__isDashboardLoading = false;
   }
 }
 
@@ -1458,8 +1479,6 @@ async function maybeLoadBacktestHistory(range) {
       return;
     }
 
-    const prependOldRange = ChartAdapter.getVisibleLogicalRange('backtest') ?? null;
-
     backtestStore.seal();
     beginDataUpdate();
     try {
@@ -1477,18 +1496,14 @@ async function maybeLoadBacktestHistory(range) {
 
       const storeData = backtestStore.getForLightweightCharts();
 
-      ChartAdapter.applyFullData('backtest', storeData, {
-        isPrepend: true,
-        addedCount: added,
-        prependOldRange,
-      });
+      ChartAdapter.applyHistoryPrepend('backtest', storeData, added);
       ChartAdapter.applyWozduhVisibility('backtest');
       ChartAdapter.applyBacktestMarkers(backtestLastTrades, storeData.osc);
 
       backtestHistoryHasMore = data.hasMore !== false && added > 0;
     } finally {
       backtestStore.unseal();
-      endDataUpdate(0);
+      endDataUpdate();
     }
 
     if (backtestHistoryHasMore && added > 0) {
@@ -1506,16 +1521,18 @@ async function maybeLoadBacktestHistory(range) {
   }
 }
 
-async function fetchLiveHistory(endTimeSec) {
+async function fetchLiveHistory(endTimeSec, limitOverride = null) {
   return API.fetchLiveHistory({
     tf: currentTf,
     endTimeSec,
-    limit: HISTORY_CHUNK_LIMIT,
+    limit: limitOverride || HISTORY_CHUNK_LIMIT,
     rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
   });
 }
 
 async function maybeLoadHistory(range, options = {}) {
+  if (!ChartAdapter.isInitialized('live') || liveStore.isSealed() || window.__isDashboardLoading) return;
+  const currentEpoch = liveHistoryEpoch;
   const force = options.force === true;
   if (isLoadingHistory || !historyHasMore) return Promise.resolve();
   if (!shouldPaintLiveChart()) return;
@@ -1526,16 +1543,15 @@ async function maybeLoadHistory(range, options = {}) {
   const firstTime = liveStore.firstCandleTimeSec();
   if (firstTime == null) return;
   const endTimeSec = Number(firstTime);
-  const epoch = liveHistoryEpoch;
   const reqId = currentLiveRequestId;
-  const prependOldRange = ChartAdapter.getVisibleLogicalRange('live');
 
   isLoadingHistory = true;
   let added = 0;
 
   try {
     const data = await fetchLiveHistory(endTimeSec);
-    if (epoch !== liveHistoryEpoch || reqId !== currentLiveRequestId) return;
+    if (currentEpoch !== liveHistoryEpoch || !ChartAdapter.isInitialized('live')) return;
+    if (reqId !== currentLiveRequestId) return;
     if (!Array.isArray(data.candles) || data.candles.length === 0) {
       historyHasMore = false;
       return;
@@ -1558,11 +1574,9 @@ async function maybeLoadHistory(range, options = {}) {
       }
 
       const storeData = liveStore.getForLightweightCharts();
-      ChartAdapter.applyFullData('live', storeData, {
-        isPrepend: true,
-        addedCount: added,
-        prependOldRange,
-      });
+
+      ChartAdapter.applyHistoryPrepend('live', storeData, added);
+
       if (liveNavigatorResult) {
         ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, storeData.candles, {
           context: 'live',
@@ -1572,28 +1586,29 @@ async function maybeLoadHistory(range, options = {}) {
       updateBufferingOverlay();
     } finally {
       liveStore.unseal();
-      endDataUpdate(0);
+      endDataUpdate();
     }
 
-    if (historyHasMore && added > 0) {
-      requestAnimationFrame(() => {
-        const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
-        if (viewportRange && viewportRange.from < LIVE_HISTORY_SCROLL_THRESHOLD) {
-          liveHistoryScrollArmed = true;
-          scheduleHistoryLoad(viewportRange);
-        }
-      });
-    }
-
-    if (!historyHasMore || epoch !== liveHistoryEpoch) return;
+    if (!historyHasMore || currentEpoch !== liveHistoryEpoch) return;
   } catch (err) {
     console.error('lazy history:', err);
   } finally {
     isLoadingHistory = false;
   }
+
+  if (historyHasMore && currentEpoch === liveHistoryEpoch) {
+    setTimeout(() => {
+      const finalRange = ChartAdapter.getVisibleLogicalRange('live');
+      const threshold = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_HISTORY_SCROLL_THRESHOLD) || 50;
+      if (finalRange && finalRange.from < threshold) {
+        scheduleHistoryLoad(finalRange);
+      }
+    }, 0);
+  }
 }
 
 function scheduleHistoryLoad(range, options = {}) {
+  if (liveStore.isSealed() || window.__isDashboardLoading) return;
   if (!range || !historyHasMore) return;
   if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;

@@ -55,8 +55,9 @@ const TimeNormalizer = (() => {
 
     const existingVol = Number(existing.volume);
     const incomingVol = Number(incoming.volume);
-    const volume = (Number.isFinite(existingVol) ? existingVol : 0)
-      + (Number.isFinite(incomingVol) ? incomingVol : 0);
+    const volume = incoming.volume !== undefined && Number.isFinite(incomingVol)
+      ? incomingVol
+      : (Number.isFinite(existingVol) ? existingVol : 0);
 
     return {
       ...existing,

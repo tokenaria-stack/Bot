@@ -147,13 +147,13 @@ const TimeframeController = (() => {
     if (resolved === '1M') return;
 
     const changed = resolved !== currentTf;
+    let viewportAnchor = null;
 
     if (changed) {
-      window.__pendingAnchor = null;
       abortLiveStateFetch();
       ++currentLiveRequestId;
       if (ChartAdapter.isInitialized('live')) {
-        window.__pendingAnchor = ChartAdapter.captureViewport('live');
+        viewportAnchor = window.ViewportManager.capture('live');
       }
     }
 
@@ -169,7 +169,7 @@ const TimeframeController = (() => {
       ChartAdapter.setChartInitialized(false);
     }
 
-    loadDashboard({ userTfChange: changed });
+    loadDashboard({ userTfChange: changed, viewportAnchor });
 
     if (refreshTimer) clearInterval(refreshTimer);
     if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);

@@ -31,8 +31,6 @@ const API = {
       rsxLookback,
       limit,
       extra = {},
-      pendingAnchor = null,
-      intervalMs = 60000,
     } = config;
 
     const params = {
@@ -41,18 +39,6 @@ const API = {
       limit,
       ...extra,
     };
-
-    if (pendingAnchor?.type === 'center' && pendingAnchor.targetTime != null && params.endTime == null) {
-      const halfLimit = limit / 2;
-      const centerSec = Number(pendingAnchor.targetTime);
-      if (Number.isFinite(centerSec) && intervalMs > 0) {
-        let targetEndTimeMs = centerSec * 1000 + (halfLimit * intervalMs);
-        if (targetEndTimeMs > Date.now()) {
-          targetEndTimeMs = Date.now();
-        }
-        params.endTime = Math.floor(targetEndTimeMs / 1000);
-      }
-    }
 
     return params;
   },

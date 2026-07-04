@@ -154,8 +154,11 @@ const MTF_PERIOD_COLORS = {
   '3d': '#e91e63',
   '1w': '#ab47bc',
 };
-const LIVE_STATE_CANDLE_LIMIT = 50;
+/** Fast RAM tail for /api/state; deep history comes from pre-fetch assembly. */
+const LIVE_STATE_CANDLE_LIMIT = 300;
 const HISTORY_CHUNK_LIMIT = 3000;
+const MAX_STORE_CAPACITY = 50000;
+const STORE_PRUNE_CHUNK = 5000;
 const LIVE_POLL_CANDLE_LIMIT = 5;
 const DEFAULT_RSX_LOOKBACK = 90;
 const DEFAULT_RSX_SIGNAL_LENGTH = 9;
@@ -435,6 +438,7 @@ if (typeof window !== 'undefined') {
   window.CONFIG = {
     TV, SCORING_MATRIX_DEFAULTS, SCORING_MATRIX_LABELS,
     LIVE_STATE_CANDLE_LIMIT, HISTORY_CHUNK_LIMIT, LIVE_POLL_CANDLE_LIMIT,
+    MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
     LIVE_HISTORY_SCROLL_THRESHOLD, BACKTEST_HISTORY_CHUNK_LIMIT,
     LIVE_CHART_SELECTORS, BACKTEST_CHART_SELECTORS, PANE_STACK_CONFIG,
     defaultRsxSettings, defaultNavigatorPaneSettings, defaultRiskSettings, defaultWozduhPrefs,

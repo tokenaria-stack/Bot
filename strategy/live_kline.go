@@ -6,7 +6,7 @@ import "trading_bot/exchange"
 const LiveKlineRAMCap = 3000
 
 // AnalystBootKlineLimit is how many bars each analyst loads from SQLite/REST at process start.
-const AnalystBootKlineLimit = 50
+const AnalystBootKlineLimit = 400
 
 // GetKlinesTail returns a copy of the last maxBars candles (or all when shorter).
 func (a *Marker) GetKlinesTail(maxBars int) []exchange.Kline {

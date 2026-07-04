@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июнь 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT, gap-fill merge, Falcon/RSX snapshot isolation. **UI/Stats/Backtest tooling:** универсальный Stats Dashboard (Live/Paper/Backtest), Click-to-Lock Trade Inspector, anti-flicker телеметрия, остановка бэктеста. **CLI A/B:** `cmd/backtest` + `make ab-test` (вспомогательный; основной инструмент калибровки — UI). Следующий фокус: **калибровка весов** + персистентность trade history. Правила в `.cursor/rules/`.
+> **Снэпшот MEMORY (июль 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT. **Frontend Phase 20 ✅:** монолит `app.js` разрезан на SSOT-пайплайн (`ChartDataStore` → `ChartAdapter` → LWC), Pre-Fetch Assembly (ровно 3000 баров на старте без 8s boot), `ViewportManager` (time-anchor, без анимаций), seal/guard против цепной пагинации. **Go boot:** `AnalystBootKlineLimit=400`, `IndicatorWarmupBars=300`. **UI/Stats/Backtest:** Stats Dashboard, Trade Inspector, Stop Backtest. Следующий фокус: **калибровка весов** + персистентность trade history. Правила в `.cursor/rules/`.
 
 ---
 
@@ -171,13 +171,93 @@ HTFProvider.GetKlines / PinKlines (cache: symbol_interval)
 - `marker` → `markerPayload`: trade entry/exit на графике
 
 **Live dual-channel (HTTP bootstrap + WS push):**
-1. `boot()` → `fetchBootstrapState` (без localStorage TF) → `initCharts` → `renderState`
-2. `GET /api/state` → `enrichFromAnalyst` → `master.ScoreDecisionForTelemetry`
-3. WS `tick` → `SetOnTelemetry` → `BroadcastTick` с полным `ScoreDecision` на **каждом** тике рабочего TF
-4. WS игнорируется до `chartInitialized`
-5. `pollLatestState` дополняет scoring на REST
+1. `boot()` → `initCharts` → `loadDashboard` (**Pre-Fetch Assembly**, Phase 20.4)
+2. `GET /api/state` — быстрый RAM-хвост (`LIVE_STATE_CANDLE_LIMIT=300`); `GET /api/history` — глубина до `HISTORY_CHUNK_LIMIT=3000`
+3. Store: `seal` → `replaceFromServer` + `prependHistory` → **один** `renderState` → `fitLiveChartsContent`
+4. WS `tick` → `liveStore.upsert*` → `ChartAdapter.applyDelta` (только если `!liveStore.isSealed()`)
+5. WS игнорируется до `chartInitialized`
+6. `pollLatestState` — tail `LIVE_POLL_CANDLE_LIMIT=5`
 
 **Scoring на wire:** `scoreDecisionForAnalyst` → `master.ScoreDecisionForTelemetry` (closed-bar cache, read-only) → `MarketState` / `tickPayload`.
+
+---
+
+## Frontend Data Pipeline (Phase 19.5–20)
+
+**Принцип (Jeweler):** данные текут `API/WS → TimeNormalizer → ChartDataStore (SSOT) → ChartAdapter (LWC facade) → canvas`. `app.js` — только оркестратор. Никаких прямых `setData` из ingress.
+
+### Карта модулей
+
+| Модуль | Файл | Роль |
+|--------|------|------|
+| **CONFIG** | `web/config.js` | `LIVE_STATE_CANDLE_LIMIT`, `HISTORY_CHUNK_LIMIT`, chart styles |
+| **TimeNormalizer** | `web/time-normalizer.js` | `snapToGrid(tf)`, `mergeCandles` (LWW volume — Phase 20.4B) |
+| **ChartDataStore** | `web/store.js` | `Map<snappedMs>` candles/osc; `annotations` flat grid; `seal/unseal` |
+| **Mappers** | `web/mappers.js` | Pure transforms: `toCandles`, spike/wozduh markers из annotation grid |
+| **ChartAdapter** | `web/chart-adapter.js` | LWC lifecycle, `ms→sec` на границе, delta/full apply, scroll hooks |
+| **ViewportManager** | `web/ui/viewport-manager.js` | `capture/restore` по `centerTimeMs`; **без** logical-index shift |
+| **API** | `web/api.js` | `fetchLiveState`, `fetchLiveHistory`, backtest |
+| **UI controllers** | `web/ui/*.js` | TF, toolbar, backtest, RSX, navigators, tabs, layout |
+| **Orchestrator** | `web/app.js` | `loadDashboard`, `renderState`, `maybeLoadHistory`, WS handlers |
+| **Dormant** | `web/indicators_dormant.js` | Карантин неактивных индикаторов |
+
+**Удалено:** `web/viewport.js`, `Viewport.captureViewport`, `__pendingAnchor`, prepend index-shift hacks, legacy RSX incremental paths (`rsx_div_fractal.go`, `rsx_div_tv.go`, `rsx_incremental.go`).
+
+### Pre-Fetch Assembly (Phase 20.4E–F)
+
+Молниеносный старт Go (`AnalystBootKlineLimit=400`) + полная глубина на UI **без** увеличения boot:
+
+```
+loadDashboard (window.__isDashboardLoading = true)
+  → fetchLiveState()           // RAM tail, limit=300
+  → neededBars = 3000 - candles.length
+  → if neededBars > 0:
+       fetchLiveHistory(oldestSec, neededBars)   // ровно недостающее до 3000
+  → liveStore.seal()
+  → replaceFromServer(state) + prependHistory(history)
+  → renderState({ isPreFetch: true, storeReady: true })  // один paint
+  → fitLiveChartsContent()     // весь диапазон в экран
+  → liveStore.unseal(); __isDashboardLoading = false
+```
+
+**TF switch:** `TimeframeController` → `ViewportManager.capture('live')` → `loadDashboard({ viewportAnchor })` → `restore` (не fit).
+
+### ViewportManager (Phase 20.4C–F)
+
+**Capture:** `{ centerTimeMs, visibleBars, isAtRightEdge }` — якорь по времени, не по logical index.
+
+**Restore:**
+- **Center:** binary search `candlesArray()` по `timeMs` → `syncVisibleLogicalRange(..., { animate: false })`
+- **Right edge:** `from = lastIndex - visibleBars`, `to = lastIndex` — **без** `scrollToRealTime()` (анимация триггерила ложную пагинацию)
+
+**`lockPriceAutoScaleDuring`:** MTF overlay / plugin update без прыжка Y.
+
+### Store Seal & Pagination Guards (Phase 20.3–20.4F)
+
+| Guard | Где | Зачем |
+|-------|-----|-------|
+| `liveStore.seal()` | `loadDashboard`, `renderState`, `maybeLoadHistory` | WS delta не портит batch ingress |
+| `liveStore.isSealed()` | `getLatestDeltaForChart`, scroll hooks | Intra-bar paint заблокирован |
+| `window.__isDashboardLoading` | `loadDashboard` finally | Блок первичной пагинации |
+| `liveStore.isSealed() \|\| __isDashboardLoading` | `scheduleHistoryLoad`, `maybeLoadHistory`, `chart-adapter` `onScrollHistory` | Нет цепной реакции при `setData`/viewport jump |
+
+**Lazy scroll:** `liveHistoryScrollArmed` — arm на wheel/pointerdown; `maybeLoadHistory` при `range.from < LIVE_HISTORY_SCROLL_THRESHOLD`.
+
+### Annotation Grid (Phase 20.2)
+
+`annotations: Map<snappedMs, flatProps>` — spike/wozduh/rsx labels. `_mergeAnnotationProps` sticky flags. Marker cache в `ChartAdapter` (`_cachedPriceMarkers`).
+
+### Go-константы live boot (Phase 20.4B)
+
+| Константа | Файл | Значение | Смысл |
+|-----------|------|----------|-------|
+| `AnalystBootKlineLimit` | `strategy/live_kline.go` | **400** | SQLite/REST при старте процесса |
+| `IndicatorWarmupBars` | `strategy/rsx_pipeline.go` | **300** | Trim холодного прогрева RSX в API output |
+| `LiveKlineRAMCap` | `strategy/live_kline.go` | **3000** | Ring buffer в RAM per Marker |
+
+**Volume bug fix (20.4B):** `mergeCandles` — Last-Write-Wins для `volume` (не суммировать cumulative WS volume).
+
+**Time scale sync (20.4C):** `chartTimeFormatBundle()` — `Intl.DateTimeFormat` + `tickMarkFormatter` на `SHARED_TIME_SCALE`; `applyOrderFlowTimeScale` на все live charts.
 
 ---
 
@@ -237,7 +317,72 @@ Binance → Marker (Layer1/2 + snapshot) → ScoreEngine → ScoreDecision
 
 ---
 
-## Changelog / Статус (июнь 2026)
+## Changelog / Статус (июль 2026)
+
+### [Frontend SSOT Pipeline — Phase 19.5–20 — июль 2026]
+
+#### [Phase 19.5 — Monolith Decomposition — ✅]
+**Цель:** разрезать `web/app.js` без изменения поведения.
+
+| Извлечено | Файл |
+|-----------|------|
+| TF / toolbar / tabs | `web/ui/timeframe-controller.js`, `toolbar-controller.js`, `tabs-controller.js` |
+| Backtest / RSX / risk / navigators | `web/ui/backtest-controller.js`, `rsx-controller.js`, `risk-controller.js`, `navigator-controller.js` |
+| Layout / strategy / wozduh | `layout-controller.js`, `strategy-controller.js`, `wozduh-controller.js` |
+| Fetch layer | `web/api.js`, `web/ws.js` |
+| Pure mappers | `web/mappers.js` |
+| Dormant quarantine | `web/indicators_dormant.js` |
+
+`app.js` остаётся оркестратором: `loadDashboard`, `renderState`, history pagination, WS bridge.
+
+#### [Phase 20.1 — Universal TimeGrid — ✅]
+**`web/time-normalizer.js`:** `snapToGrid(timeMs, tf)`, `getIntervalMs`, `mergeCandles`.
+**`web/store.js`:** `ChartDataStore` — все ingress через snap + merge с `tf`.
+
+#### [Phase 20.2 — Annotation Grid — ✅]
+`annotations: Map<snappedMs, flatProps>`; `buildSpikeMarkersFromGrid` / `buildWozduhMarkersFromGrid` в `mappers.js`; live marker cache в `chart-adapter.js`.
+
+#### [Phase 20.3 — Data Pipeline Seal — ✅]
+`seal()` / `unseal()` / `isSealed()`; guard в `getLatestDeltaForChart()`; seal в `renderState`, `maybeLoadHistory`, `loadDashboard`.
+
+#### [Phase 20.3.1 — History Chunk Split — ✅]
+`HISTORY_CHUNK_LIMIT = 3000` для `/api/history` pagination; `LIVE_STATE_CANDLE_LIMIT` отделён от chunk size.
+
+#### [Phase 20.4A — Read-Only Audit — ✅]
+Выявлено: cumulative volume bug, boot < warmup trim → cold RSX, dual viewport systems, logical-index prepend shift.
+
+#### [Phase 20.4B — Iceberg + Math Fix — ✅]
+| Fix | Детали |
+|-----|--------|
+| **Volume LWW** | `mergeCandles` — incoming volume wins, не sum |
+| **Boot limit** | `AnalystBootKlineLimit = 400` (`strategy/live_kline.go`) |
+| **Warmup trim** | `IndicatorWarmupBars = 300` (`strategy/rsx_pipeline.go`) |
+
+#### [Phase 20.4C — Time Sync + ViewportManager — ✅]
+| Изменение | Детали |
+|-----------|--------|
+| **Удалён** | `web/viewport.js`, `captureViewport`, `__pendingAnchor`, prepend shift hacks |
+| **Добавлен** | `web/ui/viewport-manager.js` — time-anchored capture/restore |
+| **Time format** | `chartTimeFormatBundle()` + shared tick formatter на всех live panes |
+| **Store** | `candlesArray()` для binary search по `timeMs` |
+
+#### [Phase 20.4D — Viewport Polish — ✅]
+`TimeframeController`: `ViewportManager.capture('live')` → `loadDashboard({ viewportAnchor })`; `fitLiveChartsContent()`; убран auto-fill из `renderState`/`maybeLoadHistory`.
+
+#### [Phase 20.4E — Exorcism & Pre-Fetch Assembly — ✅]
+| Изменение | Детали |
+|-----------|--------|
+| **Pre-Fetch** | State → History → Store (under seal) → single `renderState({ isPreFetch, storeReady })` |
+| **Fast state** | `LIVE_STATE_CANDLE_LIMIT = 300` (RAM tail, не 3000) |
+| **Ghost fix** | `captureViewport` полностью удалён из `chart-adapter.js` (краш = stale bundle) |
+| **Loading** | `ToolbarController.setBuffering` + `window.__isDashboardLoading` |
+
+#### [Phase 20.4F — Perfect Assembly & Animation Kill — ✅]
+| Изменение | Детали |
+|-----------|--------|
+| **Ровно 3000 баров** | `neededBars = 3000 - stateCandles.length`; `fetchLiveHistory(endSec, neededBars)` |
+| **No animation** | Right-edge restore: `syncVisibleLogicalRange(..., { animate: false })` вместо `scrollToRealTime()` |
+| **Pagination guard** | `liveStore.isSealed() \|\| window.__isDashboardLoading` в scroll hook + `scheduleHistoryLoad` + `maybeLoadHistory` |
 
 ### [Live Viewport TradingView-style + HTF Hub — Phase 5.46–5.48 — сессия]
 
@@ -534,10 +679,10 @@ targetFrom = targetTo - windowSize
 | **0** | ~~**Live indicator poisoning (Go)**~~ | `layer2.go`, `indicators/` | ✅ 5.57–5.58 |
 | 1 | ~~**Navigator MTF math**~~ | `trendline_navigator.go` | ✅ 5.54 |
 | 2 | **Navigator background zones** | `web/trendline_plugin.js` | 🟡 |
-| 3 | ~~**Backtest viewport**~~ | `web/viewport.js` | ✅ 5.49 |
+| 3 | ~~**Backtest viewport**~~ | `web/ui/viewport-manager.js` | ✅ 20.4C (supersedes `viewport.js`) |
 | 4 | **Backend 1M** — UI `1M`→`1w` | `server/`, `main.go` | 🟢 |
-| 5 | **Microscope `endTime`** | `web/app.js` | 🟡 |
-| 6 | **Forward lazy load** | `web/app.js` | 🟡 |
+| 5 | **Microscope `endTime`** | `web/app.js` | 🟡 TF switch без center-anchor API |
+| 6 | **Forward lazy load** | `web/app.js` | 🟡 scroll prepend only (pre-fetch закрывает initial) |
 | 7 | **SQLite clear в Cache** | `server/webserver.go` | 🟡 |
 | 8 | **Qdrant in main** | `main.go`, `vector_db/` | 🔜 |
 | 9 | **expose `masterState`** | `server/webserver.go` | 🔜 |
@@ -556,6 +701,9 @@ targetFrom = targetTo - windowSize
 | **22** | **Live Trade Inspector** | `web/app.js` | 🔜 scoring history buffer |
 | **23** | **Backtest stop: await partial JSON** | `web/app.js` | 🟡 prefer server response over AbortController |
 | **24** | **Stats live initial balance sync** | `domain/trade_history.go` | 🟡 uses DefaultSessionCapital |
+| **25** | ~~**Frontend monolith / live viewport hacks**~~ | `web/app.js`, `viewport.js` | ✅ Phase 19.5–20 |
+| **26** | ~~**Live volume exponential growth**~~ | `web/time-normalizer.js` | ✅ 20.4B LWW |
+| **27** | ~~**Chain-reaction history load**~~ | `app.js`, `viewport-manager.js` | ✅ 20.4F guards + no animate |
 
 ---
 
@@ -570,12 +718,15 @@ targetFrom = targetTo - windowSize
 | Live | `strategy/master.go`, `main.go`, `config/config.go` |
 | Backtest | `strategy/backtest.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `cmd/backtest/` |
 | Stats / Trades | `domain/trade_history.go`, `server/backtest_run.go`, `server/stats_test.go` |
-| API / WS | `server/webserver.go`, `server/micro_broadcast.go`, `server/config/matrix.json` |
-| Frontend | `web/app.js`, `web/viewport.js`, `web/style.css`, `web/trade_marker_plugin.js` |
+| API / WS | `server/webserver.go`, `server/ram_router.go`, `server/chart_cache.go`, `server/micro_broadcast.go`, `server/config/matrix.json` |
+| Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go` |
+| Frontend core | `web/app.js`, `web/store.js`, `web/chart-adapter.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, … |
+| Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
 **Env:** `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, `READ_ONLY`, `SANDBOX_MODE`.
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, paper/sandbox via `.env`. `make ab-test` — CLI A/B backtest (опционально).
 
-**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite; live Trade Inspector при необходимости.
+**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite; live Trade Inspector при необходимости. Frontend Phase 20 закрыт — дальнейшие UI-работы только по телеметрии/inspector, не по data pipeline.

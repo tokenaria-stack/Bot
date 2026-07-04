@@ -94,16 +94,13 @@ const TabsController = (() => {
           beginDataUpdate();
           try {
             applySeriesData();
-            ChartAdapter.syncLivePanesFromPrice();
           } finally {
-            endDataUpdate(0);
+            endDataUpdate();
           }
           if (typeof shouldRunLivePoll === 'function' && shouldRunLivePoll()) {
             pollLatestState();
           }
         }
-      } else if (targetId === 'tab-backtest' && ChartAdapter?.getChartHandle('backtest')?.chart) {
-        ChartAdapter.forceSyncTimeScales('backtest');
       } else if (targetId === 'tab-stats') {
         ChartAdapter?.resizeEquity?.();
         ChartAdapter?.fitEquityContent?.();
@@ -112,6 +109,10 @@ const TabsController = (() => {
         }
       }
     });
+
+    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.handleResize === 'function') {
+      setTimeout(() => ChartAdapter.handleResize(), 0);
+    }
   }
 
   function init() {

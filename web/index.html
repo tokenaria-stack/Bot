@@ -36,6 +36,16 @@
       flex-direction: column;
     }
 
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 100%;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     /* ── Unified command bar (tabs + controls) ── */
     .command-bar {
       display: flex;
@@ -1004,20 +1014,74 @@
       color: var(--tv-text);
     }
 
-    .pane-resize {
-      flex: 0 0 5px;
-      cursor: ns-resize;
-      background: var(--tv-border);
-      transition: background 0.15s;
-      z-index: 6;
+    /* Хосты графиков отдают 100% пространства и служат якорем (relative) */
+    .chart-wrapper {
+      flex: 1 1 100% !important;
+      min-height: 0 !important;
+      position: relative !important;
+      display: block !important;
     }
 
-    .pane-resize:hover,
-    .pane-resize.dragging {
-      background: var(--tv-accent);
-    }
-
+    /* Сами контейнеры LWC прибиты гвоздями к границам хоста */
     #chart-container,
+    #bt-chart-container {
+      position: absolute !important;
+      inset: 0 !important;
+    }
+
+    .chart-pane-ui {
+      position: absolute;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .chart-pane-ui .chart-legend,
+    .chart-pane-ui .indicator-settings-menu,
+    .chart-pane-ui .rsx-val-inline {
+      pointer-events: auto;
+    }
+
+    #osc-wrap.chart-pane-ui {
+      left: 8px;
+      top: 58%;
+      right: 8px;
+    }
+
+    #bt-osc-wrap.chart-pane-ui {
+      left: 8px;
+      top: 58%;
+      right: 8px;
+    }
+
+    #rsx-wrap.chart-pane-ui {
+      left: 8px;
+      bottom: 8px;
+      right: 8px;
+    }
+
+    #bt-rsx-wrap.chart-pane-ui {
+      left: 8px;
+      bottom: 8px;
+      right: 8px;
+    }
+
+    .pane-splitter {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 4px;
+      margin-top: -2px;
+      background: rgba(42, 46, 57, 0.4);
+      z-index: 100;
+      cursor: ns-resize;
+      transition: background 0.2s;
+      touch-action: none;
+    }
+
+    .pane-splitter:hover {
+      background: #2196F3;
+    }
+
     #osc-container,
     #rsx-container {
       width: 100%;
@@ -1236,6 +1300,8 @@
         <div class="pane-label" id="volume-label">Vol<span class="val" id="volume-val">—</span></div>
         <div class="chart-legend" data-pane="price" data-context="live"></div>
         <div id="chart-container"></div>
+        <div class="pane-splitter" data-boundary="price-wozduh" aria-hidden="true"></div>
+        <div class="pane-splitter" data-boundary="wozduh-rsx" aria-hidden="true"></div>
         <div class="scale-controls" data-scale-context="live" aria-label="Price scale controls">
           <button type="button" class="scale-btn scale-btn--auto active" data-action="auto" title="Auto scale (Y)">Auto</button>
           <button type="button" class="scale-btn scale-btn--log active" data-action="log" title="Logarithmic scale">Log</button>
@@ -1243,11 +1309,9 @@
         <div id="orderflow-buffer">Buffering Order Flow data... Please wait.</div>
         <div id="ruler-shade" class="ruler-shade"></div>
         <div id="ruler-tooltip" class="ruler-tooltip"></div>
-      </div>
-      <div class="pane-resize" data-resize="price-osc" data-pane-stack="live"></div>
-      <div class="osc-wrap" id="osc-wrap">
-        <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
-        <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
+        <div class="osc-wrap chart-pane-ui" id="osc-wrap">
+          <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
+          <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
@@ -1258,12 +1322,10 @@
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
             <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
           </div>
-        <div id="osc-container"></div>
-      </div>
-      <div class="pane-resize" data-resize="osc-rsx" data-pane-stack="live"></div>
-      <div class="rsx-wrap" id="rsx-wrap">
-        <div class="chart-legend" data-pane="rsx" data-context="live"></div>
-        <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+        </div>
+        <div class="rsx-wrap chart-pane-ui" id="rsx-wrap">
+          <div class="chart-legend" data-pane="rsx" data-context="live"></div>
+          <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
             <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
             <div class="setting-row">
               <label>RSX Length:</label>
@@ -1306,10 +1368,9 @@
             <label class="menu-row"><input type="checkbox" class="rsx-show-pivots-chk" checked /> Show Pivots</label>
             <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
           </div>
-        <span class="val rsx-val-inline" id="rsx-val">—</span>
-        <div id="rsx-container"></div>
+          <span class="val rsx-val-inline" id="rsx-val">—</span>
+        </div>
       </div>
-    </div>
     </div>
     </div>
 
@@ -1381,17 +1442,17 @@
             <div class="chart-wrap chart-wrapper" id="bt-price-wrap">
               <div class="chart-legend" data-pane="price" data-context="backtest"></div>
               <div id="bt-chart-container"></div>
+              <div class="pane-splitter" data-boundary="price-wozduh" aria-hidden="true"></div>
+              <div class="pane-splitter" data-boundary="wozduh-rsx" aria-hidden="true"></div>
               <div class="scale-controls" data-scale-context="backtest" aria-label="Price scale controls">
                 <button type="button" class="scale-btn scale-btn--auto active" data-action="auto" title="Auto scale (Y)">Auto</button>
                 <button type="button" class="scale-btn scale-btn--log active" data-action="log" title="Logarithmic scale">Log</button>
               </div>
               <div id="bt-ruler-shade" class="ruler-shade"></div>
               <div id="bt-ruler-tooltip" class="ruler-tooltip"></div>
-            </div>
-            <div class="pane-resize" data-resize="price-osc" data-pane-stack="backtest"></div>
-            <div class="osc-wrap" id="bt-osc-wrap">
-              <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
-              <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
+              <div class="osc-wrap chart-pane-ui" id="bt-osc-wrap">
+                <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
+                <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
@@ -1402,13 +1463,11 @@
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
                   <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
                 </div>
-              <div id="bt-osc-container"></div>
-            </div>
-            <div class="pane-resize" data-resize="osc-rsx" data-pane-stack="backtest"></div>
-            <div class="rsx-wrap" id="bt-rsx-wrap">
-              <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
-              <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
-              <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
+              </div>
+              <div class="rsx-wrap chart-pane-ui" id="bt-rsx-wrap">
+                <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
+                <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
+                <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
                   <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
                   <div class="setting-row">
                     <label>RSX Length:</label>
@@ -1451,7 +1510,7 @@
                   <label class="menu-row"><input type="checkbox" class="rsx-show-pivots-chk" checked /> Show Pivots</label>
                   <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
                 </div>
-              <div id="bt-rsx-container"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1687,12 +1746,13 @@
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="/trendline_plugin.js"></script>
   <script src="/trade_marker_plugin.js"></script>
-  <script src="/viewport.js"></script>
   <script src="/config.js" defer></script>
   <script src="/mappers.js" defer></script>
   <script src="/time-normalizer.js" defer></script>
   <script src="/store.js" defer></script>
+  <script src="/ui/chart-layout-manager.js" defer></script>
   <script src="/chart-adapter.js" defer></script>
+  <script src="/ui/viewport-manager.js" defer></script>
   <script src="/api.js" defer></script>
   <script src="/ws.js" defer></script>
   <script src="/ui/tabs-controller.js" defer></script>

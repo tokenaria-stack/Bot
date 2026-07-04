@@ -49,6 +49,20 @@ class ChartDataStore {
   unseal() {
     this._sealed = false;
     this._dirtyIsNewBar = false;
+    this._pruneOldData();
+  }
+
+  _pruneOldData() {
+    const maxCap = (typeof CONFIG !== 'undefined' && CONFIG.MAX_STORE_CAPACITY) || 50000;
+    const chunk = (typeof CONFIG !== 'undefined' && CONFIG.STORE_PRUNE_CHUNK) || 5000;
+    if (this.candles.size <= maxCap) return;
+    const sortedKeys = Array.from(this.candles.keys()).sort((a, b) => a - b);
+    const keysToRemove = sortedKeys.slice(0, chunk);
+    for (const ms of keysToRemove) {
+      this.candles.delete(ms);
+      this.osc.delete(ms);
+      this.annotations.delete(ms);
+    }
   }
 
   isSealed() { return this._sealed; }
@@ -157,6 +171,10 @@ class ChartDataStore {
     });
     chartAnnotations.sort((a, b) => a.time - b.time);
     return chartAnnotations;
+  }
+
+  candlesArray() {
+    return Array.from(this.candles.values()).sort((a, b) => a.timeMs - b.timeMs);
   }
 
   candleCount() {
