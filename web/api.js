@@ -13,6 +13,22 @@ const API = {
   _liveStateAbort: null,
   _liveStateInflight: new Map(),
 
+  // Универсальный конвертер PascalCase -> camelCase для ответов Go
+  normalizeGoResponse(obj) {
+    if (Array.isArray(obj)) {
+      return obj.map(API.normalizeGoResponse);
+    }
+    if (obj !== null && typeof obj === 'object') {
+      const normalized = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+        normalized[camelKey] = API.normalizeGoResponse(value);
+      }
+      return normalized;
+    }
+    return obj;
+  },
+
   apiFetchUrl(path, params = {}) {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -284,7 +300,8 @@ const API = {
     const rawText = await resp.text();
     let result = {};
     try {
-      result = rawText ? JSON.parse(rawText) : {};
+      const parsed = rawText ? JSON.parse(rawText) : {};
+      result = API.normalizeGoResponse(parsed);
     } catch {
       result = { _parseError: true };
     }

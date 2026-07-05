@@ -167,10 +167,10 @@ function ensureMtfNavigatorLayer(chartData, pane, tf) {
   const paneMap = layers[pane] || (layers[pane] = {});
   if (paneMap[key]) return paneMap[key];
 
-  const priceChart = getNavigatorPriceChart(chartData, pane);
-  if (!priceChart) return null;
+  const hostChart = getNavigatorPriceChart(chartData, pane);
+  if (!hostChart) return null;
 
-  const anchorSeries = createMTFOverlaySeries(priceChart, {
+  const anchorSeries = createMTFOverlaySeries(hostChart, {
     color: getMtfPeriodColor(key),
     lineWidth: 0,
     visible: false,
@@ -915,32 +915,32 @@ function attachChartHooks(chartData, hooks = {}, context = 'live') {
   });
 }
 
-function resizeChartInstance(chartData, rootEl) {
-  if (!chartData?.elements) return;
+function resizeChartInstance(chartData) {
+  if (!chartData?.chart || !chartData?.elements?.chartContainer) return;
+  const el = chartData.elements.chartContainer;
+  const rect = el.getBoundingClientRect();
+  const w = rect.width || el.clientWidth || 800;
+  const h = rect.height || el.clientHeight || 400;
+
+  chartData.chart.applyOptions({ width: w, height: h });
   chartData.layoutManager?.positionSplitters();
 }
 
 function resizeChartForContainer(chartData, container) {
-  if (!chartData?.chart || !container) return;
-  resizeChartInstance(chartData, container);
+  if (!chartData?.chart) return;
+  resizeChartInstance(chartData);
 }
 
 function handleResize() {
   const activeTab = getActiveTabId();
-
   if (activeTab === 'tab-live') {
-    resizeChartForContainer(
-      _live,
-      document.getElementById('live-chart-container'),
-    );
+    resizeChartInstance(_live);
   } else if (activeTab === 'tab-backtest') {
-    resizeChartForContainer(
-      _backtest,
-      document.getElementById('backtest-chart-container'),
-    );
+    resizeChartInstance(_backtest);
+  } else if (activeTab === 'tab-stats') {
+    resizeEquityChart();
   }
-
-  if (ruler.active) {
+  if (typeof ruler !== 'undefined' && ruler.active) {
     updateRulerOverlay(getRulerChartData());
   }
 }
@@ -1544,7 +1544,13 @@ function initEquityChart() {
 }
 
 function resizeEquityChart() {
-  // autoSize: true справляется сам, ничего не делаем
+  const container = document.getElementById('equity-chart');
+  if (_equityChart && container) {
+    const rect = container.getBoundingClientRect();
+    const w = rect.width || container.clientWidth || 800;
+    const h = rect.height || container.clientHeight || 300;
+    _equityChart.applyOptions({ width: w, height: h });
+  }
 }
 
 function setAllPriceData(candles) {

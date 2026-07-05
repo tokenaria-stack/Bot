@@ -13,6 +13,7 @@ class ChartDataStore {
     this._dirtyIsNewBar = false;
     this._dirtyAnnotations = false;
     this._sealed = false;
+    this._trades = [];
   }
 
   static toMs(t) {
@@ -35,6 +36,7 @@ class ChartDataStore {
     this.candles.clear();
     this.osc.clear();
     this.annotations.clear();
+    this._trades = [];
     this._resetDirtyState();
   }
 
@@ -179,6 +181,49 @@ class ChartDataStore {
 
   candleCount() {
     return this.candles.size;
+  }
+
+  hasBaseLayer() {
+    return this.candleCount() > 0;
+  }
+
+  setTrades(trades) {
+    this._trades = trades || [];
+  }
+
+  getTrades() {
+    return this._trades || [];
+  }
+
+  patchBacktestData(payload, tf) {
+    let patchedOsc = 0;
+
+    (payload.oscillators || []).forEach((o) => {
+      const norm = typeof Mappers !== 'undefined' ? Mappers.normalizeOscPoint(o) : normalizeOscPoint(o);
+      if (!norm) return;
+      const ms = ChartDataStore._snapMs(norm.time, tf);
+      if (!ms) return;
+
+      const snapped = { ...norm, timeMs: ms, time: ChartDataStore.msToChartSec(ms) };
+      const existing = this.osc.get(ms);
+
+      if (existing) {
+        const merged = this._mergeOsc(existing, snapped);
+        this.osc.set(ms, merged);
+        this._syncOscAnnotationProps(merged);
+      } else {
+        this.osc.set(ms, snapped);
+        this._syncOscAnnotationProps(snapped);
+      }
+      patchedOsc += 1;
+    });
+
+    if (Array.isArray(payload.annotations)) {
+      this._ingestAnnotations(payload.annotations, tf);
+    }
+
+    this._resetDirtyState();
+    return { patchedOsc };
   }
 
   sortedCandleTimesMs() {

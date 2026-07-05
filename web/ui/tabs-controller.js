@@ -47,7 +47,7 @@ const TabsController = (() => {
     panels.forEach((panel) => {
       const isActive = panel.id === targetId;
       panel.classList.toggle('active', isActive);
-      panel.style.display = isActive ? '' : 'none';
+      panel.style.display = isActive ? 'flex' : 'none';
     });
 
     applyToolbarVisibility(targetId);
@@ -111,7 +111,14 @@ const TabsController = (() => {
     });
 
     if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.handleResize === 'function') {
-      setTimeout(() => ChartAdapter.handleResize(), 0);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          ChartAdapter.handleResize();
+          if (targetId === 'tab-backtest') {
+            ChartAdapter.fitContent('backtest');
+          }
+        });
+      });
     }
   }
 

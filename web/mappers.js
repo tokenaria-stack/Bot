@@ -139,10 +139,10 @@ function isValidOHLC(open, high, low, close) {
 function normalizeCandle(c) {
   if (!c) return null;
   const time = chartTime(c?.time ?? c?.Time);
-  const open = Number(c.open);
-  const high = Number(c.high);
-  const low = Number(c.low);
-  const close = Number(c.close);
+  const open = Number(c.open ?? c.Open);
+  const high = Number(c.high ?? c.High);
+  const low = Number(c.low ?? c.Low);
+  const close = Number(c.close ?? c.Close);
   if (time == null) return null;
   if (!isValidOHLC(open, high, low, close)) return null;
   return {
@@ -151,7 +151,7 @@ function normalizeCandle(c) {
     high,
     low,
     close,
-    volume: Number.isFinite(Number(c.volume)) ? Number(c.volume) : 0,
+    volume: Number.isFinite(Number(c.volume ?? c.Volume)) ? Number(c.volume ?? c.Volume) : 0,
   };
 }
 
@@ -199,18 +199,18 @@ function chartPointsToOsc(points) {
   return (points || [])
     .map((p) => normalizeOscPoint({
       time: chartTime(p.time ?? p.Time),
-      jurik: p.jurik,
-      rsx: p.rsx,
-      rsx_signal: p.rsx_signal ?? p.rsxSignal,
-      rsiPrice: p.rsiPrice,
-      rsiHl2: p.rsiHl2,
-      rsiVolFast: p.rsiVolFast ?? p.wozduh_up,
-      rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down,
-      volCrossMarker: p.volCrossMarker,
-      color: p.color,
-      marker: p.marker,
-      volumeSpikeUp: p.volumeSpikeUp,
-      volumeSpikeDown: p.volumeSpikeDown,
+      jurik: p.jurik ?? p.Jurik,
+      rsx: p.rsx ?? p.Rsx,
+      rsx_signal: p.rsx_signal ?? p.rsxSignal ?? p.RsxSignal,
+      rsiPrice: p.rsiPrice ?? p.RsiPrice,
+      rsiHl2: p.rsiHl2 ?? p.RsiHl2,
+      rsiVolFast: p.rsiVolFast ?? p.wozduh_up ?? p.RsiVolFast,
+      rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down ?? p.RsiVolSlow,
+      volCrossMarker: p.volCrossMarker ?? p.VolCrossMarker,
+      color: p.color ?? p.Color,
+      marker: p.marker ?? p.Marker,
+      volumeSpikeUp: p.volumeSpikeUp ?? p.VolumeSpikeUp,
+      volumeSpikeDown: p.volumeSpikeDown ?? p.VolumeSpikeDown,
     }))
     .filter(Boolean);
 }
@@ -218,11 +218,11 @@ function chartPointsToOsc(points) {
 function chartPointsToCandles(points) {
   return toCandles((points || []).map((p) => ({
     time: p.time ?? p.Time,
-    open: p.open,
-    high: p.high,
-    low: p.low,
-    close: p.close,
-    volume: p.volume,
+    open: p.open ?? p.Open,
+    high: p.high ?? p.High,
+    low: p.low ?? p.Low,
+    close: p.close ?? p.Close,
+    volume: p.volume ?? p.Volume,
   })));
 }
 

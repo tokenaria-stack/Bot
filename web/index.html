@@ -968,10 +968,6 @@
       resize: none !important;
     }
 
-    .chart-wrap { flex: 55 1 0; }
-    .osc-wrap { flex: 22 1 0; }
-    .rsx-wrap { flex: 23 1 0; }
-
     .pane-label {
       position: absolute;
       top: 6px;
@@ -1012,21 +1008,6 @@
 
     .rsx-label-btn:hover {
       color: var(--tv-text);
-    }
-
-    /* Хосты графиков отдают 100% пространства и служат якорем (relative) */
-    .chart-wrapper {
-      flex: 1 1 100% !important;
-      min-height: 0 !important;
-      position: relative !important;
-      display: block !important;
-    }
-
-    /* Сами контейнеры LWC прибиты гвоздями к границам хоста */
-    #chart-container,
-    #bt-chart-container {
-      position: absolute !important;
-      inset: 0 !important;
     }
 
     .chart-pane-ui {
