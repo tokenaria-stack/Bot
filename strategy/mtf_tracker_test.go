@@ -77,6 +77,13 @@ func TestWalkForwardMTFTracker_StepFunctionNoLookAhead(t *testing.T) {
 		t.Fatalf("LastUpdateSec changed on duplicate updates: %d -> %d", st.LastUpdateSec, stRepeat.LastUpdateSec)
 	}
 
+	ptrA := tracker.GetState(interval)
+	tracker.Update(afterBar2Sec, nil)
+	ptrB := tracker.GetState(interval)
+	if ptrA != ptrB {
+		t.Fatal("HTF state pointer changed on intra-boundary tick")
+	}
+
 	afterBar3Sec := (base + 3*step - 1) / 1000
 	tracker.Update(afterBar3Sec, nil)
 	st3 := tracker.GetState(interval)

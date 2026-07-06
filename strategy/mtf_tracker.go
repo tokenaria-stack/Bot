@@ -168,22 +168,13 @@ func (t *WalkForwardMTFTracker) GetState(tf string) *HTFState {
 	return t.states[tf]
 }
 
-// States returns a defensive copy of all HTF states keyed by interval.
+// States returns the cached walk-forward HTF state map (read-only).
+// The map is replaced only on HTF close boundaries inside Update; intra-bar ticks reuse the same pointer.
 func (t *WalkForwardMTFTracker) States() map[string]*HTFState {
 	if t == nil || len(t.states) == 0 {
 		return nil
 	}
-	out := make(map[string]*HTFState, len(t.states))
-	for tf, st := range t.states {
-		if st == nil {
-			continue
-		}
-		cp := *st
-		cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
-		cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
-		out[tf] = &cp
-	}
-	return out
+	return t.states
 }
 
 // evaluateHTFOscillators runs an isolated FalconEngine over strictly-closed HTF candles.

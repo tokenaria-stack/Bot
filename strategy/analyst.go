@@ -277,57 +277,30 @@ func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int) {
 }
 
 // SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).
+// states is adopted by pointer-swap; callers must treat published HTFState values as read-only.
 func (a *Marker) SetCurrentMTFState(states map[string]*HTFState) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if len(states) == 0 {
-		a.mtfStates = nil
-		return
-	}
-	a.mtfStates = make(map[string]*HTFState, len(states))
-	for tf, st := range states {
-		if st == nil {
-			continue
-		}
-		cp := *st
-		cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
-		cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
-		a.mtfStates[tf] = &cp
-	}
+	a.mtfStates = states
 }
 
 // MTFState returns walk-forward HTF state for one interval (nil when unavailable).
+// Returned state is read-only; valid until the next SetCurrentMTFState.
 func (a *Marker) MTFState(tf string) *HTFState {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	st := a.mtfStates[tf]
-	if st == nil {
-		return nil
-	}
-	cp := *st
-	cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
-	cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
-	return &cp
+	return a.mtfStates[tf]
 }
 
-// MTFStates returns a defensive copy of all walk-forward HTF states.
+// MTFStates returns walk-forward HTF states keyed by interval (read-only view).
+// Valid until the next SetCurrentMTFState on this marker.
 func (a *Marker) MTFStates() map[string]*HTFState {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if len(a.mtfStates) == 0 {
 		return nil
 	}
-	out := make(map[string]*HTFState, len(a.mtfStates))
-	for tf, st := range a.mtfStates {
-		if st == nil {
-			continue
-		}
-		cp := *st
-		cp.TrendLines = append([]NavigatorLineDTO(nil), st.TrendLines...)
-		cp.Markers = append([]NavigatorMarkerDTO(nil), st.Markers...)
-		out[tf] = &cp
-	}
-	return out
+	return a.mtfStates
 }
 
 func (a *Marker) EffectiveRSXSettings() RSXSettings {
