@@ -995,7 +995,7 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     );
   }
 
-  const fp = window.__backtestFingerprint;
+  const fp = backtestStore.getFingerprint();
   const needsBaseReload = !fp
     || fp.symbol !== symbol
     || fp.interval !== tf
@@ -1090,25 +1090,6 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       const errorText = errText || `HTTP error ${status}`;
       alert(`Ошибка Бэктеста:\n${errorText}`);
       return;
-    }
-
-    if (result?.simData && Array.isArray(result.simData)) {
-      result.chartData = result.simData;
-    } else if (result && Array.isArray(result.chartData) && backtestStore.hasBaseLayer()) {
-      result.chartData = result.chartData.map((pt) => ({
-        time: pt.time,
-        jurik: pt.jurik,
-        rsx: pt.rsx,
-        rsx_signal: pt.rsx_signal ?? pt.rsxSignal,
-        rsxSignal: pt.rsxSignal ?? pt.rsx_signal,
-        rsiVolFast: pt.rsiVolFast,
-        rsiVolSlow: pt.rsiVolSlow,
-        volCrossMarker: pt.volCrossMarker,
-        volumeSpikeUp: pt.volumeSpikeUp,
-        volumeSpikeDown: pt.volumeSpikeDown,
-        color: pt.color,
-        marker: pt.marker,
-      }));
     }
 
     backtestStore.patchBacktestData(result, tf);
@@ -1473,7 +1454,6 @@ async function loadDashboard(options = {}) {
 
 async function loadBacktestHistoryShell(options = {}) {
   const force = options.force === true;
-  if (!force && backtestStore.hasBaseLayer()) return;
 
   const form = typeof BacktestController !== 'undefined' ? BacktestController.getFormValues() : {};
   const symbol = form.symbol || 'BTCUSDT';
@@ -1494,6 +1474,22 @@ async function loadBacktestHistoryShell(options = {}) {
   }
 
   const endTimeSec = Math.floor(endMs / 1000);
+  const reqStartSec = Math.floor(startMs / 1000);
+
+  if (!force) {
+    const fp = backtestStore.getFingerprint();
+    if (
+      fp
+      && fp.symbol === symbol
+      && fp.interval === tf
+      && fp.startSec === reqStartSec
+      && fp.endSec === endTimeSec
+      && backtestStore.hasBaseLayer()
+    ) {
+      return;
+    }
+  }
+
   const intervalMs = getIntervalMs(tf);
   const limit = Math.ceil((endMs - startMs) / intervalMs) + 100;
 
@@ -1501,35 +1497,36 @@ async function loadBacktestHistoryShell(options = {}) {
 
   try {
     if (typeof BacktestController !== 'undefined') BacktestController.setLoading(true);
-    const data = await API.fetchLiveHistory({
-      tf,
-      endTimeSec,
-      limit: Math.min(limit, 100000),
-      rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('backtest')),
+    const params = new URLSearchParams({
+      symbol,
+      interval: tf,
+      endTime: String(endMs),
+      limit: String(Math.min(limit, 100000)),
     });
-
-    if (data && Array.isArray(data.candles) && data.candles.length > 0) {
-      backtestStore.seal();
-      backtestStore.replaceFromServer({
-        candles: toCandles(data.candles),
-        oscillators: data.oscillators || [],
-        annotations: data.annotations || [],
-      }, tf);
-      backtestStore.unseal();
-
-      const storeData = backtestStore.getForLightweightCharts();
-      ChartAdapter.applyFullData('backtest', storeData);
-
-      const firstCandleTime = backtestStore.firstCandleTimeSec();
-      const lastCandleTime = backtestStore.lastCandleTimeSec();
-
-      window.__backtestFingerprint = {
-        symbol,
-        interval: tf,
-        startSec: firstCandleTime,
-        endSec: lastCandleTime,
-      };
+    if (typeof appendBacktestRsxSettingsToParams === 'function') {
+      appendBacktestRsxSettingsToParams(params);
     }
+    const { ok, data } = await API.fetchBacktestHistoryChunk(params);
+
+    if (!ok || !Array.isArray(data?.chartData) || data.chartData.length === 0) {
+      console.warn('[Backtest] No history chunk data for shell load', { symbol, interval: tf, endTimeSec });
+      backtestHistoryHasMore = false;
+      return;
+    }
+
+    backtestStore.seal();
+    backtestStore.replaceFromServer(
+      chartPointsToStorePayload(data.chartData, data.annotations),
+      tf,
+    );
+    backtestStore.unseal();
+
+    const storeData = backtestStore.getForLightweightCharts();
+    ChartAdapter.applyFullData('backtest', storeData);
+    ChartAdapter.fitContent('backtest');
+
+    backtestHistoryHasMore = data.hasMore !== false;
+    backtestStore.setFingerprint(symbol, tf, reqStartSec, endTimeSec);
   } catch (err) {
     console.error('Failed to load backtest shell:', err);
   } finally {
@@ -1588,8 +1585,12 @@ async function maybeLoadBacktestHistory(range) {
 
       backtestHistoryHasMore = data.hasMore !== false && added > 0;
 
-      if (window.__backtestFingerprint) {
-        window.__backtestFingerprint.startSec = backtestStore.firstCandleTimeSec();
+      const fp = backtestStore.getFingerprint();
+      if (fp) {
+        const newStart = backtestStore.firstCandleTimeSec();
+        if (newStart != null) {
+          backtestStore.setFingerprint(fp.symbol, fp.interval, newStart, fp.endSec);
+        }
       }
     } finally {
       backtestStore.unseal();
@@ -1991,7 +1992,6 @@ function boot() {
         orderFlowPollTimer = setInterval(pollOrderFlowState, 500);
       }
 
-      requestAnimationFrame(() => ChartAdapter.handleResize());
       isAppInitialized = true;
     } catch (err) {
       console.error('boot failed:', err);

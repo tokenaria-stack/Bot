@@ -83,46 +83,31 @@ const TabsController = (() => {
         .catch((err) => console.warn('Failed to restore live RSX settings:', err));
     }
 
-    requestAnimationFrame(() => {
-      ChartAdapter?.handleResize?.();
-
-      if (targetId === 'tab-live' && ChartAdapter?.getChartHandle('live')?.chart) {
-        if (typeof wsSubscribeTf === 'function') wsSubscribeTf(currentTf);
-        if (!ChartAdapter.chartInitialized()) {
-          loadDashboard();
-        } else {
-          beginDataUpdate();
-          try {
-            applySeriesData();
-          } finally {
-            endDataUpdate();
-          }
-          if (typeof shouldRunLivePoll === 'function' && shouldRunLivePoll()) {
-            pollLatestState();
-          }
+    if (targetId === 'tab-live' && ChartAdapter?.getChartHandle('live')?.chart) {
+      if (typeof wsSubscribeTf === 'function') wsSubscribeTf(currentTf);
+      if (!ChartAdapter.chartInitialized()) {
+        loadDashboard();
+      } else {
+        beginDataUpdate();
+        try {
+          applySeriesData();
+        } finally {
+          endDataUpdate();
         }
-      } else if (targetId === 'tab-stats') {
-        ChartAdapter?.resizeEquity?.();
-        ChartAdapter?.fitEquityContent?.();
-        if (typeof refreshStatsForMode === 'function') {
-          refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
+        if (typeof shouldRunLivePoll === 'function' && shouldRunLivePoll()) {
+          pollLatestState();
         }
       }
-    });
-
-    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.handleResize === 'function') {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          ChartAdapter.handleResize();
-          if (targetId === 'tab-backtest') {
-            if (typeof loadBacktestHistoryShell === 'function') {
-              loadBacktestHistoryShell({ force: false }).then(() => {
-                if (typeof ChartAdapter !== 'undefined') ChartAdapter.fitContent('backtest');
-              });
-            }
-          }
-        });
-      });
+    } else if (targetId === 'tab-stats') {
+      ChartAdapter?.resizeEquity?.();
+      ChartAdapter?.fitEquityContent?.();
+      if (typeof refreshStatsForMode === 'function') {
+        refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
+      }
+    } else if (targetId === 'tab-backtest') {
+      if (typeof loadBacktestHistoryShell === 'function') {
+        loadBacktestHistoryShell({ force: false }).catch(console.error);
+      }
     }
   }
 

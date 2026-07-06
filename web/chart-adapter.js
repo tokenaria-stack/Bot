@@ -9,6 +9,7 @@ let _live = {};
 let _backtest = {};
 let _equityChart;
 let _equitySeries;
+let _equityResizeObserver;
 let _chartType = 'candles';
 let _liveUpdating = false;
 let _fibPriceLines = [];
@@ -292,7 +293,7 @@ function sharedChartLayout() {
 
 function createPriceChartOptions(width, height) {
   return {
-    autoSize: true,
+    autoSize: false,
     layout: sharedChartLayout(),
     localization: chartLocalizationOptions(),
     grid: {
@@ -311,7 +312,7 @@ function createPriceChartOptions(width, height) {
 
 function createWozduxChartOptions(width, height) {
   return {
-    autoSize: true,
+    autoSize: false,
     layout: sharedChartLayout(),
     localization: chartLocalizationOptions(),
     grid: {
@@ -331,7 +332,7 @@ function createWozduxChartOptions(width, height) {
 
 function createRSXChartOptions(width, height) {
   return {
-    autoSize: true,
+    autoSize: false,
     layout: sharedChartLayout(),
     localization: chartLocalizationOptions(),
     grid: {
@@ -547,6 +548,10 @@ function initPriceScaleControls(chartData) {
 }
 
 function destroyChartInstance(chartData) {
+  if (chartData?._resizeObserver) {
+    chartData._resizeObserver.disconnect();
+    chartData._resizeObserver = null;
+  }
   if (chartData?.chart) {
     try { chartData.chart.remove(); } catch { /* noop */ }
   }
@@ -761,7 +766,7 @@ function initMonolithChart(context, containerId, options = {}) {
   const height = Math.max(chartHost.clientHeight || 0, root.clientHeight || 0, 400);
 
   const chart = LightweightCharts.createChart(chartContainer, {
-    autoSize: true,
+    autoSize: false,
     layout: sharedChartLayout(),
     localization: chartLocalizationOptions(),
     grid: {
@@ -909,6 +914,18 @@ function initMonolithChart(context, containerId, options = {}) {
   };
 
   initPriceScaleControls(result);
+
+  const ro = new ResizeObserver((entries) => {
+    if (!entries || !entries.length) return;
+    const { width, height } = entries[0].contentRect;
+    if (width > 0 && height > 0) {
+      chart.applyOptions({ width, height });
+      if (layoutManager) layoutManager.positionSplitters();
+    }
+  });
+  ro.observe(chartHost);
+  result._resizeObserver = ro;
+
   return result;
 }
 
@@ -1494,8 +1511,23 @@ function initEquityChart() {
   const container = document.getElementById('equity-chart');
   if (!container || typeof LightweightCharts === 'undefined') return;
 
+  if (_equityResizeObserver) {
+    _equityResizeObserver.disconnect();
+    _equityResizeObserver = null;
+  }
+  if (_equityChart) {
+    try { _equityChart.remove(); } catch { /* noop */ }
+    _equityChart = null;
+    _equitySeries = null;
+  }
+
+  const width = Math.max(container.clientWidth || 0, 800);
+  const height = Math.max(container.clientHeight || 0, 300);
+
   _equityChart = LightweightCharts.createChart(container, {
-    autoSize: true,
+    autoSize: false,
+    width,
+    height,
     layout: { ...sharedChartLayout(), background: { type: 'solid', color: TV.bg }, textColor: '#d1d4dc' },
     grid: {
       vertLines: { color: TV.grid },
@@ -1519,6 +1551,15 @@ function initEquityChart() {
     priceLineVisible: false,
     lastValueVisible: true,
   });
+
+  _equityResizeObserver = new ResizeObserver((entries) => {
+    if (!entries?.length || !_equityChart) return;
+    const { width: w, height: h } = entries[0].contentRect;
+    if (w > 0 && h > 0) {
+      _equityChart.applyOptions({ width: w, height: h });
+    }
+  });
+  _equityResizeObserver.observe(container);
 }
 
 function resizeEquityChart() {

@@ -14,6 +14,7 @@ class ChartDataStore {
     this._dirtyAnnotations = false;
     this._sealed = false;
     this._trades = [];
+    this._fingerprint = null;
   }
 
   static toMs(t) {
@@ -37,7 +38,21 @@ class ChartDataStore {
     this.osc.clear();
     this.annotations.clear();
     this._trades = [];
+    this._fingerprint = null;
     this._resetDirtyState();
+  }
+
+  setFingerprint(symbol, interval, startSec, endSec) {
+    this._fingerprint = {
+      symbol: String(symbol || ''),
+      interval: String(interval || ''),
+      startSec: startSec != null ? Number(startSec) : null,
+      endSec: endSec != null ? Number(endSec) : null,
+    };
+  }
+
+  getFingerprint() {
+    return this._fingerprint ? { ...this._fingerprint } : null;
   }
 
   _resetDirtyState() {
