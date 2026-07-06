@@ -254,10 +254,7 @@ func (a *StreamingReplayAccumulator) applyChartAnnotation(pt *BacktestChartPoint
 		}
 		return
 	}
-	decision := DefaultScoreEngine.CalculateWithThresholds(
-		a.marker, a.cfg.Matrix, a.cfg.LongThreshold, a.cfg.ShortThreshold,
-	)
-	if ann, ok := rsxAnnotationFromDecision(decision, barTimeSec); ok {
+	if ann, ok := rsxAnnotationFromMarker(a.marker, barTimeSec); ok {
 		appendStreamingRSXAnnotation(&a.annotations, ann)
 		pt.Marker = ann.Label
 	}

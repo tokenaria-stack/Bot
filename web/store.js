@@ -198,7 +198,15 @@ class ChartDataStore {
   patchBacktestData(payload, tf) {
     let patchedOsc = 0;
 
-    (payload.oscillators || []).forEach((o) => {
+    let oscillators = payload.oscillators || [];
+    if (!oscillators.length && Array.isArray(payload.simData) && payload.simData.length) {
+      oscillators = chartPointsToOsc(payload.simData);
+    }
+    if (!oscillators.length && Array.isArray(payload.chartData) && payload.chartData.length) {
+      oscillators = chartPointsToOsc(payload.chartData);
+    }
+
+    oscillators.forEach((o) => {
       const norm = typeof Mappers !== 'undefined' ? Mappers.normalizeOscPoint(o) : normalizeOscPoint(o);
       if (!norm) return;
       const ms = ChartDataStore._snapMs(norm.time, tf);
@@ -468,6 +476,18 @@ class ChartDataStore {
     this._dirtyIsNewBar = false;
     this._dirtyAnnotations = false;
     return delta;
+  }
+
+  getSimOverlayPayload() {
+    const sortedTimes = Array.from(this.osc.keys()).sort((a, b) => a - b);
+    const chartOsc = sortedTimes.map((ms) => ({
+      ...this.osc.get(ms),
+      time: ChartDataStore.msToChartSec(ms),
+    }));
+    return {
+      osc: chartOsc,
+      annotations: this._annotationsToArray(),
+    };
   }
 
   getForLightweightCharts() {

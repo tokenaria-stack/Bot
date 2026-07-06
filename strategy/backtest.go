@@ -88,6 +88,8 @@ type BacktestConfig struct {
 	ShortThreshold  int
 	RSXSettings     *RSXSettings
 	WozduhPrefs     map[string]bool
+	SimOnly         bool
+	SkipNavigators  bool
 }
 
 func (e *BacktestEngine) activeMatrix() ScoringMatrix {
@@ -130,13 +132,6 @@ type BacktestChartPoint struct {
 	VolumeSpikeUp   bool
 	VolumeSpikeDown bool
 
-	// Legacy aliases (still populated for compatibility).
-	WozduhUp   float64
-	WozduhDown float64
-	RedLine    float64
-	GreenLine  float64
-	BlueLine   float64
-
 	LongScore  int                        `json:"longScore"`
 	ShortScore int                        `json:"shortScore"`
 	RawAction   string                    `json:"rawAction"`
@@ -144,6 +139,21 @@ type BacktestChartPoint struct {
 	IsVetoed    bool                      `json:"isVetoed"`
 	VetoReason  string                    `json:"vetoReason,omitempty"`
 	Factors    map[string]ScoreFactor     `json:"factors,omitempty"`
+}
+
+// BacktestSimPoint carries indicator/marker fields only (no OHLC) for slim sim wire responses.
+type BacktestSimPoint struct {
+	Time            int64   `json:"time"`
+	Jurik           float64 `json:"jurik,omitempty"`
+	RSX             float64 `json:"rsx,omitempty"`
+	RSXSignal       float64 `json:"rsxSignal,omitempty"`
+	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
+	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
+	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
+	Color           string  `json:"color,omitempty"`
+	Marker          string  `json:"marker,omitempty"`
+	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
+	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
 }
 
 // BacktestTradeResult is one completed round-trip trade.
@@ -183,6 +193,7 @@ type BacktestRunResult struct {
 	Trades         []BacktestTradeResult
 	EquityCurve    []BacktestEquityPoint
 	ChartData      []BacktestChartPoint
+	SimData        []BacktestSimPoint
 	NavigatorData  NavigatorResultDTO
 	Navigators     map[string]NavigatorResultDTO
 	Annotations    []ChartAnnotation
@@ -257,22 +268,36 @@ func (e *BacktestEngine) Run(ctx context.Context, candles []exchange.Candle) (*B
 	replay := RunStreamingReplay(ctx, candlesToKlines(candles), replayCfg)
 
 	if replay.Cancelled {
-		log.Printf("[Backtest] Cancelled (%d chart points)", len(replay.ChartPoints))
+		if e.cfg.SimOnly {
+			log.Printf("[Backtest] Cancelled (%d sim points)", len(replay.SimPoints))
+		} else {
+			log.Printf("[Backtest] Cancelled (%d chart points)", len(replay.ChartPoints))
+		}
 	}
-	log.Printf("[Backtest] streaming replay: %d annotations (%d candles, %d chart points)",
-		len(replay.Annotations), len(candles), len(replay.ChartPoints))
+	if e.cfg.SimOnly {
+		log.Printf("[Backtest] streaming replay: %d annotations (%d candles, %d sim points)",
+			len(replay.Annotations), len(candles), len(replay.SimPoints))
+	} else {
+		log.Printf("[Backtest] streaming replay: %d annotations (%d candles, %d chart points)",
+			len(replay.Annotations), len(candles), len(replay.ChartPoints))
+	}
 	if len(replay.Annotations) > 0 {
 		first := replay.Annotations[0]
 		log.Printf("[Backtest] annotation sample: time=%d (sec) pane=%s label=%s", first.Time, first.Pane, first.Label)
 	}
 
 	chartPts := replay.ChartPoints
-	if len(chartPts) >= IndicatorWarmupBars {
+	simPts := replay.SimPoints
+	if e.cfg.SimOnly {
+		if len(simPts) >= IndicatorWarmupBars {
+			simPts = simPts[IndicatorWarmupBars-1:]
+		}
+	} else if len(chartPts) >= IndicatorWarmupBars {
 		chartPts = chartPts[IndicatorWarmupBars-1:]
 	}
 
 	return e.assembleRunResult(
-		replay.FinalBalance, replay.ClosedTrades, replay.EquityCurve, chartPts,
+		replay.FinalBalance, replay.ClosedTrades, replay.EquityCurve, chartPts, simPts,
 		replay.HistKlines, replay.HistRSX, replay.HistWozduh,
 		replay.MaxDrawdownPct, replay.MaxDrawdownUSD, replay.Cancelled,
 		replay.Annotations,
@@ -284,6 +309,7 @@ func (e *BacktestEngine) assembleRunResult(
 	closedTrades []backtestClosedTrade,
 	equity []BacktestEquityPoint,
 	chartData []BacktestChartPoint,
+	simData []BacktestSimPoint,
 	histKlines []exchange.Kline,
 	histRSX, histWozduh []float64,
 	maxDrawdownPct, maxDrawdownUSD float64,
@@ -313,23 +339,34 @@ func (e *BacktestEngine) assembleRunResult(
 		}
 	}
 
-	navigators := BuildAllNavigators(e.cfg.Navigators, e.cfg.Symbol, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF)
-	navData := NavigatorResultDTO{}
-	if len(navigators) > 0 {
-		if priceNav, ok := navigators["price"]; ok {
-			navData = priceNav
-		} else {
-			for _, v := range navigators {
-				navData = v
-				break
+	var navigators map[string]NavigatorResultDTO
+	var navData NavigatorResultDTO
+	if !e.cfg.SkipNavigators {
+		navigators = BuildAllNavigators(e.cfg.Navigators, e.cfg.Symbol, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF)
+		if len(navigators) > 0 {
+			if priceNav, ok := navigators["price"]; ok {
+				navData = priceNav
+			} else {
+				for _, v := range navigators {
+					navData = v
+					break
+				}
 			}
+		} else if e.cfg.Navigator.Enabled {
+			startMs := navigatorChartStartMs(histKlines)
+			maxTimeSec := navigatorMaxCloseTimeSec(histKlines)
+			htfData := loadNavigatorHTFData(e.cfg.HTF, e.cfg.Symbol, e.cfg.Interval, startMs, maxTimeSec, e.cfg.Navigator.Periods)
+			navData = BuildNavigatorResult(e.cfg.Navigator, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF, htfData)
+			navigators = map[string]NavigatorResultDTO{"price": navData}
 		}
-	} else if e.cfg.Navigator.Enabled {
-		startMs := navigatorChartStartMs(histKlines)
-		maxTimeSec := navigatorMaxCloseTimeSec(histKlines)
-		htfData := loadNavigatorHTFData(e.cfg.HTF, e.cfg.Symbol, e.cfg.Interval, startMs, maxTimeSec, e.cfg.Navigator.Periods)
-		navData = BuildNavigatorResult(e.cfg.Navigator, histKlines, histRSX, histWozduh, e.cfg.Interval, e.cfg.HTF, htfData)
-		navigators = map[string]NavigatorResultDTO{"price": navData}
+	}
+
+	var finalChartData []BacktestChartPoint
+	var finalSimData []BacktestSimPoint
+	if e.cfg.SimOnly {
+		finalSimData = simData
+	} else {
+		finalChartData = chartData
 	}
 
 	return &BacktestRunResult{
@@ -342,10 +379,27 @@ func (e *BacktestEngine) assembleRunResult(
 		Cancelled:      cancelled,
 		Trades:         trades,
 		EquityCurve:    equity,
-		ChartData:      chartData,
+		ChartData:      finalChartData,
+		SimData:        finalSimData,
 		NavigatorData:  navData,
 		Navigators:     navigators,
 		Annotations:    annotations,
+	}
+}
+
+func backtestChartPointToSim(pt BacktestChartPoint) BacktestSimPoint {
+	return BacktestSimPoint{
+		Time:            pt.Time,
+		Jurik:           pt.Jurik,
+		RSX:             pt.RSX,
+		RSXSignal:       pt.RSXSignal,
+		RsiVolFast:      pt.RsiVolFast,
+		RsiVolSlow:      pt.RsiVolSlow,
+		VolCrossMarker:  pt.VolCrossMarker,
+		Color:           pt.Color,
+		Marker:          pt.Marker,
+		VolumeSpikeUp:   pt.VolumeSpikeUp,
+		VolumeSpikeDown: pt.VolumeSpikeDown,
 	}
 }
 
@@ -638,11 +692,6 @@ func populateBacktestPointFromFalcon(pt *BacktestChartPoint, sig FalconSignals, 
 	pt.PriceChanMid = sig.PriceChanMid
 	pt.PriceChanUp = sig.PriceChanUp
 	pt.PriceChanDn = sig.PriceChanDn
-	pt.WozduhUp = sig.RsiVolFast
-	pt.WozduhDown = sig.RsiVolSlow
-	pt.RedLine = sig.RedLine
-	pt.GreenLine = sig.GreenLine
-	pt.BlueLine = sig.BlueLine
 	if prevReady {
 		pt.VolumeSpikeUp = DetectWozduxVolumeSpikeUp(prevBlue, sig.BlueLine, sig.RedLine)
 		pt.VolumeSpikeDown = DetectWozduxVolumeSpikeDown(prevBlue, sig.BlueLine, sig.RedLine)

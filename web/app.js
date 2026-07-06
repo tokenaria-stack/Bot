@@ -200,15 +200,6 @@ const backtestStore = new ChartDataStore('backtest');
 
 
 
-function canPatchBacktestIndicatorsOnly(options = {}) {
-  if (options.patchIndicatorsOnly === false) return false;
-  if (options.patchIndicatorsOnly === true) return true;
-  return options.preserveView === true
-    && backtestStore.candleCount() > 0
-    && ChartAdapter.isInitialized('backtest');
-}
-
-
 let backtestHistoryHasMore = true;
 let backtestHistoryLoading = false;
 let backtestLastTrades = [];
@@ -698,10 +689,6 @@ async function handleBacktestIntervalChange(newTf) {
   syncToolbarToActiveContext();
   BacktestController.applyDateRangeLimits(tf);
 
-  const anchor = ChartAdapter.isInitialized('backtest')
-    ? ViewportManager.capture('backtest')
-    : null;
-
   resetBacktestClientCacheForTfChange();
   RsxController.syncFromMenu('backtest');
 
@@ -716,8 +703,6 @@ async function handleBacktestIntervalChange(newTf) {
       manageLoading: false,
       skipSettingsPush: false,
       switchTab: false,
-      patchIndicatorsOnly: false,
-      viewportAnchor: anchor,
     });
   } catch (err) {
     console.error('Backtest TF change failed:', err);
@@ -957,34 +942,6 @@ function estimateCandleIntervalSec(candles) {
   return Math.max(1, t1 - t0);
 }
 
-function tradesToStoreAnnotations(trades) {
-  const anns = [];
-  (trades || []).forEach((trade) => {
-    const side = String(trade.side || trade.Side || '').toUpperCase();
-    const isLong = side === 'LONG' || side === 'BUY';
-    const entryT = trade.entryTime || trade.EntryTime;
-    const exitT = trade.time || trade.Time;
-    if (entryT) {
-      anns.push({
-        time: entryT,
-        text: isLong ? 'L' : 'S',
-        pane: 'rsx',
-        position: isLong ? 'belowBar' : 'aboveBar',
-      });
-    }
-    if (exitT) {
-      anns.push({ time: exitT, text: 'X', pane: 'rsx', position: 'inBar' });
-    }
-  });
-  return anns;
-}
-
-function buildBacktestTradeMarkers(trades) {
-  backtestStore._ingestAnnotations(tradesToStoreAnnotations(trades), getBacktestStoreTf());
-  return buildTradeMarkerPrimitiveData(trades);
-}
-
-
 function refreshStatsForMode(mode) {
   return BacktestController.refreshStatsForMode(mode);
 }
@@ -1019,37 +976,68 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     autoSwitchTab = autoSwitchTabOrOptions !== false;
   }
 
+  const form = typeof BacktestController !== 'undefined' ? BacktestController.getFormValues() : {};
+  const symbol = form.symbol || 'BTCUSDT';
+  const interval = form.interval || backtestTf || getActiveTfFromToolbar() || '15m';
+  const tf = normalizeTf(interval);
+
+  const startStr = form.start || form.startDate;
+  const endStr = form.end || form.endDate;
+
+  let reqStartSec = 0;
+  let reqEndSec = Math.floor(Date.now() / 1000);
+  if (startStr) {
+    reqStartSec = Math.floor(new Date(`${startStr}T00:00:00Z`).getTime() / 1000);
+  }
+  if (endStr) {
+    reqEndSec = Math.floor(
+      (new Date(`${endStr}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000 - 1) / 1000,
+    );
+  }
+
+  const fp = window.__backtestFingerprint;
+  const needsBaseReload = !fp
+    || fp.symbol !== symbol
+    || fp.interval !== tf
+    || (fp.startSec != null && reqStartSec < fp.startSec)
+    || (fp.endSec != null && reqEndSec > fp.endSec);
+
+  if (!backtestStore.hasBaseLayer() || needsBaseReload) {
+    console.log(`[Orchestrator] Base layer missing or outdated. Forcing reload for ${symbol} ${tf}`);
+    if (typeof loadBacktestHistoryShell === 'function') {
+      await loadBacktestHistoryShell({ force: true });
+    }
+  }
+
+  ChartAdapter.ensureBacktestChart();
+
   const manageLoading = options.manageLoading !== false;
   const skipSettingsPush = options.skipSettingsPush === true;
   const shouldSwitchTab = options.switchTab !== undefined ? options.switchTab : autoSwitchTab;
-  const forceFullReload = options.patchIndicatorsOnly === false;
-  const patchIndicatorsOnly = !forceFullReload && (
-    options.patchIndicatorsOnly === true
-    || (canPatchBacktestIndicatorsOnly(options) && backtestStore.candleCount() > 0)
-  );
 
-  const anchor = options.viewportAnchor ?? ViewportManager.capture('backtest');
-
-  const form = BacktestController.getFormValues();
-  const symbol = form.symbol;
-  const interval = normalizeTf(form.interval || backtestTf || getActiveTfFromToolbar() || '15m');
   BacktestController.applyDateRangeLimits(interval);
   const startDate = form.start;
   const endDate = form.end;
-  const isSettingsRefresh = patchIndicatorsOnly && backtestStore.candleCount() > 0;
 
   if (manageLoading) {
     BacktestController.setLoading(true);
   }
 
-  if (!isSettingsRefresh) {
-    backtestRunActive = true;
-    BacktestController.setRunActive(true);
-  }
+  backtestRunActive = true;
+  BacktestController.setRunActive(true);
   backtestAbortController = new AbortController();
 
   try {
     let payload = buildFinalBacktestPayload({ symbol, interval, startDate, endDate });
+    payload.simOnly = backtestStore.hasBaseLayer() && !needsBaseReload;
+    const isExplicitRefresh = options.navigatorRefresh === true;
+    const isUiDirty = typeof NavigatorController !== 'undefined' && typeof NavigatorController.consumeDirtyState === 'function'
+      ? NavigatorController.consumeDirtyState('backtest')
+      : false;
+    const isNavRefresh = isExplicitRefresh || isUiDirty;
+    if (backtestStore.hasBaseLayer() && !needsBaseReload && !isNavRefresh) {
+      payload.settings.skipNavigators = true;
+    }
     const settingsPayload = payload.settings;
 
     if (!settingsPayload?.matrix || !settingsPayload?.navigators) {
@@ -1081,6 +1069,10 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
             startDate: expanded,
             endDate: payload.endDate,
           });
+          payload.simOnly = backtestStore.hasBaseLayer() && !needsBaseReload;
+          if (backtestStore.hasBaseLayer() && !needsBaseReload && !isNavRefresh) {
+            payload.settings.skipNavigators = true;
+          }
           BacktestController.setFormValues({ start: expanded });
           continue;
         }
@@ -1100,14 +1092,42 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
       return;
     }
 
-    ChartAdapter.applyBacktestResult(result, {
-      patchIndicatorsOnly,
-    }, anchor);
-    renderBacktestStats(result);
+    if (result?.simData && Array.isArray(result.simData)) {
+      result.chartData = result.simData;
+    } else if (result && Array.isArray(result.chartData) && backtestStore.hasBaseLayer()) {
+      result.chartData = result.chartData.map((pt) => ({
+        time: pt.time,
+        jurik: pt.jurik,
+        rsx: pt.rsx,
+        rsx_signal: pt.rsx_signal ?? pt.rsxSignal,
+        rsxSignal: pt.rsxSignal ?? pt.rsx_signal,
+        rsiVolFast: pt.rsiVolFast,
+        rsiVolSlow: pt.rsiVolSlow,
+        volCrossMarker: pt.volCrossMarker,
+        volumeSpikeUp: pt.volumeSpikeUp,
+        volumeSpikeDown: pt.volumeSpikeDown,
+        color: pt.color,
+        marker: pt.marker,
+      }));
+    }
+
+    backtestStore.patchBacktestData(result, tf);
+
+    if (typeof backtestStore.setTrades === 'function') {
+      backtestStore.setTrades(result.trades || []);
+    }
+    backtestLastTrades = result.trades || [];
+
+    if (typeof ChartAdapter.applySimOverlay === 'function') {
+      ChartAdapter.applySimOverlay('backtest', { navigators: result.navigators });
+    }
+
+    if (typeof renderBacktestStats === 'function') renderBacktestStats(result);
     if (typeof NavigatorController !== 'undefined') {
       NavigatorController.renderChartLegends('backtest');
     }
-    if (shouldSwitchTab) {
+
+    if (shouldSwitchTab && typeof switchTab === 'function') {
       switchTab('tab-stats');
     }
   } catch (err) {
@@ -1451,6 +1471,72 @@ async function loadDashboard(options = {}) {
   }
 }
 
+async function loadBacktestHistoryShell(options = {}) {
+  const force = options.force === true;
+  if (!force && backtestStore.hasBaseLayer()) return;
+
+  const form = typeof BacktestController !== 'undefined' ? BacktestController.getFormValues() : {};
+  const symbol = form.symbol || 'BTCUSDT';
+  const interval = form.interval || '15m';
+  const tf = normalizeTf(interval);
+
+  const startStr = form.start || form.startDate;
+  const endStr = form.end || form.endDate;
+
+  let endMs = Date.now();
+  let startMs = endMs - (30 * 24 * 60 * 60 * 1000);
+
+  if (startStr) {
+    startMs = new Date(`${startStr}T00:00:00Z`).getTime();
+  }
+  if (endStr) {
+    endMs = new Date(`${endStr}T00:00:00Z`).getTime() + (24 * 60 * 60 * 1000 - 1);
+  }
+
+  const endTimeSec = Math.floor(endMs / 1000);
+  const intervalMs = getIntervalMs(tf);
+  const limit = Math.ceil((endMs - startMs) / intervalMs) + 100;
+
+  ChartAdapter.ensureBacktestChart();
+
+  try {
+    if (typeof BacktestController !== 'undefined') BacktestController.setLoading(true);
+    const data = await API.fetchLiveHistory({
+      tf,
+      endTimeSec,
+      limit: Math.min(limit, 100000),
+      rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('backtest')),
+    });
+
+    if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+      backtestStore.seal();
+      backtestStore.replaceFromServer({
+        candles: toCandles(data.candles),
+        oscillators: data.oscillators || [],
+        annotations: data.annotations || [],
+      }, tf);
+      backtestStore.unseal();
+
+      const storeData = backtestStore.getForLightweightCharts();
+      ChartAdapter.applyFullData('backtest', storeData);
+
+      const firstCandleTime = backtestStore.firstCandleTimeSec();
+      const lastCandleTime = backtestStore.lastCandleTimeSec();
+
+      window.__backtestFingerprint = {
+        symbol,
+        interval: tf,
+        startSec: firstCandleTime,
+        endSec: lastCandleTime,
+      };
+    }
+  } catch (err) {
+    console.error('Failed to load backtest shell:', err);
+  } finally {
+    if (typeof BacktestController !== 'undefined') BacktestController.setLoading(false);
+  }
+}
+
 async function maybeLoadBacktestHistory(range) {
   if (window.__isSettingsUpdating) return;
   if (!isBacktestTabActive()) return;
@@ -1498,9 +1584,13 @@ async function maybeLoadBacktestHistory(range) {
 
       ChartAdapter.applyHistoryPrepend('backtest', storeData, added);
       ChartAdapter.applyWozduhVisibility('backtest');
-      ChartAdapter.applyBacktestMarkers(backtestLastTrades, storeData.osc);
+      ChartAdapter.applyBacktestMarkers(backtestStore.getTrades(), storeData.osc);
 
       backtestHistoryHasMore = data.hasMore !== false && added > 0;
+
+      if (window.__backtestFingerprint) {
+        window.__backtestFingerprint.startSec = backtestStore.firstCandleTimeSec();
+      }
     } finally {
       backtestStore.unseal();
       endDataUpdate();
@@ -1869,19 +1959,6 @@ function boot() {
           applyTradeMarkers: () => ChartAdapter.applyAllMarkers(),
         });
         if (chartsReady) {
-          ChartAdapter.initBacktestCharts(BACKTEST_CHART_SELECTORS, {
-            crosshairPriceSeries: () => ChartAdapter.getChartHandle('backtest').candleSeries,
-            onVisibleRangeChange: (range) => {
-              if (getRulerChartData() === ChartAdapter.getChartHandle('backtest')) {
-                ChartAdapter.updateRulerOverlay(ChartAdapter.getChartHandle('backtest'));
-              }
-            },
-            onScrollHistory: (range) => maybeLoadBacktestHistory(range),
-            onBacktestInit: () => {
-              ChartAdapter.attachRuler(ChartAdapter.getChartHandle('backtest'));
-              NavigatorController.renderChartLegends('backtest');
-            },
-          });
           WozduhController.init();
           NavigatorController.initLegends();
           ChartAdapter.initRuler();

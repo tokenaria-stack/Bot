@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"trading_bot/indicators"
 	"trading_bot/vector_db"
 )
 
@@ -77,7 +76,7 @@ type markerScoreSnapshot struct {
 	volatility      VolatilityState
 	divergenceScore int
 	geometry        GeometryState
-	fibZones        []indicators.FibZone
+	hasFib618       bool
 	rsxMarker       string
 	redCrossUp      bool
 	redCrossDown    bool
@@ -103,6 +102,15 @@ func (a *Marker) scoreSnapshot() (markerScoreSnapshot, bool) {
 		return markerScoreSnapshot{}, false
 	}
 	last := a.klines[len(a.klines)-1]
+
+	activeFib618 := false
+	for _, zone := range a.fibZones {
+		if zone.Ratio == 0.618 && zone.IsActive {
+			activeFib618 = true
+			break
+		}
+	}
+
 	return markerScoreSnapshot{
 		close:           last.Close,
 		barTimeMs:       last.OpenTime,
@@ -110,7 +118,7 @@ func (a *Marker) scoreSnapshot() (markerScoreSnapshot, bool) {
 		volatility:      a.volatilityState,
 		divergenceScore: a.divSignal.Score,
 		geometry:        a.geometryState,
-		fibZones:        append([]indicators.FibZone(nil), a.fibZones...),
+		hasFib618:       activeFib618,
 		rsxMarker:       a.rsxTradingMarkerAtCurrentBarLocked(),
 		redCrossUp:      a.redLineCrossGreenUp,
 		redCrossDown:    a.redLineCrossGreenDown,
@@ -133,12 +141,21 @@ func (e *ScoreEngine) Calculate(marker *Marker, matrix ScoringMatrix) ScoreDecis
 	return e.CalculateWithThresholds(marker, matrix, LongScoreThreshold(), ShortScoreThreshold())
 }
 
+// releaseFactorsUnlessActionable drops factor maps on non-actionable bars to reduce heap retention.
+func releaseFactorsUnlessActionable(decision *ScoreDecision) {
+	if decision == nil || decision.FinalAction == WaitAction {
+		if decision != nil {
+			decision.Factors = nil
+			decision.ActiveFactors = nil
+		}
+	}
+}
+
 // CalculateWithThresholds evaluates scoring using explicit thresholds (backtest / A/B isolation).
 func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatrix, longTh, shortTh int) ScoreDecision {
 	decision := ScoreDecision{
 		RawAction:   WaitAction,
 		FinalAction: WaitAction,
-		Factors:     make(map[string]ScoreFactor),
 	}
 	if e == nil || marker == nil || ScoringMatrixFullyDisabledFor(matrix) {
 		return decision
@@ -146,6 +163,32 @@ func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatr
 
 	snap, ok := marker.scoreSnapshot()
 	if !ok {
+		return decision
+	}
+
+	longScore, shortScore := calculateRawScores(snap, matrix)
+	if matrix.UseTrendlines {
+		mtfLong, mtfShort := calculateMTFRawScores(marker, snap.close, snap.barTimeMs)
+		longScore += mtfLong
+		shortScore += mtfShort
+	}
+	if matrix.UseHTFOscillators {
+		htfLong, htfShort := calculateHTFRawScores(marker)
+		longScore += htfLong
+		shortScore += htfShort
+	}
+	decision.LongScore = longScore
+	decision.ShortScore = shortScore
+
+	if longTh <= 0 {
+		longTh = DefaultScoreThreshold
+	}
+	if shortTh <= 0 {
+		shortTh = DefaultScoreThreshold
+	}
+
+	if decision.LongScore < longTh && decision.ShortScore < shortTh {
+		decision.Reason = "No clear signal"
 		return decision
 	}
 
@@ -161,7 +204,7 @@ func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatr
 		decision.StopDist = snap.close * 0.002
 	}
 
-	collectScoreFactors(&decision, snap, matrix)
+	buildScoreFactorsMap(&decision, snap, matrix)
 	if matrix.UseTrendlines {
 		for key, factor := range scoreMTFFactors(marker, snap.close, snap.barTimeMs) {
 			addScoreFactor(&decision, key, factor)
@@ -170,23 +213,8 @@ func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatr
 	if matrix.UseHTFOscillators {
 		mergeHTFFactors(&decision, scoreHTFOscillatorFactors(marker))
 	}
-
 	populateActiveFactors(&decision)
 
-	for _, factor := range decision.Factors {
-		switch factor.Direction {
-		case BuyAction:
-			decision.LongScore += factor.Score
-		case SellAction:
-			decision.ShortScore += factor.Score
-		}
-	}
-	if longTh <= 0 {
-		longTh = DefaultScoreThreshold
-	}
-	if shortTh <= 0 {
-		shortTh = DefaultScoreThreshold
-	}
 	if decision.LongScore >= longTh && decision.LongScore > decision.ShortScore {
 		decision.RawAction = BuyAction
 		decision.FinalAction = BuyAction
@@ -205,6 +233,7 @@ func (e *ScoreEngine) CalculateWithThresholds(marker *Marker, matrix ScoringMatr
 	decision.RawAction = WaitAction
 	decision.FinalAction = WaitAction
 	decision.Reason = "No clear signal"
+	releaseFactorsUnlessActionable(&decision)
 	return decision
 }
 
@@ -225,11 +254,14 @@ func addScoreFactor(decision *ScoreDecision, key string, factor ScoreFactor) {
 	if factor.Direction != BuyAction && factor.Direction != SellAction {
 		return
 	}
+	if decision.Factors == nil {
+		decision.Factors = make(map[string]ScoreFactor)
+	}
 	decision.Factors[key] = factor
 }
 
 func populateActiveFactors(decision *ScoreDecision) {
-	if decision == nil {
+	if decision == nil || len(decision.Factors) == 0 {
 		return
 	}
 	keys := make([]string, 0, len(decision.Factors))
@@ -251,6 +283,9 @@ func ActiveFactorsForSide(decision ScoreDecision, side string) []string {
 	want := BuyAction
 	if side == "SELL" {
 		want = SellAction
+	}
+	if len(decision.Factors) == 0 {
+		return nil
 	}
 	out := make([]string, 0, len(decision.Factors))
 	for key, factor := range decision.Factors {
@@ -281,7 +316,147 @@ func logTradeSource(barIndex int, side string, decision ScoreDecision) {
 		barIndex, side, score, factors)
 }
 
-func collectScoreFactors(decision *ScoreDecision, snap markerScoreSnapshot, m ScoringMatrix) {
+func calculateRawScores(snap markerScoreSnapshot, m ScoringMatrix) (longScore, shortScore int) {
+	if m.UseRSX {
+		switch snap.rsxMarker {
+		case "LL":
+			longScore += scoreRSXLL
+		case "L":
+			longScore += scoreRSXL
+		case "SS":
+			shortScore += scoreRSXSS
+		case "S":
+			shortScore += scoreRSXS
+		}
+	}
+	if m.UseWozduhCross && snap.falcon.VolCrossMarker == "lime" {
+		longScore += scoreWozduhCross
+	}
+	if m.UseWozduhCross && snap.falcon.VolCrossMarker == "red" {
+		shortScore += scoreWozduhCross
+	}
+	if m.UseRedCross && snap.redCrossUp {
+		longScore += scoreRedCross
+	}
+	if m.UseRedCross && snap.redCrossDown {
+		shortScore += scoreRedCross
+	}
+	if m.UseGeometry && snap.geometry.IsBullishBreakout {
+		longScore += scoreBreakout
+	}
+	if m.UseGeometry && snap.geometry.IsBearishBreakout {
+		shortScore += scoreBreakout
+	}
+	if m.UseDivergence && snap.divergenceScore > 0 && snap.divergenceScore >= minScoreThreshold {
+		longScore += snap.divergenceScore
+	}
+	if m.UseDivergence && snap.divergenceScore < 0 {
+		if s := -snap.divergenceScore; s >= minScoreThreshold {
+			shortScore += s
+		}
+	}
+	if m.UseFib && snap.hasFib618 {
+		longScore += scoreFib618
+		shortScore += scoreFib618
+	}
+	if m.UseExpRegime && snap.volatility.Regime == RegimeExpansion {
+		longScore += scoreExpansion
+		shortScore += scoreExpansion
+	}
+	if m.UseJurikTrend {
+		if snap.jurikRising && snap.jurikValue > 50 {
+			longScore += scoreJurikBull
+		} else if snap.jurikRising && snap.jurikValue <= 20 {
+			longScore += scoreJurikRecovery
+		} else if !snap.jurikRising && snap.jurikValue < 50 {
+			shortScore += scoreJurikBear
+		}
+	}
+	if m.UseWozduhSpike && snap.wozduxSpikeUp {
+		longScore += scoreWozduhVolume
+	}
+	if m.UseWozduhSpike && snap.wozduxSpikeDown {
+		shortScore += scoreWozduhVolume
+	}
+	if m.UseGeometryBounce && snap.geomBounceUp {
+		longScore += scoreGeometryBounce
+	}
+	if m.UseGeometryBounce && snap.geomBounceDown {
+		shortScore += scoreGeometryBounce
+	}
+	if m.UseGeometryTriangle && snap.geomTriangle {
+		longScore += scoreGeometryTriangle
+		shortScore += scoreGeometryTriangle
+	}
+	if m.UseAD && snap.adRising {
+		longScore += scoreAccumulation
+	}
+	if m.UseAD && snap.adFalling {
+		shortScore += scoreAccumulation
+	}
+	if m.UseAOCross && snap.aoCrossUp {
+		longScore += scoreAOCross
+	}
+	if m.UseAOCross && snap.aoCrossDown {
+		shortScore += scoreAOCross
+	}
+	return longScore, shortScore
+}
+
+func calculateMTFRawScores(marker *Marker, close float64, barTimeMs int64) (longScore, shortScore int) {
+	states := marker.MTFStates()
+	if len(states) == 0 {
+		return 0, 0
+	}
+	for _, st := range states {
+		if st == nil {
+			continue
+		}
+		for _, line := range st.TrendLines {
+			if !line.IsActive {
+				continue
+			}
+			linePrice := navigatorLinePriceAtTime(line, barTimeMs)
+			if linePrice <= 0 {
+				continue
+			}
+			if isBullNavigatorColor(line.Color) && close >= linePrice {
+				longScore += scoreMTFTrendline
+			}
+			if isBearNavigatorColor(line.Color) && close <= linePrice {
+				shortScore += scoreMTFTrendline
+			}
+		}
+	}
+	return longScore, shortScore
+}
+
+func calculateHTFRawScores(marker *Marker) (longScore, shortScore int) {
+	states := marker.MTFStates()
+	if len(states) == 0 {
+		return 0, 0
+	}
+	for _, st := range states {
+		if st == nil {
+			continue
+		}
+		if st.RSXValue < 30 && st.RSXColor == "green" {
+			longScore += scoreHTFRSX
+		} else if st.RSXValue > 70 && st.RSXColor == "red" {
+			shortScore += scoreHTFRSX
+		}
+		if st.WozduhUp > 0 && st.WozduhDown > 0 {
+			if st.WozduhUp > st.WozduhDown {
+				longScore += scoreHTFWozduhRegime
+			} else if st.WozduhDown > st.WozduhUp {
+				shortScore += scoreHTFWozduhRegime
+			}
+		}
+	}
+	return longScore, shortScore
+}
+
+func buildScoreFactorsMap(decision *ScoreDecision, snap markerScoreSnapshot, m ScoringMatrix) {
 	add := func(key string, factor ScoreFactor) {
 		addScoreFactor(decision, key, factor)
 	}
@@ -322,7 +497,7 @@ func collectScoreFactors(decision *ScoreDecision, snap markerScoreSnapshot, m Sc
 	if m.UseDivergence && snap.divergenceScore < 0 {
 		add("Divergence", ScoreFactor{Name: "Divergence", Direction: SellAction, Score: -snap.divergenceScore, Reason: "Divergence"})
 	}
-	if m.UseFib && fib618Active(snap.fibZones) {
+	if m.UseFib && snap.hasFib618 {
 		add("Fib618_L", ScoreFactor{Name: "Fib 0.618", Direction: BuyAction, Score: scoreFib618, Reason: "Fib 0.618"})
 		add("Fib618_S", ScoreFactor{Name: "Fib 0.618", Direction: SellAction, Score: scoreFib618, Reason: "Fib 0.618"})
 	}
@@ -486,15 +661,6 @@ func isBullNavigatorColor(color string) bool {
 
 func isBearNavigatorColor(color string) bool {
 	return strings.Contains(strings.ToLower(color), "f23645") || strings.Contains(strings.ToLower(color), "ff5d00")
-}
-
-func fib618Active(zones []indicators.FibZone) bool {
-	for _, zone := range zones {
-		if zone.Ratio == 0.618 && zone.IsActive {
-			return true
-		}
-	}
-	return false
 }
 
 func decisionReason(decision ScoreDecision, long bool) string {

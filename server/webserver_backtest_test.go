@@ -50,7 +50,7 @@ func TestBacktestResultFromStrategy_Convert(t *testing.T) {
 			{Time: 1700000000, Value: 10000},
 		},
 		ChartData: []strategy.BacktestChartPoint{
-			{Time: 1700000000, Open: 99, High: 101, Low: 98, Close: 100, RSX: 55, WozduhUp: 40, WozduhDown: 35},
+			{Time: 1700000000, Open: 99, High: 101, Low: 98, Close: 100, RSX: 55, RsiVolFast: 40, RsiVolSlow: 35},
 		},
 	}
 
@@ -66,6 +66,19 @@ func TestBacktestResultFromStrategy_Convert(t *testing.T) {
 	}
 	if result.Trades[0].EntryTime != 1700000000 {
 		t.Fatalf("entryTime = %d, want 1700000000", result.Trades[0].EntryTime)
+	}
+
+	simRun := &strategy.BacktestRunResult{
+		SimData: []strategy.BacktestSimPoint{
+			{Time: 1700000000, RSX: 60, RsiVolFast: 41, Marker: "S"},
+		},
+	}
+	simResult := backtestResultFromStrategy(simRun)
+	if len(simResult.ChartData) != 0 {
+		t.Fatalf("sim run chartData len = %d, want 0", len(simResult.ChartData))
+	}
+	if len(simResult.SimData) != 1 || simResult.SimData[0].RSX != 60 {
+		t.Fatalf("simData = %+v", simResult.SimData)
 	}
 
 	empty := backtestResultFromStrategy(nil)

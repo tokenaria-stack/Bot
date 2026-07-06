@@ -22,7 +22,7 @@ func TestScoreDecisionForTelemetryReadOnly(t *testing.T) {
 
 	before := marker.ClosedVolatilityRegime()
 	decision := master.ScoreDecisionForTelemetry(marker)
-	if decision.Factors == nil {
+	if decision.FinalAction == "" && decision.RawAction == "" {
 		t.Fatal("expected seeded closed-bar decision")
 	}
 	if marker.ClosedVolatilityRegime() != before {

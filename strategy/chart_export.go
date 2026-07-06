@@ -136,7 +136,7 @@ func exportChartSeriesFromSnapshot(snap markerExportSnapshot) (*StreamingReplayR
 	histWozduh := make([]float64, len(chartData))
 	for i, pt := range chartData {
 		histRSX[i] = pt.RSX
-		histWozduh[i] = pt.RedLine
+		histWozduh[i] = pt.RsiHl2
 	}
 
 	return &StreamingReplayResult{

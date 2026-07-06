@@ -642,6 +642,37 @@ function reinitBacktestChart() {
   return _backtest;
 }
 
+function ensureBacktestChart() {
+  if (_backtest?.chart) return true;
+
+  _hooks.backtest = {
+    crosshairPriceSeries: () => _ctxData('backtest').candleSeries,
+    onVisibleRangeChange: () => {
+      if (typeof getRulerChartData !== 'undefined' && getRulerChartData() === _ctxData('backtest')) {
+        updateRulerOverlay(_ctxData('backtest'));
+      }
+    },
+    onScrollHistory: (range) => {
+      if (typeof maybeLoadBacktestHistory === 'function') maybeLoadBacktestHistory(range);
+    },
+    onBacktestInit: () => {
+      attachRulerToChart(_backtest);
+      if (typeof NavigatorController !== 'undefined') NavigatorController.renderChartLegends('backtest');
+    },
+  };
+
+  _backtest = _initChartPair('backtest-chart-container', 'backtest', {
+    selectors: BACKTEST_CHART_SELECTORS,
+    overlayTrades: true,
+    navigatorPlugin: true,
+    tradeMarkers: true,
+  }) || {};
+  if (!_backtest.chart) return false;
+  applyWozduhVisibilityToChart(_backtest, 'backtest');
+  if (typeof _hooks.backtest.onBacktestInit === 'function') _hooks.backtest.onBacktestInit(_backtest);
+  return true;
+}
+
 function normalizePriceLineLevel(level) {
   const lineColor = level.color || TV.text;
   const { labelBackgroundColor, labelTextColor, ...rest } = level;
@@ -1422,93 +1453,40 @@ function applyBacktestTradeMarkerPrimitive(chartData, trades) {
   chartData.tradeMarkerPlugin.setData(buildTradeMarkerPrimitiveData(trades));
 }
 
-function applyBacktestIndicatorPatch(result) {
-  if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-  if (!_backtest?.candleSeries || backtestStore.candleCount() === 0) return;
+function applySimOverlay(context = 'backtest', payload = {}) {
+  const chartData = typeof _ctxData === 'function' ? _ctxData(context) : null;
+  if (!chartData?.chart) return;
 
-  const trades = result.trades || [];
-  backtestLastTrades = trades;
+  const store = context === 'backtest' ? backtestStore : liveStore;
 
-  const patchPayload = { oscillators: chartPointsToOsc(result.chartData) };
-  if (Array.isArray(result.annotations)) {
-    patchPayload.annotations = result.annotations;
+  const overlayData = typeof store.getSimOverlayPayload === 'function'
+    ? store.getSimOverlayPayload()
+    : store.getForLightweightCharts();
+
+  applyOscillatorToChart(chartData, overlayData.osc, overlayData.annotations);
+  if (typeof applyWozduhVisibilityToChart === 'function') {
+    applyWozduhVisibilityToChart(chartData, context);
   }
-  backtestStore.replaceOscAndAnnotations(patchPayload, _storeTf('backtest'));
-  buildBacktestTradeMarkers(trades);
 
-  const storeData = backtestStore.getForLightweightCharts();
-  const prevRange = _backtest.chart?.timeScale()?.getVisibleLogicalRange();
-
-  isUpdatingData = true;
-  try {
-    applyOscillatorToChart(_backtest, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(_backtest, 'backtest');
-
-    applyNavigatorOverlays(result, storeData.candles, _backtest, {
+  if (payload.navigators) {
+    applyNavigatorOverlays({ navigators: payload.navigators }, null, chartData, {
+      context,
       preserveView: true,
-      updateLoadedCandles: true,
+      updateLoadedCandles: false,
     });
-    applyBacktestCandleMarkers(_backtest, trades, storeData.osc, _btNavMarkers);
-    applyBacktestTradeMarkerPrimitive(_backtest, trades);
-  } finally {
-    setTimeout(() => { isUpdatingData = false; }, 0);
   }
 
-  if (prevRange && _backtest.chart) {
-    syncVisibleLogicalRange(_backtest.chart, prevRange);
+  const trades = typeof store.getTrades === 'function' ? store.getTrades() : [];
+  if (typeof applyBacktestCandleMarkers === 'function') {
+    applyBacktestCandleMarkers(
+      chartData,
+      trades,
+      overlayData.osc,
+      typeof _btNavMarkers !== 'undefined' ? _btNavMarkers : null,
+    );
   }
-}
-
-function applyBacktestResultToChart(result, options = {}, viewportAnchor = null) {
-  if (!result || !Array.isArray(result.chartData) || result.chartData.length === 0) return;
-
-  const patchIndicatorsOnly = options.patchIndicatorsOnly === true
-    || (options.patchIndicatorsOnly !== false && canPatchBacktestIndicatorsOnly(options));
-
-  const container = document.getElementById('backtest-chart-container');
-  if (container) container.classList.add('visible');
-
-  if (!_backtest?.candleSeries) {
-    reinitBacktestChart();
-  }
-  if (!_backtest.candleSeries) return;
-
-  if (patchIndicatorsOnly) {
-    applyBacktestIndicatorPatch(result);
-    applyIndicatorConfigStyles(_backtest);
-    return;
-  }
-
-  backtestStore.replaceFromServer(
-    chartPointsToStorePayload(result.chartData, result.annotations),
-    _storeTf('backtest'),
-  );
-  backtestLastTrades = result.trades || [];
-  backtestHistoryHasMore = true;
-  backtestHistoryLoading = false;
-  buildBacktestTradeMarkers(result.trades);
-
-  const storeData = backtestStore.getForLightweightCharts();
-
-  isUpdatingData = true;
-  try {
-    applyPriceToChart(_backtest, storeData.candles);
-    applyOscillatorToChart(_backtest, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(_backtest, 'backtest');
-
-    applyNavigatorOverlays(result, storeData.candles, _backtest, {
-      updateLoadedCandles: true,
-    });
-    applyBacktestCandleMarkers(_backtest, result.trades, storeData.osc, _btNavMarkers);
-    applyBacktestTradeMarkerPrimitive(_backtest, result.trades);
-
-    applyIndicatorConfigStyles(_backtest);
-
-    if (_backtest?.chart) {
-      _backtest.chart.timeScale().fitContent();
-    }
-  } finally {
-    setTimeout(() => { isUpdatingData = false; }, 0);
+  if (typeof applyBacktestTradeMarkerPrimitive === 'function') {
+    applyBacktestTradeMarkerPrimitive(chartData, trades);
   }
 }
 
@@ -1866,8 +1844,16 @@ const ChartAdapter = {
     return true;
   },
 
+  ensureBacktestChart() {
+    return ensureBacktestChart();
+  },
+
   applyFullData(context, storeData, options = {}) {
     _applyFullDataInternal(context, storeData, options);
+  },
+
+  applySimOverlay(context = 'backtest', payload = {}) {
+    applySimOverlay(context, payload);
   },
 
   applyHistoryPrepend(context, storeData, addedBars = 0) {
@@ -1940,14 +1926,6 @@ const ChartAdapter = {
   reinitBacktest(hooks = {}) {
     _hooks.backtest = { ..._hooks.backtest, ...hooks };
     return reinitBacktestChart();
-  },
-
-  applyBacktestResult(result, options = {}, viewportAnchor = null) {
-    return applyBacktestResultToChart(result, options, viewportAnchor);
-  },
-
-  applyBacktestPatch(result) {
-    return applyBacktestIndicatorPatch(result);
   },
 
   applyIndicatorStyles(context) {

@@ -29,11 +29,16 @@ type StreamingReplayConfig struct {
 	Navigators       map[string]NavigatorUISettings
 	// LightweightMode runs the chart-only fast path (no trade FSM, RSX-only annotations).
 	LightweightMode bool
+	// SimOnly writes BacktestSimPoint slices directly (no BacktestChartPoint allocation).
+	SimOnly bool
+	// SkipNavigators omits histRSX/histWozduh accumulation (navigator assembly runs elsewhere).
+	SkipNavigators bool
 }
 
 // StreamingReplayResult is the output of one full streaming replay pass.
 type StreamingReplayResult struct {
 	ChartPoints    []BacktestChartPoint
+	SimPoints      []BacktestSimPoint
 	Annotations    []ChartAnnotation
 	ClosedTrades   []backtestClosedTrade
 	EquityCurve    []BacktestEquityPoint
@@ -102,6 +107,8 @@ func StreamingReplayConfigFromBacktest(cfg BacktestConfig) StreamingReplayConfig
 		HTF:            cfg.HTF,
 		Navigator:      cfg.Navigator,
 		Navigators:     cfg.Navigators,
+		SimOnly:        cfg.SimOnly,
+		SkipNavigators: cfg.SkipNavigators,
 	}
 }
 
@@ -139,9 +146,18 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 	var prevRSXReady bool
 
 	histKlines := make([]exchange.Kline, 0, len(klines))
-	histRSX := make([]float64, 0, len(klines))
-	histWozduh := make([]float64, 0, len(klines))
-	chartData := make([]BacktestChartPoint, 0, len(klines))
+	var histRSX, histWozduh []float64
+	if !cfg.SkipNavigators {
+		histRSX = make([]float64, 0, len(klines))
+		histWozduh = make([]float64, 0, len(klines))
+	}
+	var chartData []BacktestChartPoint
+	var simData []BacktestSimPoint
+	if cfg.SimOnly {
+		simData = make([]BacktestSimPoint, 0, len(klines))
+	} else {
+		chartData = make([]BacktestChartPoint, 0, len(klines))
+	}
 	annotations := make([]ChartAnnotation, 0, 32)
 	equity := []BacktestEquityPoint{{Time: klines[0].OpenTime / 1000, Value: balance}}
 	var closedTrades []backtestClosedTrade
@@ -195,44 +211,24 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 		marker.UpdateKlineTick(kline, true)
 		histKlines = append(histKlines, kline)
 		falcon := marker.FalconSnapshot()
-		histRSX = append(histRSX, falcon.JurikRSX)
-		histWozduh = append(histWozduh, falcon.RsiVolSlow)
+		if !cfg.SkipNavigators {
+			histRSX = append(histRSX, falcon.JurikRSX)
+			histWozduh = append(histWozduh, falcon.RsiVolSlow)
+		}
 
 		if mtfTracker != nil {
 			mtfTracker.Update(barTimeSec, histKlines)
 			marker.SetCurrentMTFState(mtfTracker.States())
 		}
 
-		pt := BacktestChartPoint{
-			Time:   barTimeSec,
-			Open:   kline.Open,
-			High:   kline.High,
-			Low:    kline.Low,
-			Close:  kline.Close,
-			Volume: kline.Volume,
-		}
-		populateBacktestPointFromMarker(&pt, marker, prevBlue, prevBlueReady)
-		if prevRSXReady {
-			pt.Color = RSXColor(pt.RSX, prevRSX)
-		}
-		prevRSX = pt.RSX
-		prevRSXReady = true
-		prevBlue = falcon.BlueLine
-		prevBlueReady = true
-
 		scoreReady := marker.HasMinBars(IndicatorWarmupBars)
+		var decision ScoreDecision
+		var rsxMarker string
 		if scoreReady {
-			decision := evaluateStreamingDecision(marker, chief, cfg)
-			pt.LongScore = decision.LongScore
-			pt.ShortScore = decision.ShortScore
-			pt.RawAction = string(decision.RawAction)
-			pt.FinalAction = string(decision.FinalAction)
-			pt.IsVetoed = decision.IsVetoed
-			pt.VetoReason = decision.VetoReason
-			pt.Factors = decision.Factors
-			if ann, ok := rsxAnnotationFromDecision(decision, barTimeSec); ok {
+			decision = evaluateStreamingDecision(marker, chief, cfg)
+			if ann, ok := rsxAnnotationFromMarker(marker, barTimeSec); ok {
 				appendStreamingRSXAnnotation(&annotations, ann)
-				pt.Marker = ann.Label
+				rsxMarker = ann.Label
 			}
 
 			if cfg.EnableTrading && tradeEngine != nil {
@@ -282,7 +278,7 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 					tryOpenBacktestPosition(tradeEngine, &pos, histKlines, i, string(decision.FinalAction), candle, decision, signalKind, marker, &balance, cfg.SlippagePct)
 				}
 
-				tradeEngine.logRSXSignalIgnored(i, pt.Marker, decision)
+				tradeEngine.logRSXSignalIgnored(i, rsxMarker, decision)
 
 				if i > 0 && i%backtestEquityEvery == 0 {
 					recordEquityPoint(&equity, barTimeSec, balance)
@@ -291,7 +287,63 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 			}
 		}
 
-		chartData = append(chartData, pt)
+		if cfg.SimOnly {
+			simPt := BacktestSimPoint{
+				Time:           barTimeSec,
+				Jurik:          falcon.JurikRSX,
+				RSX:            falcon.JurikRSX,
+				RSXSignal:      falcon.JurikRSXSignal,
+				RsiVolFast:     falcon.RsiVolFast,
+				RsiVolSlow:     falcon.RsiVolSlow,
+				VolCrossMarker: falcon.VolCrossMarker,
+			}
+			if prevRSXReady {
+				simPt.Color = RSXColor(simPt.RSX, prevRSX)
+			}
+			if rsxMarker != "" {
+				simPt.Marker = rsxMarker
+			} else if ann, ok := rsxAnnotationFromMarker(marker, barTimeSec); ok {
+				simPt.Marker = ann.Label
+			}
+			if prevBlueReady {
+				simPt.VolumeSpikeUp = DetectWozduxVolumeSpikeUp(prevBlue, falcon.BlueLine, falcon.RedLine)
+				simPt.VolumeSpikeDown = DetectWozduxVolumeSpikeDown(prevBlue, falcon.BlueLine, falcon.RedLine)
+			}
+			simData = append(simData, simPt)
+		} else {
+			pt := BacktestChartPoint{
+				Time:   barTimeSec,
+				Open:   kline.Open,
+				High:   kline.High,
+				Low:    kline.Low,
+				Close:  kline.Close,
+				Volume: kline.Volume,
+			}
+			populateBacktestPointFromMarker(&pt, marker, prevBlue, prevBlueReady)
+			if prevRSXReady {
+				pt.Color = RSXColor(pt.RSX, prevRSX)
+			}
+			if scoreReady {
+				pt.LongScore = decision.LongScore
+				pt.ShortScore = decision.ShortScore
+				pt.RawAction = string(decision.RawAction)
+				pt.FinalAction = string(decision.FinalAction)
+				pt.IsVetoed = decision.IsVetoed
+				pt.VetoReason = decision.VetoReason
+				if decision.FinalAction == BuyAction || decision.FinalAction == SellAction {
+					pt.Factors = decision.Factors
+				}
+				if rsxMarker != "" {
+					pt.Marker = rsxMarker
+				}
+			}
+			chartData = append(chartData, pt)
+		}
+
+		prevRSX = falcon.JurikRSX
+		prevRSXReady = true
+		prevBlue = falcon.BlueLine
+		prevBlueReady = true
 	}
 
 	if cfg.EnableTrading && tradeEngine != nil && !cancelled && pos != nil {
@@ -311,6 +363,7 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 	}
 
 	result.ChartPoints = chartData
+	result.SimPoints = simData
 	result.Annotations = annotations
 	result.ClosedTrades = closedTrades
 	result.EquityCurve = equity
@@ -329,6 +382,17 @@ func evaluateStreamingDecision(marker *Marker, chief *ChiefAnalyst, cfg Streamin
 		analyst = NewAnalyst(false)
 	}
 	return ApplyExecutionVetoes(decision, marker, analyst, chief)
+}
+
+func rsxAnnotationFromMarker(marker *Marker, barTimeSec int64) (ChartAnnotation, bool) {
+	if marker == nil {
+		return ChartAnnotation{}, false
+	}
+	snap, ok := marker.scoreSnapshot()
+	if !ok || snap.rsxMarker == "" {
+		return ChartAnnotation{}, false
+	}
+	return rsxAnnotationFromLabel(snap.rsxMarker, barTimeSec)
 }
 
 func rsxAnnotationFromDecision(decision ScoreDecision, barTimeSec int64) (ChartAnnotation, bool) {

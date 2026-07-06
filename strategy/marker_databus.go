@@ -198,8 +198,6 @@ func (a *Marker) recordChartExportPointLocked(barIndex int, k exchange.Kline, si
 			RSX:       sig.JurikRSX,
 			Jurik:     sig.JurikRSX,
 			RSXSignal: sig.JurikRSXSignal,
-			RedLine:   sig.RedLine,
-			GreenLine: sig.GreenLine,
 		}
 		populateBacktestPointFromFalcon(&pt, sig, 0, false)
 		pt.VolumeSpikeUp = a.wozduxVolumeSpikeUp

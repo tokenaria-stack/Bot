@@ -190,3 +190,65 @@ func TestNewBacktestEngine_defaultSlippage(t *testing.T) {
 		t.Fatalf("SlippagePct = %v, want %v", engine.cfg.SlippagePct, DefaultBacktestSlippagePct)
 	}
 }
+
+func TestBacktestChartPointToSim_omitsOHLC(t *testing.T) {
+	t.Parallel()
+
+	sim := backtestChartPointToSim(BacktestChartPoint{
+		Time:       1700000000,
+		Open:       99,
+		High:       101,
+		Low:        98,
+		Close:      100,
+		RSX:        55,
+		RsiVolFast: 40,
+		RsiVolSlow: 35,
+		Marker:     "L",
+	})
+	if sim.Time != 1700000000 || sim.RSX != 55 {
+		t.Fatalf("unexpected sim point: %+v", sim)
+	}
+	if sim.RsiVolFast != 40 || sim.RsiVolSlow != 35 {
+		t.Fatalf("rsi vol: fast=%v slow=%v", sim.RsiVolFast, sim.RsiVolSlow)
+	}
+}
+
+func TestAssembleRunResult_SimOnly(t *testing.T) {
+	t.Parallel()
+
+	engine := NewBacktestEngine(BacktestConfig{SimOnly: true})
+	run := engine.assembleRunResult(
+		BacktestInitialCapital,
+		nil,
+		nil,
+		nil,
+		[]BacktestSimPoint{{Time: 1, RSX: 50}},
+		nil, nil, nil,
+		0, 0, false, nil,
+	)
+	if len(run.ChartData) != 0 {
+		t.Fatalf("ChartData len = %d, want 0 when SimOnly", len(run.ChartData))
+	}
+	if len(run.SimData) != 1 || run.SimData[0].RSX != 50 {
+		t.Fatalf("SimData = %+v", run.SimData)
+	}
+}
+
+func TestAssembleRunResult_SkipNavigators(t *testing.T) {
+	t.Parallel()
+
+	engine := NewBacktestEngine(BacktestConfig{SkipNavigators: true})
+	run := engine.assembleRunResult(
+		BacktestInitialCapital,
+		nil,
+		nil,
+		nil,
+		nil,
+		make([]exchange.Kline, 100),
+		nil, nil,
+		0, 0, false, nil,
+	)
+	if run.Navigators != nil && len(run.Navigators) > 0 {
+		t.Fatalf("Navigators = %+v, want nil/empty when SkipNavigators", run.Navigators)
+	}
+}

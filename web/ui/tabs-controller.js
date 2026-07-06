@@ -115,7 +115,11 @@ const TabsController = (() => {
         requestAnimationFrame(() => {
           ChartAdapter.handleResize();
           if (targetId === 'tab-backtest') {
-            ChartAdapter.fitContent('backtest');
+            if (typeof loadBacktestHistoryShell === 'function') {
+              loadBacktestHistoryShell({ force: false }).then(() => {
+                if (typeof ChartAdapter !== 'undefined') ChartAdapter.fitContent('backtest');
+              });
+            }
           }
         });
       });

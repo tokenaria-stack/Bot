@@ -21,7 +21,18 @@ const API = {
     if (obj !== null && typeof obj === 'object') {
       const normalized = {};
       for (const [key, value] of Object.entries(obj)) {
-        const camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+        let camelKey = key;
+        const match = key.match(/^[A-Z]+/);
+        if (match) {
+          const prefix = match[0];
+          if (prefix.length === key.length) {
+            camelKey = key.toLowerCase();
+          } else if (prefix.length > 1) {
+            camelKey = prefix.slice(0, -1).toLowerCase() + key.slice(prefix.length - 1);
+          } else {
+            camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+          }
+        }
         normalized[camelKey] = API.normalizeGoResponse(value);
       }
       return normalized;

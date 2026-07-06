@@ -122,6 +122,7 @@ func TestScoreEngine_DisabledMatrixWaits(t *testing.T) {
 
 func TestScoreEngine_MTFTrendlinesFactor(t *testing.T) {
 	m := testMarkerWithFlags(t, func(marker *Marker) {
+		injectRSXMarker(marker, 59, "L")
 		marker.mtfStates = map[string]*HTFState{
 			"4h": {
 				TrendLines: []NavigatorLineDTO{{
@@ -136,10 +137,15 @@ func TestScoreEngine_MTFTrendlinesFactor(t *testing.T) {
 			},
 		}
 	})
-	matrix := ScoringMatrix{UseTrendlines: true}
+	matrix := ScoringMatrix{UseTrendlines: true, UseRSX: true}
 	decision := scoreDecision(t, m, matrix)
-	if len(decision.Factors) == 0 {
-		t.Fatal("expected MTF trendline factor")
+	if decision.LongScore == 0 && decision.ShortScore == 0 {
+		t.Fatal("expected MTF trendline score contribution")
+	}
+	if decision.FinalAction == BuyAction || decision.FinalAction == SellAction {
+		if len(decision.Factors) == 0 {
+			t.Fatal("expected MTF trendline factor on actionable bar")
+		}
 	}
 }
 
@@ -155,16 +161,36 @@ func TestScoreEngine_HTFOscillatorsFactor(t *testing.T) {
 			},
 		}
 	})
-	matrix := ScoringMatrix{UseHTFOscillators: true}
+	matrix := ScoringMatrix{UseHTFOscillators: true, UseRSX: true}
 	decision := scoreDecision(t, m, matrix)
-	if decision.Factors["RSX_4h"].Direction != BuyAction {
-		t.Fatalf("RSX_4h factor = %+v, want BUY", decision.Factors["RSX_4h"])
+	if decision.LongScore < scoreHTFRSX {
+		t.Fatalf("LongScore = %d, want HTF RSX contribution >= %d", decision.LongScore, scoreHTFRSX)
 	}
-	if decision.Factors["Wozduh_4h"].Direction != BuyAction {
-		t.Fatalf("Wozduh_4h factor = %+v, want BUY", decision.Factors["Wozduh_4h"])
+	if decision.FinalAction == BuyAction || decision.FinalAction == SellAction {
+		if decision.Factors["RSX_4h"].Direction != BuyAction {
+			t.Fatalf("RSX_4h factor = %+v, want BUY", decision.Factors["RSX_4h"])
+		}
+		if decision.Factors["Wozduh_4h"].Direction != BuyAction {
+			t.Fatalf("Wozduh_4h factor = %+v, want BUY", decision.Factors["Wozduh_4h"])
+		}
 	}
-	if decision.Factors["RSX_4h"].Score != scoreHTFRSX {
-		t.Fatalf("RSX_4h score = %d, want %d", decision.Factors["RSX_4h"].Score, scoreHTFRSX)
+}
+
+func TestScoreEngine_FastPathNoFactorsOnWait(t *testing.T) {
+	t.Parallel()
+
+	m := testMarkerWithFlags(t, func(marker *Marker) {
+		marker.falconSignals.VolCrossMarker = "lime" // +35, below default threshold
+	})
+	decision := DefaultScoreEngine.CalculateWithThresholds(m, ScoringMatrix{UseWozduhCross: true}, DefaultScoreThreshold, DefaultScoreThreshold)
+	if decision.FinalAction != WaitAction {
+		t.Fatalf("FinalAction = %q, want WAIT", decision.FinalAction)
+	}
+	if decision.Factors != nil {
+		t.Fatalf("Factors = %v, want nil on fast-path WAIT", decision.Factors)
+	}
+	if decision.LongScore != scoreWozduhCross {
+		t.Fatalf("LongScore = %d, want %d", decision.LongScore, scoreWozduhCross)
 	}
 }
 
@@ -178,8 +204,13 @@ func TestScoreEngine_UsesExplicitMatrix(t *testing.T) {
 	})
 	enabled := ScoringMatrix{UseWozduhCross: true, UseExpRegime: true}
 	local := scoreDecision(t, m, enabled)
-	if len(local.Factors) == 0 {
-		t.Fatal("expected active factors from explicit matrix")
+	if local.LongScore == 0 && local.ShortScore == 0 {
+		t.Fatal("expected score contribution from explicit matrix")
+	}
+	if local.FinalAction == BuyAction || local.FinalAction == SellAction {
+		if len(local.Factors) == 0 {
+			t.Fatal("expected active factors on actionable bar")
+		}
 	}
 	global := CalculateScoreGlobal(m)
 	if len(global.Factors) != 0 {

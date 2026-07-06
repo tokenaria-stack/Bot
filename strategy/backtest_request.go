@@ -13,6 +13,8 @@ type BacktestRunSettings struct {
 	ShortThreshold int                            `json:"shortThreshold,omitempty"`
 	RSXSettings    *RSXSettings                   `json:"rsxSettings,omitempty"`
 	WozduhSettings map[string]bool                `json:"wozduhSettings,omitempty"`
+	SimOnly        bool                           `json:"simOnly"`        // If true, server omits OHLC from wire response
+	SkipNavigators bool                           `json:"skipNavigators"` // If true, skip histRSX/histWozduh and navigator geometry
 }
 
 // ResolveBacktestThresholds returns isolated long/short entry thresholds for backtests.

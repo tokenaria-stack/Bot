@@ -23,7 +23,7 @@ func TestHistoryEndTimeToMs(t *testing.T) {
 func TestBuildHistoryChartSeriesTrimmed(t *testing.T) {
 	t.Parallel()
 
-	klines := make([]exchange.Kline, 150)
+	klines := make([]exchange.Kline, strategy.IndicatorWarmupBars+100)
 	base := int64(1_700_000_000_000)
 	for i := range klines {
 		price := 50000.0 + float64(i)

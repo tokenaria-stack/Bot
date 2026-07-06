@@ -12,6 +12,11 @@ const NavigatorController = (() => {
   let settingsChangedCallback = null;
   let settingsChangedTimer = null;
 
+  const _dirtyState = {
+    live: false,
+    backtest: false,
+  };
+
   function getContext() {
     return TabsController.isBacktestTabActive() ? 'backtest' : 'live';
   }
@@ -364,6 +369,11 @@ const NavigatorController = (() => {
         safePane,
       );
       saveNavigatorPaneSettings(safePane, uiSettings, context);
+      if (context === 'backtest') {
+        _dirtyState.backtest = true;
+      } else {
+        _dirtyState.live = true;
+      }
     }
 
     if (context === 'live') {
@@ -950,6 +960,12 @@ const NavigatorController = (() => {
     renderChartLegends,
     hideAllPopups,
     openNavigatorPopup,
+    consumeDirtyState: (context = 'backtest') => {
+      const key = context === 'live' ? 'live' : 'backtest';
+      const isDirty = _dirtyState[key];
+      _dirtyState[key] = false;
+      return isDirty;
+    },
   };
 })();
 

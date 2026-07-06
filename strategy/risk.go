@@ -35,9 +35,11 @@ func ApplyExecutionVetoes(decision ScoreDecision, marker *Marker, analyst *Analy
 		decision.IsVetoed = true
 		decision.VetoReason = "System Warmup: Not enough history"
 		decision.FinalAction = WaitAction
+		releaseFactorsUnlessActionable(&decision)
 		return decision
 	}
 	if !decision.HasRawSignal() {
+		releaseFactorsUnlessActionable(&decision)
 		return decision
 	}
 	if analyst != nil {
@@ -45,12 +47,14 @@ func ApplyExecutionVetoes(decision ScoreDecision, marker *Marker, analyst *Analy
 			decision.IsVetoed = true
 			decision.VetoReason = "Analyst blocked: " + err.Error()
 			decision.FinalAction = WaitAction
+			releaseFactorsUnlessActionable(&decision)
 			return decision
 		}
 	}
 	if chief != nil {
 		chief.Approve(&decision)
 	}
+	releaseFactorsUnlessActionable(&decision)
 	return decision
 }
 

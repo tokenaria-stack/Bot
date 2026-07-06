@@ -922,6 +922,7 @@ type BacktestRequest struct {
 	Navigator  strategy.NavigatorUISettings          `json:"navigator,omitempty"`
 	Navigators map[string]strategy.NavigatorUISettings `json:"navigators,omitempty"`
 	MtfOptions map[string]bool                       `json:"mtfOptions,omitempty"`
+	SimOnly    bool                                  `json:"simOnly"`
 }
 
 // ChartPoint is one candle with full indicator values for the backtest chart.
@@ -966,6 +967,21 @@ type ChartPoint struct {
 	Factors         map[string]strategy.ScoreFactor `json:"factors,omitempty"`
 }
 
+// SimPoint is a slim chart point (indicators only, no OHLC) for simOnly backtest responses.
+type SimPoint struct {
+	Time            int64   `json:"time"`
+	Jurik           float64 `json:"jurik,omitempty"`
+	RSX             float64 `json:"rsx,omitempty"`
+	RSXSignal       float64 `json:"rsxSignal,omitempty"`
+	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
+	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
+	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
+	Color           string  `json:"color,omitempty"`
+	Marker          string  `json:"marker,omitempty"`
+	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
+	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
+}
+
 // BacktestTrade is a single simulated trade in a backtest result.
 type BacktestTrade struct {
 	Time            int64    `json:"time"`
@@ -1003,6 +1019,7 @@ type BacktestResult struct {
 	Trades         []BacktestTrade `json:"trades"`
 	EquityCurve    []EquityPoint   `json:"equityCurve"`
 	ChartData      []ChartPoint                           `json:"chartData"`
+	SimData        []SimPoint                             `json:"simData,omitempty"`
 	NavigatorData  strategy.NavigatorResultDTO            `json:"navigatorData"`
 	NavigatorPrice strategy.NavigatorResultDTO            `json:"navigatorPrice"` // legacy alias for navigatorData
 	Navigators     map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
@@ -1182,6 +1199,21 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.DivMethod, rsxSettings.Source)
 	}
 
+	simOnly := req.SimOnly
+	if req.Settings != nil && req.Settings.SimOnly {
+		simOnly = true
+	}
+	skipNavigators := false
+	if req.Settings != nil && req.Settings.SkipNavigators {
+		skipNavigators = true
+	}
+	if simOnly {
+		log.Printf("[Backtest] simOnly=true — wire response will omit OHLC chartData")
+	}
+	if skipNavigators {
+		log.Printf("[Backtest] skipNavigators=true — navigator geometry bypassed")
+	}
+
 	ctx, endRun := d.backtestRuns.begin(r.Context())
 	defer endRun()
 
@@ -1199,6 +1231,8 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		ShortThreshold: shortTh,
 		RSXSettings:    rsxCfg,
 		WozduhPrefs:    wozduhPrefs,
+		SimOnly:        simOnly,
+		SkipNavigators: skipNavigators,
 	})
 	runResult, err := engine.Run(ctx, candles)
 	if err != nil {
@@ -1304,8 +1338,8 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 			Marker:          p.Marker,
 			VolumeSpikeUp:   p.VolumeSpikeUp,
 			VolumeSpikeDown: p.VolumeSpikeDown,
-			WozduhUp:        p.WozduhUp,
-			WozduhDown:      p.WozduhDown,
+			WozduhUp:        p.RsiVolFast,
+			WozduhDown:      p.RsiVolSlow,
 			LongScore:       p.LongScore,
 			ShortScore:      p.ShortScore,
 			RawAction:       p.RawAction,
@@ -1313,6 +1347,23 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 			IsVetoed:        p.IsVetoed,
 			VetoReason:      p.VetoReason,
 			Factors:         p.Factors,
+		}
+	}
+
+	simData := make([]SimPoint, len(run.SimData))
+	for i, p := range run.SimData {
+		simData[i] = SimPoint{
+			Time:            p.Time,
+			Jurik:           p.Jurik,
+			RSX:             p.RSX,
+			RSXSignal:       p.RSXSignal,
+			RsiVolFast:      p.RsiVolFast,
+			RsiVolSlow:      p.RsiVolSlow,
+			VolCrossMarker:  p.VolCrossMarker,
+			Color:           p.Color,
+			Marker:          p.Marker,
+			VolumeSpikeUp:   p.VolumeSpikeUp,
+			VolumeSpikeDown: p.VolumeSpikeDown,
 		}
 	}
 
@@ -1327,6 +1378,7 @@ func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult 
 		Trades:         trades,
 		EquityCurve:    equity,
 		ChartData:      chartData,
+		SimData:        simData,
 		NavigatorData:  run.NavigatorData,
 		NavigatorPrice: run.NavigatorData,
 		Navigators:     run.Navigators,
