@@ -202,6 +202,20 @@ class ChartDataStore {
     return this.candleCount() > 0;
   }
 
+  getCoverage() {
+    return {
+      startSec: this.firstCandleTimeSec(),
+      endSec: this.lastCandleTimeSec(),
+    };
+  }
+
+  coversRange(reqStartSec, reqEndSec) {
+    if (!this.hasBaseLayer()) return false;
+    const coverage = this.getCoverage();
+    if (coverage.startSec == null || coverage.endSec == null) return false;
+    return reqStartSec >= coverage.startSec && reqEndSec <= coverage.endSec;
+  }
+
   setTrades(trades) {
     this._trades = trades || [];
   }

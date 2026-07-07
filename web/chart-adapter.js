@@ -508,6 +508,13 @@ function attachPriceScaleInteractionWatch(chartData) {
   };
   container.addEventListener('mouseup', onPointerEnd);
   document.addEventListener('mouseup', onPointerEnd);
+  if (chartData._disposers) {
+    chartData._disposers.push(() => {
+      container.removeEventListener('mouseup', onPointerEnd);
+      document.removeEventListener('mouseup', onPointerEnd);
+      container._priceScaleWatchBound = false;
+    });
+  }
 }
 
 function initPriceScaleControls(chartData) {
@@ -548,9 +555,9 @@ function initPriceScaleControls(chartData) {
 }
 
 function destroyChartInstance(chartData) {
-  if (chartData?._resizeObserver) {
-    chartData._resizeObserver.disconnect();
-    chartData._resizeObserver = null;
+  if (chartData?._disposers && Array.isArray(chartData._disposers)) {
+    chartData._disposers.forEach((fn) => fn());
+    chartData._disposers = [];
   }
   if (chartData?.chart) {
     try { chartData.chart.remove(); } catch { /* noop */ }
@@ -911,6 +918,7 @@ function initMonolithChart(context, containerId, options = {}) {
     priceScaleState: defaultPriceScaleState(),
     priceScaleMode: 'log',
     rulerAttached: false,
+    _disposers: [],
   };
 
   initPriceScaleControls(result);
@@ -918,13 +926,16 @@ function initMonolithChart(context, containerId, options = {}) {
   const ro = new ResizeObserver((entries) => {
     if (!entries || !entries.length) return;
     const { width, height } = entries[0].contentRect;
-    if (width > 0 && height > 0) {
-      chart.applyOptions({ width, height });
-      if (layoutManager) layoutManager.positionSplitters();
-    }
+    if (width <= 0 || height <= 0) return;
+    chart.applyOptions({ width, height });
+    if (layoutManager) layoutManager.positionSplitters();
   });
-  ro.observe(chartHost);
+  ro.observe(root);
   result._resizeObserver = ro;
+  result._disposers.push(() => {
+    ro.disconnect();
+    result._resizeObserver = null;
+  });
 
   return result;
 }
@@ -1887,6 +1898,20 @@ const ChartAdapter = {
 
   ensureBacktestChart() {
     return ensureBacktestChart();
+  },
+
+  activateSurface(context) {
+    const chartData = _ctxData(context);
+    if (!chartData || !chartData.chart || !chartData.root) return false;
+    const w = chartData.root.clientWidth;
+    const h = chartData.root.clientHeight;
+    if (w <= 0 || h <= 0) return false;
+    chartData.chart.applyOptions({ width: w, height: h });
+    if (chartData.layoutManager) {
+      chartData.layoutManager.apply(chartData.chart);
+      chartData.layoutManager.positionSplitters();
+    }
+    return true;
   },
 
   applyFullData(context, storeData, options = {}) {

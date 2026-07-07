@@ -968,12 +968,8 @@ function resetBacktestRunUi() {
 }
 
 async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
-  let autoSwitchTab = true;
   if (typeof autoSwitchTabOrOptions === 'object' && autoSwitchTabOrOptions !== null) {
     options = autoSwitchTabOrOptions;
-    autoSwitchTab = options.switchTab !== false;
-  } else {
-    autoSwitchTab = autoSwitchTabOrOptions !== false;
   }
 
   const form = typeof BacktestController !== 'undefined' ? BacktestController.getFormValues() : {};
@@ -1002,122 +998,42 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     || (fp.startSec != null && reqStartSec < fp.startSec)
     || (fp.endSec != null && reqEndSec > fp.endSec);
 
-  if (!backtestStore.hasBaseLayer() || needsBaseReload) {
-    console.log(`[Orchestrator] Base layer missing or outdated. Forcing reload for ${symbol} ${tf}`);
-    if (typeof loadBacktestHistoryShell === 'function') {
-      await loadBacktestHistoryShell({ force: true });
-    }
-  }
-
-  ChartAdapter.ensureBacktestChart();
-
-  const manageLoading = options.manageLoading !== false;
-  const skipSettingsPush = options.skipSettingsPush === true;
-  const shouldSwitchTab = options.switchTab !== undefined ? options.switchTab : autoSwitchTab;
-
   BacktestController.applyDateRangeLimits(interval);
   const startDate = form.start;
   const endDate = form.end;
 
-  if (manageLoading) {
-    BacktestController.setLoading(true);
-  }
+  const manageLoading = options.manageLoading !== false;
+  const skipSettingsPush = options.skipSettingsPush === true;
 
   backtestRunActive = true;
   BacktestController.setRunActive(true);
   backtestAbortController = new AbortController();
 
   try {
-    let payload = buildFinalBacktestPayload({ symbol, interval, startDate, endDate });
-    payload.simOnly = backtestStore.hasBaseLayer() && !needsBaseReload;
+    const payload = buildFinalBacktestPayload({ symbol, interval, startDate, endDate });
     const isExplicitRefresh = options.navigatorRefresh === true;
     const isUiDirty = typeof NavigatorController !== 'undefined' && typeof NavigatorController.consumeDirtyState === 'function'
       ? NavigatorController.consumeDirtyState('backtest')
       : false;
     const isNavRefresh = isExplicitRefresh || isUiDirty;
-    if (backtestStore.hasBaseLayer() && !needsBaseReload && !isNavRefresh) {
-      payload.settings.skipNavigators = true;
-    }
-    const settingsPayload = payload.settings;
 
-    if (!settingsPayload?.matrix || !settingsPayload?.navigators) {
-      throw new Error('Backtest payload missing matrix or navigators in settings');
+    if (typeof BacktestPipeline === 'undefined') {
+      throw new Error('BacktestPipeline is not loaded');
     }
 
-    if (!skipSettingsPush) {
-      await pushRsxSettingsToServer(coerceRsxSettingsForAPI(RsxController.getSettings('backtest')));
-    }
-
-    let result;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const { ok, status, result: respResult, rawText } = await API.runBacktest(
-        payload,
-        backtestAbortController?.signal,
-      );
-      result = respResult;
-
-      const errText = result?.error || result?.message || rawText || '';
-      const notEnoughCandles = status === 400 && /not enough candles/i.test(errText);
-
-      if (attempt === 0 && notEnoughCandles) {
-        const expanded = BacktestController.expandBacktestStartDate(payload.startDate, payload.endDate, 90);
-        if (expanded && expanded !== payload.startDate) {
-          console.warn(`[Backtest] Auto-expanding startDate ${payload.startDate} → ${expanded} (retry after: ${errText})`);
-          payload = buildFinalBacktestPayload({
-            symbol: payload.symbol,
-            interval: payload.interval,
-            startDate: expanded,
-            endDate: payload.endDate,
-          });
-          payload.simOnly = backtestStore.hasBaseLayer() && !needsBaseReload;
-          if (backtestStore.hasBaseLayer() && !needsBaseReload && !isNavRefresh) {
-            payload.settings.skipNavigators = true;
-          }
-          BacktestController.setFormValues({ start: expanded });
-          continue;
-        }
-      }
-
-      if (result?._parseError) {
-        console.error('[FALCON NETWORK] Server returned invalid JSON. Raw response:', rawText);
-        throw new Error(`Server response is not valid JSON. Check console for raw text. Status: ${status}`);
-      }
-
-      if (ok) {
-        break;
-      }
-
-      const errorText = errText || `HTTP error ${status}`;
-      alert(`Ошибка Бэктеста:\n${errorText}`);
-      return;
-    }
-
-    backtestStore.patchBacktestData(result, tf);
-
-    if (typeof backtestStore.setTrades === 'function') {
-      backtestStore.setTrades(result.trades || []);
-    }
-    backtestLastTrades = result.trades || [];
-
-    if (typeof ChartAdapter.applySimOverlay === 'function') {
-      ChartAdapter.applySimOverlay('backtest', { navigators: result.navigators });
-    }
-
-    if (typeof renderBacktestStats === 'function') renderBacktestStats(result);
-    if (typeof NavigatorController !== 'undefined') {
-      NavigatorController.renderChartLegends('backtest');
-    }
-
-    if (shouldSwitchTab && typeof switchTab === 'function') {
-      switchTab('tab-stats');
-    }
+    await BacktestPipeline.run({
+      payload,
+      tf,
+      needsBaseReload,
+      isNavRefresh,
+      signal: backtestAbortController?.signal,
+      skipSettingsPush,
+      manageLoading,
+    });
   } catch (err) {
     if (err?.name === 'AbortError') {
       return;
     }
-    const msg = err?.message || String(err);
-    console.error('Backtest failed:', err);
-    alert(`Ошибка Бэктеста:\n${msg}`);
   } finally {
     resetBacktestRunUi();
   }
@@ -1453,85 +1369,11 @@ async function loadDashboard(options = {}) {
 }
 
 async function loadBacktestHistoryShell(options = {}) {
-  const force = options.force === true;
-
-  const form = typeof BacktestController !== 'undefined' ? BacktestController.getFormValues() : {};
-  const symbol = form.symbol || 'BTCUSDT';
-  const interval = form.interval || '15m';
-  const tf = normalizeTf(interval);
-
-  const startStr = form.start || form.startDate;
-  const endStr = form.end || form.endDate;
-
-  let endMs = Date.now();
-  let startMs = endMs - (30 * 24 * 60 * 60 * 1000);
-
-  if (startStr) {
-    startMs = new Date(`${startStr}T00:00:00Z`).getTime();
+  if (typeof BacktestPipeline === 'undefined') {
+    console.warn('[Backtest] BacktestPipeline is not loaded');
+    return;
   }
-  if (endStr) {
-    endMs = new Date(`${endStr}T00:00:00Z`).getTime() + (24 * 60 * 60 * 1000 - 1);
-  }
-
-  const endTimeSec = Math.floor(endMs / 1000);
-  const reqStartSec = Math.floor(startMs / 1000);
-
-  if (!force) {
-    const fp = backtestStore.getFingerprint();
-    if (
-      fp
-      && fp.symbol === symbol
-      && fp.interval === tf
-      && fp.startSec === reqStartSec
-      && fp.endSec === endTimeSec
-      && backtestStore.hasBaseLayer()
-    ) {
-      return;
-    }
-  }
-
-  const intervalMs = getIntervalMs(tf);
-  const limit = Math.ceil((endMs - startMs) / intervalMs) + 100;
-
-  ChartAdapter.ensureBacktestChart();
-
-  try {
-    if (typeof BacktestController !== 'undefined') BacktestController.setLoading(true);
-    const params = new URLSearchParams({
-      symbol,
-      interval: tf,
-      endTime: String(endMs),
-      limit: String(Math.min(limit, 100000)),
-    });
-    if (typeof appendBacktestRsxSettingsToParams === 'function') {
-      appendBacktestRsxSettingsToParams(params);
-    }
-    const { ok, data } = await API.fetchBacktestHistoryChunk(params);
-
-    if (!ok || !Array.isArray(data?.chartData) || data.chartData.length === 0) {
-      console.warn('[Backtest] No history chunk data for shell load', { symbol, interval: tf, endTimeSec });
-      backtestHistoryHasMore = false;
-      return;
-    }
-
-    backtestStore.seal();
-    backtestStore.replaceFromServer(
-      chartPointsToStorePayload(data.chartData, data.annotations),
-      tf,
-    );
-    backtestStore.unseal();
-
-    const storeData = backtestStore.getForLightweightCharts();
-    ChartAdapter.applyFullData('backtest', storeData);
-    ChartAdapter.fitContent('backtest');
-
-    backtestHistoryHasMore = data.hasMore !== false;
-    backtestStore.setFingerprint(symbol, tf, reqStartSec, endTimeSec);
-  } catch (err) {
-    console.error('Failed to load backtest shell:', err);
-  } finally {
-    if (typeof BacktestController !== 'undefined') BacktestController.setLoading(false);
-  }
+  return BacktestPipeline.loadShell(options);
 }
 
 async function maybeLoadBacktestHistory(range) {

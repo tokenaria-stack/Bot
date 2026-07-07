@@ -105,8 +105,12 @@ const TabsController = (() => {
         refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
       }
     } else if (targetId === 'tab-backtest') {
-      if (typeof loadBacktestHistoryShell === 'function') {
-        loadBacktestHistoryShell({ force: false }).catch(console.error);
+      ChartAdapter.activateSurface('backtest');
+      if (typeof ChartProjection !== 'undefined') {
+        ChartProjection.renderBacktest({ reason: 'tab_activate', mode: 'full' });
+      }
+      if (typeof BacktestPipeline !== 'undefined') {
+        BacktestPipeline.loadShell({ force: false }).catch(console.error);
       }
     }
   }
