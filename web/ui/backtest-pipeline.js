@@ -50,6 +50,9 @@ const BacktestPipeline = (() => {
     const currentEpoch = bumpEpoch ? ++_epoch : (options.parentEpoch ?? _epoch);
     const force = options.force === true;
     const ctx = shellFormContext();
+    // #region agent log
+    fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H1',location:'web/ui/backtest-pipeline.js:loadShell:entry',message:'loadShell context and options',data:{force,bumpEpoch,currentEpoch,parentEpoch:options.parentEpoch??null,ctx:{symbol:ctx.symbol,interval:ctx.interval,tf:ctx.tf,reqStartSec:ctx.reqStartSec,endTimeSec:ctx.endTimeSec,limit:ctx.limit},fp:backtestStore.getFingerprint(),hasBaseLayer:backtestStore.hasBaseLayer()},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (!force) {
       const fp = backtestStore.getFingerprint();
@@ -79,6 +82,9 @@ const BacktestPipeline = (() => {
         appendBacktestRsxSettingsToParams(params);
       }
       const { ok, data } = await API.fetchBacktestHistoryChunk(params);
+      // #region agent log
+      fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H2',location:'web/ui/backtest-pipeline.js:loadShell:afterFetch',message:'loadShell response summary',data:{ok,chartDataLen:Array.isArray(data?.chartData)?data.chartData.length:0,hasMore:data?.hasMore,firstTime:data?.chartData?.[0]?.time??data?.chartData?.[0]?.Time??null,lastTime:data?.chartData?.[(data?.chartData?.length||1)-1]?.time??data?.chartData?.[(data?.chartData?.length||1)-1]?.Time??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (isStale(currentEpoch)) {
         console.log('[Pipeline] Stale drop');
@@ -134,6 +140,9 @@ const BacktestPipeline = (() => {
     if (!initialPayload) {
       throw new Error('BacktestPipeline.run requires payload');
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H3',location:'web/ui/backtest-pipeline.js:run:entry',message:'run entry state',data:{epoch:currentEpoch,tf,needsBaseReload,isNavRefresh,manageLoading,skipSettingsPush,hasBaseLayer:backtestStore.hasBaseLayer(),storeCoverage:typeof backtestStore.getCoverage==='function'?backtestStore.getCoverage():null,payload:{symbol:initialPayload.symbol,interval:initialPayload.interval,startDate:initialPayload.startDate,endDate:initialPayload.endDate}},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     if (!backtestStore.hasBaseLayer() || needsBaseReload) {
       console.log(`[Orchestrator] Base layer missing or outdated. Forcing reload for ${initialPayload.symbol} ${tf}`);

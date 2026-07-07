@@ -682,6 +682,9 @@ function ensureBacktestChart() {
   if (!_backtest.chart) return false;
   applyWozduhVisibilityToChart(_backtest, 'backtest');
   if (typeof _hooks.backtest.onBacktestInit === 'function') _hooks.backtest.onBacktestInit(_backtest);
+  // #region agent log
+  fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H5',location:'web/chart-adapter.js:ensureBacktestChart:initialized',message:'Backtest chart created',data:{ok:!!_backtest?.chart,rootW:_backtest?.root?.clientWidth??null,rootH:_backtest?.root?.clientHeight??null,containerW:_backtest?.elements?.chartContainer?.clientWidth??null,containerH:_backtest?.elements?.chartContainer?.clientHeight??null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return true;
 }
 

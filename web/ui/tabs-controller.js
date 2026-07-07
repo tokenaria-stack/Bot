@@ -105,12 +105,21 @@ const TabsController = (() => {
         refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
       }
     } else if (targetId === 'tab-backtest') {
-      ChartAdapter.activateSurface('backtest');
+      // 1. Пробуждение поверхности
+      if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.activateSurface === 'function') {
+        ChartAdapter.activateSurface('backtest');
+      }
+
+      // 2. Отрисовка данных из кэша (Вентиль теперь пропустит)
       if (typeof ChartProjection !== 'undefined') {
         ChartProjection.renderBacktest({ reason: 'tab_activate', mode: 'full' });
       }
+
+      // 3. Фоновая проверка актуальности базы
       if (typeof BacktestPipeline !== 'undefined') {
         BacktestPipeline.loadShell({ force: false }).catch(console.error);
+      } else {
+        console.error('[TabsController] CRITICAL FAIL: BacktestPipeline is missing. Cannot load history shell.');
       }
     }
   }

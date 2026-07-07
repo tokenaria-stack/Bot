@@ -998,6 +998,10 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     || (fp.startSec != null && reqStartSec < fp.startSec)
     || (fp.endSec != null && reqEndSec > fp.endSec);
 
+  // #region agent log
+  fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H1',location:'web/app.js:runBacktest:beforePipeline',message:'runBacktest input/fingerprint snapshot',data:{symbol,interval,tf,reqStartSec,reqEndSec,needsBaseReload,hasBaseLayer:backtestStore.hasBaseLayer(),fp},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   BacktestController.applyDateRangeLimits(interval);
   const startDate = form.start;
   const endDate = form.end;
@@ -1407,13 +1411,17 @@ async function maybeLoadBacktestHistory(range) {
     backtestStore.seal();
     beginDataUpdate();
     try {
-      ({ added } = backtestStore.prependHistory(
+      const prependResult = backtestStore.prependHistory(
         chartPointsToStorePayload(data.chartData, data.annotations),
         getBacktestStoreTf(),
-      ));
+      );
+      ({ added } = prependResult);
       backtestHistoryHasMore = data.hasMore !== false;
 
       if (added === 0) {
+        // #region agent log
+        fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H4',location:'web/app.js:maybeLoadBacktestHistory:zeroOverlap',message:'Backtest history prepend added zero',data:{symbol,interval,range,firstTime,dataLen:Array.isArray(data.chartData)?data.chartData.length:0,dataFirstTime:data.chartData?.[0]?.time??data.chartData?.[0]?.Time??null,dataLastTime:data.chartData?.[data.chartData.length-1]?.time??data.chartData?.[data.chartData.length-1]?.Time??null,prependResult,storeFirst:backtestStore.firstCandleTimeSec(),storeLast:backtestStore.lastCandleTimeSec()},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         backtestHistoryHasMore = false;
         console.warn('History pagination stalled: Zero overlap.');
         return;
