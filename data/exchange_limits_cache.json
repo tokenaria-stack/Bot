@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-06-29T15:49:31.950349Z",
+  "fetched_at": "2026-07-07T05:02:24.513242Z",
   "testnet": false,
   "limits": {
     "0GUSDT": {
@@ -634,6 +634,10 @@
       "TickSize": 0.00001,
       "StepSize": 1
     },
+    "BSPUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
     "BSVUSDT": {
       "TickSize": 0.01,
       "StepSize": 0.1
@@ -649,6 +653,10 @@
     "BTCSTUSDT": {
       "TickSize": 0.001,
       "StepSize": 0.1
+    },
+    "BTCU": {
+      "TickSize": 0.1,
+      "StepSize": 0.0001
     },
     "BTCUSD1": {
       "TickSize": 0.1,
@@ -713,6 +721,10 @@
     "CATIUSDT": {
       "TickSize": 0.00001,
       "StepSize": 1
+    },
+    "CATUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
     },
     "CBRSUSDT": {
       "TickSize": 0.01,
@@ -922,6 +934,14 @@
       "TickSize": 0.01,
       "StepSize": 0.001
     },
+    "DATAIPUSDC": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
+    "DATAIPUSDT": {
+      "TickSize": 0.0001,
+      "StepSize": 1
+    },
     "DEEPUSDT": {
       "TickSize": 0.00001,
       "StepSize": 1
@@ -1110,6 +1130,14 @@
       "TickSize": 0.0001,
       "StepSize": 0.1
     },
+    "ETHU": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
+    "ETHUSD1": {
+      "TickSize": 0.01,
+      "StepSize": 0.001
+    },
     "ETHUSDC": {
       "TickSize": 0.01,
       "StepSize": 0.001
@@ -1193,6 +1221,10 @@
     "FISUSDT": {
       "TickSize": 0.00001,
       "StepSize": 1
+    },
+    "FLEXUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
     },
     "FLMUSDT": {
       "TickSize": 0.0001,
@@ -1317,6 +1349,10 @@
     "GPSUSDT": {
       "TickSize": 0.000001,
       "StepSize": 1
+    },
+    "GRAMUSDT": {
+      "TickSize": 0.001,
+      "StepSize": 0.1
     },
     "GRASSUSDT": {
       "TickSize": 0.0001,
@@ -1649,6 +1685,10 @@
     "KSMUSDT": {
       "TickSize": 0.001,
       "StepSize": 0.1
+    },
+    "KSTRUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
     },
     "LABUSDT": {
       "TickSize": 0.001,
@@ -2658,6 +2698,10 @@
       "TickSize": 0.0001,
       "StepSize": 1
     },
+    "STRCUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
     "STRKUSDT": {
       "TickSize": 0.00001,
       "StepSize": 0.1
@@ -2745,6 +2789,10 @@
     "TAUSDT": {
       "TickSize": 0.00001,
       "StepSize": 1
+    },
+    "TERUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
     },
     "THETAUSDT": {
       "TickSize": 0.0001,
@@ -2846,6 +2894,10 @@
       "TickSize": 0.000001,
       "StepSize": 1
     },
+    "TTWOUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
+    },
     "TURBOUSDT": {
       "TickSize": 1e-7,
       "StepSize": 1
@@ -2865,6 +2917,10 @@
     "TWTUSDT": {
       "TickSize": 0.0001,
       "StepSize": 1
+    },
+    "TXNUSDT": {
+      "TickSize": 0.01,
+      "StepSize": 0.01
     },
     "UAIUSDT": {
       "TickSize": 0.0001,
