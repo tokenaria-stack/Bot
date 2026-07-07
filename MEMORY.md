@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT. **Frontend Phase 20 ✅:** монолит `app.js` разрезан на SSOT-пайплайн (`ChartDataStore` → `ChartAdapter` → LWC), Pre-Fetch Assembly (ровно 3000 баров на старте без 8s boot), `ViewportManager` (time-anchor, без анимаций), seal/guard против цепной пагинации. **Go boot:** `AnalystBootKlineLimit=400`, `IndicatorWarmupBars=300`. **UI/Stats/Backtest:** Stats Dashboard, Trade Inspector, Stop Backtest. Следующий фокус: **калибровка весов** + персистентность trade history. Правила в `.cursor/rules/`.
+> **Снэпшот MEMORY (июль 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT. **Frontend Phase 20 ✅:** монолит `app.js` разрезан на SSOT-пайплайн (`ChartDataStore` → `ChartAdapter` → LWC), Pre-Fetch Assembly (ровно 3000 баров на старте без 8s boot), `ViewportManager` (time-anchor, без анимаций), seal/guard против цепной пагинации. **Frontend Phase 28 ✅ (Backtest black screen):** Data-plane / View-plane split — `BacktestPipeline` (store + `markViewDirty`) → `ChartProjection.trySync()` (единственный paint authority); ping-сенсоры Tabs / RO / post-async; **root cause fix:** `#tab-stats` и `#tab-backtest` были вложены в `#tab-live` (missing `</div>` в `index.html`) → 0×0 при скрытом Live. **Go boot:** `AnalystBootKlineLimit=400`, `IndicatorWarmupBars=300`. **UI/Stats/Backtest:** Stats Dashboard, Trade Inspector, Stop Backtest. Следующий фокус: **калибровка весов** + персистентность trade history + cleanup backtest view debts (см. OPEN DEBTS #28–#32). Правила в `.cursor/rules/`.
 
 ---
 
@@ -258,6 +258,43 @@ loadDashboard (window.__isDashboardLoading = true)
 **Volume bug fix (20.4B):** `mergeCandles` — Last-Write-Wins для `volume` (не суммировать cumulative WS volume).
 
 **Time scale sync (20.4C):** `chartTimeFormatBundle()` — `Intl.DateTimeFormat` + `tickMarkFormatter` на `SHARED_TIME_SCALE`; `applyOrderFlowTimeScale` на все live charts.
+
+### Backtest View-Plane (Phase 28 — ✅ black screen resolved)
+
+**Принцип (Reactive Simplicity):** Data-plane **слеп к DOM**. View-plane — идемпотентный `trySync()`.
+
+```
+BacktestPipeline → backtestStore.replace/patch → markViewDirty(intent)
+Tabs / RO / runBacktest.finally → ChartProjection.trySync()  // ping only
+trySync: hasBaseLayer ∧ container>0 → ensureBacktestChart → applyFullData → scrollToPosition(0)
+```
+
+| Модуль | Файл | Роль |
+|--------|------|------|
+| **backtestStore** | `web/store.js` | IIFE wrapper: `ChartDataStore('backtest')` + `markViewDirty` / `consumeViewDirty` |
+| **BacktestPipeline** | `web/ui/backtest-pipeline.js` | Epoch guard, API I/O, store writes only — **без** `ChartAdapter` / `ChartProjection` |
+| **ChartProjection** | `web/ui/chart-projection.js` | `trySync()` — единственный paint authority; lazy init; independent RO на `#backtest-chart-container` |
+| **TabsController** | `web/ui/tabs-controller.js` | `switchTab('tab-backtest')` → `trySync()` + `loadShell().then(trySync)` |
+| **Orchestrator** | `web/app.js` | `runBacktest` finally → `trySync()`; `loadBacktestHistoryShell` → pipeline |
+
+**View intent:** `{ mode: 'full'|'overlay', viewport: 'fresh'|'preserve'|'restore' }` — full после shell/engine fallback; overlay после simOnly patch.
+
+**Viewport policy:** `scrollToPosition(0, false)` на fresh (как Live edge), не `fitContent()` на 50k баров.
+
+**`_needsInitialPaint`:** сбрасывается только если `candleSeries` существует после paint (anti poison-pill).
+
+#### Root cause black screen (Phase 28 RCA)
+
+| Симптом | Ложная гипотеза | Реальная причина |
+|---------|-----------------|------------------|
+| Чёрный canvas, store 435+ свечей | Pipeline / fitContent / spinner | **HTML:** `#tab-stats` и `#tab-backtest` были **детьми** `#tab-live` (пропущен `</div>` после `#live-chart-container` в `index.html`) |
+| `containerW/H = 0` на активной Backtest | trySync gate слишком строгий | `#tab-live { display:none }` скрывал всё поддерево |
+| `hasChart: false` | ensureBacktestChart broken | Gate блокировал init до ненулевой геометрии; геометрия никогда не появлялась |
+
+**Fix:** один `</div>` в `web/index.html` ~1357 — siblings под `#workspace-main`:
+`#tab-live` | `#tab-stats` | `#tab-backtest`.
+
+**Диагностика (консоль):** `document.getElementById('tab-backtest').parentElement.id` → должно быть `workspace-main`.
 
 ---
 
@@ -672,6 +709,20 @@ targetFrom = targetTo - windowSize
 | **Axis labels** | `axisLabelColor` / `axisLabelTextColor` вместо несуществующего `labelBackgroundColor` |
 | **RSX 50** | `lineWidth: 1`, `color: rgba(204, 85, 0, 0.4)` |
 
+#### [Phase 28 — Backtest Data/View Split + Black Screen Fix — ✅]
+**Файлы:** `web/store.js`, `web/ui/backtest-pipeline.js`, `web/ui/chart-projection.js`, `web/ui/tabs-controller.js`, `web/app.js`, `web/chart-adapter.js`, `web/index.html`
+
+| Шаг | Изменение |
+|-----|-----------|
+| **Data-plane** | `BacktestPipeline` — только store + `markViewDirty`; удалены `ensureBacktestChart`, `ChartProjection.renderBacktest`, `NavigatorController.renderChartLegends` |
+| **View intent** | `backtestStore.markViewDirty({ mode, viewport })` / `consumeViewDirty()` в IIFE wrapper |
+| **View-plane** | `ChartProjection.trySync()` — gate `hasBaseLayer ∧ #backtest-chart-container > 0`; lazy init; `scrollToPosition(0)` |
+| **Ping sensors** | Tabs (`trySync` + post-`loadShell`), independent RO на container, `runBacktest` finally |
+| **Poison pill** | `_needsInitialPaint` сброс только при наличии `candleSeries` |
+| **HTML fix** | Закрыт `#tab-live` перед `#tab-stats` — вкладки стали siblings в `#workspace-main` |
+
+**Эволюция отладки (не повторять):** pending queue + RO-hooks + `fitContent` на 0×0 — accidental complexity; правильный паттерн — dirty + idempotent ping (как Live `shouldPaintLiveChart`).
+
 ### [🔜 OPEN DEBTS — приоритет]
 
 | # | Долг | Файлы | Статус |
@@ -704,6 +755,13 @@ targetFrom = targetTo - windowSize
 | **25** | ~~**Frontend monolith / live viewport hacks**~~ | `web/app.js`, `viewport.js` | ✅ Phase 19.5–20 |
 | **26** | ~~**Live volume exponential growth**~~ | `web/time-normalizer.js` | ✅ 20.4B LWW |
 | **27** | ~~**Chain-reaction history load**~~ | `app.js`, `viewport-manager.js` | ✅ 20.4F guards + no animate |
+| **28** | ~~**Backtest black screen (0×0 tab nesting)**~~ | `web/index.html`, `chart-projection.js` | ✅ Phase 28 — HTML `</div>` + Data/View split |
+| **29** | **Backtest history bypasses Projection** | `web/app.js` `maybeLoadBacktestHistory` | 🟡 прямой `ChartAdapter.applyHistoryPrepend` — асимметрия с Phase 28 |
+| **30** | **trySync: re-mark dirty on paint fail** | `web/ui/chart-projection.js` | 🟡 `consumeViewDirty` до успешного paint; poison pill v2 если series пустой после `clearSeries` |
+| **31** | **Debug agent logs cleanup** | `backtest-pipeline.js`, `chart-adapter.js`, `app.js` | 🟡 `#region agent log` fetch ingest (session 39f875) |
+| **32** | **Overlay navigators in intent** | `backtest-pipeline.js`, `chart-projection.js` | 🟡 simOnly overlay без `result.navigators` в intent |
+| **33** | **`coversRange` not wired to `needsBaseReload`** | `backtest-pipeline.js`, `store.js` | 🟡 fingerprint-only reload policy |
+| **34** | **`runBacktest(autoSwitchTab)` dead param** | `web/app.js` | 🟢 не переключает на Backtest tab |
 
 ---
 
@@ -721,7 +779,7 @@ targetFrom = targetTo - windowSize
 | API / WS | `server/webserver.go`, `server/ram_router.go`, `server/chart_cache.go`, `server/micro_broadcast.go`, `server/config/matrix.json` |
 | Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go` |
 | Frontend core | `web/app.js`, `web/store.js`, `web/chart-adapter.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
-| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, … |
+| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
@@ -729,4 +787,4 @@ targetFrom = targetTo - windowSize
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, paper/sandbox via `.env`. `make ab-test` — CLI A/B backtest (опционально).
 
-**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite; live Trade Inspector при необходимости. Frontend Phase 20 закрыт — дальнейшие UI-работы только по телеметрии/inspector, не по data pipeline.
+**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite. **Frontend:** Phase 28 backtest paint закрыт; остаток — debt #29–#32 (history bypass Projection, debug log cleanup, overlay navigators intent, dirty re-mark guard).

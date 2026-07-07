@@ -68,8 +68,6 @@ const BacktestPipeline = (() => {
       }
     }
 
-    ChartAdapter.ensureBacktestChart();
-
     try {
       if (typeof BacktestController !== 'undefined') BacktestController.setLoading(true);
       const params = new URLSearchParams({
@@ -115,9 +113,7 @@ const BacktestPipeline = (() => {
       }
       backtestStore.setFingerprint(ctx.symbol, ctx.tf, ctx.reqStartSec, ctx.endTimeSec);
 
-      if (typeof ChartProjection !== 'undefined') {
-        ChartProjection.renderBacktest({ mode: 'full', reason: 'fresh_run' });
-      }
+      backtestStore.markViewDirty({ mode: 'full', viewport: 'fresh' });
     } catch (err) {
       console.error('Failed to load backtest shell:', err);
     } finally {
@@ -152,8 +148,6 @@ const BacktestPipeline = (() => {
         return;
       }
     }
-
-    ChartAdapter.ensureBacktestChart();
 
     if (manageLoading && typeof BacktestController !== 'undefined') {
       BacktestController.setLoading(true);
@@ -259,27 +253,14 @@ const BacktestPipeline = (() => {
         backtestLastTrades = result.trades || [];
       }
 
-      if (typeof ChartProjection !== 'undefined') {
-        if (!payload.simOnly && result.chartData && result.chartData.length > 0) {
-          ChartProjection.renderBacktest({
-            mode: 'full',
-            reason: 'fresh_run',
-            navigators: result.navigators,
-          });
-        } else {
-          ChartProjection.renderBacktest({
-            mode: 'overlay',
-            reason: 'fresh_run',
-            navigators: result.navigators,
-          });
-        }
+      if (!payload.simOnly && result.chartData && result.chartData.length > 0) {
+        backtestStore.markViewDirty({ mode: 'full', viewport: 'fresh' });
+      } else {
+        backtestStore.markViewDirty({ mode: 'overlay', viewport: 'preserve' });
       }
 
       if (typeof BacktestController !== 'undefined') {
         BacktestController.storeBacktestResult(result);
-      }
-      if (typeof NavigatorController !== 'undefined') {
-        NavigatorController.renderChartLegends('backtest');
       }
     } catch (err) {
       if (err?.name === 'AbortError') {

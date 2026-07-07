@@ -194,7 +194,6 @@ if (typeof window !== 'undefined') {
 }
 
 const liveStore = new ChartDataStore('live');
-const backtestStore = new ChartDataStore('backtest');
 
 
 
@@ -1040,6 +1039,9 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
     }
   } finally {
     resetBacktestRunUi();
+    if (typeof ChartProjection !== 'undefined') {
+      ChartProjection.trySync();
+    }
   }
 }
 

@@ -932,6 +932,9 @@ function initMonolithChart(context, containerId, options = {}) {
     if (width <= 0 || height <= 0) return;
     chart.applyOptions({ width, height });
     if (layoutManager) layoutManager.positionSplitters();
+    if (context === 'backtest' && typeof ChartProjection !== 'undefined') {
+      ChartProjection.trySync();
+    }
   });
   ro.observe(root);
   result._resizeObserver = ro;
@@ -1908,13 +1911,14 @@ const ChartAdapter = {
     if (!chartData || !chartData.chart || !chartData.root) return false;
     const w = chartData.root.clientWidth;
     const h = chartData.root.clientHeight;
-    if (w <= 0 || h <= 0) return false;
+    const ready = w > 0 && h > 0;
+    if (!ready) return false;
     chartData.chart.applyOptions({ width: w, height: h });
     if (chartData.layoutManager) {
       chartData.layoutManager.apply(chartData.chart);
       chartData.layoutManager.positionSplitters();
     }
-    return true;
+    return ready;
   },
 
   applyFullData(context, storeData, options = {}) {

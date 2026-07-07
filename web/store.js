@@ -542,6 +542,27 @@ class ChartDataStore {
   }
 }
 
+const backtestStore = (function () {
+  const store = new ChartDataStore('backtest');
+  let _viewIntent = null;
+
+  function markViewDirty(intent) {
+    _viewIntent = intent;
+  }
+
+  function consumeViewDirty() {
+    const intent = _viewIntent;
+    _viewIntent = null;
+    return intent;
+  }
+
+  return Object.assign(store, {
+    markViewDirty,
+    consumeViewDirty,
+  });
+})();
+
 if (typeof window !== 'undefined') {
   window.ChartDataStore = ChartDataStore;
+  window.backtestStore = backtestStore;
 }
