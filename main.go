@@ -154,10 +154,6 @@ func main() {
 			return
 		}
 		rsxColor := analyst.JurikRSXColor()
-		rsxSignal := 0.0
-		if analyst.HasMinBars(strategy.BacktestMinBars()) {
-			rsxSignal = analyst.RSXSignalLine()
-		}
 		brainStatus := strategy.TelemetryBrainStatus(decision, signalAnalyst)
 		aiStatus := strategy.TelemetryAIStatus(context.Background(), analyst, nil)
 		regime := master.ClosedVolatilityRegimeForTelemetry(analyst)
@@ -165,8 +161,7 @@ func main() {
 		dashboard.BroadcastTick(
 			tradingTF,
 			domain.CandleFromKline(tick.Kline),
-			falcon.JurikRSX, rsxSignal,
-			falcon.RedLine, falcon.GreenLine, falcon.BlueLine,
+			falcon,
 			rsxColor,
 			decision,
 			brainStatus, aiStatus,

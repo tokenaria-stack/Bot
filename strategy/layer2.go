@@ -214,11 +214,9 @@ func (a *Marker) saveLayer2StreamingState() {
 }
 
 func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, isClosed bool) {
-	if !a.bulkReplayMode {
-		a.falcon.RestoreState()
-	}
+	a.falcon.RestoreState()
 	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
-	if isClosed && !a.bulkReplayMode {
+	if isClosed {
 		a.falcon.SaveState()
 	}
 }

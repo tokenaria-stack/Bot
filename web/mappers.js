@@ -178,21 +178,25 @@ function toLine(raw, key) {
 function normalizeOscPoint(p) {
   const time = chartTime(p?.time ?? p?.Time);
   if (time == null) return null;
-  return {
-    time: Number(time),
-    jurik: p.jurik,
-    rsx: p.rsx,
-    rsx_signal: p.rsx_signal ?? p.rsxSignal,
-    rsiPrice: p.rsiPrice,
-    rsiHl2: p.rsiHl2,
-    rsiVolFast: p.rsiVolFast,
-    rsiVolSlow: p.rsiVolSlow,
-    volCrossMarker: p.volCrossMarker,
-    color: p.color,
-    marker: p.marker,
-    volumeSpikeUp: p.volumeSpikeUp,
-    volumeSpikeDown: p.volumeSpikeDown,
-  };
+  const res = { time: Number(time) };
+  const fields = [
+  ['jurik', p.jurik],
+  ['rsx', p.rsx],
+  ['rsx_signal', p.rsx_signal ?? p.rsxSignal],
+  ['rsiPrice', p.rsiPrice],
+  ['rsiHl2', p.rsiHl2],
+  ['rsiVolFast', p.rsiVolFast],
+  ['rsiVolSlow', p.rsiVolSlow],
+  ['volCrossMarker', p.volCrossMarker],
+  ['color', p.color],
+  ['marker', p.marker],
+  ['volumeSpikeUp', p.volumeSpikeUp],
+  ['volumeSpikeDown', p.volumeSpikeDown],
+  ];
+  for (const [key, value] of fields) {
+    if (value !== undefined) res[key] = value;
+  }
+  return res;
 }
 
 function chartPointsToOsc(points) {

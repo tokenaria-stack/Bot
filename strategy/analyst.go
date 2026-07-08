@@ -256,15 +256,15 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 
 func (a *Marker) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
 	if a.bulkReplayMode {
-		a.evaluateTickBulkChartLocked(k, barIndex)
+		a.evaluateTickBulkChartLocked(k, barIndex, isClosed)
 		return
 	}
 	a.evaluateTickLocked(k, barIndex, isClosed)
 }
 
 // evaluateTickBulkChartLocked is the chart-only cold replay path (falcon + RSX markers, zero snap churn).
-func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int) {
-	a.evaluateFalconSignalsLocked(k, true)
+func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isClosed bool) {
+	a.evaluateFalconSignalsLocked(k, isClosed)
 	a.recordDataBusBarLocked(barIndex, a.falconSignals)
 	a.cachedRSXMarkerBar = barIndex
 	a.cachedRSXMarkerLabel = ""

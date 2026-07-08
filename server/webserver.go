@@ -19,11 +19,13 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"trading_bot/core"
 	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 	"trading_bot/strategy"
+	"trading_bot/ui_config"
 )
 
 const (
@@ -90,6 +92,7 @@ type DashboardServer struct {
 	liveNavigators map[string]strategy.NavigatorUISettings
 	master         *strategy.MasterGeneral
 	backtestRuns   *backtestRunManager
+	uiRegistry     *core.UIRegistry
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -211,6 +214,10 @@ type tickPayload struct {
 	RedLine     float64 `json:"redLine"`
 	GreenLine   float64 `json:"greenLine"`
 	BlueLine    float64 `json:"blueLine"`
+	RsiPrice    float64 `json:"rsiPrice,omitempty"`
+	RsiHl2      float64 `json:"rsiHl2,omitempty"`
+	RsiVolFast  float64 `json:"rsiVolFast,omitempty"`
+	RsiVolSlow  float64 `json:"rsiVolSlow,omitempty"`
 	LongScore   int                            `json:"longScore"`
 	ShortScore  int                            `json:"shortScore"`
 	RawAction   string                         `json:"rawAction,omitempty"`
@@ -264,6 +271,11 @@ func NewDashboardServer(
 	if tradingTimeframe == "" {
 		tradingTimeframe = defaultTimeframe
 	}
+	uiReg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		log.Printf("[Dashboard] UI registry build failed: %v", err)
+		uiReg = core.NewUIRegistry()
+	}
 	return &DashboardServer{
 		analysts:         analysts,
 		rest:             rest,
@@ -280,6 +292,7 @@ func NewDashboardServer(
 		signalAnalyst:    signalAnalyst,
 		htfProvider:      htfProvider,
 		liveNavigators:   defaultLiveNavigatorPanes(),
+		uiRegistry:       uiReg,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -298,6 +311,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/indicators", withGzip(d.handleIndicatorSettings))
 	mux.HandleFunc("/api/settings/risk", withGzip(d.handleRiskSettings))
 	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
+	mux.HandleFunc("/api/ui/manifest", withGzip(d.handleUIManifest))
 	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
 	mux.HandleFunc("/api/backtest/stop", withGzip(d.handleBacktestStop))
 	mux.HandleFunc("/api/stats", withGzip(d.handleStats))
@@ -349,7 +363,7 @@ func validOHLC(open, high, low, closePrice float64) bool {
 func (d *DashboardServer) BroadcastTick(
 	timeframe string,
 	candle domain.Candle,
-	jurik, rsxSignal, redLine, greenLine, blueLine float64,
+	falcon strategy.FalconSignals,
 	rsxColor string,
 	decision strategy.ScoreDecision,
 	brainStatus, aiStatus string,
@@ -373,13 +387,17 @@ func (d *DashboardServer) BroadcastTick(
 			Low:         chart.Low,
 			Close:       chart.Close,
 			Volume:      chart.Volume,
-			Jurik:       jurik,
-			RSX:         jurik,
-			RSXSignal:   rsxSignal,
+			Jurik:       falcon.JurikRSX,
+			RSX:         falcon.JurikRSX,
+			RSXSignal:   falcon.JurikRSXSignal,
 			RSXColor:    rsxColor,
-			RedLine:     redLine,
-			GreenLine:   greenLine,
-			BlueLine:    blueLine,
+			RedLine:     falcon.RedLine,
+			GreenLine:   falcon.GreenLine,
+			BlueLine:    falcon.BlueLine,
+			RsiPrice:    falcon.RsiPrice,
+			RsiHl2:      falcon.RsiHl2,
+			RsiVolFast:  falcon.RsiVolFast,
+			RsiVolSlow:  falcon.RsiVolSlow,
 			LongScore:   decision.LongScore,
 			ShortScore:  decision.ShortScore,
 			RawAction:   string(decision.RawAction),
@@ -901,6 +919,19 @@ func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (d *DashboardServer) handleUIManifest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if d.uiRegistry == nil {
+		http.Error(w, "ui manifest unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(d.uiRegistry.Manifest())
 }
 
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
