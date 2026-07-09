@@ -1572,6 +1572,10 @@ function handleLiveTick(d) {
   const tickTf = (d.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
   if (tickTf !== currentTf.toLowerCase()) return;
 
+  if (d.plots && window.DDRFactory) {
+    window.DDRFactory.updateTick(d.time, d.plots);
+  }
+
   const time = chartTime(d.time);
   if (time == null) return;
 
@@ -1749,7 +1753,73 @@ function safeInit(moduleName, fn) {
   }
 }
 
+function buildLiveDDRChartRegistry() {
+  const chart = ChartAdapter.getChart('live', 'price');
+  if (!chart) return null;
+  return {
+    pane_osc: { chart, defaultPriceScaleId: 'rsx' },
+    pane_score: { chart, defaultPriceScaleId: 'wozduh' },
+  };
+}
+
+async function mountDDRLiveCutover() {
+  if (!window.DDRFactory?.manifest || !ChartAdapter.chartInitialized()) {
+    return false;
+  }
+  const chartRegistry = buildLiveDDRChartRegistry();
+  if (!chartRegistry) return false;
+
+  window.DDRFactory.buildPanes(chartRegistry, window.DDRFactory.manifest.panes);
+  window.DDRFactory.applyHydratedData();
+
+  ChartAdapter.hideLegacyOscillatorSeries('live');
+  ChartAdapter.enableDDROscCutover();
+  return true;
+}
+
+function initDDRFactory() {
+  if (typeof DDRFactory === 'undefined') return;
+  window.DDRFactory = new DDRFactory({
+    normalizeTime: (raw) => {
+      if (typeof chartTime === 'function') return chartTime(raw);
+      return DDRFactory.defaultNormalizeTime(raw);
+    },
+  });
+  window.DDRFactory.fetchManifest().catch((err) => {
+    console.warn('[DDRFactory] manifest fetch failed:', err);
+  });
+}
+
+async function scheduleDDRCutover() {
+  if (!window.DDRFactory) return;
+  const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+  const tf = backendTradingTimeframe || currentTf || '1m';
+  const endTimeSec = liveStore?.lastCandleTimeSec?.() ?? liveStore?.firstCandleTimeSec?.();
+
+  if (Number.isFinite(endTimeSec) && endTimeSec > 0) {
+    const rsxSettings = typeof coerceRsxSettingsForAPI === 'function' && typeof RsxController !== 'undefined'
+      ? coerceRsxSettingsForAPI(RsxController.getSettings('live'))
+      : undefined;
+    try {
+      await window.DDRFactory.fetchAndHydrateHistory(symbol, tf, {
+        endTimeSec,
+        limit: typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 1000,
+        rsxSettings,
+      });
+    } catch (err) {
+      console.warn('[DDRFactory] history hydrate failed:', err);
+    }
+  }
+
+  try {
+    await mountDDRLiveCutover();
+  } catch (err) {
+    console.warn('[DDRFactory] cutover mount failed:', err);
+  }
+}
+
 function boot() {
+  safeInit('DDR factory', initDDRFactory);
   safeInit('UI strategy', () => StrategyController.init());
   safeInit('UI tabs', () => TabsController.init());
   safeInit('UI risk', () => RiskController.init());
@@ -1839,6 +1909,7 @@ function boot() {
       }
 
       await loadDashboard();
+      await scheduleDDRCutover();
       initLiveWebSocket();
       if (isOrderFlowTf()) {
         orderFlowPollTimer = setInterval(pollOrderFlowState, 500);

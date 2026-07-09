@@ -1,6 +1,8 @@
 package wire
 
 import (
+	"math"
+
 	"trading_bot/core"
 )
 
@@ -15,9 +17,10 @@ func NewProjector(r *core.UIRegistry) *Projector {
 }
 
 // BuildTickJSON projects scalar slot values into a map keyed by component ID.
+// Non-finite values (NaN, ±Inf) are omitted so encoding/json never panics on plots.
 func (p *Projector) BuildTickJSON(frame *core.TickFrame) map[string]float64 {
 	if p == nil || p.registry == nil || frame == nil {
-		return map[string]float64{}
+		return nil
 	}
 	components := p.registry.Components()
 	out := make(map[string]float64, len(components))
@@ -25,7 +28,18 @@ func (p *Projector) BuildTickJSON(frame *core.TickFrame) map[string]float64 {
 		if c.DataMode != "scalar" {
 			continue
 		}
-		out[c.ID] = frame.Get(c.Slot)
+		val := frame.Get(c.Slot)
+		if !jsonSafeFloat(val) {
+			continue
+		}
+		out[c.ID] = val
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
+}
+
+func jsonSafeFloat(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }

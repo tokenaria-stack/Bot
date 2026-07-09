@@ -26,6 +26,12 @@ let _cachedWozduhMarkers = [];
 const _SPIKE_MARKER_TEXTS = new Set(['▲', '▼']);
 let _hooks = { live: {}, backtest: {} };
 let _chartInitialized = false;
+/** Phase 6: live oscillators painted by DDRFactory instead of legacy applyOscillatorToChart. */
+let _ddrOscCutover = false;
+
+function ddrOscCutoverActive(context = 'live') {
+  return _ddrOscCutover && context === 'live';
+}
 
 function _ctxData(context) {
   return context === 'backtest' ? _backtest : _live;
@@ -1705,12 +1711,15 @@ function _applyFullDataInternal(context, storeData, options = {}) {
     _rebuildPriceMarkerCache(annotationMap);
     _rebuildWozduhMarkerCache(annotationMap);
   }
-  applyOscillatorToChart(chartData, storeData.osc, storeData.annotations);
-  const wozPrefs = options.wozduhPrefs;
-  if (wozPrefs) {
-    applyWozduhVisibilityFromPrefs(chartData, wozPrefs);
-  } else if (typeof getWozduhPrefsForChart === 'function') {
-    applyWozduhVisibilityToChart(chartData, context);
+  // Phase 6 DDR cutover: legacy oscillator paint disabled for live chart.
+  if (!ddrOscCutoverActive(context)) {
+    applyOscillatorToChart(chartData, storeData.osc, storeData.annotations);
+    const wozPrefs = options.wozduhPrefs;
+    if (wozPrefs) {
+      applyWozduhVisibilityFromPrefs(chartData, wozPrefs);
+    } else if (typeof getWozduhPrefsForChart === 'function') {
+      applyWozduhVisibilityToChart(chartData, context);
+    }
   }
   if (context === 'live') {
     if (typeof _hooks.live.applyTradeMarkers === 'function') {
@@ -1771,7 +1780,7 @@ function _applyDeltaInternal(context, delta, options = {}) {
     }
   }
 
-  if (delta.osc) {
+  if (delta.osc && !ddrOscCutoverActive(context)) {
     applyOscPointDelta(delta.osc, chartData);
   }
 
@@ -2099,6 +2108,24 @@ const ChartAdapter = {
 
   setChartInitialized(v) { _chartInitialized = !!v; },
 
+  enableDDROscCutover() {
+    _ddrOscCutover = true;
+  },
+
+  isDDROscCutover() {
+    return _ddrOscCutover;
+  },
+
+  hideLegacyOscillatorSeries(context = 'live') {
+    const chartData = _ctxData(context);
+    if (!chartData) return;
+    chartData.rsxSeries?.applyOptions({ visible: false });
+    chartData.rsxSignalSeries?.applyOptions({ visible: false });
+    Object.values(chartData.wozduxSeries || {}).forEach((series) => {
+      series?.applyOptions({ visible: false });
+    });
+  },
+
   applyRsxData(context, osc, annotations) {
     applyRsxData(osc, _ctxData(context), annotations);
   },
@@ -2111,8 +2138,11 @@ const ChartAdapter = {
     if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
     _rebuildPriceMarkerCache(liveStore.getAnnotationsMap());
     _rebuildWozduhMarkerCache(liveStore.getAnnotationsMap());
-    applyOscillatorToChart(_live, storeData.osc, storeData.annotations);
-    applyWozduhVisibilityToChart(_live, 'live');
+    // Phase 6 DDR cutover: legacy oscillator paint disabled for live chart.
+    if (!ddrOscCutoverActive('live')) {
+      applyOscillatorToChart(_live, storeData.osc, storeData.annotations);
+      applyWozduhVisibilityToChart(_live, 'live');
+    }
     _flushPriceMarkerCache();
     return { candles, storeData };
   },

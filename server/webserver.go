@@ -24,6 +24,7 @@ import (
 	"trading_bot/domain"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
+	"trading_bot/server/wire"
 	"trading_bot/strategy"
 	"trading_bot/ui_config"
 )
@@ -71,61 +72,62 @@ func (c *WSClient) Close() error {
 
 // DashboardServer serves the trading dashboard UI and market state API.
 type DashboardServer struct {
-	analysts       map[string]*strategy.Marker
-	rest           *exchange.BinanceExchange
-	orderFlow      *domain.OrderFlowStore
-	symbol         string
-	staticDir      string
-	upgrader       websocket.Upgrader
-	clients        map[*WSClient]bool
-	clientTF       map[*WSClient]string
-	clientsMu      sync.Mutex
-	tradesMu       sync.RWMutex
-	trades         []ChartTrade
-	tradeHistory   *domain.TradeHistoryStore
-	paperTrading      bool
-	sandboxMode       bool
-	tradingTimeframe  string
-	signalAnalyst     *strategy.Analyst
-	htfProvider    *exchange.HTFProvider
-	liveNavMu      sync.RWMutex
-	liveNavigators map[string]strategy.NavigatorUISettings
-	master         *strategy.MasterGeneral
-	backtestRuns   *backtestRunManager
-	uiRegistry     *core.UIRegistry
+	analysts         map[string]*strategy.Marker
+	rest             *exchange.BinanceExchange
+	orderFlow        *domain.OrderFlowStore
+	symbol           string
+	staticDir        string
+	upgrader         websocket.Upgrader
+	clients          map[*WSClient]bool
+	clientTF         map[*WSClient]string
+	clientsMu        sync.Mutex
+	tradesMu         sync.RWMutex
+	trades           []ChartTrade
+	tradeHistory     *domain.TradeHistoryStore
+	paperTrading     bool
+	sandboxMode      bool
+	tradingTimeframe string
+	signalAnalyst    *strategy.Analyst
+	htfProvider      *exchange.HTFProvider
+	liveNavMu        sync.RWMutex
+	liveNavigators   map[string]strategy.NavigatorUISettings
+	master           *strategy.MasterGeneral
+	backtestRuns     *backtestRunManager
+	uiRegistry       *core.UIRegistry
+	projector        *wire.Projector
 }
 
 // MarketState is the JSON payload for GET /api/state.
 type MarketState struct {
-	Status           string              `json:"status,omitempty"`
-	Symbol           string              `json:"symbol"`
-	Timeframe        string              `json:"timeframe"`
-	TradingTimeframe string              `json:"tradingTimeframe"`
-	UpdatedAt        int64               `json:"updatedAt"`
-	VolatilityRegime string              `json:"volatilityRegime"`
-	Jurik            float64             `json:"jurik"`
-	RedLine          float64             `json:"redLine"`
-	GreenLine        float64             `json:"greenLine"`
-	LongScore        int                            `json:"longScore"`
-	ShortScore       int                            `json:"shortScore"`
-	RawAction        string                         `json:"rawAction,omitempty"`
-	FinalAction      string                         `json:"finalAction,omitempty"`
-	IsVetoed         bool                           `json:"isVetoed,omitempty"`
-	VetoReason       string                         `json:"vetoReason,omitempty"`
-	Factors          map[string]strategy.ScoreFactor `json:"factors"`
-	BrainStatus      string                         `json:"brainStatus"`
-	AIStatus         string              `json:"aiStatus"`
-	TickBufferLen    int                 `json:"tickBufferLen,omitempty"`
-	Candles          []ChartCandle       `json:"candles"`
-	Oscillators      []ChartOscillator   `json:"oscillators"`
-	FibZones         []ChartFibZone      `json:"fibZones"`
-	Trades           []ChartTrade        `json:"trades,omitempty"`
-	MasterState      string              `json:"masterState,omitempty"`
-	PaperTrading     bool                `json:"paperTrading,omitempty"`
-	SandboxMode      bool                `json:"sandboxMode,omitempty"`
-	HasMore          bool                                        `json:"hasMore,omitempty"`
-	Navigators       map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
-	Annotations      []strategy.ChartAnnotation                `json:"annotations,omitempty"`
+	Status           string                                 `json:"status,omitempty"`
+	Symbol           string                                 `json:"symbol"`
+	Timeframe        string                                 `json:"timeframe"`
+	TradingTimeframe string                                 `json:"tradingTimeframe"`
+	UpdatedAt        int64                                  `json:"updatedAt"`
+	VolatilityRegime string                                 `json:"volatilityRegime"`
+	Jurik            float64                                `json:"jurik"`
+	RedLine          float64                                `json:"redLine"`
+	GreenLine        float64                                `json:"greenLine"`
+	LongScore        int                                    `json:"longScore"`
+	ShortScore       int                                    `json:"shortScore"`
+	RawAction        string                                 `json:"rawAction,omitempty"`
+	FinalAction      string                                 `json:"finalAction,omitempty"`
+	IsVetoed         bool                                   `json:"isVetoed,omitempty"`
+	VetoReason       string                                 `json:"vetoReason,omitempty"`
+	Factors          map[string]strategy.ScoreFactor        `json:"factors"`
+	BrainStatus      string                                 `json:"brainStatus"`
+	AIStatus         string                                 `json:"aiStatus"`
+	TickBufferLen    int                                    `json:"tickBufferLen,omitempty"`
+	Candles          []ChartCandle                          `json:"candles"`
+	Oscillators      []ChartOscillator                      `json:"oscillators"`
+	FibZones         []ChartFibZone                         `json:"fibZones"`
+	Trades           []ChartTrade                           `json:"trades,omitempty"`
+	MasterState      string                                 `json:"masterState,omitempty"`
+	PaperTrading     bool                                   `json:"paperTrading,omitempty"`
+	SandboxMode      bool                                   `json:"sandboxMode,omitempty"`
+	HasMore          bool                                   `json:"hasMore,omitempty"`
+	Navigators       map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations      []strategy.ChartAnnotation             `json:"annotations,omitempty"`
 }
 
 // ChartTrade is a virtual or live trade marker for the price chart (time in Unix seconds).
@@ -199,36 +201,37 @@ type wsEnvelope struct {
 }
 
 type tickPayload struct {
-	Timeframe   string  `json:"timeframe,omitempty"`
-	Time        int64   `json:"time"`
-	Open        float64 `json:"open"`
-	High        float64 `json:"high"`
-	Low         float64 `json:"low"`
-	Close       float64 `json:"close"`
-	Volume      float64 `json:"volume,omitempty"`
-	Jurik       float64 `json:"jurik"`
-	RSXColor    string  `json:"rsxColor,omitempty"`
-	RSXMarker   string  `json:"rsxMarker,omitempty"`
-	RSX         float64 `json:"rsx,omitempty"`
-	RSXSignal   float64 `json:"rsx_signal,omitempty"`
-	RedLine     float64 `json:"redLine"`
-	GreenLine   float64 `json:"greenLine"`
-	BlueLine    float64 `json:"blueLine"`
-	RsiPrice    float64 `json:"rsiPrice,omitempty"`
-	RsiHl2      float64 `json:"rsiHl2,omitempty"`
-	RsiVolFast  float64 `json:"rsiVolFast,omitempty"`
-	RsiVolSlow  float64 `json:"rsiVolSlow,omitempty"`
-	LongScore   int                            `json:"longScore"`
-	ShortScore  int                            `json:"shortScore"`
-	RawAction   string                         `json:"rawAction,omitempty"`
-	FinalAction string                         `json:"finalAction,omitempty"`
-	IsVetoed    bool                           `json:"isVetoed,omitempty"`
-	VetoReason  string                         `json:"vetoReason,omitempty"`
-	Factors     map[string]strategy.ScoreFactor `json:"factors"`
-	BrainStatus string                         `json:"brainStatus"`
-	AIStatus    string  `json:"aiStatus"`
-	IsClosed    bool    `json:"isClosed,omitempty"`
-	VolatilityRegime string `json:"volatilityRegime,omitempty"`
+	Timeframe        string                          `json:"timeframe,omitempty"`
+	Time             int64                           `json:"time"`
+	Open             float64                         `json:"open"`
+	High             float64                         `json:"high"`
+	Low              float64                         `json:"low"`
+	Close            float64                         `json:"close"`
+	Volume           float64                         `json:"volume,omitempty"`
+	Jurik            float64                         `json:"jurik"`
+	RSXColor         string                          `json:"rsxColor,omitempty"`
+	RSXMarker        string                          `json:"rsxMarker,omitempty"`
+	RSX              float64                         `json:"rsx,omitempty"`
+	RSXSignal        float64                         `json:"rsx_signal,omitempty"`
+	RedLine          float64                         `json:"redLine"`
+	GreenLine        float64                         `json:"greenLine"`
+	BlueLine         float64                         `json:"blueLine"`
+	RsiPrice         float64                         `json:"rsiPrice,omitempty"`
+	RsiHl2           float64                         `json:"rsiHl2,omitempty"`
+	RsiVolFast       float64                         `json:"rsiVolFast,omitempty"`
+	RsiVolSlow       float64                         `json:"rsiVolSlow,omitempty"`
+	LongScore        int                             `json:"longScore"`
+	ShortScore       int                             `json:"shortScore"`
+	RawAction        string                          `json:"rawAction,omitempty"`
+	FinalAction      string                          `json:"finalAction,omitempty"`
+	IsVetoed         bool                            `json:"isVetoed,omitempty"`
+	VetoReason       string                          `json:"vetoReason,omitempty"`
+	Factors          map[string]strategy.ScoreFactor `json:"factors"`
+	BrainStatus      string                          `json:"brainStatus"`
+	AIStatus         string                          `json:"aiStatus"`
+	IsClosed         bool                            `json:"isClosed,omitempty"`
+	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
+	Plots            map[string]float64              `json:"plots,omitempty"`
 }
 
 type markerPayload struct {
@@ -240,20 +243,20 @@ type markerPayload struct {
 }
 
 type historyChunkResponse struct {
-	ChartData     []ChartPoint           `json:"chartData"`
-	HasMore       bool                   `json:"hasMore"`
+	ChartData   []ChartPoint               `json:"chartData"`
+	HasMore     bool                       `json:"hasMore"`
 	Annotations []strategy.ChartAnnotation `json:"annotations,omitempty"`
 }
 
 type historyResponse struct {
-	Status      string            `json:"status"`
-	Timeframe   string            `json:"timeframe"`
-	Candles     []ChartCandle     `json:"candles"`
-	Oscillators []ChartOscillator `json:"oscillators"`
-	Trades      []ChartTrade                                `json:"trades,omitempty"`
-	HasMore     bool                                        `json:"hasMore"`
-	Navigators  map[string]strategy.NavigatorResultDTO      `json:"navigators,omitempty"`
-	Annotations []strategy.ChartAnnotation                 `json:"annotations,omitempty"`
+	Status      string                                 `json:"status"`
+	Timeframe   string                                 `json:"timeframe"`
+	Candles     []ChartCandle                          `json:"candles"`
+	Oscillators []ChartOscillator                      `json:"oscillators"`
+	Trades      []ChartTrade                           `json:"trades,omitempty"`
+	HasMore     bool                                   `json:"hasMore"`
+	Navigators  map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations []strategy.ChartAnnotation             `json:"annotations,omitempty"`
 }
 
 // NewDashboardServer creates a dashboard server bound to Marker instances.
@@ -293,6 +296,7 @@ func NewDashboardServer(
 		htfProvider:      htfProvider,
 		liveNavigators:   defaultLiveNavigatorPanes(),
 		uiRegistry:       uiReg,
+		projector:        wire.NewProjector(uiReg),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -312,6 +316,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/risk", withGzip(d.handleRiskSettings))
 	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
 	mux.HandleFunc("/api/ui/manifest", withGzip(d.handleUIManifest))
+	mux.HandleFunc("/api/ui/history", withGzip(d.handleUIHistory))
 	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
 	mux.HandleFunc("/api/backtest/stop", withGzip(d.handleBacktestStop))
 	mux.HandleFunc("/api/stats", withGzip(d.handleStats))
@@ -369,6 +374,7 @@ func (d *DashboardServer) BroadcastTick(
 	brainStatus, aiStatus string,
 	volatilityRegime string,
 	isClosed bool,
+	dagFrame *core.TickFrame,
 ) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
@@ -377,38 +383,43 @@ func (d *DashboardServer) BroadcastTick(
 	if timeframe == "" {
 		timeframe = d.tradingTimeframe
 	}
+	var plots map[string]float64
+	if dagFrame != nil && d.projector != nil {
+		plots = d.projector.BuildTickJSON(dagFrame)
+	}
 	d.broadcast(wsEnvelope{
 		Type: "tick",
 		Data: tickPayload{
-			Timeframe:   timeframe,
-			Time:        chart.Time,
-			Open:        chart.Open,
-			High:        chart.High,
-			Low:         chart.Low,
-			Close:       chart.Close,
-			Volume:      chart.Volume,
-			Jurik:       falcon.JurikRSX,
-			RSX:         falcon.JurikRSX,
-			RSXSignal:   falcon.JurikRSXSignal,
-			RSXColor:    rsxColor,
-			RedLine:     falcon.RedLine,
-			GreenLine:   falcon.GreenLine,
-			BlueLine:    falcon.BlueLine,
-			RsiPrice:    falcon.RsiPrice,
-			RsiHl2:      falcon.RsiHl2,
-			RsiVolFast:  falcon.RsiVolFast,
-			RsiVolSlow:  falcon.RsiVolSlow,
-			LongScore:   decision.LongScore,
-			ShortScore:  decision.ShortScore,
-			RawAction:   string(decision.RawAction),
-			FinalAction: string(decision.FinalAction),
-			IsVetoed:    decision.IsVetoed,
-			VetoReason:  decision.VetoReason,
-			Factors:     decision.Factors,
-			BrainStatus: brainStatus,
-			AIStatus:    aiStatus,
-			IsClosed:    isClosed,
+			Timeframe:        timeframe,
+			Time:             chart.Time,
+			Open:             chart.Open,
+			High:             chart.High,
+			Low:              chart.Low,
+			Close:            chart.Close,
+			Volume:           chart.Volume,
+			Jurik:            falcon.JurikRSX,
+			RSX:              falcon.JurikRSX,
+			RSXSignal:        falcon.JurikRSXSignal,
+			RSXColor:         rsxColor,
+			RedLine:          falcon.RedLine,
+			GreenLine:        falcon.GreenLine,
+			BlueLine:         falcon.BlueLine,
+			RsiPrice:         falcon.RsiPrice,
+			RsiHl2:           falcon.RsiHl2,
+			RsiVolFast:       falcon.RsiVolFast,
+			RsiVolSlow:       falcon.RsiVolSlow,
+			LongScore:        decision.LongScore,
+			ShortScore:       decision.ShortScore,
+			RawAction:        string(decision.RawAction),
+			FinalAction:      string(decision.FinalAction),
+			IsVetoed:         decision.IsVetoed,
+			VetoReason:       decision.VetoReason,
+			Factors:          decision.Factors,
+			BrainStatus:      brainStatus,
+			AIStatus:         aiStatus,
+			IsClosed:         isClosed,
 			VolatilityRegime: volatilityRegime,
+			Plots:            plots,
 		},
 	})
 }
@@ -934,6 +945,116 @@ func (d *DashboardServer) handleUIManifest(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(d.uiRegistry.Manifest())
 }
 
+func (d *DashboardServer) handleUIHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
+	if d.projector == nil {
+		http.Error(w, "ui projector unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	tf := r.URL.Query().Get("tf")
+	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
+	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
+	if tf == "" || (endTimeMs <= 0 && endTimeSec <= 0) {
+		http.Error(w, "tf and endTime or endTimeMs required", http.StatusBadRequest)
+		return
+	}
+	if symbol := strings.TrimSpace(r.URL.Query().Get("symbol")); symbol != "" {
+		if exchange.NormalizeFuturesSymbol(symbol) != d.symbol {
+			http.Error(w, "symbol mismatch", http.StatusBadRequest)
+			return
+		}
+	}
+
+	spec, err := ResolveTimeframe(tf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rsxSettings := parseRSXSettingsFromRequest(r)
+	candleLimit := parseCandleLimit(r, historyFetchLimit, maxStateCandleLimit)
+
+	klines, hasMore, err := d.loadHistoryKlinesForUI(r, spec, candleLimit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	if len(klines) == 0 {
+		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+		return
+	}
+
+	display := klines
+	if candleLimit > 0 && len(display) > candleLimit {
+		display = display[len(display)-candleLimit:]
+	}
+	times := make([]int64, len(display))
+	for i, k := range display {
+		times[i] = exchange.ChartTimeSec(k.OpenTime)
+	}
+
+	hist := strategy.ReplayDAGKlines(klines, rsxSettings)
+	cols := d.projector.BuildHistoryColumns(hist, times)
+
+	resp := map[string]any{
+		"status":    "ready",
+		"timeframe": spec.ID,
+		"symbol":    d.symbol,
+		"hasMore":   hasMore,
+	}
+	for k, v := range cols {
+		resp[k] = v
+	}
+	writeJSON(w, resp)
+}
+
+func (d *DashboardServer) loadHistoryKlinesForUI(r *http.Request, spec TimeframeSpec, candleLimit int) ([]exchange.Kline, bool, error) {
+	if IsOrderFlowTimeframe(spec) {
+		if err := requestCtxErr(r.Context()); err != nil {
+			return nil, false, err
+		}
+		endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
+		klines := d.loadOrderFlowKlines(spec, endTimeSec, candleLimit)
+		hasMore := len(klines) >= historyFetchLimit
+		return klines, hasMore, nil
+	}
+
+	if spec.Kind == TFRAMOnly {
+		if err := requestCtxErr(r.Context()); err != nil {
+			return nil, false, err
+		}
+		klines := d.ramKlines(spec.ID, candleLimit+strategy.IndicatorWarmupBars)
+		return klines, false, nil
+	}
+
+	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
+	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
+	resolvedEndMs := endTimeMs
+	if resolvedEndMs <= 0 {
+		resolvedEndMs = historyEndTimeToMs(endTimeSec)
+	}
+	klines := d.loadRESTKlinesFromStore(r.Context(), spec, resolvedEndMs, candleLimit, true)
+	if err := requestCtxErr(r.Context()); err != nil {
+		return nil, false, err
+	}
+	if len(klines) == 0 {
+		return nil, false, nil
+	}
+
+	hasMore := false
+	if len(klines) > 0 {
+		hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, exchange.ChartTimeSec(klines[0].OpenTime)*1000)
+	}
+	return klines, hasMore, nil
+}
+
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
 	settings := strategy.GetRSXSettings()
 	for _, analyst := range d.analysts {
@@ -945,48 +1066,48 @@ func (d *DashboardServer) applyRSXSettingsToAnalysts() {
 
 // BacktestRequest is the JSON payload for POST /api/backtest/run.
 type BacktestRequest struct {
-	Symbol     string                                `json:"symbol"`
-	Interval   string                                `json:"interval"`
-	StartDate  string                                `json:"startDate"`
-	EndDate    string                                `json:"endDate"`
-	Settings   *strategy.BacktestRunSettings         `json:"settings"`
-	Navigator  strategy.NavigatorUISettings          `json:"navigator,omitempty"`
+	Symbol     string                                  `json:"symbol"`
+	Interval   string                                  `json:"interval"`
+	StartDate  string                                  `json:"startDate"`
+	EndDate    string                                  `json:"endDate"`
+	Settings   *strategy.BacktestRunSettings           `json:"settings"`
+	Navigator  strategy.NavigatorUISettings            `json:"navigator,omitempty"`
 	Navigators map[string]strategy.NavigatorUISettings `json:"navigators,omitempty"`
-	MtfOptions map[string]bool                       `json:"mtfOptions,omitempty"`
-	SimOnly    bool                                  `json:"simOnly"`
+	MtfOptions map[string]bool                         `json:"mtfOptions,omitempty"`
+	SimOnly    bool                                    `json:"simOnly"`
 }
 
 // ChartPoint is one candle with full indicator values for the backtest chart.
 type ChartPoint struct {
-	Time            int64   `json:"time"`
-	Open            float64 `json:"open"`
-	High            float64 `json:"high"`
-	Low             float64 `json:"low"`
-	Close           float64 `json:"close"`
-	Volume          float64 `json:"volume,omitempty"`
-	Jurik           float64 `json:"jurik,omitempty"`
-	RSX             float64 `json:"rsx"`
-	RSXSignal       float64 `json:"rsx_signal"`
-	RsiPrice        float64 `json:"rsiPrice,omitempty"`
-	EmaRsi          float64 `json:"emaRsi,omitempty"`
-	RsiRsi          float64 `json:"rsiRsi,omitempty"`
-	RsiHl2          float64 `json:"rsiHl2,omitempty"`
-	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
-	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
-	MacdRsi         float64 `json:"macdRsi,omitempty"`
-	RsiAd           float64 `json:"rsiAd,omitempty"`
-	RsiHl2Vol       float64 `json:"rsiHl2Vol,omitempty"`
-	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
-	VolChanMid      float64 `json:"volChanMid,omitempty"`
-	VolChanUp       float64 `json:"volChanUp,omitempty"`
-	VolChanDn       float64 `json:"volChanDn,omitempty"`
-	PriceChanMid    float64 `json:"priceChanMid,omitempty"`
-	PriceChanUp     float64 `json:"priceChanUp,omitempty"`
-	PriceChanDn     float64 `json:"priceChanDn,omitempty"`
-	Color           string  `json:"color,omitempty"`
-	Marker          string  `json:"marker,omitempty"`
-	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
-	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
+	Time            int64                           `json:"time"`
+	Open            float64                         `json:"open"`
+	High            float64                         `json:"high"`
+	Low             float64                         `json:"low"`
+	Close           float64                         `json:"close"`
+	Volume          float64                         `json:"volume,omitempty"`
+	Jurik           float64                         `json:"jurik,omitempty"`
+	RSX             float64                         `json:"rsx"`
+	RSXSignal       float64                         `json:"rsx_signal"`
+	RsiPrice        float64                         `json:"rsiPrice,omitempty"`
+	EmaRsi          float64                         `json:"emaRsi,omitempty"`
+	RsiRsi          float64                         `json:"rsiRsi,omitempty"`
+	RsiHl2          float64                         `json:"rsiHl2,omitempty"`
+	RsiVolFast      float64                         `json:"rsiVolFast,omitempty"`
+	RsiVolSlow      float64                         `json:"rsiVolSlow,omitempty"`
+	MacdRsi         float64                         `json:"macdRsi,omitempty"`
+	RsiAd           float64                         `json:"rsiAd,omitempty"`
+	RsiHl2Vol       float64                         `json:"rsiHl2Vol,omitempty"`
+	VolCrossMarker  string                          `json:"volCrossMarker,omitempty"`
+	VolChanMid      float64                         `json:"volChanMid,omitempty"`
+	VolChanUp       float64                         `json:"volChanUp,omitempty"`
+	VolChanDn       float64                         `json:"volChanDn,omitempty"`
+	PriceChanMid    float64                         `json:"priceChanMid,omitempty"`
+	PriceChanUp     float64                         `json:"priceChanUp,omitempty"`
+	PriceChanDn     float64                         `json:"priceChanDn,omitempty"`
+	Color           string                          `json:"color,omitempty"`
+	Marker          string                          `json:"marker,omitempty"`
+	VolumeSpikeUp   bool                            `json:"volumeSpikeUp,omitempty"`
+	VolumeSpikeDown bool                            `json:"volumeSpikeDown,omitempty"`
 	WozduhUp        float64                         `json:"wozduh_up,omitempty"`
 	WozduhDown      float64                         `json:"wozduh_down,omitempty"`
 	LongScore       int                             `json:"longScore,omitempty"`
@@ -1040,15 +1161,15 @@ type EquityPoint struct {
 
 // BacktestResult is returned after a backtest run completes.
 type BacktestResult struct {
-	TotalTrades    int             `json:"totalTrades"`
-	WinRate        float64         `json:"winRate"`
-	NetProfit      float64         `json:"netProfit"`
-	ProfitFactor   float64         `json:"profitFactor"`
-	MaxDrawdown    float64         `json:"maxDrawdown"`
-	RecoveryFactor float64         `json:"recoveryFactor"`
-	Cancelled      bool            `json:"cancelled,omitempty"`
-	Trades         []BacktestTrade `json:"trades"`
-	EquityCurve    []EquityPoint   `json:"equityCurve"`
+	TotalTrades    int                                    `json:"totalTrades"`
+	WinRate        float64                                `json:"winRate"`
+	NetProfit      float64                                `json:"netProfit"`
+	ProfitFactor   float64                                `json:"profitFactor"`
+	MaxDrawdown    float64                                `json:"maxDrawdown"`
+	RecoveryFactor float64                                `json:"recoveryFactor"`
+	Cancelled      bool                                   `json:"cancelled,omitempty"`
+	Trades         []BacktestTrade                        `json:"trades"`
+	EquityCurve    []EquityPoint                          `json:"equityCurve"`
 	ChartData      []ChartPoint                           `json:"chartData"`
 	SimData        []SimPoint                             `json:"simData,omitempty"`
 	NavigatorData  strategy.NavigatorResultDTO            `json:"navigatorData"`
@@ -1643,8 +1764,8 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			writeJSON(w, historyChunkResponse{
-				ChartData:     chartData,
-				HasMore:       hasMore,
+				ChartData:   chartData,
+				HasMore:     hasMore,
 				Annotations: annotations,
 			})
 			return
@@ -1721,9 +1842,9 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 			Timeframe:        spec.ID,
 			TradingTimeframe: d.tradingTimeframe,
 			UpdatedAt:        time.Now().Unix(),
-			Trades:       d.sessionTradesForChart(),
-			PaperTrading: d.paperTrading,
-			SandboxMode:  d.sandboxMode,
+			Trades:           d.sessionTradesForChart(),
+			PaperTrading:     d.paperTrading,
+			SandboxMode:      d.sandboxMode,
 		}
 		if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
 			state.TickBufferLen = d.orderFlow.Ticks.Len()

@@ -64,6 +64,7 @@ func (a *Marker) resetStreamingEngines() {
 	a.falcon.SetRSXSource(settings.Source)
 	a.Annotations = nil
 	a.clearDataBusLocked()
+	a.initDAGShadowLocked()
 }
 
 func (a *Marker) warmupStreaming(klines []exchange.Kline) {
@@ -213,19 +214,20 @@ func (a *Marker) saveLayer2StreamingState() {
 	}
 }
 
-func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, isClosed bool) {
+func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isClosed bool) {
 	a.falcon.RestoreState()
 	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
 	if isClosed {
 		a.falcon.SaveState()
 	}
+	a.runDAGShadowLocked(k, barIndex, isClosed)
 }
 
 func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
 	if !a.bulkReplayMode {
 		a.restoreLayer2StreamingState()
 	}
-	a.evaluateFalconSignalsLocked(k, isClosed)
+	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
 	curRed := a.falconSignals.RedLine
 	curGreen := a.falconSignals.GreenLine
 	a.redLineCrossGreenUp = detectRedLineCrossGreenUp(a.prevFalconRed, a.prevFalconGreen, curRed, curGreen)

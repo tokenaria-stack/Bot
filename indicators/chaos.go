@@ -79,6 +79,10 @@ type WilliamsFractals struct {
 	buf   [5]candleHL
 	idx   int
 	count int
+
+	snapBuf   [5]candleHL
+	snapIdx   int
+	snapCount int
 }
 
 // NewWilliamsFractals creates a streaming Williams fractals detector.
@@ -113,6 +117,18 @@ func (w *WilliamsFractals) UpdateCandle(high, low float64) FractalStatus {
 	}
 
 	return status
+}
+
+func (w *WilliamsFractals) SaveState() {
+	w.snapBuf = w.buf
+	w.snapIdx = w.idx
+	w.snapCount = w.count
+}
+
+func (w *WilliamsFractals) RestoreState() {
+	w.buf = w.snapBuf
+	w.idx = w.snapIdx
+	w.count = w.snapCount
 }
 
 func isUpFractal(buf [5]candleHL, centerIdx int) bool {

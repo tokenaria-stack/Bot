@@ -16,6 +16,11 @@ const (
 	SlotWozduhFast
 	SlotWozduhSlow
 
+	SlotDivScore
+	SlotDivState
+	SlotMicroDivScore
+	SlotTotalScore
+
 	// SlotCount is the number of defined slots (valid indices: 0 .. SlotCount-1).
 	SlotCount
 )

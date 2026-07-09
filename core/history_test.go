@@ -45,11 +45,12 @@ type stubNode struct {
 	saved    int
 }
 
-func (s *stubNode) Name() string { return s.name }
-func (s *stubNode) Init(*Bus)    {}
-func (s *stubNode) Update()      { s.updated++ }
-func (s *stubNode) SaveState()   { s.saved++ }
-func (s *stubNode) RestoreState() { s.restored++ }
+func (s *stubNode) Name() string             { return s.name }
+func (s *stubNode) Init(*Bus)                {}
+func (s *stubNode) Update()                  { s.updated++ }
+func (s *stubNode) SaveState()               { s.saved++ }
+func (s *stubNode) RestoreState()            { s.restored++ }
+func (s *stubNode) OnConfigChange(any) error { return nil }
 
 func TestDAGRunnerOpenBarNoHist(t *testing.T) {
 	bus := NewBus(64)
@@ -57,7 +58,7 @@ func TestDAGRunnerOpenBarNoHist(t *testing.T) {
 	n := &stubNode{name: "stub"}
 	r.AddNode(n)
 
-	r.TickUpdate(1, 2, 0.5, 1.5, 10, false)
+	r.TickUpdate(1, 2, 0.5, 1.5, 10, 0, false)
 	if n.restored != 1 || n.updated != 1 || n.saved != 0 {
 		t.Fatalf("open bar: restored=%d updated=%d saved=%d", n.restored, n.updated, n.saved)
 	}
@@ -65,7 +66,7 @@ func TestDAGRunnerOpenBarNoHist(t *testing.T) {
 		t.Fatalf("open bar should not commit history")
 	}
 
-	r.TickUpdate(1, 2, 0.5, 1.6, 11, true)
+	r.TickUpdate(1, 2, 0.5, 1.6, 11, 1, true)
 	if n.saved != 1 {
 		t.Fatalf("closed bar: saved=%d", n.saved)
 	}

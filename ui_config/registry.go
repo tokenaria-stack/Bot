@@ -11,5 +11,8 @@ func BuildUIRegistry() (*core.UIRegistry, error) {
 	if err := r.Register(WozduhComponents()...); err != nil {
 		return nil, err
 	}
+	if err := r.Register(ScoreComponents()...); err != nil {
+		return nil, err
+	}
 	return r, nil
 }

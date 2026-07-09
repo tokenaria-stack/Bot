@@ -45,6 +45,14 @@ func (h *HistoryBus) Cap() int {
 	return h.cap
 }
 
+// Count returns the number of committed bars in the ring.
+func (h *HistoryBus) Count() int {
+	if h == nil {
+		return 0
+	}
+	return h.count
+}
+
 // Push writes val for slot at the current head index (call before Advance on bar close).
 func (h *HistoryBus) Push(slot Slot, val float64) {
 	if h == nil || slot >= SlotCount {

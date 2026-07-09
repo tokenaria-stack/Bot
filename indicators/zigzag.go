@@ -26,20 +26,38 @@ type ZigZagUpdate struct {
 
 // ZigZag is an adaptive swing detector using Williams fractals and ATR filtering.
 type ZigZag struct {
-	fractals       *WilliamsFractals
+	fractals       fractalDetector
 	atr            *ATR
 	baseMultiplier float64
 	direction      ZigZagDirection
 	lastNode       ZigZagNode
 	hasLastNode    bool
+
+	snapDirection   ZigZagDirection
+	snapLastNode    ZigZagNode
+	snapHasLastNode bool
 }
 
-// NewZigZag creates an adaptive ZigZag with the given ATR period.
+type fractalDetector interface {
+	UpdateCandle(high, low float64) FractalStatus
+	SaveState()
+	RestoreState()
+}
+
+// NewZigZag creates an adaptive ZigZag with the default Williams 5-bar fractal.
 func NewZigZag(atrPeriod int) *ZigZag {
 	return &ZigZag{
 		fractals: NewWilliamsFractals(),
 		atr:      NewATR(atrPeriod),
 	}
+}
+
+// SetDynamicFractal replaces the fractal detector with a configurable window.
+func (z *ZigZag) SetDynamicFractal(leftBars, rightBars int) {
+	if z == nil {
+		return
+	}
+	z.fractals = NewDynamicFractal(leftBars, rightBars)
 }
 
 // SetSensitivity sets the base ATR multiplier for peak confirmation.
@@ -122,4 +140,28 @@ func (z *ZigZag) passesThreshold(price, atr, mult float64) bool {
 		return true
 	}
 	return math.Abs(price-z.lastNode.Price) > atr*mult
+}
+
+func (z *ZigZag) SaveState() {
+	if z.fractals != nil {
+		z.fractals.SaveState()
+	}
+	if z.atr != nil {
+		z.atr.SaveState()
+	}
+	z.snapDirection = z.direction
+	z.snapLastNode = z.lastNode
+	z.snapHasLastNode = z.hasLastNode
+}
+
+func (z *ZigZag) RestoreState() {
+	if z.fractals != nil {
+		z.fractals.RestoreState()
+	}
+	if z.atr != nil {
+		z.atr.RestoreState()
+	}
+	z.direction = z.snapDirection
+	z.lastNode = z.snapLastNode
+	z.hasLastNode = z.snapHasLastNode
 }

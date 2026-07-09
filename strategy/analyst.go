@@ -8,6 +8,8 @@ import (
 
 	"github.com/qdrant/go-client/qdrant"
 
+	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/data"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
@@ -15,11 +17,11 @@ import (
 )
 
 const (
-	patternWindowSize       = 20
-	similarPatternsLimit    = 3
-	billWilliamsFractalWin  = 2
-	fractalATRFilterWindow  = 5
-	fractalATRMultiplier    = 1.0
+	patternWindowSize      = 20
+	similarPatternsLimit   = 3
+	billWilliamsFractalWin = 2
+	fractalATRFilterWindow = 5
+	fractalATRMultiplier   = 1.0
 )
 
 // ChaosConfig holds configurable Trading Chaos indicator parameters.
@@ -82,18 +84,19 @@ type Marker struct {
 	prevZigHas               bool
 	rsxSettings              *RSXSettings
 	// DataBus — единый реестр синхронизированных серий (владелец — только Marker).
-	JurikLines               []float64
-	WozduhRed                []float64
-	WozduhGreen              []float64
-	chartExportPoints        []BacktestChartPoint
-	Annotations              []ChartAnnotation
-	layer2Snap               layer2StreamingSnapshot
-	mtfStates                map[string]*HTFState
-	cachedRSXMarkerBar       int
-	cachedRSXMarkerLabel     string
-	closeLines               []float64
-	rsxPriceLines            []float64
-	bulkReplayMode           bool
+	JurikLines           []float64
+	WozduhRed            []float64
+	WozduhGreen          []float64
+	chartExportPoints    []BacktestChartPoint
+	Annotations          []ChartAnnotation
+	layer2Snap           layer2StreamingSnapshot
+	mtfStates            map[string]*HTFState
+	cachedRSXMarkerBar   int
+	cachedRSXMarkerLabel string
+	closeLines           []float64
+	rsxPriceLines        []float64
+	bulkReplayMode       bool
+	dag                  *core.DAGRunner
 }
 
 // NewMarker loads the initial candle history into a protected store.
@@ -168,6 +171,14 @@ func (a *Marker) UpdateRSXScanConfig(settings RSXSettings) {
 
 	if a.divEngine != nil {
 		a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(next))
+	}
+
+	if a.dag != nil {
+		_ = a.dag.OnConfigChange("rsx", nodes.RSXNodeConfig{
+			Length:       next.Length,
+			SignalLength: next.SignalLength,
+			Source:       next.Source,
+		})
 	}
 
 	needsReplay := prev.Length != next.Length ||
@@ -264,7 +275,7 @@ func (a *Marker) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
 
 // evaluateTickBulkChartLocked is the chart-only cold replay path (falcon + RSX markers, zero snap churn).
 func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	a.evaluateFalconSignalsLocked(k, isClosed)
+	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
 	a.recordDataBusBarLocked(barIndex, a.falconSignals)
 	a.cachedRSXMarkerBar = barIndex
 	a.cachedRSXMarkerLabel = ""

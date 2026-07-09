@@ -7,4 +7,6 @@ type Node interface {
 	Update()
 	SaveState()
 	RestoreState()
+	// OnConfigChange applies hot config; nodes that do not support config return nil.
+	OnConfigChange(cfg any) error
 }

@@ -167,6 +167,7 @@ func main() {
 			brainStatus, aiStatus,
 			regime,
 			tick.IsClosed,
+			analyst.DAGTickFrame(),
 		)
 	})
 	master.SetOnKlineBar(func(tf string, k exchange.Kline) {

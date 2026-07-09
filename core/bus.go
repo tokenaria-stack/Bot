@@ -2,7 +2,8 @@ package core
 
 // TickFrame holds scalar slot values for the current tick (zero-alloc hot path).
 type TickFrame struct {
-	Values [SlotCount]float64
+	BarIndex int
+	Values   [SlotCount]float64
 }
 
 // Get returns the value at slot s.
@@ -17,14 +18,16 @@ func (f *TickFrame) Set(s Slot, val float64) {
 
 // Bus is the shared data plane for DAG nodes on the current tick.
 type Bus struct {
-	Cur  *TickFrame
-	Hist *HistoryBus
+	Cur    *TickFrame
+	Hist   *HistoryBus
+	Events *EventRing
 }
 
-// NewBus allocates the tick frame and history ring.
+// NewBus allocates the tick frame, history ring, and event ring.
 func NewBus(historyCap int) *Bus {
 	return &Bus{
-		Cur:  &TickFrame{},
-		Hist: NewHistoryBus(historyCap),
+		Cur:    &TickFrame{},
+		Hist:   NewHistoryBus(historyCap),
+		Events: NewEventRing(),
 	}
 }
