@@ -66,7 +66,11 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 
 	trimBars := historyWarmupTrim(len(klines), candleLimit, warmupBars)
 
+	// Drop leading warmup bars before display window; client never sees warmup prefix.
 	display := klines
+	if trimBars > 0 && len(display) > trimBars {
+		display = display[trimBars:]
+	}
 	if candleLimit > 0 && len(display) > candleLimit {
 		display = display[len(display)-candleLimit:]
 	}

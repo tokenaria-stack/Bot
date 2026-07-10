@@ -29,9 +29,8 @@ class HydrationOrchestrator {
    * @param {() => number|null} deps.getAnchorEndTimeSec
    * @param {() => string[]} deps.getSlotIds
    * @param {(endTimeSec: number) => Promise<object>} deps.fetchColumnar
-   * @param {(data: object) => { added: number, storeData: object }} deps.mergeIntoStore
-   * @param {(storeData: object, addedBars: number) => void} deps.applyAtomic
-   * @param {() => void} [deps.onAfterPrepend]
+   * @param {(data: object) => { added: number, viewportRange?: object|null }} deps.mergeIntoStore
+   * @param {(intent: object) => void} deps.markDirty
    * @param {(tick: object) => void} deps.processTick
    */
   init(deps) {
@@ -136,6 +135,10 @@ class HydrationOrchestrator {
       if (typeof deps.sealStore === 'function') deps.sealStore();
 
       try {
+        const viewportRange = typeof ChartAdapter !== 'undefined'
+          ? ChartAdapter.getVisibleLogicalRange('live')
+          : null;
+
         const mergeResult = deps.mergeIntoStore(data);
         if (!mergeResult || mergeResult.added <= 0) {
           if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
@@ -147,13 +150,19 @@ class HydrationOrchestrator {
           ? data.added
           : mergeResult.added;
 
-        deps.applyAtomic(mergeResult.storeData, addedBars);
+        if (typeof deps.markDirty === 'function') {
+          deps.markDirty({
+            mode: 'prepend',
+            addedBars,
+            viewportRange: mergeResult.viewportRange ?? viewportRange,
+          });
+        }
 
         if (deps.setHistoryHasMore) {
           deps.setHistoryHasMore(data.hasMore !== false);
         }
         if (typeof deps.onAfterPrepend === 'function') {
-          deps.onAfterPrepend(mergeResult.storeData, addedBars);
+          deps.onAfterPrepend(mergeResult, addedBars);
         }
         completed = true;
 

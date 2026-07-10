@@ -3,7 +3,11 @@
  */
 (function initViewportManager(global) {
   function storeForContext(context) {
-    return context === 'backtest' ? backtestStore : liveStore;
+    if (context === 'backtest') return backtestStore;
+    if (typeof global.liveColumnarStore !== 'undefined' && global.liveColumnarStore) {
+      return global.liveColumnarStore;
+    }
+    return null;
   }
 
   function candlesArray(store) {

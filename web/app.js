@@ -24,7 +24,7 @@ async function triggerNavigatorAutoUpdate() {
   if (context === 'live') {
     const viewportAnchor = ViewportManager.capture('live');
     await syncLiveNavigatorSettingsToServer();
-    if (ChartAdapter.chartInitialized() && liveStore.candleCount() > 0 && shouldPaintLiveChart()) {
+    if (ChartAdapter.chartInitialized() && liveColumnarStore?.candleCount() > 0 && shouldPaintLiveChart()) {
       await refreshLiveNavigatorFromServer(viewportAnchor);
     } else {
       await loadDashboard({ viewportAnchor });
@@ -43,11 +43,11 @@ async function refreshLiveNavigatorFromServer(viewportAnchor) {
     liveNavigatorResult = data.navigators || null;
     beginDataUpdate();
     try {
-      ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, liveStore.getForLightweightCharts().candles, {
+      ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, liveColumnarStore.getForLightweightCharts().candles, {
         context: 'live',
         updateLoadedCandles: false,
       });
-      ViewportManager.restore('live', viewportAnchor, liveStore);
+      ViewportManager.restore('live', viewportAnchor, liveColumnarStore);
     } finally {
       endDataUpdate();
     }
@@ -195,7 +195,28 @@ if (typeof window !== 'undefined') {
   window.__isSettingsUpdating = false;
 }
 
-const liveStore = new ChartDataStore('live');
+const liveColumnarStore = typeof ColumnarStore !== 'undefined' ? new ColumnarStore() : null;
+if (typeof window !== 'undefined' && liveColumnarStore) {
+  window.liveColumnarStore = liveColumnarStore;
+}
+
+const liveChartCompositor = (typeof ChartCompositor !== 'undefined' && liveColumnarStore)
+  ? new ChartCompositor({
+    store: liveColumnarStore,
+    shouldPaint: () => shouldPaintLiveChart(),
+    getNavigatorResult: () => liveNavigatorResult,
+    onAfterFlush: (intent) => {
+      if (intent?.mode === 'full') {
+        ChartAdapter.setChartInitialized(true);
+      }
+      updateBufferingOverlay();
+    },
+  })
+  : null;
+
+const liveRenderScheduler = (typeof RenderScheduler !== 'undefined' && liveChartCompositor)
+  ? new RenderScheduler(liveChartCompositor)
+  : null;
 
 
 
@@ -292,26 +313,33 @@ async function fetchRsxIndicatorSettings() {
 }
 
 async function reloadRsxChartFromServer() {
-  if (!shouldPaintLiveChart()) return;
+  if (!shouldPaintLiveChart() || !liveColumnarStore) return;
   const reloadVersion = ++rsxChartReloadVersion;
   try {
-    const { warmingUp, data } = await fetchLiveState();
+    const tf = getLiveStoreTf();
+    const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+    const endTimeSec = liveColumnarStore.lastTimeSec() ?? Math.floor(Date.now() / 1000);
+    const limit = Math.max(liveColumnarStore.barCount(), 300);
+    const columnar = await API.fetchColumnarHistory({
+      tf,
+      endTimeSec,
+      limit,
+      slots: resolveLiveSlotIds(),
+      rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
+      symbol,
+    });
     if (reloadVersion !== rsxChartReloadVersion) return;
-    if (warmingUp || !data?.oscillators?.length) return;
-
-    if (Array.isArray(data.annotations)) {
-      liveStore.replaceOscAndAnnotations({
-        oscillators: data.oscillators,
-        annotations: data.annotations,
-      }, getLiveStoreTf());
-    } else if (data?.oscillators?.length) {
-      liveStore.replaceOscAndAnnotations({ oscillators: data.oscillators }, getLiveStoreTf());
-    }
+    if (!columnar?.times?.length) return;
 
     beginDataUpdate();
-    const storeData = liveStore.getForLightweightCharts();
-    ChartAdapter.applyRsxData('live', storeData.osc, storeData.annotations);
-    endDataUpdate();
+    try {
+      liveColumnarStore.replaceMonolith(columnar);
+      if (liveRenderScheduler && liveColumnarStore.invariantOk()) {
+        liveRenderScheduler.markDirty({ mode: 'full' });
+      }
+    } finally {
+      endDataUpdate();
+    }
   } catch (err) {
     console.warn('Failed to reload RSX chart:', err);
   }
@@ -412,7 +440,7 @@ function disarmLiveHistoryScroll() {
 
 function updateBufferingOverlay() {
   ToolbarController.setBuffering(isOrderFlowTf() && (
-    liveStore.candleCount() < 5 ||
+    (liveColumnarStore?.candleCount() || 0) < 5 ||
     lastTickBufferLen < 500
   ));
 }
@@ -775,7 +803,8 @@ function clearChartData() {
   liveHydrationOrchestrator?.reset();
   disarmLiveHistoryScroll();
   beginDataUpdate();
-  liveStore.clear();
+  liveColumnarStore?.clear();
+  if (window.DDRFactory) window.DDRFactory.clear();
   liveNavigatorResult = null;
   liveNavigatorChartLines = [];
   liveNavigatorChartMarkers = [];
@@ -793,34 +822,6 @@ function clearChartData() {
 
 
 /** RSX/Wozduh warmup sentinel — 0 is never a valid live oscillator reading. */
-
-
-
-function applyPriceBar(bar) {
-  if (!bar) return;
-  const last = liveStore.lastCandleChartSec();
-  if (last && last.time === bar.time) {
-    liveStore.upsertCandle(bar, getLiveStoreTf());
-  } else if (!last || bar.time >= last.time) {
-    if (last && isLiveTickGapTooLarge(last.time, bar.time)) {
-      if (!_microscopeTickMuted) {
-        console.log(`[Mode Switch] Time gap too large (${bar.time} vs ${last.time}). Entering historical microscope mode. Live WS ticks will be silently ignored until return to live edge.`);
-        _microscopeTickMuted = true;
-      }
-      return;
-    }
-    liveStore.upsertCandle(bar, getLiveStoreTf());
-  } else {
-    return;
-  }
-
-  if (!shouldPaintLiveChart()) return;
-
-  const delta = liveStore.getLatestDeltaForChart();
-  if (delta && !liveStore.isSealed()) {
-    ChartAdapter.applyDelta('live', delta);
-  }
-}
 
 function mergeAnnotations(existing, incoming) {
   const map = new Map();
@@ -1048,92 +1049,131 @@ async function runBacktest(autoSwitchTabOrOptions = true, options = {}) {
   }
 }
 
-function applySeriesData(options = {}) {
-  const storeData = liveStore.getForLightweightCharts();
-  const candles = storeData.candles;
-
+function applySeriesData() {
   if (!shouldPaintLiveChart()) return;
-
-  ChartAdapter.applyFullData('live', storeData);
-  if (liveNavigatorResult) {
-    ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, candles, {
-      context: 'live',
-      updateLoadedCandles: false,
-    });
+  if (
+    liveRenderScheduler
+    && liveColumnarStore?.barCount() > 0
+    && liveColumnarStore.invariantOk()
+  ) {
+    liveRenderScheduler.markDirty({ mode: 'full', viewport: 'fresh' });
   }
   updateBufferingOverlay();
 }
 
-function applyLatestOscPoint(pt) {
-  if (!pt) return;
-  const latestCandleTime = liveStore.lastCandleTimeSec();
-  if (latestCandleTime != null && pt.time !== latestCandleTime) {
-    pt = { ...pt, time: latestCandleTime };
-  }
-  liveStore.upsertOscPoint(pt, getLiveStoreTf());
-  syncLiveRsxToolbarFromOsc(pt);
-  const delta = liveStore.getLatestDeltaForChart();
-  if (delta && !liveStore.isSealed()) {
-    ChartAdapter.applyDelta('live', delta);
-  }
-}
-
-function renderState(data, options = {}) {
+function commitLiveHeaderState(data, options = {}) {
   syncTradingTimeframeFromState(data);
   ToolbarController.updateHeaderData(data);
   if (typeof data.tickBufferLen === 'number') {
     lastTickBufferLen = data.tickBufferLen;
   }
 
-  const manageSeal = !options.storeReady;
-  if (manageSeal) liveStore.seal();
-  beginDataUpdate();
-  try {
-    if (!options.storeReady) {
-      liveStore.replaceFromServer({
-        candles: toCandles(data.candles),
-        oscillators: data.oscillators || [],
-        annotations: data.annotations,
-      }, getLiveStoreTf());
-    }
-    const oscPts = data.oscillators || [];
-    if (oscPts.length) syncLiveRsxToolbarFromOsc(oscPts[oscPts.length - 1]);
-    const storeData = liveStore.getForLightweightCharts();
-    const candles = storeData.candles;
-    const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
-    mergeSessionTrades(data.trades, {
-      masterState,
-      lastCandleTime: candles.length ? candles[candles.length - 1].time : null,
-    });
+  const candles = Array.isArray(data.candles) && data.candles.length
+    ? toCandles(data.candles)
+    : (liveColumnarStore?.barCount()
+      ? columnarToCandles({
+        times: liveColumnarStore.snapshot().times,
+        candles: liveColumnarStore.snapshot().candles,
+      })
+      : []);
 
-    const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
+  const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
+  mergeSessionTrades(data.trades, {
+    masterState,
+    lastCandleTime: candles.length ? candles[candles.length - 1].time : null,
+  });
 
-    historyHasMore = hasMore;
-    if (data.navigators) {
-      liveNavigatorResult = data.navigators;
-    }
-
-    applySeriesData();
-    ChartAdapter.renderFib(data.fibZones);
-    if (options.viewportAnchor) {
-      window.ViewportManager.restore('live', options.viewportAnchor, liveStore);
-    } else if (options.isPreFetch) {
-      const charts = [
-        ChartAdapter.getChart('live', 'price'),
-        ChartAdapter.getChart('live', 'osc'),
-        ChartAdapter.getChart('live', 'rsx'),
-      ];
-      charts.forEach((chart) => {
-        chart?.timeScale()?.scrollToPosition(0, false);
-      });
-    }
-  } finally {
-    if (manageSeal) liveStore.unseal();
-    endDataUpdate();
+  historyHasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
+  if (data.navigators) {
+    liveNavigatorResult = data.navigators;
   }
 
-  // График полностью загружен историей, теперь WebSocket может рисовать новые тики
-  ChartAdapter.setChartInitialized(true);
+  ChartAdapter.renderFib(data.fibZones);
+
+  if (options.viewportAnchor && typeof ViewportManager !== 'undefined' && liveColumnarStore?.barCount()) {
+    ViewportManager.restore('live', options.viewportAnchor, liveColumnarStore);
+  }
+}
+
+function rowsPayloadToColumnar(candles, annotations = []) {
+  const times = [];
+  const open = [];
+  const high = [];
+  const low = [];
+  const close = [];
+  const volume = [];
+  for (const bar of candles || []) {
+    const normalized = typeof normalizeCandle === 'function' ? normalizeCandle(bar) : bar;
+    if (!normalized?.time) continue;
+    times.push(normalized.time);
+    open.push(normalized.open);
+    high.push(normalized.high);
+    low.push(normalized.low);
+    close.push(normalized.close);
+    volume.push(normalized.volume ?? 0);
+  }
+  return {
+    times,
+    candles: { open, high, low, close, volume },
+    plots: {},
+    annotations: annotations || [],
+    added: times.length,
+  };
+}
+
+function pushLiveTickDelta(tick) {
+  if (!liveColumnarStore || !liveRenderScheduler) return false;
+  if (liveColumnarStore.isSealed()) return false;
+
+  const appendResult = liveColumnarStore.appendTick(tick);
+  if (!appendResult?.candle) return false;
+
+  const delta = appendResult.delta ?? {
+    candle: appendResult.candle,
+    isNewBar: appendResult.isNewBar,
+    barCount: appendResult.barCount,
+  };
+  if (!delta?.candle) return false;
+
+  liveRenderScheduler.markDirty({
+    mode: 'delta',
+    tick,
+    delta,
+  });
+  return true;
+}
+
+function applyLatestOscPoint(pt) {
+  if (!pt) return;
+  const latestCandleTime = liveColumnarStore?.lastTimeSec();
+  if (latestCandleTime != null && pt.time !== latestCandleTime) {
+    pt = { ...pt, time: latestCandleTime };
+  }
+  syncLiveRsxToolbarFromOsc(pt);
+}
+
+function renderState(data, options = {}) {
+  const compositorReady = liveRenderScheduler
+    && liveColumnarStore?.barCount() > 0
+    && liveColumnarStore.invariantOk()
+    && options.forceLegacyPaint !== true;
+
+  commitLiveHeaderState(data, options);
+
+  if (compositorReady && !options.skipPaint) {
+    beginDataUpdate();
+    try {
+      liveRenderScheduler.markDirty({
+        mode: 'full',
+        viewport: options.viewportAnchor ? 'restore' : (options.isPreFetch ? 'fresh' : undefined),
+        anchor: options.viewportAnchor || null,
+      });
+    } finally {
+      endDataUpdate();
+    }
+  }
+
+  ChartAdapter.setChartInitialized(compositorReady || options.forceLegacyPaint !== true);
   updateBufferingOverlay();
 }
 
@@ -1151,16 +1191,10 @@ async function pollOrderFlowState() {
       updateBufferingOverlay();
       return;
     }
-    liveStore.replaceFromServer({
-      candles,
-      oscillators: data.oscillators || [],
-      annotations: data.annotations,
-    }, getLiveStoreTf());
-    beginDataUpdate();
-    try {
-      applySeriesData();
-    } finally {
-      endDataUpdate();
+    if (liveColumnarStore && liveRenderScheduler) {
+      liveColumnarStore.replaceMonolith(rowsPayloadToColumnar(candles, data.annotations));
+      commitLiveHeaderState({ ...data, candles, hasMore: data.hasMore });
+      liveRenderScheduler.markDirty({ mode: 'full', viewport: 'fresh' });
     }
     ChartAdapter.setChartInitialized(true);
   } catch (err) {
@@ -1189,40 +1223,26 @@ async function pollLatestState() {
     const latest = candles[candles.length - 1];
     if (!latest) return;
 
-    const last = liveStore.lastCandleChartSec();
-    if (last && last.time === latest.time) {
-      liveStore.upsertCandle(latest, getLiveStoreTf());
-    } else if (!last || latest.time > last.time) {
-      if (last && isLiveTickGapTooLarge(last.time, latest.time)) {
+    const last = liveColumnarStore?.lastTimeSec();
+    if (last && latest.time === last) {
+      pushLiveTickDelta({ ...latest, time: latest.time });
+    } else if (!last || latest.time > last) {
+      if (last && isLiveTickGapTooLarge(last, latest.time)) {
         if (!_microscopeTickMuted) {
-          console.log(`[Mode Switch] Time gap too large. Entering historical microscope mode. Live poll ticks will be silently ignored.`);
+          console.log('[Mode Switch] Time gap too large. Entering historical microscope mode. Live poll ticks will be silently ignored.');
           _microscopeTickMuted = true;
         }
         return;
       }
-      liveStore.upsertCandle(latest, getLiveStoreTf());
+      pushLiveTickDelta({ ...latest, time: latest.time });
     } else {
       return;
     }
 
-    beginDataUpdate();
     const osc = data.oscillators || [];
     if (osc.length > 0) {
-      const latestOsc = osc[osc.length - 1];
-      const latestCandleTime = liveStore.lastCandleTimeSec();
-      let pt = latestOsc;
-      if (latestCandleTime != null && pt.time !== latestCandleTime) {
-        pt = { ...pt, time: latestCandleTime };
-      }
-      liveStore.upsertOscPoint(pt, getLiveStoreTf());
-      syncLiveRsxToolbarFromOsc(pt);
+      applyLatestOscPoint(osc[osc.length - 1]);
     }
-
-    const delta = liveStore.getLatestDeltaForChart();
-    if (delta && !liveStore.isSealed()) {
-      ChartAdapter.applyDelta('live', delta);
-    }
-    endDataUpdate();
   } catch (err) {
     ChartAdapter.setLiveUpdating(false);
     console.error('pollLatestState:', err);
@@ -1292,42 +1312,91 @@ async function loadDashboard(options = {}) {
 
     let stateData = null;
     let historyData = null;
+    let usedCompositorPaint = false;
+
+    const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+    const rsxSettings = typeof coerceRsxSettingsForAPI === 'function' && typeof RsxController !== 'undefined'
+      ? coerceRsxSettingsForAPI(RsxController.getSettings('live'))
+      : undefined;
 
     if (isMicroscope) {
+      if (window.DDRFactory && !window.DDRFactory.manifest) {
+        try {
+          await window.DDRFactory.fetchManifest();
+        } catch (err) {
+          console.warn('[Boot] manifest fetch failed (microscope):', err);
+        }
+      }
+      if (reqId !== currentLiveRequestId) return;
+
       const intervalMs = getIntervalMs(tf);
       const halfWindowMs = (TARGET_BARS / 2) * intervalMs;
       const targetEndTimeSec = Math.floor((anchor.centerTimeMs + halfWindowMs) / 1000);
 
       try {
-        historyData = await fetchLiveHistory(targetEndTimeSec, TARGET_BARS);
+        historyData = await API.fetchColumnarHistory({
+          tf,
+          endTimeSec: targetEndTimeSec,
+          limit: TARGET_BARS,
+          slots: resolveLiveSlotIds(),
+          rsxSettings,
+          symbol,
+        });
       } catch (histErr) {
         console.warn('Dashboard microscope history:', histErr);
       }
       if (reqId !== currentLiveRequestId) return;
 
-      liveStore.seal();
-      liveStore.replaceFromServer({
-        candles: toCandles(historyData?.candles || []),
-        oscillators: historyData?.oscillators || [],
-        annotations: historyData?.annotations,
-      }, tf);
+      if (!liveColumnarStore) {
+        console.error('[Boot] ColumnarStore unavailable — blocking microscope paint');
+        return;
+      }
+
+      liveColumnarStore.seal();
+      liveColumnarStore.replaceMonolith(historyData || {});
 
       stateData = {
-        candles: historyData?.candles || [],
-        oscillators: historyData?.oscillators || [],
-        annotations: historyData?.annotations,
+        candles: historyData?.times?.length ? columnarToCandles(historyData) : [],
+        oscillators: [],
+        annotations: historyData?.annotations || [],
         hasMore: historyData?.hasMore,
         status: 'ready',
       };
+      usedCompositorPaint = liveColumnarStore.invariantOk();
     } else {
-      const { warmingUp, data } = await fetchLiveState({
-        userTfChange: options.userTfChange === true,
-      });
+      if (window.DDRFactory && !window.DDRFactory.manifest) {
+        try {
+          await window.DDRFactory.fetchManifest();
+        } catch (err) {
+          console.warn('[Boot] manifest fetch failed:', err);
+        }
+      }
       if (reqId !== currentLiveRequestId) return;
-      stateData = data;
 
-      if (_microscopeTickMuted && !warmingUp && stateData.candles?.length) {
-        console.log(`[Mode Switch] Returned to Live edge. Accepting WS ticks again.`);
+      const slots = resolveLiveSlotIds();
+      const endTimeSec = Math.floor(Date.now() / 1000);
+
+      const [columnar, headerResult] = await Promise.all([
+        API.fetchColumnarHistory({
+          tf,
+          endTimeSec,
+          limit: TARGET_BARS,
+          slots,
+          rsxSettings,
+          symbol,
+        }),
+        fetchLiveState({
+          navigatorsOnly: true,
+          userTfChange: options.userTfChange === true,
+        }),
+      ]);
+      if (reqId !== currentLiveRequestId) return;
+
+      const { warmingUp, data: headerState } = headerResult;
+      stateData = headerState || {};
+
+      if (_microscopeTickMuted && !warmingUp && columnar?.times?.length) {
+        console.log('[Mode Switch] Returned to Live edge. Accepting WS ticks again.');
         _microscopeTickMuted = false;
       }
 
@@ -1341,12 +1410,12 @@ async function loadDashboard(options = {}) {
         setTimeout(() => loadDashboard(options), 2000);
         return;
       }
-      if (!stateData.candles || stateData.candles.length === 0) {
+
+      if (!columnar?.times?.length) {
         if (stateData.status === 'ready') {
-          if (reqId !== currentLiveRequestId) return;
           await renderState(
-            { ...stateData, candles: stateData.candles || [], oscillators: stateData.oscillators || [] },
-            options,
+            { ...stateData, candles: [], oscillators: [] },
+            { ...options, forceLegacyPaint: true },
           );
           if (isOrderFlowTf(currentTf)) {
             ChartAdapter.setChartInitialized(true);
@@ -1358,20 +1427,60 @@ async function loadDashboard(options = {}) {
         return;
       }
 
-      liveStore.seal();
-      liveStore.replaceFromServer({
-        candles: toCandles(stateData.candles),
-        oscillators: stateData.oscillators || [],
-        annotations: stateData.annotations,
-      }, tf);
+      if (!liveColumnarStore) {
+        console.error('[Boot] ColumnarStore unavailable — blocking chart paint');
+        return;
+      }
+
+      liveColumnarStore.replaceMonolith(columnar);
+      if (!liveColumnarStore.invariantOk()) {
+        console.error('[Boot] ColumnarStore invariant failed — blocking chart paint', liveColumnarStore.invariantMeta());
+        return;
+      }
+
+
+      if (window.DDRFactory) {
+        try {
+          await mountDDRLiveCutover();
+        } catch (err) {
+          console.warn('[Boot] DDR mount failed:', err);
+        }
+      }
+
+      stateData = {
+        ...stateData,
+        candles: columnarToCandles(columnar),
+        oscillators: [],
+        annotations: columnar.annotations || [],
+        hasMore: columnar.hasMore,
+        status: columnar.status || 'ready',
+      };
+      usedCompositorPaint = true;
     }
 
     if (reqId !== currentLiveRequestId) return;
-    await renderState(stateData, { ...options, isPreFetch: !isMicroscope, storeReady: true });
+    if (usedCompositorPaint && liveRenderScheduler) {
+      beginDataUpdate();
+      try {
+        commitLiveHeaderState(stateData, {
+          ...options,
+          viewportAnchor: options.viewportAnchor,
+        });
+        liveRenderScheduler.markDirty({
+          mode: 'full',
+          viewport: options.viewportAnchor ? 'restore' : 'fresh',
+          anchor: options.viewportAnchor || null,
+        });
+      } finally {
+        endDataUpdate();
+      }
+    } else {
+      await renderState(stateData, { ...options, isPreFetch: !isMicroscope, storeReady: true });
+    }
   } catch (err) {
     handleLoadError(err);
   } finally {
-    liveStore.unseal();
+    liveColumnarStore?.unseal();
     ToolbarController.setBuffering(false);
     window.__isDashboardLoading = false;
   }
@@ -1477,6 +1586,20 @@ async function fetchLiveHistory(endTimeSec, limitOverride = null) {
   });
 }
 
+function collectManifestScalarSlotIds(manifest) {
+  if (!manifest?.panes || typeof manifest.panes !== 'object') return [];
+  const ids = [];
+  for (const components of Object.values(manifest.panes)) {
+    if (!Array.isArray(components)) continue;
+    for (const component of components) {
+      const kind = String(component?.kind || 'line').toLowerCase();
+      if (kind === 'marker' || component?.dataMode === 'annotations') continue;
+      if (component?.id) ids.push(component.id);
+    }
+  }
+  return ids;
+}
+
 function resolveLiveSlotIds() {
   const seriesSlots = window.DDRFactory ? [...window.DDRFactory.seriesMap.keys()] : [];
   if (seriesSlots.length > 0) return seriesSlots;
@@ -1492,21 +1615,22 @@ function initHydrationOrchestrator() {
     getHistoryHasMore: () => historyHasMore,
     setHistoryHasMore: (v) => { historyHasMore = v; },
     setLoadingHistory: (v) => { isLoadingHistory = v; },
-    sealStore: () => { liveStore.seal(); },
-    unsealStore: () => { liveStore.unseal(); },
+    sealStore: () => { liveColumnarStore?.seal(); },
+    unsealStore: () => { liveColumnarStore?.unseal(); },
     shouldLoad: (range, options) => {
-      if (!ChartAdapter.isInitialized('live') || liveStore.isSealed() || window.__isDashboardLoading) return false;
+      if (!ChartAdapter.isInitialized('live') || window.__isDashboardLoading) return false;
       if (_microscopeTickMuted) return false;
       const force = options.force === true;
       if (isLoadingHistory || liveHydrationOrchestrator?.isBusy() || !historyHasMore) return false;
       if (!shouldPaintLiveChart()) return false;
       if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return false;
-      if (!range || liveStore.candleCount() === 0) return false;
+      const barCount = liveColumnarStore?.barCount?.() ?? 0;
+      if (!range || barCount === 0) return false;
       if (!force && range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return false;
       return true;
     },
     getAnchorEndTimeSec: () => {
-      const firstTime = liveStore.firstCandleTimeSec();
+      const firstTime = liveColumnarStore?.firstTimeSec?.() ?? null;
       return firstTime == null ? null : Number(firstTime);
     },
     getSlotIds: () => resolveLiveSlotIds(),
@@ -1522,31 +1646,18 @@ function initHydrationOrchestrator() {
       });
     },
     mergeIntoStore: (data) => {
-      const candles = columnarToCandles(data);
-      if (window.DDRFactory?.cutoverActive) {
-        window.DDRFactory.prependColumnarChunk(data);
-      }
-      const { added } = liveStore.prependHistory({
-        candles,
-        oscillators: [],
-        annotations: data.annotations || [],
-      }, getLiveStoreTf());
-      return {
-        added,
-        storeData: liveStore.getForLightweightCharts(),
-      };
+      if (!liveColumnarStore) return null;
+      const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+      const { added } = liveColumnarStore.prependMonolith(data);
+      if (added <= 0) return null;
+      return { added, viewportRange };
     },
-    applyAtomic: (storeData, addedBars) => {
-      ChartAdapter.applyAtomicPrepend('live', storeData, addedBars);
-    },
-    onAfterPrepend: (storeData) => {
-      if (liveNavigatorResult) {
-        ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, storeData.candles, {
-          context: 'live',
-          updateLoadedCandles: false,
-        });
+    markDirty: (intent) => {
+      if (liveRenderScheduler) {
+        liveRenderScheduler.markDirty(intent);
       }
-      updateBufferingOverlay();
+    },
+    onAfterPrepend: () => {
       if (pendingHistoryLoad) {
         const job = pendingHistoryLoad;
         pendingHistoryLoad = null;
@@ -1567,7 +1678,7 @@ async function maybeLoadHistory(range, options = {}) {
 }
 
 function scheduleHistoryLoad(range, options = {}) {
-  if (liveStore.isSealed() || window.__isDashboardLoading) return;
+  if (liveColumnarStore?.isSealed() || window.__isDashboardLoading) return;
   if (!range || !historyHasMore) return;
   if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
@@ -1590,13 +1701,6 @@ function _processLiveTickCore(d) {
   const tickTf = (d.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
   if (tickTf !== currentTf.toLowerCase()) return;
 
-  if (d.plots && window.DDRFactory) {
-    window.DDRFactory.updateTick(d.time, d.plots);
-  }
-
-  const time = chartTime(d.time);
-  if (time == null) return;
-
   if (isLiveTf()) {
     ToolbarController.updateHeaderData({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
     if (d.isClosed && d.volatilityRegime) {
@@ -1607,12 +1711,21 @@ function _processLiveTickCore(d) {
   if (!shouldPaintLiveChart()) return;
   if (!ChartAdapter.chartInitialized()) return;
 
-  const bar = normalizeCandle({
-    time, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume,
-  });
-  if (!bar) return;
+  const time = chartTime(d.time);
+  if (time == null) return;
 
-  applyPriceBar(bar);
+  const lastTime = liveColumnarStore?.lastTimeSec();
+  if (lastTime != null && time < lastTime) return;
+
+  if (lastTime != null && time > lastTime && isLiveTickGapTooLarge(lastTime, time)) {
+    if (!_microscopeTickMuted) {
+      console.log(`[Mode Switch] Time gap too large (${time} vs ${lastTime}). Entering historical microscope mode. Live WS ticks will be silently ignored until return to live edge.`);
+      _microscopeTickMuted = true;
+    }
+    return;
+  }
+
+  pushLiveTickDelta(d);
 }
 
 function handleLiveTick(d) {
@@ -1752,7 +1865,7 @@ function countBarsBetween(t1, t2, chartData) {
   const hi = Math.max(t1, t2);
   const candles = chartData === ChartAdapter.getChartHandle('backtest')
     ? backtestStore.getForLightweightCharts().candles
-    : liveStore.getForLightweightCharts().candles;
+    : (liveColumnarStore?.getForLightweightCharts().candles || []);
   return candles.filter((c) => c.time >= lo && c.time <= hi).length;
 }
 
@@ -1786,7 +1899,7 @@ function buildLiveDDRChartRegistry() {
 }
 
 async function mountDDRLiveCutover() {
-  if (!window.DDRFactory?.manifest || !ChartAdapter.chartInitialized()) {
+  if (!window.DDRFactory?.manifest || !ChartAdapter.isInitialized('live')) {
     return false;
   }
   const chartRegistry = buildLiveDDRChartRegistry();
@@ -1811,34 +1924,6 @@ function initDDRFactory() {
   window.DDRFactory.fetchManifest().catch((err) => {
     console.warn('[DDRFactory] manifest fetch failed:', err);
   });
-}
-
-async function scheduleDDRCutover() {
-  if (!window.DDRFactory) return;
-  const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
-  const tf = backendTradingTimeframe || currentTf || '1m';
-  const endTimeSec = liveStore?.lastCandleTimeSec?.() ?? liveStore?.firstCandleTimeSec?.();
-
-  if (Number.isFinite(endTimeSec) && endTimeSec > 0) {
-    const rsxSettings = typeof coerceRsxSettingsForAPI === 'function' && typeof RsxController !== 'undefined'
-      ? coerceRsxSettingsForAPI(RsxController.getSettings('live'))
-      : undefined;
-    try {
-      await window.DDRFactory.fetchAndHydrateHistory(symbol, tf, {
-        endTimeSec,
-        limit: typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000,
-        rsxSettings,
-      });
-    } catch (err) {
-      console.warn('[DDRFactory] history hydrate failed:', err);
-    }
-  }
-
-  try {
-    await mountDDRLiveCutover();
-  } catch (err) {
-    console.warn('[DDRFactory] cutover mount failed:', err);
-  }
 }
 
 function boot() {
@@ -1884,8 +1969,6 @@ function boot() {
           shouldPaint: shouldPaintLiveChart,
           onAfterDelta: () => {
             updateBufferingOverlay();
-            const osc = liveStore.getForLightweightCharts().osc;
-            if (osc?.length) syncLiveRsxToolbarFromOsc(osc[osc.length - 1]);
           },
           crosshairPriceSeries: () => {
             const t = ChartAdapter.getChartType();
@@ -1933,7 +2016,6 @@ function boot() {
       }
 
       await loadDashboard();
-      await scheduleDDRCutover();
       initLiveWebSocket();
       if (isOrderFlowTf()) {
         orderFlowPollTimer = setInterval(pollOrderFlowState, 500);

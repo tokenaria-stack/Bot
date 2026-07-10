@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Ядро ~95% готово** — Live MTF walk-forward, Safe Boot, HTF Regime scoring, closed-bar telemetry SSOT. **Frontend Phase 20 ✅:** монолит `app.js` разрезан на SSOT-пайплайн (`ChartDataStore` → `ChartAdapter` → LWC), Pre-Fetch Assembly (ровно 3000 баров на старте без 8s boot), `ViewportManager` (time-anchor, без анимаций), seal/guard против цепной пагинации. **Frontend Phase 28 ✅ (Backtest black screen):** Data-plane / View-plane split — `BacktestPipeline` (store + `markViewDirty`) → `ChartProjection.trySync()` (единственный paint authority); ping-сенсоры Tabs / RO / post-async; **root cause fix:** `#tab-stats` и `#tab-backtest` были вложены в `#tab-live` (missing `</div>` в `index.html`) → 0×0 при скрытом Live. **Go boot:** `AnalystBootKlineLimit=400`, `IndicatorWarmupBars=300`. **UI/Stats/Backtest:** Stats Dashboard, Trade Inspector, Stop Backtest. Следующий фокус: **калибровка весов** + персистентность trade history + cleanup backtest view debts (см. OPEN DEBTS #28–#32). Правила в `.cursor/rules/`.
+> **Снэпшот MEMORY (июль 2026):** **Core 2.0 (DAG) — backend transport ✅, frontend orchestration ✅ (Phase 7A–7B), annotations wire ✅ (Phase 8A).** Live chart **нестабилен** — активная отладка viewport / prepend / DDR cutover. Legacy Falcon + DAG dual replay на columnar path. **Frontend Phase 20 ✅** + **Phase 28 ✅ (backtest black screen).** Следующий фокус: **интеграция Core 2.0** (annotations UI 8B, chart stability, SettingsRenderer Phase 7 debt). См. раздел **Core 2.0 — DDR Pipeline** и **OPEN DEBTS #35–#48**.
 
 ---
 
@@ -723,6 +723,143 @@ targetFrom = targetTo - windowSize
 
 **Эволюция отладки (не повторять):** pending queue + RO-hooks + `fitContent` на 0×0 — accidental complexity; правильный паттерн — dirty + idempotent ping (как Live `shouldPaintLiveChart`).
 
+---
+
+## Core 2.0 — DDR Pipeline (DAG Shadow + Columnar Transport) — июль 2026
+
+**Цель:** заменить legacy Falcon osc paint на Data-Driven Rendering (DDR) из `core.DAGRunner` + `ui_config` manifest. Протокол ювелира: изоляция слотов, Snapshot/Restore, zero look-ahead.
+
+### Архитектура DAG (Shadow)
+
+| Компонент | Путь | Роль |
+|-----------|------|------|
+| `DAGRunner` | `core/runner.go` | Tick protocol: Restore → Update → Save+Hist |
+| Shadow chain | `core/nodes/` | RSX → Wozduh → ZigZag → Divergence → MicroPattern → Score |
+| `HistoryBus` | `core/history.go` | Ring buffer per slot; sentinel `MaxFloat64` на wire |
+| `ReplayDAGKlines` | `strategy/dag_shadow.go` | Cold replay для history (Strategy A) |
+| `Projector` | `server/wire/` | `BuildTickJSON` (live WS), `BuildHistoryColumns(Filtered)` |
+| UI Registry | `ui_config/` | `line_rsx`, `woz_fast`, `score_total`, … |
+
+**Scoring:** `ScoreNode` stateless; execution gated outside DAG (`TradeManager` on `isClosed`).
+
+### Phase 3E–4B — Nodes + Dual-Write ✅
+- MicroPattern, ScoreNode, DynamicFractal deferred
+- `Marker.DAGTickFrame()` → WS `plots` dual-write
+- `GET /api/ui/manifest`
+
+### Phase 5 — Columnar History Hydration ✅
+- `BuildHistoryColumns` — sentinel `HistoryAbsent = math.MaxFloat64`
+- ~~`GET /api/ui/history`~~ → **удалён в Phase 7A**
+
+### Phase 6 — Frontend DDR Cutover ✅
+- `DDRFactory` (`web/series-factory.js`) — manifest panes, `hydratedData`, `updateTick`
+- `mountDDRLiveCutover` — legacy osc hidden (`ddrOscCutoverActive`)
+- Boot: `scheduleDDRCutover` → columnar hydrate + `buildPanes`
+
+### Phase 7A — Monolithic Backend Transport ✅
+**Файлы:** `server/columnar_history.go`, `server/wire/history.go`, `server/webserver.go`
+
+| Правило | Значение |
+|---------|----------|
+| Endpoint | `GET /api/history?format=columnar&limit=3000&slots=...` |
+| Warmup | **hardcode 300** (`IndicatorWarmupBars`) — dynamic warmup отменён |
+| Replay | Cold `ReplayDAGKlines` на окне limit+warmup (Strategy A, no session cache) |
+| Field mask | `BuildHistoryColumnsFiltered` — только запрошенные slot IDs |
+| Row format | Default без `format=columnar` — backtest не сломан |
+| Удалено | `/api/ui/history`, `handleUIHistory`, `loadHistoryKlinesForUI` |
+
+**Columnar JSON контракт:**
+```json
+{
+  "format": "columnar",
+  "warmupDropped": 300,
+  "added": 3000,
+  "times": [...],
+  "candles": { "open": [], "high": [], "low": [], "close": [], "volume": [] },
+  "plots": { "line_rsx": [...] },
+  "annotations": [],
+  "sentinel": 1.7976931348623157e+308,
+  "hasMore": true
+}
+```
+
+### Phase 7B — Frontend Orchestration ✅
+**Файлы:** `web/hydration-orchestrator.js`, `web/chart-adapter.js`, `web/app.js`, `web/api.js`
+
+| Механизм | Детали |
+|----------|--------|
+| **FSM** | `IDLE → PREPENDING → APPLYING → LIVE` (abort → `IDLE`, wsQueue discard) |
+| **Debounce** | 200ms trailing на scroll-left (`schedulePrepend`) |
+| **Single fetch** | Один `fetchColumnarHistory` — dual HTTP race устранён |
+| **WS queue** | `queueTick` в PREPENDING/APPLYING; `flushQueue` только при успешном prepend |
+| **Atomic apply** | `ChartAdapter.applyAtomicPrepend` — `_liveUpdating` → candles → `DDRFactory.applyHydratedData` → **один** `setVisibleLogicalRange` |
+| **Pre-alloc merge** | `DDRFactory.prependColumnarChunk` + `mergePrependPoints` (no push) |
+| **TF reset** | `clearChartData` → `liveHistoryEpoch++` + `orchestrator.reset()` |
+| **Microscope guard** | `shouldLoad` → `false` if `_microscopeTickMuted` |
+
+**Поток scroll-left:**
+```
+subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
+  → HydrationOrchestrator.requestPrepend
+  → GET /api/history?format=columnar&limit=3000
+  → liveStore.prependHistory + DDRFactory.prependColumnarChunk
+  → ChartAdapter.applyAtomicPrepend
+```
+
+### Phase 8A — Backend Annotations Wiring ✅
+**Файлы:** `server/columnar_history.go`
+
+| Слой | Источник |
+|------|----------|
+| Plots | DAG `ReplayDAGKlines` + `BuildHistoryColumnsFiltered` |
+| Annotations | **Hybrid:** `StreamingReplayAccumulator` (Falcon) на тех же klines |
+| Фильтр | `trimAnnotations(warmup)` + `filterAnnotationsByDisplayTimes` (exact `time ∈ times`) |
+
+**Долг:** dual replay engines (DAG + Falcon) на каждый columnar request — Strangler, не баг.
+
+### Phase 8B — Frontend Annotations (🔜 NOT DONE)
+- `applyUniversalAnnotations` в atomic prepend block
+- RSX LL/SS markers при DDR cutover (сейчас `_applyFullDataInternal` skip legacy osc)
+
+### Phase 7 (planned) — SettingsRenderer 🔜
+- `DDRFactory.applyComponentOptions(id, opts)` для Wozduh checkboxes
+
+### MCP / Tooling (paused)
+- `.cursor/mcp.json` — SQLite (`history.db`), GitHub MCP, Puppeteer
+- Browser tab `localhost:8080` для visual QA
+
+### Известные проблемы графиков (июль 2026 — ACTIVE)
+
+| Симптом | Вероятная причина | Статус |
+|---------|-------------------|--------|
+| Viewport jump / «гармошка» | dual transport (fixed 7B); остаток: `prevRange null`, `addedBars` mismatch | 🟡 отладка |
+| Browser freeze на boot | 3000 bars × N series `setData` + `columnToLWC` object alloc | 🟡 pre-alloc partial |
+| DDR series empty on boot | `fetchAndHydrateHistory` до `buildPanes` → empty `slots` | 🟡 manifest fallback |
+| RSX markers missing on prepend | Annotations на wire (8A) но UI не рисует (8B pending) | 🔜 |
+| Divergence drift DAG vs Falcon | Разные движки для plots vs markers | 🟡 architectural |
+| Scroll spam / lost packets | Debounce + `_inFlight` (7B) | ✅ mitigated |
+| Legacy osc hidden, DDR only | Phase 6 cutover — regression if DDR fails | 🟡 |
+| Microscope vs scroll-left race | epoch + orchestrator reset | ✅ mitigated |
+
+### [🔜 OPEN DEBTS — Core 2.0 / Charts]
+
+| # | Долг | Файлы | Статус |
+|---|------|-------|--------|
+| **35** | **Phase 8B — annotations UI on prepend** | `chart-adapter.js`, `app.js` | 🔜 `applyUniversalAnnotations` in atomic block |
+| **36** | **Chart stability QA** | browser + `app.js` | 🔜 viewport jump, freeze, scroll-left 3×3000 |
+| **37** | **Dual replay CPU** | `columnar_history.go` | 🟢 acceptable ~30–80ms; parallel optional |
+| **38** | **DAG vs Falcon div drift** | `dag_shadow.go`, `streaming_replay_accum.go` | 🟡 Strangler until unified div in DAG |
+| **39** | **SettingsRenderer (Phase 7)** | `series-factory.js` | 🔜 Wozduh DDR series visibility |
+| **40** | **Backtest DDR cutover** | `backtest-pipeline.js` | 🔜 live only |
+| **41** | **wsQueue hard cap** | `hydration-orchestrator.js` | 🟡 cap 64 on slow server |
+| **42** | **`added` server vs client mismatch warn** | `app.js` | 🟢 log if `data.added !== store.added` |
+| **43** | **Boot slots from manifest** | `series-factory.js` | 🟡 `resolveLiveSlotIds()` fallback |
+| **44** | **Order Flow deprecation** | `webserver.go` | 🔜 roadmap |
+| **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
+| **46** | **MEMORY sync** | this file | ✅ Phase 7–8A logged |
+| **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
+| **48** | **Debug agent logs cleanup** | `app.js` | 🟡 session 39f875 ingest |
+
 ### [🔜 OPEN DEBTS — приоритет]
 
 | # | Долг | Файлы | Статус |
@@ -776,8 +913,10 @@ targetFrom = targetTo - windowSize
 | Live | `strategy/master.go`, `main.go`, `config/config.go` |
 | Backtest | `strategy/backtest.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `cmd/backtest/` |
 | Stats / Trades | `domain/trade_history.go`, `server/backtest_run.go`, `server/stats_test.go` |
-| API / WS | `server/webserver.go`, `server/ram_router.go`, `server/chart_cache.go`, `server/micro_broadcast.go`, `server/config/matrix.json` |
-| Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go` |
+| API / WS | `server/webserver.go`, `server/ram_router.go`, `server/chart_cache.go`, `server/columnar_history.go`, `server/micro_broadcast.go` |
+| Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
+| DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js` |
+| Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
 | Frontend core | `web/app.js`, `web/store.js`, `web/chart-adapter.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
 | Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
@@ -787,4 +926,4 @@ targetFrom = targetTo - windowSize
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, paper/sandbox via `.env`. `make ab-test` — CLI A/B backtest (опционально).
 
-**Следующий шаг:** калибровка весов scoring через Stats Dashboard (Backtest vs Paper A/B) + персистентность `TradeHistoryStore` в SQLite. **Frontend:** Phase 28 backtest paint закрыт; остаток — debt #29–#32 (history bypass Projection, debug log cleanup, overlay navigators intent, dirty re-mark guard).
+**Следующий шаг:** **Core 2.0 chart integration** — Phase 8B (annotations UI), стабилизация viewport/prepend на live, затем SettingsRenderer + backtest columnar. Параллельно: калибровка scoring (#12), trade history SQLite (#21). **Frontend backtest debts:** #29–#32.

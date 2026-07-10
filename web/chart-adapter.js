@@ -50,8 +50,21 @@ function _storeTf(context = 'live') {
   return TimeframeController?.getActiveTf?.() || '1m';
 }
 
+function _liveStore() {
+  if (typeof window !== 'undefined' && window.liveColumnarStore) {
+    return window.liveColumnarStore;
+  }
+  return (typeof liveColumnarStore !== 'undefined' && liveColumnarStore) ? liveColumnarStore : null;
+}
+
+function _liveCandles() {
+  const store = _liveStore();
+  if (!store?.barCount?.()) return [];
+  return store.getForLightweightCharts().candles;
+}
+
 function _storeForChart(chartData) {
-  return _chartContext(chartData) === 'backtest' ? backtestStore : liveStore;
+  return _chartContext(chartData) === 'backtest' ? backtestStore : _liveStore();
 }
 
 function _storeDataForChart(chartData) {
@@ -119,7 +132,7 @@ function _flushWozduhMarkerCache(chartData = _live) {
 }
 
 function _storeForContext(context) {
-  return context === 'backtest' ? backtestStore : liveStore;
+  return context === 'backtest' ? backtestStore : _liveStore();
 }
 
 function _shouldPaint(context) {
@@ -976,7 +989,7 @@ function attachChartHooks(chartData, hooks = {}, context = 'live') {
     if (!range || (context === 'live' && _liveUpdating)) return;
 
     if (typeof hooks.onScrollHistory === 'function' && range.from < scrollThreshold) {
-      if (context === 'live' && typeof liveStore !== 'undefined' && liveStore.isSealed()) return;
+      if (context === 'live' && _liveStore()?.isSealed()) return;
       hooks.onScrollHistory(range);
     }
 
@@ -1057,9 +1070,8 @@ function setChartType(type) {
   if (_chartType === type) return;
   _chartType = type;
 
-  if (_live?.chart && typeof liveStore !== 'undefined' && liveStore.candleCount() > 0) {
-    const candles = liveStore.getForLightweightCharts().candles;
-    applyPriceToChart(_live, candles);
+  if (_live?.chart && _liveCandles().length > 0) {
+    applyPriceToChart(_live, _liveCandles());
   }
 
   _live.candleSeries?.applyOptions({ visible: type === 'candles' });
@@ -1497,7 +1509,7 @@ function applySimOverlay(context = 'backtest', payload = {}) {
   const chartData = typeof _ctxData === 'function' ? _ctxData(context) : null;
   if (!chartData?.chart) return;
 
-  const store = context === 'backtest' ? backtestStore : liveStore;
+  const store = context === 'backtest' ? backtestStore : _liveStore();
 
   const overlayData = typeof store.getSimOverlayPayload === 'function'
     ? store.getSimOverlayPayload()
@@ -1611,7 +1623,8 @@ function updateAllPriceSeries(bar) {
       value: normalized.volume,
       color: normalized.close >= normalized.open ? CHART_STYLES.volumeBar.upColor : CHART_STYLES.volumeBar.downColor,
     });
-    ToolbarController.updateVolume(liveStore.candleCount() ? liveStore.getForLightweightCharts().candles : [normalized]);
+    const liveCandles = _liveCandles();
+    ToolbarController.updateVolume(liveCandles.length ? liveCandles : [normalized]);
   }
   if (tradeMarkers.length > 0) {
     applyAllMarkers();
@@ -1707,7 +1720,9 @@ function _applyFullDataInternal(context, storeData, options = {}) {
     ToolbarController.updateVolume(storeData.candles);
   }
   if (context === 'live') {
-    const annotationMap = liveStore.getAnnotationsMap();
+    const annotationMap = storeData?.annotationMap instanceof Map
+      ? storeData.annotationMap
+      : (_liveStore()?.getAnnotationsMap() || new Map());
     _rebuildPriceMarkerCache(annotationMap);
     _rebuildWozduhMarkerCache(annotationMap);
   }
@@ -1747,32 +1762,6 @@ function applyHistoryPrepend(context, storeData, addedBars = 0) {
   }
 }
 
-function applyAtomicPrepend(context, storeData, addedBars = 0, options = {}) {
-  const chartData = _ctxData(context);
-  if (!chartData?.chart) return;
-
-  _liveUpdating = true;
-  try {
-    const ts = chartData.chart.timeScale();
-    const prevRange = ts.getVisibleLogicalRange();
-
-    _applyFullDataInternal(context, storeData, options);
-
-    if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
-      window.DDRFactory.applyHydratedData(options.ddrPlots);
-    }
-
-    if (prevRange != null && Number.isFinite(prevRange.from) && Number.isFinite(prevRange.to) && addedBars > 0) {
-      ts.setVisibleLogicalRange({
-        from: prevRange.from + addedBars,
-        to: prevRange.to + addedBars,
-      });
-    }
-  } finally {
-    _liveUpdating = false;
-  }
-}
-
 function applyWozduhVisibilityFromPrefs(chartData, prefs) {
   if (!chartData?.wozduxSeries) return;
   WOZDUH_MENU_ITEMS.forEach((item) => {
@@ -1786,7 +1775,8 @@ function applyWozduhVisibilityFromPrefs(chartData, prefs) {
 }
 
 function applyAllMarkersFromState() {
-  _rebuildPriceMarkerCache(liveStore.getAnnotationsMap());
+  const map = _liveStore()?.getAnnotationsMap() || new Map();
+  _rebuildPriceMarkerCache(map);
   _flushPriceMarkerCache();
 }
 
@@ -1796,11 +1786,14 @@ function _applyDeltaInternal(context, delta, options = {}) {
   const chartData = _ctxData(context);
 
   if (delta.candle && context === 'live') {
-    if (liveStore.candleCount() <= 1) {
-      const candles = liveStore.getForLightweightCharts().candles;
-      setAllPriceData(candles);
-      _live.volumeSeries?.setData(toVolumeBars(candles));
-      if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
+    const barCount = Number.isFinite(delta.barCount) ? delta.barCount : (_liveStore()?.barCount() || 0);
+    if (barCount <= 1) {
+      const candles = _liveCandles();
+      setAllPriceData(candles.length ? candles : [delta.candle]);
+      _live.volumeSeries?.setData(toVolumeBars(candles.length ? candles : [delta.candle]));
+      if (typeof ToolbarController !== 'undefined') {
+        ToolbarController.updateVolume(candles.length ? candles : [delta.candle]);
+      }
     } else {
       updateAllPriceSeries(delta.candle);
     }
@@ -1966,10 +1959,6 @@ const ChartAdapter = {
 
   applyHistoryPrepend(context, storeData, addedBars = 0) {
     applyHistoryPrepend(context, storeData, addedBars);
-  },
-
-  applyAtomicPrepend(context, storeData, addedBars = 0, options = {}) {
-    applyAtomicPrepend(context, storeData, addedBars, options);
   },
 
   applyDelta(context, delta, options = {}) {
@@ -2158,23 +2147,6 @@ const ChartAdapter = {
 
   applyRsxData(context, osc, annotations) {
     applyRsxData(osc, _ctxData(context), annotations);
-  },
-
-  applySeriesDataLive(options = {}) {
-    const storeData = liveStore.getForLightweightCharts();
-    const candles = storeData.candles;
-    if (!_shouldPaint('live')) return;
-    applyPriceToChart(_live, candles);
-    if (typeof ToolbarController !== 'undefined') ToolbarController.updateVolume(candles);
-    _rebuildPriceMarkerCache(liveStore.getAnnotationsMap());
-    _rebuildWozduhMarkerCache(liveStore.getAnnotationsMap());
-    // Phase 6 DDR cutover: legacy oscillator paint disabled for live chart.
-    if (!ddrOscCutoverActive('live')) {
-      applyOscillatorToChart(_live, storeData.osc, storeData.annotations);
-      applyWozduhVisibilityToChart(_live, 'live');
-    }
-    _flushPriceMarkerCache();
-    return { candles, storeData };
   },
 
   syncVisibleLogicalRange(chart, range, options = {}) {

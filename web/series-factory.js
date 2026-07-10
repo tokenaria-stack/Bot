@@ -94,6 +94,12 @@ class DDRFactory {
       throw new Error(`DDRFactory: columnar history failed (${res.status})`);
     }
     const data = await res.json();
+    return this.hydrateFromColumnar(data);
+  }
+
+  /** Populate hydratedData from an in-memory columnar monolith (boot / TF switch). */
+  hydrateFromColumnar(data) {
+    if (!data) return null;
     const sentinel = Number(data.sentinel ?? DDRFactory.HISTORY_ABSENT);
     const times = Array.isArray(data.times) ? data.times : [];
     const plots = data.plots && typeof data.plots === 'object' ? data.plots : {};
@@ -127,47 +133,6 @@ class DDRFactory {
         /* skip invalid setData during cutover */
       }
     }
-  }
-
-  /**
-   * Merge columnar prepend chunk into hydratedData (indexed pre-alloc, no push).
-   * @param {object} data — columnar history response
-   */
-  prependColumnarChunk(data) {
-    if (!data) return;
-    const sentinel = Number(data.sentinel ?? DDRFactory.HISTORY_ABSENT);
-    const times = Array.isArray(data.times) ? data.times : [];
-    const plots = data.plots && typeof data.plots === 'object' ? data.plots : {};
-
-    for (const [plotId, values] of Object.entries(plots)) {
-      if (!Array.isArray(values)) continue;
-      const newPoints = DDRFactory.columnToLWC(times, values, sentinel, this.normalizeTime);
-      const existing = this.hydratedData.get(plotId) || [];
-      this.hydratedData.set(plotId, DDRFactory.mergePrependPoints(existing, newPoints));
-    }
-  }
-
-  static mergePrependPoints(existing, newPoints) {
-    if (!newPoints?.length) return existing?.length ? existing : [];
-    if (!existing?.length) return newPoints;
-
-    const anchor = existing[0].time;
-    let newCount = 0;
-    for (let i = 0; i < newPoints.length; i++) {
-      if (newPoints[i].time < anchor) newCount++;
-    }
-    if (newCount === 0) return existing;
-
-    const total = newCount + existing.length;
-    const out = new Array(total);
-    let j = 0;
-    for (let i = 0; i < newPoints.length && newPoints[i].time < anchor; i++) {
-      out[j++] = newPoints[i];
-    }
-    for (let i = 0; i < existing.length; i++) {
-      out[j++] = existing[i];
-    }
-    return out;
   }
 
   static columnToLWC(times, values, sentinel, normalizeTime) {

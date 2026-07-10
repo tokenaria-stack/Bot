@@ -188,9 +188,14 @@ const RsxController = (() => {
     const settings = readSettingsFromMenu(context);
     const applied = setSettings(context, settings);
     persist(context, applied);
+    if (context === 'live' && typeof liveRenderScheduler !== 'undefined' && liveRenderScheduler) {
+      liveRenderScheduler.markDirty({ mode: 'full' });
+      return;
+    }
     const chartKey = context === 'backtest' ? 'backtest' : 'live';
     const chartData = ChartAdapter.getChartHandle(chartKey);
-    const store = chartKey === 'backtest' ? backtestStore : liveStore;
+    const store = chartKey === 'backtest' ? backtestStore : null;
+    if (!store) return;
     const storeData = store.getForLightweightCharts();
     const osc = storeData.osc;
     const anns = storeData.annotations;

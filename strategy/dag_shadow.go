@@ -97,7 +97,7 @@ func (a *Marker) validateDAGShadowLocked() {
 		}
 	}
 
-	slog.Info("dag shadow total score",
+	slog.Debug("dag shadow total score",
 		"total", cur.Get(core.SlotTotalScore),
 		"macro", cur.Get(core.SlotDivScore),
 		"micro", cur.Get(core.SlotMicroDivScore),
