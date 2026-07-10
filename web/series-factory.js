@@ -68,8 +68,13 @@ class DDRFactory {
     const params = new URLSearchParams({
       tf: tf || '1m',
       endTime: String(endTimeSec),
-      limit: String(options.limit ?? (typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 1000)),
+      limit: String(options.limit ?? (typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000)),
+      format: 'columnar',
     });
+    const slotKeys = options.slots ?? [...this.seriesMap.keys()];
+    if (slotKeys.length > 0) {
+      params.set('slots', slotKeys.join(','));
+    }
     if (symbol) params.set('symbol', symbol);
 
     const rsx = options.rsxSettings;
@@ -84,9 +89,9 @@ class DDRFactory {
       params.set('min_osc_delta', String(rsx.min_osc_delta ?? 0));
     }
 
-    const res = await fetch(`/api/ui/history?${params.toString()}`, { cache: 'no-store' });
+    const res = await fetch(`/api/history?${params.toString()}`, { cache: 'no-store' });
     if (!res.ok) {
-      throw new Error(`DDRFactory: ui history failed (${res.status})`);
+      throw new Error(`DDRFactory: columnar history failed (${res.status})`);
     }
     const data = await res.json();
     const sentinel = Number(data.sentinel ?? DDRFactory.HISTORY_ABSENT);
@@ -104,9 +109,17 @@ class DDRFactory {
     return data;
   }
 
-  applyHydratedData() {
+  applyHydratedData(plotsOverride) {
+    const source = plotsOverride && typeof plotsOverride === 'object'
+      ? plotsOverride
+      : this.hydratedData;
+    if (plotsOverride && typeof plotsOverride === 'object') {
+      for (const [id, points] of Object.entries(plotsOverride)) {
+        if (Array.isArray(points)) this.hydratedData.set(id, points);
+      }
+    }
     for (const [id, series] of this.seriesMap) {
-      const points = this.hydratedData.get(id);
+      const points = source instanceof Map ? source.get(id) : this.hydratedData.get(id);
       if (!points?.length) continue;
       try {
         series.setData(points);
@@ -114,6 +127,47 @@ class DDRFactory {
         /* skip invalid setData during cutover */
       }
     }
+  }
+
+  /**
+   * Merge columnar prepend chunk into hydratedData (indexed pre-alloc, no push).
+   * @param {object} data — columnar history response
+   */
+  prependColumnarChunk(data) {
+    if (!data) return;
+    const sentinel = Number(data.sentinel ?? DDRFactory.HISTORY_ABSENT);
+    const times = Array.isArray(data.times) ? data.times : [];
+    const plots = data.plots && typeof data.plots === 'object' ? data.plots : {};
+
+    for (const [plotId, values] of Object.entries(plots)) {
+      if (!Array.isArray(values)) continue;
+      const newPoints = DDRFactory.columnToLWC(times, values, sentinel, this.normalizeTime);
+      const existing = this.hydratedData.get(plotId) || [];
+      this.hydratedData.set(plotId, DDRFactory.mergePrependPoints(existing, newPoints));
+    }
+  }
+
+  static mergePrependPoints(existing, newPoints) {
+    if (!newPoints?.length) return existing?.length ? existing : [];
+    if (!existing?.length) return newPoints;
+
+    const anchor = existing[0].time;
+    let newCount = 0;
+    for (let i = 0; i < newPoints.length; i++) {
+      if (newPoints[i].time < anchor) newCount++;
+    }
+    if (newCount === 0) return existing;
+
+    const total = newCount + existing.length;
+    const out = new Array(total);
+    let j = 0;
+    for (let i = 0; i < newPoints.length && newPoints[i].time < anchor; i++) {
+      out[j++] = newPoints[i];
+    }
+    for (let i = 0; i < existing.length; i++) {
+      out[j++] = existing[i];
+    }
+    return out;
   }
 
   static columnToLWC(times, values, sentinel, normalizeTime) {

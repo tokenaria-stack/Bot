@@ -188,6 +188,8 @@ let liveHistoryEpoch = 0;
 let pendingHistoryLoad = null;
 /** History lazy-load is armed only after the user scrolls/zooms the live chart (not on TF init). */
 let liveHistoryScrollArmed = false;
+/** @type {HydrationOrchestrator|null} */
+let liveHydrationOrchestrator = null;
 
 if (typeof window !== 'undefined') {
   window.__isSettingsUpdating = false;
@@ -770,6 +772,7 @@ function wsSubscribeTf(tf) {
 function clearChartData() {
   _microscopeTickMuted = false;
   liveHistoryEpoch += 1;
+  liveHydrationOrchestrator?.reset();
   disarmLiveHistoryScroll();
   beginDataUpdate();
   liveStore.clear();
@@ -1469,57 +1472,73 @@ async function fetchLiveHistory(endTimeSec, limitOverride = null) {
     tf: currentTf,
     endTimeSec,
     limit: limitOverride || HISTORY_CHUNK_LIMIT,
+    slots: resolveLiveSlotIds(),
     rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
   });
 }
 
-async function maybeLoadHistory(range, options = {}) {
-  if (!ChartAdapter.isInitialized('live') || liveStore.isSealed() || window.__isDashboardLoading) return;
-  const currentEpoch = liveHistoryEpoch;
-  const force = options.force === true;
-  if (isLoadingHistory || !historyHasMore) return Promise.resolve();
-  if (!shouldPaintLiveChart()) return;
-  if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
-  if (!range || liveStore.candleCount() === 0) return;
-  if (!force && range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
+function resolveLiveSlotIds() {
+  const seriesSlots = window.DDRFactory ? [...window.DDRFactory.seriesMap.keys()] : [];
+  if (seriesSlots.length > 0) return seriesSlots;
+  return collectManifestScalarSlotIds(window.DDRFactory?.manifest);
+}
 
-  const firstTime = liveStore.firstCandleTimeSec();
-  if (firstTime == null) return;
-  const endTimeSec = Number(firstTime);
-  const reqId = currentLiveRequestId;
-
-  isLoadingHistory = true;
-  let added = 0;
-
-  try {
-    const data = await fetchLiveHistory(endTimeSec);
-    if (currentEpoch !== liveHistoryEpoch || !ChartAdapter.isInitialized('live')) return;
-    if (reqId !== currentLiveRequestId) return;
-    if (!Array.isArray(data.candles) || data.candles.length === 0) {
-      historyHasMore = false;
-      return;
-    }
-
-    liveStore.seal();
-    beginDataUpdate();
-    try {
-      ({ added } = liveStore.prependHistory({
-        candles: toCandles(data.candles),
-        oscillators: data.oscillators || [],
-        annotations: data.annotations,
-      }, getLiveStoreTf()));
-      historyHasMore = data.hasMore !== false;
-
-      if (added === 0) {
-        historyHasMore = false;
-        console.warn('History pagination stalled: Zero overlap.');
-        return;
+function initHydrationOrchestrator() {
+  if (typeof HydrationOrchestrator === 'undefined') return;
+  liveHydrationOrchestrator = new HydrationOrchestrator();
+  liveHydrationOrchestrator.init({
+    getEpoch: () => liveHistoryEpoch,
+    getReqId: () => currentLiveRequestId,
+    getHistoryHasMore: () => historyHasMore,
+    setHistoryHasMore: (v) => { historyHasMore = v; },
+    setLoadingHistory: (v) => { isLoadingHistory = v; },
+    sealStore: () => { liveStore.seal(); },
+    unsealStore: () => { liveStore.unseal(); },
+    shouldLoad: (range, options) => {
+      if (!ChartAdapter.isInitialized('live') || liveStore.isSealed() || window.__isDashboardLoading) return false;
+      const force = options.force === true;
+      if (isLoadingHistory || liveHydrationOrchestrator?.isBusy() || !historyHasMore) return false;
+      if (!shouldPaintLiveChart()) return false;
+      if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return false;
+      if (!range || liveStore.candleCount() === 0) return false;
+      if (!force && range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return false;
+      return true;
+    },
+    getAnchorEndTimeSec: () => {
+      const firstTime = liveStore.firstCandleTimeSec();
+      return firstTime == null ? null : Number(firstTime);
+    },
+    getSlotIds: () => resolveLiveSlotIds(),
+    fetchColumnar: async (endTimeSec) => {
+      const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+      return API.fetchColumnarHistory({
+        tf: currentTf,
+        endTimeSec,
+        limit: HISTORY_CHUNK_LIMIT,
+        slots: resolveLiveSlotIds(),
+        rsxSettings: coerceRsxSettingsForAPI(RsxController.getSettings('live')),
+        symbol,
+      });
+    },
+    mergeIntoStore: (data) => {
+      const candles = columnarToCandles(data);
+      if (window.DDRFactory?.cutoverActive) {
+        window.DDRFactory.prependColumnarChunk(data);
       }
-
-      const storeData = liveStore.getForLightweightCharts();
-
-      ChartAdapter.applyHistoryPrepend('live', storeData, added);
-
+      const { added } = liveStore.prependHistory({
+        candles,
+        oscillators: [],
+        annotations: data.annotations || [],
+      }, getLiveStoreTf());
+      return {
+        added,
+        storeData: liveStore.getForLightweightCharts(),
+      };
+    },
+    applyAtomic: (storeData, addedBars) => {
+      ChartAdapter.applyAtomicPrepend('live', storeData, addedBars);
+    },
+    onAfterPrepend: (storeData) => {
       if (liveNavigatorResult) {
         ChartAdapter.setNavigatorOverlay('live', { navigators: liveNavigatorResult }, storeData.candles, {
           context: 'live',
@@ -1527,27 +1546,23 @@ async function maybeLoadHistory(range, options = {}) {
         });
       }
       updateBufferingOverlay();
-    } finally {
-      liveStore.unseal();
-      endDataUpdate();
-    }
-
-    if (!historyHasMore || currentEpoch !== liveHistoryEpoch) return;
-  } catch (err) {
-    console.error('lazy history:', err);
-  } finally {
-    isLoadingHistory = false;
-  }
-
-  if (historyHasMore && currentEpoch === liveHistoryEpoch) {
-    setTimeout(() => {
-      const finalRange = ChartAdapter.getVisibleLogicalRange('live');
-      const threshold = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_HISTORY_SCROLL_THRESHOLD) || 50;
-      if (finalRange && finalRange.from < threshold) {
-        scheduleHistoryLoad(finalRange);
+      if (pendingHistoryLoad) {
+        const job = pendingHistoryLoad;
+        pendingHistoryLoad = null;
+        Promise.resolve().then(() => scheduleHistoryLoad(job.range, job.options));
       }
-    }, 0);
+    },
+    processTick: (tick) => _processLiveTickCore(tick),
+  });
+}
+
+async function maybeLoadHistory(range, options = {}) {
+  if (!liveHydrationOrchestrator) return;
+  if (options.force === true) {
+    await liveHydrationOrchestrator.requestPrepend(range, options);
+    return;
   }
+  liveHydrationOrchestrator.schedulePrepend(range, options);
 }
 
 function scheduleHistoryLoad(range, options = {}) {
@@ -1555,8 +1570,12 @@ function scheduleHistoryLoad(range, options = {}) {
   if (!range || !historyHasMore) return;
   if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
-  if (ChartAdapter.isLiveUpdating()) {
+  if (ChartAdapter.isLiveUpdating() || liveHydrationOrchestrator?.isBusy()) {
     pendingHistoryLoad = { range, options };
+    return;
+  }
+  if (liveHydrationOrchestrator) {
+    liveHydrationOrchestrator.schedulePrepend(range, options);
     return;
   }
   maybeLoadHistory(range, options);
@@ -1568,7 +1587,7 @@ function isLiveTf() {
   return scoringTf.toLowerCase() === currentTf.toLowerCase();
 }
 
-function handleLiveTick(d) {
+function _processLiveTickCore(d) {
   const tickTf = (d.timeframe || backendTradingTimeframe || currentTf || '1m').toLowerCase();
   if (tickTf !== currentTf.toLowerCase()) return;
 
@@ -1595,6 +1614,11 @@ function handleLiveTick(d) {
   if (!bar) return;
 
   applyPriceBar(bar);
+}
+
+function handleLiveTick(d) {
+  if (liveHydrationOrchestrator?.queueTick(d)) return;
+  _processLiveTickCore(d);
 }
 
 function handleLiveMarker(d) {
@@ -1803,7 +1827,7 @@ async function scheduleDDRCutover() {
     try {
       await window.DDRFactory.fetchAndHydrateHistory(symbol, tf, {
         endTimeSec,
-        limit: typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 1000,
+        limit: typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000,
         rsxSettings,
       });
     } catch (err) {
@@ -1820,6 +1844,7 @@ async function scheduleDDRCutover() {
 
 function boot() {
   safeInit('DDR factory', initDDRFactory);
+  safeInit('Hydration orchestrator', initHydrationOrchestrator);
   safeInit('UI strategy', () => StrategyController.init());
   safeInit('UI tabs', () => TabsController.init());
   safeInit('UI risk', () => RiskController.init());

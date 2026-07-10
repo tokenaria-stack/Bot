@@ -161,6 +161,41 @@ function toCandles(raw) {
     .filter(Boolean);
 }
 
+/** Columnar SoA history payload → row candles for ChartDataStore. */
+function columnarToCandles(data) {
+  if (!data || !Array.isArray(data.times)) return [];
+  const times = data.times;
+  const cols = data.candles && typeof data.candles === 'object' ? data.candles : {};
+  const n = times.length;
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const bar = normalizeCandle({
+      time: times[i],
+      open: cols.open?.[i],
+      high: cols.high?.[i],
+      low: cols.low?.[i],
+      close: cols.close?.[i],
+      volume: cols.volume?.[i],
+    });
+    if (bar) count++;
+  }
+  if (count === 0) return [];
+  const out = new Array(count);
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const bar = normalizeCandle({
+      time: times[i],
+      open: cols.open?.[i],
+      high: cols.high?.[i],
+      low: cols.low?.[i],
+      close: cols.close?.[i],
+      volume: cols.volume?.[i],
+    });
+    if (bar) out[j++] = bar;
+  }
+  return out;
+}
+
 function toLineClose(candles) {
   return candles.map((c) => ({ time: Number(c.time), value: Number(c.close) }));
 }
@@ -475,6 +510,7 @@ if (typeof window !== 'undefined') {
     chartPointsToCandles,
     chartPointsToStorePayload,
     toCandles,
+    columnarToCandles,
     toLine,
     toLineClose,
     toVolumeBars,

@@ -68,3 +68,55 @@ func TestBuildHistoryColumns_SentinelForNaN(t *testing.T) {
 		t.Fatalf("expected NaN mapped to sentinel, got %v", plots["line_rsx"][0])
 	}
 }
+
+func TestBuildHistoryColumnsFiltered_OnlyRequestedSlots(t *testing.T) {
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewProjector(reg)
+
+	h := core.NewHistoryBus(8)
+	for i := 1; i <= 2; i++ {
+		frame := &core.TickFrame{}
+		frame.Set(core.SlotJurikRSX, float64(40+i))
+		frame.Set(core.SlotTotalScore, float64(10*i))
+		h.PushFrame(frame)
+		h.Advance()
+	}
+
+	times := []int64{100, 200}
+	plots, sentinel := p.BuildHistoryColumnsFiltered(h, times, []string{"line_rsx"})
+	if sentinel != HistoryAbsent {
+		t.Fatalf("sentinel: got %v", sentinel)
+	}
+	if len(plots) != 1 {
+		t.Fatalf("plots count = %d, want 1", len(plots))
+	}
+	if _, ok := plots["line_rsx"]; !ok {
+		t.Fatal("expected line_rsx column")
+	}
+	if _, ok := plots["score_total"]; ok {
+		t.Fatal("score_total should not be serialized when not requested")
+	}
+	if len(plots["line_rsx"]) != len(times) {
+		t.Fatalf("column len %d want %d", len(plots["line_rsx"]), len(times))
+	}
+}
+
+func TestBuildHistoryColumnsFiltered_EmptySlotIDsAllScalars(t *testing.T) {
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewProjector(reg)
+	all := p.scalarComponents()
+	if len(all) == 0 {
+		t.Fatal("expected scalar components in registry")
+	}
+
+	plots, _ := p.BuildHistoryColumnsFiltered(core.NewHistoryBus(4), []int64{1}, nil)
+	if len(plots) != len(all) {
+		t.Fatalf("empty slotIDs: got %d plots want %d", len(plots), len(all))
+	}
+}

@@ -2,6 +2,7 @@ package wire
 
 import (
 	"math"
+	"strings"
 
 	"trading_bot/core"
 )
@@ -13,23 +14,26 @@ const HistoryAbsent = math.MaxFloat64
 // BuildHistoryColumns projects committed HistoryBus values into columnar plot arrays.
 // times is oldest-first; len(times) may exceed hist.Count() — leading bars receive HistoryAbsent.
 func (p *Projector) BuildHistoryColumns(hist *core.HistoryBus, times []int64) map[string]any {
+	plots, sentinel := p.BuildHistoryColumnsFiltered(hist, times, nil)
+	return map[string]any{
+		"times":    append([]int64(nil), times...),
+		"plots":    plots,
+		"sentinel": sentinel,
+	}
+}
+
+// BuildHistoryColumnsFiltered projects only the requested component IDs into plot columns.
+// When slotIDs is empty, all scalar manifest components are serialized.
+func (p *Projector) BuildHistoryColumnsFiltered(hist *core.HistoryBus, times []int64, slotIDs []string) (map[string][]float64, float64) {
 	n := len(times)
 	if n == 0 {
-		return map[string]any{
-			"times":    []int64{},
-			"plots":    map[string][]float64{},
-			"sentinel": HistoryAbsent,
-		}
+		return map[string][]float64{}, HistoryAbsent
 	}
 	if p == nil || p.registry == nil {
-		return map[string]any{
-			"times":    append([]int64(nil), times...),
-			"plots":    map[string][]float64{},
-			"sentinel": HistoryAbsent,
-		}
+		return map[string][]float64{}, HistoryAbsent
 	}
 
-	components := p.scalarComponents()
+	components := p.filterScalarComponents(slotIDs)
 	plots := make(map[string][]float64, len(components))
 	for _, c := range components {
 		plots[c.ID] = make([]float64, n)
@@ -57,11 +61,32 @@ func (p *Projector) BuildHistoryColumns(hist *core.HistoryBus, times []int64) ma
 		}
 	}
 
-	return map[string]any{
-		"times":    append([]int64(nil), times...),
-		"plots":    plots,
-		"sentinel": HistoryAbsent,
+	return plots, HistoryAbsent
+}
+
+func (p *Projector) filterScalarComponents(slotIDs []string) []core.UIComponent {
+	all := p.scalarComponents()
+	if len(slotIDs) == 0 {
+		return all
 	}
+	allowed := make(map[string]struct{}, len(slotIDs))
+	for _, id := range slotIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		allowed[id] = struct{}{}
+	}
+	if len(allowed) == 0 {
+		return all
+	}
+	out := make([]core.UIComponent, 0, len(allowed))
+	for _, c := range all {
+		if _, ok := allowed[c.ID]; ok {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func (p *Projector) scalarComponents() []core.UIComponent {

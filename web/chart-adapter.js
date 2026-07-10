@@ -1747,6 +1747,32 @@ function applyHistoryPrepend(context, storeData, addedBars = 0) {
   }
 }
 
+function applyAtomicPrepend(context, storeData, addedBars = 0, options = {}) {
+  const chartData = _ctxData(context);
+  if (!chartData?.chart) return;
+
+  _liveUpdating = true;
+  try {
+    const ts = chartData.chart.timeScale();
+    const prevRange = ts.getVisibleLogicalRange();
+
+    _applyFullDataInternal(context, storeData, options);
+
+    if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
+      window.DDRFactory.applyHydratedData();
+    }
+
+    if (prevRange && addedBars > 0) {
+      ts.setVisibleLogicalRange({
+        from: prevRange.from + addedBars,
+        to: prevRange.to + addedBars,
+      });
+    }
+  } finally {
+    _liveUpdating = false;
+  }
+}
+
 function applyWozduhVisibilityFromPrefs(chartData, prefs) {
   if (!chartData?.wozduxSeries) return;
   WOZDUH_MENU_ITEMS.forEach((item) => {
@@ -1940,6 +1966,10 @@ const ChartAdapter = {
 
   applyHistoryPrepend(context, storeData, addedBars = 0) {
     applyHistoryPrepend(context, storeData, addedBars);
+  },
+
+  applyAtomicPrepend(context, storeData, addedBars = 0, options = {}) {
+    applyAtomicPrepend(context, storeData, addedBars, options);
   },
 
   applyDelta(context, delta, options = {}) {

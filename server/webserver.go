@@ -316,7 +316,6 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/settings/risk", withGzip(d.handleRiskSettings))
 	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
 	mux.HandleFunc("/api/ui/manifest", withGzip(d.handleUIManifest))
-	mux.HandleFunc("/api/ui/history", withGzip(d.handleUIHistory))
 	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
 	mux.HandleFunc("/api/backtest/stop", withGzip(d.handleBacktestStop))
 	mux.HandleFunc("/api/stats", withGzip(d.handleStats))
@@ -945,116 +944,6 @@ func (d *DashboardServer) handleUIManifest(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(d.uiRegistry.Manifest())
 }
 
-func (d *DashboardServer) handleUIHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if err := requestCtxErr(r.Context()); err != nil {
-		return
-	}
-	if d.projector == nil {
-		http.Error(w, "ui projector unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	tf := r.URL.Query().Get("tf")
-	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
-	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	if tf == "" || (endTimeMs <= 0 && endTimeSec <= 0) {
-		http.Error(w, "tf and endTime or endTimeMs required", http.StatusBadRequest)
-		return
-	}
-	if symbol := strings.TrimSpace(r.URL.Query().Get("symbol")); symbol != "" {
-		if exchange.NormalizeFuturesSymbol(symbol) != d.symbol {
-			http.Error(w, "symbol mismatch", http.StatusBadRequest)
-			return
-		}
-	}
-
-	spec, err := ResolveTimeframe(tf)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	rsxSettings := parseRSXSettingsFromRequest(r)
-	candleLimit := parseCandleLimit(r, historyFetchLimit, maxStateCandleLimit)
-
-	klines, hasMore, err := d.loadHistoryKlinesForUI(r, spec, candleLimit)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	if len(klines) == 0 {
-		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
-		return
-	}
-
-	display := klines
-	if candleLimit > 0 && len(display) > candleLimit {
-		display = display[len(display)-candleLimit:]
-	}
-	times := make([]int64, len(display))
-	for i, k := range display {
-		times[i] = exchange.ChartTimeSec(k.OpenTime)
-	}
-
-	hist := strategy.ReplayDAGKlines(klines, rsxSettings)
-	cols := d.projector.BuildHistoryColumns(hist, times)
-
-	resp := map[string]any{
-		"status":    "ready",
-		"timeframe": spec.ID,
-		"symbol":    d.symbol,
-		"hasMore":   hasMore,
-	}
-	for k, v := range cols {
-		resp[k] = v
-	}
-	writeJSON(w, resp)
-}
-
-func (d *DashboardServer) loadHistoryKlinesForUI(r *http.Request, spec TimeframeSpec, candleLimit int) ([]exchange.Kline, bool, error) {
-	if IsOrderFlowTimeframe(spec) {
-		if err := requestCtxErr(r.Context()); err != nil {
-			return nil, false, err
-		}
-		endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-		klines := d.loadOrderFlowKlines(spec, endTimeSec, candleLimit)
-		hasMore := len(klines) >= historyFetchLimit
-		return klines, hasMore, nil
-	}
-
-	if spec.Kind == TFRAMOnly {
-		if err := requestCtxErr(r.Context()); err != nil {
-			return nil, false, err
-		}
-		klines := d.ramKlines(spec.ID, candleLimit+strategy.IndicatorWarmupBars)
-		return klines, false, nil
-	}
-
-	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
-	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	resolvedEndMs := endTimeMs
-	if resolvedEndMs <= 0 {
-		resolvedEndMs = historyEndTimeToMs(endTimeSec)
-	}
-	klines := d.loadRESTKlinesFromStore(r.Context(), spec, resolvedEndMs, candleLimit, true)
-	if err := requestCtxErr(r.Context()); err != nil {
-		return nil, false, err
-	}
-	if len(klines) == 0 {
-		return nil, false, nil
-	}
-
-	hasMore := false
-	if len(klines) > 0 {
-		hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, exchange.ChartTimeSec(klines[0].OpenTime)*1000)
-	}
-	return klines, hasMore, nil
-}
-
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
 	settings := strategy.GetRSXSettings()
 	for _, analyst := range d.analysts {
@@ -1570,6 +1459,8 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	rsxSettings := parseRSXSettingsFromRequest(r)
 	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
 	candleLimit := parseCandleLimit(r, historyFetchLimit, maxStateCandleLimit)
+	columnar := r.URL.Query().Get("format") == "columnar"
+	slotIDs := parseSlotsParam(r.URL.Query().Get("slots"))
 
 	if IsOrderFlowTimeframe(spec) {
 		if err := requestCtxErr(r.Context()); err != nil {
@@ -1585,6 +1476,11 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		writeJSON(w, resp)
+		return
+	}
+
+	if columnar {
+		d.writeColumnarHistory(w, r, spec, endTimeMs, endTimeSec, rsxSettings, candleLimit, slotIDs)
 		return
 	}
 

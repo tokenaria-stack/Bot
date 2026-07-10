@@ -187,11 +187,12 @@ const API = {
     return { warmingUp: false, data };
   },
 
-  async fetchLiveHistory({ tf, endTimeSec, limit, rsxSettings }) {
+  async fetchColumnarHistory({ tf, endTimeSec, limit = 3000, slots, rsxSettings, symbol }) {
     const params = new URLSearchParams({
       tf,
       endTime: String(endTimeSec),
       limit: String(limit),
+      format: 'columnar',
       rsx_length: String(rsxSettings.length),
       rsx_signal_length: String(rsxSettings.signal_length),
       rsx_source: rsxSettings.source,
@@ -201,10 +202,33 @@ const API = {
       min_price_delta_ratio: String(rsxSettings.min_price_delta_ratio),
       min_osc_delta: String(rsxSettings.min_osc_delta),
     });
+    if (Array.isArray(slots) && slots.length > 0) {
+      params.set('slots', slots.join(','));
+    }
+    if (symbol) params.set('symbol', symbol);
     const resp = await fetch(`/api/history?${params.toString()}`, { cache: 'no-store' });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(`history API: ${resp.status}`);
+    if (!resp.ok) throw new Error(`columnar history API: ${resp.status}`);
     return data;
+  },
+
+  async fetchLiveHistory({ tf, endTimeSec, limit, rsxSettings, slots, symbol }) {
+    const columnar = await this.fetchColumnarHistory({
+      tf,
+      endTimeSec,
+      limit: limit ?? 3000,
+      slots,
+      rsxSettings,
+      symbol,
+    });
+    return {
+      ...columnar,
+      candles: typeof columnarToCandles === 'function' ? columnarToCandles(columnar) : [],
+      oscillators: [],
+      annotations: columnar.annotations || [],
+      hasMore: columnar.hasMore,
+      status: columnar.status || 'ready',
+    };
   },
 
   async fetchBacktestHistoryChunk(params) {
