@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
@@ -49,6 +50,7 @@ func parseSlotsParam(raw string) []string {
 }
 
 func (d *DashboardServer) buildColumnarHistoryPayload(
+	ctx context.Context,
 	klines []exchange.Kline,
 	candleLimit int,
 	warmupBars int,
@@ -56,6 +58,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	slotIDs []string,
 	hasMore bool,
 	timeframe string,
+	binanceInterval string,
 ) (columnarHistoryResponse, bool) {
 	if d == nil || d.projector == nil || len(klines) == 0 {
 		return columnarHistoryResponse{}, false
@@ -96,6 +99,12 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		return columnarHistoryResponse{}, false
 	}
 
+	legacyAnns := legacyChartAnnotationsFromKlines(ctx, klines, trimBars, binanceInterval, rsxSettings)
+	annotations := filterAnnotationsByDisplayTimes(legacyAnns, times)
+	if annotations == nil {
+		annotations = []strategy.ChartAnnotation{}
+	}
+
 	return columnarHistoryResponse{
 		Format:        "columnar",
 		Status:        "ready",
@@ -105,10 +114,52 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		Times:         times,
 		Candles:       candles,
 		Plots:         plots,
-		Annotations:   []strategy.ChartAnnotation{},
+		Annotations:   annotations,
 		Sentinel:      sentinel,
 		HasMore:       hasMore,
 	}, true
+}
+
+// legacyChartAnnotationsFromKlines runs Falcon streaming replay on the same kline window
+// used for DAG columnar output and returns warmup-trimmed RSX divergence markers.
+func legacyChartAnnotationsFromKlines(
+	ctx context.Context,
+	klines []exchange.Kline,
+	trimBars int,
+	interval string,
+	settings strategy.RSXSettings,
+) []strategy.ChartAnnotation {
+	if len(klines) == 0 {
+		return nil
+	}
+	if err := requestCtxErr(ctx); err != nil {
+		return nil
+	}
+	cfg := strategy.ChartStreamingReplayConfig(settings, interval)
+	acc := strategy.NewStreamingReplayAccumulatorCtx(ctx, klines, cfg)
+	if err := acc.LastReplayErr(); err != nil {
+		return nil
+	}
+	_, _, annotations := chartSeriesFromReplayResult(acc.Result(), true)
+	return trimAnnotations(annotations, trimBars, klines)
+}
+
+// filterAnnotationsByDisplayTimes keeps markers whose time is an exact member of display times.
+func filterAnnotationsByDisplayTimes(annotations []strategy.ChartAnnotation, times []int64) []strategy.ChartAnnotation {
+	if len(annotations) == 0 || len(times) == 0 {
+		return []strategy.ChartAnnotation{}
+	}
+	allowed := make(map[int64]struct{}, len(times))
+	for _, t := range times {
+		allowed[t] = struct{}{}
+	}
+	out := make([]strategy.ChartAnnotation, 0, len(annotations))
+	for _, ann := range annotations {
+		if _, ok := allowed[ann.Time]; ok {
+			out = append(out, ann)
+		}
+	}
+	return out
 }
 
 func columnarTimesFromKlines(klines []exchange.Kline) []int64 {
@@ -187,7 +238,17 @@ func (d *DashboardServer) writeColumnarHistory(
 		hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, exchange.ChartTimeSec(klines[0].OpenTime)*1000)
 	}
 
-	resp, ok := d.buildColumnarHistoryPayload(klines, candleLimit, warmup, rsxSettings, slotIDs, hasMore, spec.ID)
+	resp, ok := d.buildColumnarHistoryPayload(
+		r.Context(),
+		klines,
+		candleLimit,
+		warmup,
+		rsxSettings,
+		slotIDs,
+		hasMore,
+		spec.ID,
+		spec.BinanceInterval,
+	)
 	if !ok {
 		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(klines))
 		http.Error(w, "history replay empty", http.StatusServiceUnavailable)
@@ -196,7 +257,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	log.Printf("[Dashboard] columnar history %s %s: %d bars (from %d klines) slots=%d hasMore=%v",
-		d.symbol, spec.BinanceInterval, resp.Added, len(klines), len(resp.Plots), resp.HasMore)
+	log.Printf("[Dashboard] columnar history %s %s: %d bars (from %d klines) slots=%d anns=%d hasMore=%v",
+		d.symbol, spec.BinanceInterval, resp.Added, len(klines), len(resp.Plots), len(resp.Annotations), resp.HasMore)
 	writeJSON(w, resp)
 }

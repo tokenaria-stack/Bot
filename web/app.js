@@ -1496,6 +1496,7 @@ function initHydrationOrchestrator() {
     unsealStore: () => { liveStore.unseal(); },
     shouldLoad: (range, options) => {
       if (!ChartAdapter.isInitialized('live') || liveStore.isSealed() || window.__isDashboardLoading) return false;
+      if (_microscopeTickMuted) return false;
       const force = options.force === true;
       if (isLoadingHistory || liveHydrationOrchestrator?.isBusy() || !historyHasMore) return false;
       if (!shouldPaintLiveChart()) return false;
@@ -1576,9 +1577,7 @@ function scheduleHistoryLoad(range, options = {}) {
   }
   if (liveHydrationOrchestrator) {
     liveHydrationOrchestrator.schedulePrepend(range, options);
-    return;
   }
-  maybeLoadHistory(range, options);
 }
 
 function isLiveTf() {

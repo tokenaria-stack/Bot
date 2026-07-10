@@ -58,6 +58,11 @@ class HydrationOrchestrator {
     this._inFlight = false;
   }
 
+  /** Drop queued ticks without replay (epoch/TF abort). */
+  discardQueue() {
+    this.wsQueue = [];
+  }
+
   /**
    * Queue live WS tick while prepend is in flight.
    * @returns {boolean} true if queued (caller should skip immediate processing)
@@ -114,6 +119,7 @@ class HydrationOrchestrator {
 
     this._inFlight = true;
     this.state = HydrationState.PREPENDING;
+    let completed = false;
 
     try {
       const data = await deps.fetchColumnar(endTimeSec);
@@ -129,9 +135,8 @@ class HydrationOrchestrator {
       if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(true);
       if (typeof deps.sealStore === 'function') deps.sealStore();
 
-      let mergeResult;
       try {
-        mergeResult = deps.mergeIntoStore(data);
+        const mergeResult = deps.mergeIntoStore(data);
         if (!mergeResult || mergeResult.added <= 0) {
           if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
           console.warn('[HydrationOrchestrator] prepend stalled: zero overlap');
@@ -150,26 +155,32 @@ class HydrationOrchestrator {
         if (typeof deps.onAfterPrepend === 'function') {
           deps.onAfterPrepend(mergeResult.storeData, addedBars);
         }
+        completed = true;
+
+        if (deps.getHistoryHasMore?.() !== false && epoch === deps.getEpoch()) {
+          const threshold = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_HISTORY_SCROLL_THRESHOLD) || 50;
+          const finalRange = typeof ChartAdapter !== 'undefined'
+            ? ChartAdapter.getVisibleLogicalRange('live')
+            : null;
+          if (finalRange && finalRange.from < threshold) {
+            this.schedulePrepend(finalRange);
+          }
+        }
       } finally {
         if (typeof deps.unsealStore === 'function') deps.unsealStore();
         if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(false);
-      }
-
-      if (deps.getHistoryHasMore?.() !== false && epoch === deps.getEpoch()) {
-        const threshold = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_HISTORY_SCROLL_THRESHOLD) || 50;
-        const finalRange = typeof ChartAdapter !== 'undefined'
-          ? ChartAdapter.getVisibleLogicalRange('live')
-          : null;
-        if (finalRange && finalRange.from < threshold) {
-          this.schedulePrepend(finalRange);
-        }
       }
     } catch (err) {
       console.error('[HydrationOrchestrator] prepend failed:', err);
     } finally {
       this._inFlight = false;
-      this.state = HydrationState.LIVE;
-      this.flushQueue();
+      if (completed) {
+        this.state = HydrationState.LIVE;
+        this.flushQueue();
+      } else {
+        this.wsQueue = [];
+        this.state = HydrationState.IDLE;
+      }
     }
   }
 }

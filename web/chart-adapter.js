@@ -1759,10 +1759,10 @@ function applyAtomicPrepend(context, storeData, addedBars = 0, options = {}) {
     _applyFullDataInternal(context, storeData, options);
 
     if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
-      window.DDRFactory.applyHydratedData();
+      window.DDRFactory.applyHydratedData(options.ddrPlots);
     }
 
-    if (prevRange && addedBars > 0) {
+    if (prevRange != null && Number.isFinite(prevRange.from) && Number.isFinite(prevRange.to) && addedBars > 0) {
       ts.setVisibleLogicalRange({
         from: prevRange.from + addedBars,
         to: prevRange.to + addedBars,

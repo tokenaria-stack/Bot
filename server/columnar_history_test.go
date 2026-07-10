@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 
 	"trading_bot/exchange"
@@ -63,12 +64,14 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	}
 
 	resp, ok := d.buildColumnarHistoryPayload(
+		context.Background(),
 		klines,
 		50,
 		strategy.IndicatorWarmupBars,
 		strategy.GetRSXSettings(),
 		[]string{"line_rsx", "score_total"},
 		false,
+		"1m",
 		"1m",
 	)
 	if !ok {
@@ -83,8 +86,8 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	if resp.WarmupDropped != strategy.IndicatorWarmupBars {
 		t.Fatalf("warmupDropped = %d want %d", resp.WarmupDropped, strategy.IndicatorWarmupBars)
 	}
-	if len(resp.Annotations) != 0 {
-		t.Fatalf("annotations should be empty slice, got %d", len(resp.Annotations))
+	if resp.Annotations == nil {
+		t.Fatal("annotations must be non-nil slice")
 	}
 	n := len(resp.Times)
 	if n != 50 {
@@ -100,5 +103,32 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	}
 	if len(resp.Plots) != 2 {
 		t.Fatalf("plots count = %d want 2", len(resp.Plots))
+	}
+}
+
+func TestFilterAnnotationsByDisplayTimes(t *testing.T) {
+	t.Parallel()
+	times := []int64{100, 200, 300}
+	anns := []strategy.ChartAnnotation{
+		{Time: 50, Label: "LL", Pane: "rsx"},
+		{Time: 200, Label: "SS", Pane: "rsx"},
+		{Time: 999, Label: "L", Pane: "rsx"},
+	}
+	got := filterAnnotationsByDisplayTimes(anns, times)
+	if len(got) != 1 {
+		t.Fatalf("len = %d want 1", len(got))
+	}
+	if got[0].Time != 200 || got[0].Label != "SS" {
+		t.Fatalf("got %+v", got[0])
+	}
+}
+
+func TestFilterAnnotationsByDisplayTimes_emptyInputs(t *testing.T) {
+	t.Parallel()
+	if len(filterAnnotationsByDisplayTimes(nil, []int64{1})) != 0 {
+		t.Fatal("expected empty for nil annotations")
+	}
+	if len(filterAnnotationsByDisplayTimes([]strategy.ChartAnnotation{{Time: 1}}, nil)) != 0 {
+		t.Fatal("expected empty for nil times")
 	}
 }
