@@ -2246,6 +2246,9 @@ const ChartAdapter = {
   },
 
   setToggleSeriesVisible(context, key, visible) {
+    if (typeof SettingsRenderer !== 'undefined' && SettingsRenderer.setToggleVisible(context, key, visible)) {
+      return;
+    }
     const chartData = _ctxData(context);
     const series = key === 'rsx' ? chartData?.rsxSeries : chartData?.volumeSeries;
     series?.applyOptions({ visible });

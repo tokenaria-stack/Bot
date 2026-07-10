@@ -108,7 +108,11 @@ const WozduhController = (() => {
         el.addEventListener('change', () => {
           const prefs = readPrefsFromMenu(menu);
           savePrefs(context, prefs);
-          ChartAdapter.applyWozduhVisibility(context, prefs);
+          if (typeof SettingsRenderer !== 'undefined' && context === 'live' && window.DDRFactory?.cutoverActive) {
+            SettingsRenderer.applyWozduhPrefs(context, prefs);
+          } else {
+            ChartAdapter.applyWozduhVisibility(context, prefs);
+          }
         });
       });
     });

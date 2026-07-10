@@ -1909,6 +1909,10 @@ async function mountDDRLiveCutover() {
   window.DDRFactory.buildPanes(chartRegistry, window.DDRFactory.manifest.panes);
   window.DDRFactory.applyHydratedData();
 
+  if (typeof SettingsRenderer !== 'undefined') {
+    SettingsRenderer.refreshFromManifest();
+  }
+
   ChartAdapter.hideLegacyOscillatorSeries('live');
   ChartAdapter.enableDDROscCutover();
   return true;

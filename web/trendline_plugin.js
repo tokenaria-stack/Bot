@@ -4,6 +4,28 @@
  * Active lines extend to the viewport edge (LuxAlgo live ray). Completed lines are fixed segments to the break bar.
  */
 (function initTrendlinePlugin(global) {
+  function theme() {
+    return global.ChartTheme || null;
+  }
+
+  function lineColor(line) {
+    const T = theme();
+    if (line?.color) return line.color;
+    if (T) return T.trendlineStroke(line);
+    return '#089981';
+  }
+
+  function zoneFill(zone) {
+    const T = theme();
+    if (zone?.color) return zone.color;
+    if (T) return T.trendlineFill(zone);
+    return 'rgba(8, 153, 129, 0.08)';
+  }
+
+  function completedAlpha() {
+    const T = theme();
+    return T?.trendlineCompletedAlpha ?? 0.55;
+  }
   function toChartTimeSec(raw) {
     const n = Number(raw);
     if (!Number.isFinite(n)) return null;
@@ -163,9 +185,9 @@
           const style = line.style || 'solid';
           applyLineDash(ctx, style);
           ctx.beginPath();
-          ctx.strokeStyle = line.color || '#089981';
+          ctx.strokeStyle = lineColor(line);
           ctx.lineWidth = line.width || lineWidthForStyle(style);
-          ctx.globalAlpha = isActive ? 1 : 0.55;
+          ctx.globalAlpha = isActive ? 1 : completedAlpha();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
           ctx.stroke();
@@ -205,7 +227,7 @@
 
           const left = Math.min(startX, endX);
           const width = Math.max(Math.abs(endX - startX), 1);
-          ctx.fillStyle = zone.color || 'rgba(8, 153, 129, 0.08)';
+          ctx.fillStyle = zoneFill(zone);
           ctx.fillRect(left, 0, width, height);
         });
       });

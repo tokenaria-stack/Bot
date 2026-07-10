@@ -140,22 +140,24 @@ const WOZDUH_PREFS_KEY = 'wozduh_visibility_prefs';
 const DEFAULT_FAVS = ['1m', '3m', '15m', '1h', '4h', '1d', '1w'];
 /** Higher-TF quick-sync toggles in trendlines menu (any period can be added here). */
 const MTF_SYNC_QUICK_PERIODS = ['4h', '1d', '1w'];
-const MTF_PERIOD_COLORS = {
-  '1m': '#787b86',
-  '3m': '#5b9cf6',
-  '5m': '#2962ff',
-  '15m': '#089981',
-  '30m': '#00bcd4',
-  '1h': '#9c27b0',
-  '2h': '#e040fb',
-  '4h': '#ff9800',
-  '6h': '#ffb74d',
-  '8h': '#ffa726',
-  '12h': '#ff7043',
-  '1d': '#f23645',
-  '3d': '#e91e63',
-  '1w': '#ab47bc',
-};
+const MTF_PERIOD_COLORS = (typeof ChartTheme !== 'undefined' && ChartTheme.mtfPeriodColors)
+  ? ChartTheme.mtfPeriodColors
+  : {
+    '1m': '#787b86',
+    '3m': '#5b9cf6',
+    '5m': '#2962ff',
+    '15m': '#089981',
+    '30m': '#00bcd4',
+    '1h': '#9c27b0',
+    '2h': '#e040fb',
+    '4h': '#ff9800',
+    '6h': '#ffb74d',
+    '8h': '#ffa726',
+    '12h': '#ff7043',
+    '1d': '#f23645',
+    '3d': '#e91e63',
+    '1w': '#ab47bc',
+  };
 /** Fast RAM tail for /api/state; deep history comes from pre-fetch assembly. */
 const LIVE_STATE_CANDLE_LIMIT = 300;
 const HISTORY_CHUNK_LIMIT = 3000;
@@ -199,7 +201,7 @@ function ensureChartLibraryStyles() {
     lastValueVisible: false,
     crosshairMarkerRadius: 1,
     crosshairMarkerBorderWidth: 1,
-    crosshairMarkerBorderColor: '#90ee90',
+    crosshairMarkerBorderColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshairMarkerBorder : '#90ee90',
   },
   candle: {
     upColor: TV.green,
@@ -238,7 +240,7 @@ function ensureChartLibraryStyles() {
     lastValueVisible: false,
   },
   rsxSignal: {
-    color: '#ff9800',
+    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.rsxSignalLine : '#ff9800',
     lineWidth: 1,
     lineStyle: LC.LineStyle.Dashed,
     priceLineVisible: false,
@@ -357,8 +359,8 @@ function ensureChartLibraryStyles() {
 
   SHARED_CROSSHAIR = {
     mode: LC.CrosshairMode.Normal,
-    vertLine: { width: 1, color: '#555', style: LC.LineStyle.Dashed },
-    horzLine: { width: 1, color: '#555', style: LC.LineStyle.Dashed },
+    vertLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
+    horzLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
   };
 
   return true;

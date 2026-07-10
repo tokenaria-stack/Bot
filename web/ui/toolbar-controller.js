@@ -110,7 +110,9 @@ const ToolbarController = (() => {
     if (!el || !candles?.length) return;
     const last = candles[candles.length - 1];
     el.textContent = fmtVolume(last.volume);
-    el.style.color = last.close >= last.open ? TV.green : TV.red;
+    el.style.color = last.close >= last.open
+      ? ((typeof ChartTheme !== 'undefined') ? ChartTheme.bull : TV.green)
+      : ((typeof ChartTheme !== 'undefined') ? ChartTheme.bear : TV.red);
   }
 
   function isSpikeEnabled() {
@@ -126,24 +128,27 @@ const ToolbarController = (() => {
   }
 
   function init() {
-    const toggles = {
-      'tog-jurik': 'rsx',
-      'tog-volume': 'volume',
-    };
-
-    Object.entries(toggles).forEach(([id, seriesKey]) => {
-      const el = document.getElementById(id);
-      if (!el) {
-        console.warn(`[ToolbarController] #${id} not found`);
-        return;
-      }
-      const applyVisibility = () => {
-        el.closest('.ind-toggle')?.classList.toggle('active', el.checked);
-        ChartAdapter.setToggleSeriesVisible('live', seriesKey, el.checked);
+    if (typeof SettingsRenderer !== 'undefined') {
+      SettingsRenderer.initToolbarToggles('live');
+    } else {
+      const toggles = {
+        'tog-jurik': 'rsx',
+        'tog-volume': 'volume',
       };
-      applyVisibility();
-      el.addEventListener('change', applyVisibility);
-    });
+      Object.entries(toggles).forEach(([id, seriesKey]) => {
+        const el = document.getElementById(id);
+        if (!el) {
+          console.warn(`[ToolbarController] #${id} not found`);
+          return;
+        }
+        const applyVisibility = () => {
+          el.closest('.ind-toggle')?.classList.toggle('active', el.checked);
+          ChartAdapter.setToggleSeriesVisible('live', seriesKey, el.checked);
+        };
+        applyVisibility();
+        el.addEventListener('change', applyVisibility);
+      });
+    }
 
     const togSpike = document.getElementById('tog-spike');
     if (togSpike) {

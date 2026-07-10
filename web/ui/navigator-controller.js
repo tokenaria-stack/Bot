@@ -74,8 +74,11 @@ const NavigatorController = (() => {
   }
 
   function getMtfPeriodColor(tf) {
+    if (typeof ChartTheme !== 'undefined' && ChartTheme.mtfPeriodColor) {
+      return ChartTheme.mtfPeriodColor(tf);
+    }
     const key = normalizeMtfPeriod(tf);
-    return MTF_PERIOD_COLORS[key] || '#787b86';
+    return MTF_PERIOD_COLORS[key] || ChartTheme?.text || '#787b86';
   }
 
   function coerceNavigatorPeriods(settings) {
@@ -876,7 +879,9 @@ const NavigatorController = (() => {
           position: 'aboveBar',
           shape: 'circle',
           text: 'HH',
-          color: m.color || '#089981',
+          color: (typeof ChartTheme !== 'undefined')
+            ? ChartTheme.navMarkerColor('HH', m.color)
+            : (m.color || '#089981'),
         });
       } else if (type === 'LL') {
         markers.push({
@@ -884,14 +889,18 @@ const NavigatorController = (() => {
           position: 'belowBar',
           shape: 'circle',
           text: 'LL',
-          color: m.color || '#f23645',
+          color: (typeof ChartTheme !== 'undefined')
+            ? ChartTheme.navMarkerColor('LL', m.color)
+            : (m.color || '#f23645'),
         });
       } else if (type === 'WickBreak') {
         markers.push({
           time,
           position: 'inBar',
           shape: 'circle',
-          color: m.color || '#ff5d00',
+          color: (typeof ChartTheme !== 'undefined')
+            ? ChartTheme.navMarkerColor('WickBreak', m.color)
+            : (m.color || '#ff5d00'),
           size: 1,
         });
       }

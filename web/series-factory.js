@@ -188,6 +188,13 @@ class DDRFactory {
     return this.seriesMap.get(id);
   }
 
+  setSeriesVisible(id, visible) {
+    const series = this.seriesMap.get(id);
+    if (!series) return false;
+    series.applyOptions({ visible: visible !== false });
+    return true;
+  }
+
   clear() {
     this.seriesMap.clear();
     this.hydratedData.clear();
