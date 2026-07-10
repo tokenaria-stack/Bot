@@ -861,12 +861,13 @@ function tradeToMarker(trade) {
   if (time == null) return null;
   const side = tradeSide(trade);
   const kind = String(trade.kind || 'entry').toLowerCase();
+  const T = (typeof ChartTheme !== 'undefined') ? ChartTheme : null;
 
   if (side === 'CLOSE_LONG') {
     return {
       time,
       position: 'aboveBar',
-      color: '#f23645',
+      color: T?.bear ?? '#f23645',
       shape: 'circle',
       text: 'EXIT',
     };
@@ -875,7 +876,7 @@ function tradeToMarker(trade) {
     return {
       time,
       position: 'belowBar',
-      color: '#089981',
+      color: T?.bull ?? '#089981',
       shape: 'circle',
       text: 'EXIT',
     };
@@ -885,7 +886,7 @@ function tradeToMarker(trade) {
   return {
     time,
     position: isBuy ? 'belowBar' : 'aboveBar',
-    color: isBuy ? '#089981' : '#f23645',
+    color: isBuy ? (T?.buy ?? '#089981') : (T?.sell ?? '#f23645'),
     shape: isBuy ? 'arrowUp' : 'arrowDown',
     size: 2,
     text: kind === 'exit' ? 'EXIT' : (isBuy ? 'BUY' : 'SELL'),

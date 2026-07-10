@@ -1,16 +1,18 @@
 /** Declarative configuration — styles, limits, selectors, defaults. */
-/* ── TradingView palette ── */
-const TV = {
-  bg: '#131722',
-  grid: '#1e222d',
-  border: '#2a2e39',
-  text: '#787b86',
-  green: '#089981',
-  red: '#f23645',
-  blue: '#2962ff',
-  cyan: '#00bcd4',
-  gold: '#f7931a',
-};
+/* ── TradingView palette (sourced from ChartTheme) ── */
+const TV = (typeof ChartTheme !== 'undefined' && ChartTheme.palette)
+  ? ChartTheme.palette()
+  : {
+    bg: '#131722',
+    grid: '#1e222d',
+    border: '#2a2e39',
+    text: '#787b86',
+    green: '#089981',
+    red: '#f23645',
+    blue: '#2962ff',
+    cyan: '#00bcd4',
+    gold: '#f7931a',
+  };
 
 const THRESHOLDS_KEY = 'bot_thresholds';
 const SCORING_MATRIX_KEY = 'bot_scoring_matrix';
@@ -170,7 +172,7 @@ const MAX_RSX_DIV_LOOKBACK = 200;
 const MIN_RSX_SIGNAL_LENGTH = 2;
 const MAX_RSX_SIGNAL_LENGTH = 50;
 
-const RSX_DEFAULT_COLOR = '#e1d2b5';
+const RSX_DEFAULT_COLOR = (typeof ChartTheme !== 'undefined') ? ChartTheme.rsxDefault : '#e1d2b5';
 
 /** Lazy-built after LightweightCharts CDN loads (see ensureChartLibraryStyles). */
 let CHART_STYLES = null;
@@ -226,8 +228,8 @@ function ensureChartLibraryStyles() {
     priceLineVisible: false,
   },
   volumeBar: {
-    upColor: 'rgba(8,153,129,0.55)',
-    downColor: 'rgba(242,54,69,0.55)',
+    upColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeUp : 'rgba(8,153,129,0.55)',
+    downColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeDown : 'rgba(242,54,69,0.55)',
   },
   rsx: {
     color: RSX_DEFAULT_COLOR,
@@ -243,7 +245,7 @@ function ensureChartLibraryStyles() {
     lastValueVisible: false,
   },
   wozduhUp: {
-    color: 'blue',
+    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhFast : 'blue',
     lineWidth: 2,
     lineStyle: LC.LineStyle.Solid,
     title: 'wt11 (Blue)',
@@ -251,7 +253,7 @@ function ensureChartLibraryStyles() {
     lastValueVisible: false,
   },
   wozduhDown: {
-    color: 'aqua',
+    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhSlow : 'aqua',
     lineWidth: 2,
     lineStyle: LC.LineStyle.Solid,
     title: 'wt22 (Aqua)',
@@ -273,10 +275,10 @@ function ensureChartLibraryStyles() {
     { price: 20, color: 'rgba(255, 190, 120, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
   ],
   wozdux: {
-    rsiPrice: { color: 'red', lineWidth: 2, title: 'RSI(C)', priceLineVisible: false, lastValueVisible: false },
-    rsiHl2: { color: 'purple', lineWidth: 2, title: 'RSI(HL2)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolFast: { color: 'blue', lineWidth: 2, title: 'wt11 (Blue)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolSlow: { color: 'aqua', lineWidth: 2, title: 'wt22 (Aqua)', priceLineVisible: false, lastValueVisible: false },
+    rsiPrice: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.bear : 'red', lineWidth: 2, title: 'RSI(C)', priceLineVisible: false, lastValueVisible: false },
+    rsiHl2: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.short : 'purple', lineWidth: 2, title: 'RSI(HL2)', priceLineVisible: false, lastValueVisible: false },
+    rsiVolFast: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhFast : 'blue', lineWidth: 2, title: 'wt11 (Blue)', priceLineVisible: false, lastValueVisible: false },
+    rsiVolSlow: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhSlow : 'aqua', lineWidth: 2, title: 'wt22 (Aqua)', priceLineVisible: false, lastValueVisible: false },
   },
 };
 

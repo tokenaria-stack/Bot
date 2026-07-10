@@ -310,6 +310,9 @@ function mapRSXData(osc) {
 }
 
 function rsxMarkerStyle(marker) {
+  if (typeof ChartTheme !== 'undefined' && ChartTheme.rsxMarkerStyle) {
+    return ChartTheme.rsxMarkerStyle(marker);
+  }
   const m = String(marker || '').toUpperCase();
   if (m === 'S' || m === 'SS') {
     return { position: 'aboveBar', color: '#b71c1c', shape: 'circle', size: 1 };
@@ -339,7 +342,11 @@ function annotationToNativeMarker(ann) {
   return {
     time: Number(time),
     position: useRsxStyle ? style.position : (ann?.position || 'belowBar'),
-    color: useRsxStyle ? style.color : (ann?.color || '#26a69a'),
+    color: useRsxStyle ? style.color : (
+      (typeof ChartTheme !== 'undefined')
+        ? ChartTheme.resolve(ann?.color, ChartTheme.bull)
+        : (ann?.color || '#26a69a')
+    ),
     shape: useRsxStyle ? style.shape : (ann?.shape || 'circle'),
     size: useRsxStyle ? (style.size ?? 1) : undefined,
     text: label,
@@ -450,10 +457,22 @@ function buildSpikeMarkersFromGrid(annotationMap, { showSpike = true } = {}) {
     if (!ann.spikeUp && !ann.spikeDown) return;
     const time = ChartDataStore.msToChartSec(ms);
     if (ann.spikeUp) {
-      markers.push({ time, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
+      markers.push({
+        time,
+        position: 'belowBar',
+        color: (typeof ChartTheme !== 'undefined') ? ChartTheme.spikeUp : TV.green,
+        shape: 'circle',
+        text: '▲',
+      });
     }
     if (ann.spikeDown) {
-      markers.push({ time, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
+      markers.push({
+        time,
+        position: 'aboveBar',
+        color: (typeof ChartTheme !== 'undefined') ? ChartTheme.spikeDown : TV.red,
+        shape: 'circle',
+        text: '▼',
+      });
     }
   });
   return markers.sort((a, b) => a.time - b.time);

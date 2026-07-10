@@ -3,11 +3,14 @@
  * Horizontal triangles point at exact entry price; exits render as orange dots.
  */
 (function initTradeMarkerPlugin(global) {
-  const COLORS = {
-    long: '#9C27B0',
-    short: '#AD1457',
-    exit: '#FF9800',
-  };
+  function themeColors() {
+    const T = global.ChartTheme;
+    return {
+      long: T?.long ?? '#9C27B0',
+      short: T?.short ?? '#AD1457',
+      exit: T?.exit ?? '#FF9800',
+    };
+  }
 
   class TradeMarkerPaneRenderer {
     constructor(source) {
@@ -25,6 +28,7 @@
       const timeScale = chart.timeScale();
 
       target.useMediaCoordinateSpace(({ context: ctx }) => {
+        const COLORS = themeColors();
         markers.forEach((m) => {
           const x = timeScale.timeToCoordinate(m.time);
           const y = series.priceToCoordinate(m.price);

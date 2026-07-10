@@ -5,6 +5,16 @@
 const CHART_PRICE_SCALE_MIN_WIDTH = 70;
 const LOGICAL_RANGE_EPS = 0.01;
 
+function _theme() {
+  return (typeof ChartTheme !== 'undefined') ? ChartTheme : null;
+}
+
+function _themeColor(token, tvFallback) {
+  const T = _theme();
+  if (T && T[token]) return T[token];
+  return tvFallback;
+}
+
 let _live = {};
 let _backtest = {};
 let _equityChart;
@@ -96,10 +106,22 @@ function _patchSpikeMarkersAtMs(ms, annotation) {
   if (showSpike && annotation) {
     const added = [];
     if (annotation.spikeUp) {
-      added.push({ time: timeSec, position: 'belowBar', color: TV.green, shape: 'circle', text: '▲' });
+      added.push({
+        time: timeSec,
+        position: 'belowBar',
+        color: _themeColor('spikeUp', TV.green),
+        shape: 'circle',
+        text: '▲',
+      });
     }
     if (annotation.spikeDown) {
-      added.push({ time: timeSec, position: 'aboveBar', color: TV.red, shape: 'circle', text: '▼' });
+      added.push({
+        time: timeSec,
+        position: 'aboveBar',
+        color: _themeColor('spikeDown', TV.red),
+        shape: 'circle',
+        text: '▼',
+      });
     }
     _spikeMarkers.push(...added);
     _cachedPriceMarkers.push(...added);
@@ -1191,6 +1213,65 @@ function rsxSettingsContextForChart(chartData) {
   return chartData === _backtest ? 'backtest' : 'live';
 }
 
+function applyLiveAnnotationLayer(storeData, options = {}) {
+  const chartData = _live;
+  if (!chartData?.candleSeries) return;
+
+  const annotationMap = storeData?.annotationMap instanceof Map
+    ? storeData.annotationMap
+    : (_liveStore()?.getAnnotationsMap() || new Map());
+  const wireAnnotations = storeData?.annotations || [];
+  const showPivots = options.showPivots !== false;
+
+  // Layer 1 — price pane: session trades + volume spikes (+ optional price-pane wire labels)
+  _rebuildPriceMarkerCache(annotationMap);
+  wireAnnotations.forEach((ann) => {
+    if (normalizeAnnotationPane(ann?.pane) !== 'price') return;
+    const native = annotationToNativeMarker(ann);
+    if (!native) return;
+    const { _rawTime, ...marker } = native;
+    _cachedPriceMarkers.push(marker);
+  });
+  _cachedPriceMarkers.sort((a, b) => a.time - b.time);
+  if (typeof _hooks.live.applyTradeMarkers === 'function') {
+    _hooks.live.applyTradeMarkers(_spikeMarkers);
+  } else {
+    _flushPriceMarkerCache();
+  }
+
+  // Layer 2 — wozduh pane: vol-cross grid markers merged with wire wozduh annotations
+  _rebuildWozduhMarkerCache(annotationMap);
+  const wozduhWire = wireAnnotations
+    .filter((ann) => normalizeAnnotationPane(ann?.pane) === 'wozduh')
+    .map((ann) => {
+      const native = annotationToNativeMarker(ann);
+      if (!native) return null;
+      const { _rawTime, ...marker } = native;
+      return marker;
+    })
+    .filter(Boolean);
+  if (wozduhWire.length) {
+    _cachedWozduhMarkers = [..._cachedWozduhMarkers, ...wozduhWire]
+      .sort((a, b) => a.time - b.time);
+  }
+  _flushWozduhMarkerCache(chartData);
+
+  // Layer 3 — rsx pane: pivot / signal wire annotations (single setMarkers per series)
+  const panes = getChartAnnotationPanes(chartData);
+  const rsxWire = wireAnnotations.filter((ann) => normalizeAnnotationPane(ann?.pane) === 'rsx');
+  if (panes.rsx) {
+    applyUniversalAnnotations({ rsx: panes.rsx }, rsxWire, {}, { showPivots });
+  }
+}
+
+function applyLiveAnnotationLayerFromSnapshot(snapshot, annotationMap, options = {}) {
+  const storeData = {
+    annotations: snapshot?.annotations || [],
+    annotationMap: annotationMap instanceof Map ? annotationMap : new Map(),
+  };
+  applyLiveAnnotationLayer(storeData, options);
+}
+
 function applyUniversalAnnotations(chartPanes, annotations, seriesTimesByPane = {}, options = {}) {
   if (!chartPanes) return;
   const showPivots = options.showPivots !== false;
@@ -1285,7 +1366,7 @@ function renderFibZones(zones) {
   if (!ToolbarController.isFibEnabled()) return;
   lastFibZones.forEach((z) => {
     if (!z.isActive || !Number.isFinite(z.price)) return;
-    const color = z.ratio === 0.618 ? '#e3b341' : 'rgba(120,123,134,0.7)';
+    const color = z.ratio === 0.618 ? _themeColor('fibGolden', '#e3b341') : _themeColor('fibMuted', 'rgba(120,123,134,0.7)');
     _fibPriceLines.push(_live.candleSeries.createPriceLine(normalizePriceLineLevel({
       price: z.price,
       color,
@@ -1563,7 +1644,7 @@ function initEquityChart() {
     autoSize: false,
     width,
     height,
-    layout: { ...sharedChartLayout(), background: { type: 'solid', color: TV.bg }, textColor: '#d1d4dc' },
+    layout: { ...sharedChartLayout(), background: { type: 'solid', color: TV.bg }, textColor: _themeColor('textBright', '#d1d4dc') },
     grid: {
       vertLines: { color: TV.grid },
       horzLines: { color: TV.grid },
@@ -1581,7 +1662,7 @@ function initEquityChart() {
   });
 
   _equitySeries = _equityChart.addLineSeries({
-    color: TV.green,
+    color: _themeColor('bull', TV.green),
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: true,
@@ -1719,13 +1800,6 @@ function _applyFullDataInternal(context, storeData, options = {}) {
   if (context === 'live' && typeof ToolbarController !== 'undefined') {
     ToolbarController.updateVolume(storeData.candles);
   }
-  if (context === 'live') {
-    const annotationMap = storeData?.annotationMap instanceof Map
-      ? storeData.annotationMap
-      : (_liveStore()?.getAnnotationsMap() || new Map());
-    _rebuildPriceMarkerCache(annotationMap);
-    _rebuildWozduhMarkerCache(annotationMap);
-  }
   // Phase 6 DDR cutover: legacy oscillator paint disabled for live chart.
   if (!ddrOscCutoverActive(context)) {
     applyOscillatorToChart(chartData, storeData.osc, storeData.annotations);
@@ -1736,12 +1810,8 @@ function _applyFullDataInternal(context, storeData, options = {}) {
       applyWozduhVisibilityToChart(chartData, context);
     }
   }
-  if (context === 'live') {
-    if (typeof _hooks.live.applyTradeMarkers === 'function') {
-      _hooks.live.applyTradeMarkers(_spikeMarkers);
-    } else {
-      _flushPriceMarkerCache();
-    }
+  if (context === 'live' && !options.skipAnnotations) {
+    applyLiveAnnotationLayer(storeData, options);
   }
 }
 
@@ -1775,9 +1845,9 @@ function applyWozduhVisibilityFromPrefs(chartData, prefs) {
 }
 
 function applyAllMarkersFromState() {
-  const map = _liveStore()?.getAnnotationsMap() || new Map();
-  _rebuildPriceMarkerCache(map);
-  _flushPriceMarkerCache();
+  const store = _liveStore();
+  if (!store) return;
+  applyLiveAnnotationLayer(store.getForLightweightCharts());
 }
 
 function _applyDeltaInternal(context, delta, options = {}) {
@@ -1951,6 +2021,10 @@ const ChartAdapter = {
 
   applyFullData(context, storeData, options = {}) {
     _applyFullDataInternal(context, storeData, options);
+  },
+
+  applyLiveAnnotationLayer(storeData, options = {}) {
+    applyLiveAnnotationLayer(storeData, options);
   },
 
   applySimOverlay(context = 'backtest', payload = {}) {

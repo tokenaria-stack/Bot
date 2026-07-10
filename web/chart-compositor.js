@@ -75,8 +75,9 @@ class ChartCompositor {
   }
 
   _flushFull(storeData, snapshot, intent) {
-    ChartAdapter.applyFullData('live', storeData);
+    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
     this._applyDdrPlots(snapshot);
+    this._applyAnnotations(storeData);
 
     const nav = this._getNavigatorResult();
     if (nav) {
@@ -110,8 +111,9 @@ class ChartCompositor {
       ? intent.viewportRange
       : ChartAdapter.getVisibleLogicalRange('live');
 
-    ChartAdapter.applyFullData('live', storeData);
+    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
     this._applyDdrPlots(snapshot);
+    this._applyAnnotations(storeData);
 
     const addedBars = Number(intent.addedBars) || 0;
     if (
@@ -144,6 +146,16 @@ class ChartCompositor {
       sentinel: typeof DDRFactory !== 'undefined' ? DDRFactory.HISTORY_ABSENT : undefined,
     });
     window.DDRFactory.applyHydratedData();
+  }
+
+  _applyAnnotations(storeData) {
+    if (typeof ChartAdapter === 'undefined' || typeof ChartAdapter.applyLiveAnnotationLayer !== 'function') {
+      return;
+    }
+    const showPivots = (typeof rsxShowPivotsFrom === 'function' && typeof RsxController !== 'undefined')
+      ? rsxShowPivotsFrom(RsxController.getSettings('live'), true)
+      : true;
+    ChartAdapter.applyLiveAnnotationLayer(storeData, { showPivots });
   }
 
   static snapshotToStoreData(snapshot, annotationMap) {
