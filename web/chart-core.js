@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const PRICE_SCALE_MIN = 70;
+  const PRICE_SCALE_MIN = 75;
   /** @type {{ charts: object, candleSeries: object, volumeSeries: object, _syncingTimeScale: boolean, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
   let _live = null;
   let _liveUpdating = false;
@@ -95,7 +95,21 @@
   }
 
   function createSlaveChart(host, width, height) {
-    return createPaneChart(host, width, height, false);
+    return LightweightCharts.createChart(host, {
+      autoSize: false,
+      layout: layoutOptions(),
+      grid: gridOptions(),
+      crosshair: crosshairOptions(),
+      timeScale: unifiedTimeScaleOptions(false),
+      width,
+      height,
+      handleScroll: false,
+      handleScale: false,
+      rightPriceScale: priceScaleOptions({
+        mode: LightweightCharts.PriceScaleMode.Normal,
+        scaleMargins: { top: 0.05, bottom: 0.05 },
+      }),
+    });
   }
 
   function isFiniteLogicalRange(range) {

@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 2 done.** Sliding window (~3000) + time-anchor + epoch F1/F2 scheduler; `isRenderLocked` удалён. Осталось: geometry sync, whitespace DDR, freeze window across F1/F2.
+> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 3 done.** Window buffer 15000, slave handleScroll/Scale off, priceScale width 75, DDR whitespace. Осталось: freeze window across F1/F2 (optional), TF UI refactor.
 
 ---
 
@@ -28,7 +28,7 @@
 |------|------------|--------|
 | 1 | `extractWindow` sync-slice + ViewportManager time-anchor (убрать index math) | ✅ Shot 1 done |
 | 2 | Epoch open through F1+F2; queue deltas; remove bool lock | ✅ Shot 2 done |
-| 3 | Geometry width/barSpacing; whitespace DDR; freeze window across F1/F2 | ⏳ |
+| 3 | Geometry width/barSpacing; whitespace DDR; window buffer 15000; slave scroll lock | ✅ Shot 3 done |
 
 **Synchronous Slice Rule:** один индексный диапазон на `times`, все `candles.*`, все `plots[id]`.  
 **Render window:** LWC всегда ~3000 баров (хвост / окно), Store может расти.  

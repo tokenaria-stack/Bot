@@ -1,13 +1,12 @@
 /**
  * ChartCompositor — sole live-chart paint authority (Core 2.3).
- * Reads ColumnarStore snapshots; paints only via Sliding Render Window (~3000).
+ * Reads ColumnarStore snapshots; paints via Sliding Render Window (bounded buffer).
  * Writes to ChartAdapter only.
  */
 class ChartCompositor {
+  /** Soft RAM cap for LWC; large enough for left-scroll history, not infinite. */
   static get RENDER_WINDOW_LIMIT() {
-    return (typeof HISTORY_CHUNK_LIMIT !== 'undefined' && HISTORY_CHUNK_LIMIT > 0)
-      ? HISTORY_CHUNK_LIMIT
-      : 3000;
+    return 15000;
   }
 
   /**
@@ -29,10 +28,10 @@ class ChartCompositor {
   /**
    * Synchronous Slice Rule: same tail index range for times, candles.*, and every plots[id].
    * @param {object} snapshot
-   * @param {number} [limit=3000]
+   * @param {number} [limit=15000]
    * @returns {object}
    */
-  static extractWindow(snapshot, limit = 3000) {
+  static extractWindow(snapshot, limit = 15000) {
     if (!snapshot || !Array.isArray(snapshot.times)) return snapshot;
     const n = snapshot.times.length;
     if (n <= limit) return snapshot;

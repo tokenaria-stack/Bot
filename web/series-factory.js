@@ -138,26 +138,18 @@ class DDRFactory {
   static columnToLWC(times, values, sentinel, normalizeTime) {
     const n = Math.min(times.length, values.length);
     if (n === 0) return [];
-
     const norm = typeof normalizeTime === 'function' ? normalizeTime : DDRFactory.defaultNormalizeTime;
     const isAbsent = (v) => !Number.isFinite(v) || v >= sentinel;
 
-    let count = 0;
+    const out = [];
     for (let i = 0; i < n; i++) {
-      if (isAbsent(values[i])) continue;
       const t = norm(times[i]);
       if (t == null) continue;
-      count++;
-    }
-    if (count === 0) return [];
-
-    const out = new Array(count);
-    let j = 0;
-    for (let i = 0; i < n; i++) {
-      if (isAbsent(values[i])) continue;
-      const t = norm(times[i]);
-      if (t == null) continue;
-      out[j++] = { time: t, value: values[i] };
+      if (isAbsent(values[i])) {
+        out.push({ time: t }); // Whitespace point
+      } else {
+        out.push({ time: t, value: values[i] });
+      }
     }
     return out;
   }
