@@ -13,7 +13,7 @@ class RenderScheduler {
   }
 
   /**
-   * @param {{ mode: 'full'|'prepend'|'delta', addedBars?: number, viewport?: string, viewportRange?: object|null }} intent
+   * @param {{ mode: 'full'|'prepend'|'delta'|'indicators', addedBars?: number, viewport?: string, viewportRange?: object|null }} intent
    */
   markDirty(intent) {
     if (!intent?.mode) return;
@@ -32,7 +32,10 @@ class RenderScheduler {
   static _coalesce(prev, next) {
     if (!prev) return { ...next };
     if (next.mode === 'full') return { ...next };
-    if (prev.mode === 'full') return { ...next };
+    if (prev.mode === 'full') return { ...prev };
+    if (next.mode === 'indicators' && prev.mode === 'indicators') return { mode: 'indicators' };
+    if (prev.mode === 'indicators' && next.mode === 'delta') return { ...next };
+    if (prev.mode === 'delta' && next.mode === 'indicators') return { mode: 'indicators' };
     if (prev.mode === 'delta' && next.mode === 'delta') {
       return {
         mode: 'delta',

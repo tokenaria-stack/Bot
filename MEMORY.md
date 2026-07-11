@@ -899,6 +899,11 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **32** | **Overlay navigators in intent** | `backtest-pipeline.js`, `chart-projection.js` | 🟡 simOnly overlay без `result.navigators` в intent |
 | **33** | **`coversRange` not wired to `needsBaseReload`** | `backtest-pipeline.js`, `store.js` | 🟡 fingerprint-only reload policy |
 | **34** | **`runBacktest(autoSwitchTab)` dead param** | `web/app.js` | 🟢 не переключает на Backtest tab |
+| **35** | **DAG → TradeManager wiring (PAUSED)** | `strategy/master.go`, `core/runner.go` | ⏸ `DAGRunner` shadow-only; execution via legacy `Analyst` + `HasFinalSignal()` |
+| **36** | **TradeIntent wire contract** | `strategy/score_types.go`, WS/API | ⏸ нет единого payload side/qty/stop из `ScoreNode` → `execution.CalculateTargetQuantity` |
+| **37** | **Execution gate `isClosed` only** | `strategy/master.go` | ⏸ intra-bar DAG score не проводится в TradeManager |
+| **38** | **Risk/settings SSOT parity** | UI matrix vs DAG weights | ⏸ scoring weights должны совпадать с execution veto chain |
+| **39** | **ChiefAnalyst bus snapshot path** | `strategy/chief.go`, `master.ProcessTick` | ⏸ заменить entry path на post-`DAGRunner.TickUpdate` snapshot |
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * ChartCompositor — sole live-chart paint authority (Core 3.0 Step 2).
+ * ChartCompositor — sole live-chart paint authority (Core 3.0 Step 2 + Soft Updates).
  * Reads ColumnarStore snapshots; writes to ChartAdapter only.
  */
 class ChartCompositor {
@@ -20,7 +20,7 @@ class ChartCompositor {
   }
 
   /**
-   * @param {{ mode: 'full'|'prepend'|'delta', addedBars?: number, viewport?: string, viewportRange?: object|null, anchor?: object, tick?: object, delta?: object }} intent
+   * @param {{ mode: 'full'|'prepend'|'delta'|'indicators', addedBars?: number, viewport?: string, viewportRange?: object|null, anchor?: object, tick?: object, delta?: object }} intent
    */
   flush(intent) {
     if (!this._store || !this._shouldPaint()) return;
@@ -28,6 +28,11 @@ class ChartCompositor {
 
     if (intent.mode === 'delta') {
       this._flushDelta(intent);
+      return;
+    }
+
+    if (intent.mode === 'indicators') {
+      this._flushIndicators(intent);
       return;
     }
 
@@ -49,6 +54,29 @@ class ChartCompositor {
       } else {
         this._flushFull(storeData, snapshot, intent);
       }
+    } finally {
+      ChartAdapter.setLiveUpdating(false);
+      if (this._onAfterFlush) this._onAfterFlush(intent);
+    }
+  }
+
+  /**
+   * Soft update: DDR plots (+ annotations) only — never setData on price candles.
+   */
+  _flushIndicators(intent) {
+    if (!this._store.invariantOk()) {
+      console.error('[ChartCompositor] invariant failed — skip indicators', this._store.invariantMeta());
+      return;
+    }
+    const snapshot = this._store.snapshot();
+    ChartAdapter.setLiveUpdating(true);
+    try {
+      this._applyDdrPlots(snapshot);
+      const storeData = ChartCompositor.snapshotToStoreData(
+        snapshot,
+        this._store.getAnnotationsMap(),
+      );
+      this._applyAnnotations(storeData);
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
@@ -95,7 +123,7 @@ class ChartCompositor {
     if (intent.viewport === 'fresh' || intent.viewport == null) {
       const charts = [
         ChartAdapter.getChart('live', 'price'),
-        ChartAdapter.getChart('live', 'osc'),
+        ChartAdapter.getChart('live', 'wozduh'),
         ChartAdapter.getChart('live', 'rsx'),
       ];
       charts.forEach((chart) => {
@@ -106,7 +134,6 @@ class ChartCompositor {
 
   _flushPrepend(storeData, snapshot, intent) {
     const chart = ChartAdapter.getChart('live', 'price');
-    const ts = chart?.timeScale();
     const prevRange = intent.viewportRange != null
       ? intent.viewportRange
       : ChartAdapter.getVisibleLogicalRange('live');
@@ -117,16 +144,20 @@ class ChartCompositor {
 
     const addedBars = Number(intent.addedBars) || 0;
     if (
-      ts
-      && prevRange != null
+      prevRange != null
       && Number.isFinite(prevRange.from)
       && Number.isFinite(prevRange.to)
       && addedBars > 0
     ) {
-      ts.setVisibleLogicalRange({
+      const range = {
         from: prevRange.from + addedBars,
         to: prevRange.to + addedBars,
-      });
+      };
+      if (typeof ChartAdapter.setVisibleLogicalRange === 'function') {
+        ChartAdapter.setVisibleLogicalRange('live', range, { animate: false });
+      } else {
+        chart?.timeScale()?.setVisibleLogicalRange(range);
+      }
     }
 
     const nav = this._getNavigatorResult();

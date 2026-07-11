@@ -78,6 +78,23 @@ class ColumnarStore {
     };
   }
 
+  /**
+   * Soft update: replace/add plot columns only. Never mutates _times or _candles.
+   * Arrays are padded/truncated to current barCount for invariant safety.
+   * @param {Record<string, number[]>} newPlots
+   */
+  updatePlots(newPlots) {
+    if (!newPlots || typeof newPlots !== 'object') return;
+    const n = this._times.length;
+    const absent = ColumnarStore.plotAbsent();
+    for (const [id, col] of Object.entries(newPlots)) {
+      if (!Array.isArray(col)) continue;
+      const next = col.slice(0, n);
+      while (next.length < n) next.push(absent);
+      this._plots[id] = next;
+    }
+  }
+
   mergeAnnotations(annotations) {
     if (!Array.isArray(annotations)) return;
     this._annotations = annotations.slice();

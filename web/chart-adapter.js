@@ -190,6 +190,11 @@ function ensureMtfNavigatorLayers(chartData) {
 }
 
 function getNavigatorPriceChart(chartData, pane) {
+  if (chartData?.charts) {
+    if (pane === 'rsx') return chartData.charts.rsx || null;
+    if (pane === 'wozduh' || pane === 'osc') return chartData.charts.wozduh || null;
+    return chartData.charts.price || chartData.chart || null;
+  }
   return chartData?.chart || null;
 }
 
@@ -361,7 +366,7 @@ function createWozduxChartOptions(width, height) {
       horzLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
     },
     crosshair: { ...SHARED_CROSSHAIR },
-    timeScale: chartTimeScaleOptions(),
+    timeScale: { ...chartTimeScaleOptions(), visible: false },
     width,
     height,
     rightPriceScale: sharedRightPriceScaleOptions({
@@ -597,12 +602,18 @@ function initPriceScaleControls(chartData) {
 
 function destroyChartInstance(chartData) {
   if (chartData?._disposers && Array.isArray(chartData._disposers)) {
-    chartData._disposers.forEach((fn) => fn());
+    chartData._disposers.forEach((fn) => {
+      if (typeof fn === 'function') fn();
+    });
     chartData._disposers = [];
   }
-  if (chartData?.chart) {
-    try { chartData.chart.remove(); } catch { /* noop */ }
-  }
+  const charts = chartData?.charts
+    ? [chartData.charts.price, chartData.charts.wozduh, chartData.charts.rsx]
+    : [chartData?.chart];
+  charts.forEach((chart) => {
+    if (!chart) return;
+    try { chart.remove(); } catch { /* noop */ }
+  });
 }
 
 function exitFullscreenPane() {
@@ -683,7 +694,7 @@ function applyIndicatorConfigStyles(chartData) {
 
 function reinitBacktestChart() {
   destroyChartInstance(_backtest);
-  _backtest = initMonolithChart('backtest', 'backtest-chart-container', {
+  _backtest = initMultiPaneCharts('backtest', 'backtest-chart-container', {
     selectors: BACKTEST_CHART_SELECTORS,
     overlayTrades: true,
     navigatorPlugin: true,
@@ -723,9 +734,6 @@ function ensureBacktestChart() {
   if (!_backtest.chart) return false;
   applyWozduhVisibilityToChart(_backtest, 'backtest');
   if (typeof _hooks.backtest.onBacktestInit === 'function') _hooks.backtest.onBacktestInit(_backtest);
-  // #region agent log
-  fetch('http://127.0.0.1:7650/ingest/e96d7e9c-02c2-4eef-b8f6-4424f0be67d3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'39f875'},body:JSON.stringify({sessionId:'39f875',runId:'bt-black-screen-diagnosis',hypothesisId:'H5',location:'web/chart-adapter.js:ensureBacktestChart:initialized',message:'Backtest chart created',data:{ok:!!_backtest?.chart,rootW:_backtest?.root?.clientWidth??null,rootH:_backtest?.root?.clientHeight??null,containerW:_backtest?.elements?.chartContainer?.clientWidth??null,containerH:_backtest?.elements?.chartContainer?.clientHeight??null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return true;
 }
 
@@ -802,93 +810,263 @@ function applyStaticAreas(chartData, paneKey, times, osc) {
   });
 }
 
-function initMonolithChart(context, containerId, options = {}) {
+function _hostSize(el, fallbackW = 800, fallbackH = 200) {
+  const w = Math.max(el?.clientWidth || 0, fallbackW);
+  const h = Math.max(el?.clientHeight || 0, fallbackH);
+  return { width: w, height: h };
+}
+
+function _paneCharts(chartData) {
+  if (chartData?.charts) {
+    return [chartData.charts.price, chartData.charts.wozduh, chartData.charts.rsx].filter(Boolean);
+  }
+  return chartData?.chart ? [chartData.chart] : [];
+}
+
+function _primarySeriesForChart(chartData, chart) {
+  if (!chartData || !chart) return null;
+  if (chart === chartData.charts?.price || chart === chartData.chart) {
+    return chartData.candleSeries || chartData.barSeries || chartData.lineSeries;
+  }
+  if (chart === chartData.charts?.wozduh) {
+    return chartData.wozduxSeries?.rsiPrice
+      || chartData.wozduxSeries?.rsiVolSlow
+      || chartData.wozduhDownSeries
+      || Object.values(chartData.wozduxSeries || {})[0]
+      || null;
+  }
+  if (chart === chartData.charts?.rsx) {
+    return chartData.rsxSeries || chartData.rsxSignalSeries || null;
+  }
+  return chartData.candleSeries || null;
+}
+
+/**
+ * Bidirectional TimeScale sync with reentrancy guard (Master = price).
+ */
+function syncTimeScale(chartData) {
+  const charts = _paneCharts(chartData);
+  if (charts.length < 2) return;
+
+  charts.forEach((source) => {
+    source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (!range || chartData._syncingTimeScale) return;
+      if (chartData._context === 'live' && _liveUpdating) return;
+      chartData._syncingTimeScale = true;
+      try {
+        charts.forEach((target) => {
+          if (target === source) return;
+          syncVisibleLogicalRange(target, range, { animate: false });
+        });
+      } finally {
+        chartData._syncingTimeScale = false;
+      }
+    });
+  });
+}
+
+/**
+ * Bidirectional Crosshair sync with reentrancy guard — breaks A→B→A event loops.
+ */
+function syncCrosshair(chartData) {
+  const charts = _paneCharts(chartData);
+  if (charts.length < 2) return;
+
+  charts.forEach((source) => {
+    source.subscribeCrosshairMove((param) => {
+      if (chartData._syncingCrosshair) return;
+      chartData._syncingCrosshair = true;
+      try {
+        if (param?.time == null) {
+          charts.forEach((target) => {
+            if (target !== source && typeof target.clearCrosshairPosition === 'function') {
+              target.clearCrosshairPosition();
+            }
+          });
+          return;
+        }
+        charts.forEach((target) => {
+          if (target === source) return;
+          const series = _primarySeriesForChart(chartData, target);
+          if (!series || typeof target.setCrosshairPosition !== 'function') return;
+          let price = 0;
+          const seriesData = param.seriesData?.get?.(series);
+          if (seriesData && Number.isFinite(seriesData.value)) price = seriesData.value;
+          else if (seriesData && Number.isFinite(seriesData.close)) price = seriesData.close;
+          else {
+            const sourceSeries = _primarySeriesForChart(chartData, source);
+            const srcData = sourceSeries ? param.seriesData?.get?.(sourceSeries) : null;
+            if (srcData && Number.isFinite(srcData.value)) price = srcData.value;
+            else if (srcData && Number.isFinite(srcData.close)) price = srcData.close;
+          }
+          target.setCrosshairPosition(price, param.time, series);
+        });
+      } finally {
+        chartData._syncingCrosshair = false;
+      }
+    });
+  });
+}
+
+function setVisibleLogicalRangeAll(chartData, range, options = {}) {
+  if (!chartData || !range) return;
+  const charts = _paneCharts(chartData);
+  const prev = chartData._syncingTimeScale;
+  chartData._syncingTimeScale = true;
+  try {
+    charts.forEach((chart) => syncVisibleLogicalRange(chart, range, options));
+  } finally {
+    chartData._syncingTimeScale = prev;
+  }
+}
+
+function bindFlexSplitters(chartData) {
+  const stack = chartData?.root?.querySelector?.('.charts-stack');
+  if (!stack || stack._flexSplittersBound) return;
+  stack._flexSplittersBound = true;
+
+  const readFlex = (el, fallback) => {
+    const grow = Number.parseFloat(el.style.flexGrow);
+    if (Number.isFinite(grow) && grow > 0) return grow;
+    const fromShorthand = Number.parseFloat(el.style.flex);
+    if (Number.isFinite(fromShorthand) && fromShorthand > 0) return fromShorthand;
+    return fallback;
+  };
+
+  stack.querySelectorAll('.pane-splitter').forEach((splitter) => {
+    splitter.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      splitter.setPointerCapture(e.pointerId);
+      const boundary = splitter.dataset.boundary;
+      const priceWrap = chartData.elements?.priceWrap;
+      const oscWrap = chartData.elements?.oscWrap;
+      const rsxWrap = chartData.elements?.rsxWrap;
+      const stackRect = stack.getBoundingClientRect();
+
+      const onMove = (moveEvent) => {
+        const y = ((moveEvent.clientY - stackRect.top) / stackRect.height) * 100;
+        if (boundary === 'price-wozduh' && priceWrap && oscWrap) {
+          const rsxFlex = readFlex(rsxWrap, 23);
+          const available = 100 - rsxFlex;
+          let priceW = Math.max(15, Math.min(available - 10, y));
+          let oscW = available - priceW;
+          priceWrap.style.flex = `${priceW} 1 0`;
+          oscWrap.style.flex = `${oscW} 1 0`;
+        } else if (boundary === 'wozduh-rsx' && oscWrap && rsxWrap && priceWrap) {
+          const priceFlex = readFlex(priceWrap, 55);
+          const available = 100 - priceFlex;
+          let oscW = Math.max(10, Math.min(available - 10, y - priceFlex));
+          let rsxW = available - oscW;
+          oscWrap.style.flex = `${oscW} 1 0`;
+          rsxWrap.style.flex = `${rsxW} 1 0`;
+        }
+        resizeChartInstance(chartData);
+      };
+
+      const onUp = (upEvent) => {
+        splitter.releasePointerCapture(upEvent.pointerId);
+        splitter.removeEventListener('pointermove', onMove);
+        splitter.removeEventListener('pointerup', onUp);
+        splitter.removeEventListener('pointercancel', onUp);
+      };
+
+      splitter.addEventListener('pointermove', onMove);
+      splitter.addEventListener('pointerup', onUp);
+      splitter.addEventListener('pointercancel', onUp);
+    });
+  });
+}
+
+function initMultiPaneCharts(context, containerId, options = {}) {
   if (typeof LightweightCharts === 'undefined') return null;
 
   const selectors = options.selectors || (context === 'backtest' ? BACKTEST_CHART_SELECTORS : LIVE_CHART_SELECTORS);
   const root = document.getElementById(containerId);
-  const chartContainer = document.getElementById(selectors.chartContainer);
-  const chartHost = document.getElementById(selectors.priceWrap) || chartContainer?.parentElement;
+  const priceHost = document.getElementById(selectors.chartContainer);
+  const wozduhHost = document.getElementById(selectors.oscContainer);
+  const rsxHost = document.getElementById(selectors.rsxContainer);
+  const priceWrap = document.getElementById(selectors.priceWrap);
+  const oscWrap = document.getElementById(selectors.oscWrap);
+  const rsxWrap = document.getElementById(selectors.rsxWrap);
 
-  if (!root || !chartContainer || !chartHost) return null;
+  if (!root || !priceHost || !wozduhHost || !rsxHost) return null;
   if (!ensureChartLibraryStyles()) return null;
 
-  const width = Math.max(chartContainer.clientWidth || 0, root.clientWidth || 0, 800);
-  const height = Math.max(chartHost.clientHeight || 0, root.clientHeight || 0, 400);
+  const priceSize = _hostSize(priceHost, root.clientWidth || 800, priceWrap?.clientHeight || 280);
+  const wozSize = _hostSize(wozduhHost, root.clientWidth || 800, oscWrap?.clientHeight || 140);
+  const rsxSize = _hostSize(rsxHost, root.clientWidth || 800, rsxWrap?.clientHeight || 140);
 
-  const chart = LightweightCharts.createChart(chartContainer, {
-    autoSize: false,
-    layout: sharedChartLayout(),
-    localization: chartLocalizationOptions(),
-    grid: {
-      vertLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-      horzLines: { color: TV.grid, style: LightweightCharts.LineStyle.Dotted },
-    },
-    crosshair: { ...SHARED_CROSSHAIR },
-    timeScale: chartTimeScaleOptions(),
-    width,
-    height,
-    rightPriceScale: {
-      ...sharedRightPriceScaleOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic }),
-      minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
-    },
-  });
-
-  chart.priceScale('wozduh').applyOptions({
-    minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
-  });
-  chart.priceScale('rsx').applyOptions({
-    minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
-  });
+  const priceChart = LightweightCharts.createChart(priceHost, createPriceChartOptions(priceSize.width, priceSize.height));
+  const wozduhChart = LightweightCharts.createChart(wozduhHost, createWozduxChartOptions(wozSize.width, wozSize.height));
+  const rsxChart = LightweightCharts.createChart(rsxHost, createRSXChartOptions(rsxSize.width, rsxSize.height));
 
   const priceCfg = INDICATOR_CONFIG.price;
-  const candleSeries = chart.addCandlestickSeries({ ...priceCfg.candle, priceScaleId: 'right' });
-  const barSeries = chart.addBarSeries({ ...priceCfg.bar, priceScaleId: 'right' });
-  const lineSeries = createMTFOverlaySeries(chart, {
+  const candleSeries = priceChart.addCandlestickSeries({ ...priceCfg.candle, priceScaleId: 'right' });
+  const barSeries = priceChart.addBarSeries({ ...priceCfg.bar, priceScaleId: 'right' });
+  const lineSeries = createMTFOverlaySeries(priceChart, {
     ...priceCfg.line,
     priceScaleId: 'right',
     visible: priceCfg.line?.visible ?? false,
   });
-  const volumeSeries = chart.addHistogramSeries(priceCfg.volume);
-  chart.priceScale('volume').applyOptions(priceCfg.volumeScale);
+  const volumeSeries = priceChart.addHistogramSeries(priceCfg.volume);
 
-  const wozduhAreas = {};
-  INDICATOR_CONFIG.wozduh.areas.forEach((areaCfg) => {
-    wozduhAreas[areaCfg.id] = { series: createAreaSeries(chart, areaCfg, 'wozduh'), cfg: areaCfg };
+  const priceMargins = INDICATOR_CONFIG.price.priceScale?.scaleMargins || { top: 0.05, bottom: 0.22 };
+  const volumeMargins = INDICATOR_CONFIG.price.volumeScale?.scaleMargins || { top: 0.82, bottom: 0 };
+  priceChart.priceScale('right').applyOptions({
+    ...sharedRightPriceScaleOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic }),
+    scaleMargins: priceMargins,
+  });
+  priceChart.priceScale('volume').applyOptions({
+    scaleMargins: volumeMargins,
+    autoScale: true,
+    visible: true,
   });
 
-  const wozduxSeries = {};
-  Object.entries(INDICATOR_CONFIG.wozduh.lines).forEach(([seriesKey, lineCfg]) => {
-    wozduxSeries[seriesKey] = chart.addLineSeries({
-      ...wozduxLineSeriesOptions(lineCfg.style),
-      priceScaleId: 'wozduh',
+  const isLivePane = context === 'live';
+  let wozduhAreas = {};
+  let wozduxSeries = {};
+  let wozduxPriceLinesLocal = [];
+  let rsxAreas = {};
+  let rsxSeries = null;
+  let rsxSignalSeries = null;
+  let rsxPriceLinesLocal = [];
+
+  if (!isLivePane) {
+    INDICATOR_CONFIG.wozduh.areas.forEach((areaCfg) => {
+      wozduhAreas[areaCfg.id] = { series: createAreaSeries(wozduhChart, areaCfg, 'right'), cfg: areaCfg };
     });
-    wozduxSeries[lineCfg.dataKey] = wozduxSeries[seriesKey];
-  });
 
-  const wozduhLevelAnchor = wozduxSeries.rsiPrice || wozduxSeries.wozduh_wt1;
-  const wozduxPriceLinesLocal = addLevelLines(wozduhLevelAnchor, INDICATOR_CONFIG.wozduh.levels);
+    Object.entries(INDICATOR_CONFIG.wozduh.lines).forEach(([seriesKey, lineCfg]) => {
+      wozduxSeries[seriesKey] = wozduhChart.addLineSeries({
+        ...wozduxLineSeriesOptions(lineCfg.style),
+        priceScaleId: 'right',
+      });
+      wozduxSeries[lineCfg.dataKey] = wozduxSeries[seriesKey];
+    });
 
-  const rsxAreas = {};
-  INDICATOR_CONFIG.rsx.areas.forEach((areaCfg) => {
-    rsxAreas[areaCfg.id] = { series: createAreaSeries(chart, areaCfg, 'rsx'), cfg: areaCfg };
-  });
+    const wozduhLevelAnchor = wozduxSeries.rsiPrice || wozduxSeries.wozduh_wt1;
+    wozduxPriceLinesLocal = addLevelLines(wozduhLevelAnchor, INDICATOR_CONFIG.wozduh.levels);
 
-  const rsxLineCfg = INDICATOR_CONFIG.rsx.lines.rsx_main;
-  const rsxSeries = chart.addLineSeries({
-    ...withSeriesDefaults(rsxLineCfg.style),
-    priceScaleId: 'rsx',
-  });
-  const rsxSignalCfg = INDICATOR_CONFIG.rsx.lines.rsx_signal;
-  const rsxSignalSeries = chart.addLineSeries({
-    ...withSeriesDefaults(rsxSignalCfg.style),
-    priceScaleId: 'rsx',
-  });
-  const rsxPriceLinesLocal = addLevelLines(rsxSeries, INDICATOR_CONFIG.rsx.levels);
+    INDICATOR_CONFIG.rsx.areas.forEach((areaCfg) => {
+      rsxAreas[areaCfg.id] = { series: createAreaSeries(rsxChart, areaCfg, 'right'), cfg: areaCfg };
+    });
+
+    const rsxLineCfg = INDICATOR_CONFIG.rsx.lines.rsx_main;
+    rsxSeries = rsxChart.addLineSeries({
+      ...withSeriesDefaults(rsxLineCfg.style),
+      priceScaleId: 'right',
+    });
+    const rsxSignalCfg = INDICATOR_CONFIG.rsx.lines.rsx_signal;
+    rsxSignalSeries = rsxChart.addLineSeries({
+      ...withSeriesDefaults(rsxSignalCfg.style),
+      priceScaleId: 'right',
+    });
+    rsxPriceLinesLocal = addLevelLines(rsxSeries, INDICATOR_CONFIG.rsx.levels);
+  }
 
   let entryMarkerSeries = null;
   if (options.overlayTrades) {
-    entryMarkerSeries = createMTFOverlaySeries(chart, {
+    entryMarkerSeries = createMTFOverlaySeries(priceChart, {
       color: 'transparent',
       lineWidth: 0,
       priceScaleId: 'right',
@@ -904,11 +1082,13 @@ function initMonolithChart(context, containerId, options = {}) {
     priceNavigatorPlugin = new TrendlinePrimitive();
     candleSeries.attachPrimitive(priceNavigatorPlugin);
 
-    rsxNavigatorPlugin = new TrendlinePrimitive();
-    rsxSeries.attachPrimitive(rsxNavigatorPlugin);
+    if (!isLivePane && rsxSeries) {
+      rsxNavigatorPlugin = new TrendlinePrimitive();
+      rsxSeries.attachPrimitive(rsxNavigatorPlugin);
+    }
 
     const wozduhNavHost = wozduxSeries.rsiVolSlow || wozduxSeries.wozduh_wt2;
-    if (wozduhNavHost) {
+    if (!isLivePane && wozduhNavHost) {
       wozduhNavigatorPlugin = new TrendlinePrimitive();
       wozduhNavHost.attachPrimitive(wozduhNavigatorPlugin);
     }
@@ -919,20 +1099,14 @@ function initMonolithChart(context, containerId, options = {}) {
     candleSeries.attachPrimitive(tradeMarkerPlugin);
   }
 
-  let layoutManager = null;
-  if (typeof ChartLayoutManager !== 'undefined' && chartHost) {
-    layoutManager = new ChartLayoutManager(context, chartHost);
-    layoutManager.apply(chart);
-    layoutManager.initSplitters();
-  }
-
   const result = {
-    monolith: true,
+    multiPane: true,
+    monolith: false,
     _context: context,
-    chart,
+    chart: priceChart,
+    charts: { price: priceChart, wozduh: wozduhChart, rsx: rsxChart },
     containerId,
     root,
-    layoutManager,
     candleSeries,
     barSeries,
     lineSeries,
@@ -953,36 +1127,45 @@ function initMonolithChart(context, containerId, options = {}) {
     tradeMarkerPlugin,
     mtfNavigatorLayers: { price: {}, rsx: {}, wozduh: {} },
     elements: {
-      priceWrap: chartHost,
-      chartHost,
-      chartContainer,
-      oscWrap: document.getElementById(selectors.oscWrap),
-      rsxWrap: document.getElementById(selectors.rsxWrap),
+      priceWrap,
+      chartHost: priceWrap,
+      chartContainer: priceHost,
+      oscContainer: wozduhHost,
+      rsxContainer: rsxHost,
+      oscWrap,
+      rsxWrap,
     },
     priceScaleState: defaultPriceScaleState(),
     priceScaleMode: 'log',
     rulerAttached: false,
+    _syncingTimeScale: false,
+    _syncingCrosshair: false,
     _disposers: [],
   };
 
   initPriceScaleControls(result);
+  syncTimeScale(result);
+  syncCrosshair(result);
+  bindFlexSplitters(result);
 
-  const ro = new ResizeObserver((entries) => {
-    if (!entries || !entries.length) return;
-    const { width, height } = entries[0].contentRect;
-    if (width <= 0 || height <= 0) return;
-    chart.applyOptions({ width, height });
-    if (layoutManager) layoutManager.positionSplitters();
-    if (context === 'backtest' && typeof ChartProjection !== 'undefined') {
-      ChartProjection.trySync();
-    }
-  });
-  ro.observe(root);
-  result._resizeObserver = ro;
-  result._disposers.push(() => {
-    ro.disconnect();
-    result._resizeObserver = null;
-  });
+  const observeHost = (host, chart) => {
+    if (!host || !chart) return;
+    const ro = new ResizeObserver((entries) => {
+      if (!entries?.length) return;
+      const { width, height } = entries[0].contentRect;
+      if (width <= 0 || height <= 0) return;
+      chart.applyOptions({ width, height });
+      if (context === 'backtest' && typeof ChartProjection !== 'undefined') {
+        ChartProjection.trySync();
+      }
+    });
+    ro.observe(host);
+    result._disposers.push(() => ro.disconnect());
+  };
+
+  observeHost(priceHost, priceChart);
+  observeHost(wozduhHost, wozduhChart);
+  observeHost(rsxHost, rsxChart);
 
   return result;
 }
@@ -1022,14 +1205,22 @@ function attachChartHooks(chartData, hooks = {}, context = 'live') {
 }
 
 function resizeChartInstance(chartData) {
-  if (!chartData?.chart || !chartData?.elements?.chartContainer) return;
-  const el = chartData.elements.chartContainer;
-  const rect = el.getBoundingClientRect();
-  const w = rect.width || el.clientWidth || 800;
-  const h = rect.height || el.clientHeight || 400;
-
-  chartData.chart.applyOptions({ width: w, height: h });
-  chartData.layoutManager?.positionSplitters();
+  if (!chartData) return;
+  const resizeOne = (host, chart) => {
+    if (!host || !chart) return;
+    const rect = host.getBoundingClientRect();
+    const w = rect.width || host.clientWidth || 800;
+    const h = rect.height || host.clientHeight || 200;
+    if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
+  };
+  if (chartData.charts) {
+    resizeOne(chartData.elements?.chartContainer, chartData.charts.price);
+    resizeOne(chartData.elements?.oscContainer, chartData.charts.wozduh);
+    resizeOne(chartData.elements?.rsxContainer, chartData.charts.rsx);
+    return;
+  }
+  if (!chartData.chart || !chartData.elements?.chartContainer) return;
+  resizeOne(chartData.elements.chartContainer, chartData.chart);
 }
 
 function resizeChartForContainer(chartData, container) {
@@ -1052,8 +1243,9 @@ function handleResize() {
 }
 
 function fitChartInstance(chartData) {
-  if (!chartData?.chart?.timeScale) return;
-  chartData.chart.timeScale().fitContent();
+  _paneCharts(chartData).forEach((chart) => {
+    chart?.timeScale()?.fitContent();
+  });
 }
 
 function fitProfessionalChart(chartData) {
@@ -1102,9 +1294,9 @@ function setChartType(type) {
 }
 
 function applyOrderFlowTimeScale(enabled) {
-  if (_live?.chart) {
-    _live.chart.timeScale().applyOptions({ secondsVisible: enabled, timeVisible: true });
-  }
+  _paneCharts(_live).forEach((chart) => {
+    chart.timeScale().applyOptions({ secondsVisible: enabled, timeVisible: true });
+  });
 }
 
 function clearFibLines() {
@@ -1233,11 +1425,7 @@ function applyLiveAnnotationLayer(storeData, options = {}) {
     _cachedPriceMarkers.push(marker);
   });
   _cachedPriceMarkers.sort((a, b) => a.time - b.time);
-  if (typeof _hooks.live.applyTradeMarkers === 'function') {
-    _hooks.live.applyTradeMarkers(_spikeMarkers);
-  } else {
-    _flushPriceMarkerCache();
-  }
+  _flushPriceMarkerCache();
 
   // Layer 2 — wozduh pane: vol-cross grid markers merged with wire wozduh annotations
   _rebuildWozduhMarkerCache(annotationMap);
@@ -1350,14 +1538,6 @@ function updateRsxPoint(time, value, color, marker, rsxSignal, chartData = _live
       { showPivots },
     );
   }
-}
-
-function applyAllMarkers() {
-  const showSpike = ToolbarController.isSpikeEnabled();
-  const combined = [...tradeMarkers];
-  if (showSpike) combined.push(...spikeMarkers);
-  combined.sort((a, b) => a.time - b.time);
-  _live.candleSeries.setMarkers(combined);
 }
 
 function renderFibZones(zones) {
@@ -1707,9 +1887,6 @@ function updateAllPriceSeries(bar) {
     const liveCandles = _liveCandles();
     ToolbarController.updateVolume(liveCandles.length ? liveCandles : [normalized]);
   }
-  if (tradeMarkers.length > 0) {
-    applyAllMarkers();
-  }
 }
 
 function rulerPriceSeries(chartData) {
@@ -1844,10 +2021,15 @@ function applyWozduhVisibilityFromPrefs(chartData, prefs) {
   });
 }
 
-function applyAllMarkersFromState() {
+function refreshPriceMarkersFromStore() {
   const store = _liveStore();
   if (!store) return;
-  applyLiveAnnotationLayer(store.getForLightweightCharts());
+  _rebuildPriceMarkerCache(store.getAnnotationsMap());
+  _flushPriceMarkerCache();
+}
+
+function applyAllMarkersFromState() {
+  refreshPriceMarkersFromStore();
 }
 
 function _applyDeltaInternal(context, delta, options = {}) {
@@ -1922,10 +2104,14 @@ function destroyLiveCharts() {
   destroyChartInstance(_live);
 
   const selectors = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_CHART_SELECTORS) || {
-    chartContainer: 'chart-container',
+    chartContainer: 'price-chart',
+    oscContainer: 'wozduh-chart',
+    rsxContainer: 'rsx-chart',
   };
-  const chartEl = document.getElementById(selectors.chartContainer);
-  if (chartEl) chartEl.innerHTML = '';
+  [selectors.chartContainer, selectors.oscContainer, selectors.rsxContainer].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
 
   _live = {};
   _chartInitialized = false;
@@ -1951,7 +2137,7 @@ function _clearSeries(context) {
 }
 
 function _initChartPair(containerId, context, options = {}) {
-  const chartData = initMonolithChart(context, containerId, options);
+  const chartData = initMultiPaneCharts(context, containerId, options);
   if (!chartData) return null;
   chartData._context = context;
   if (context === 'live') _live = chartData;
@@ -2011,11 +2197,7 @@ const ChartAdapter = {
     const h = chartData.root.clientHeight;
     const ready = w > 0 && h > 0;
     if (!ready) return false;
-    chartData.chart.applyOptions({ width: w, height: h });
-    if (chartData.layoutManager) {
-      chartData.layoutManager.apply(chartData.chart);
-      chartData.layoutManager.positionSplitters();
-    }
+    resizeChartInstance(chartData);
     return ready;
   },
 
@@ -2050,7 +2232,14 @@ const ChartAdapter = {
   },
 
   getChart(context, pane = 'price') {
-    return _ctxData(context)?.chart || null;
+    const data = _ctxData(context);
+    if (!data) return null;
+    if (data.charts) {
+      if (pane === 'osc' || pane === 'wozduh') return data.charts.wozduh || null;
+      if (pane === 'rsx') return data.charts.rsx || null;
+      return data.charts.price || data.chart || null;
+    }
+    return data.chart || null;
   },
 
   isInitialized(context) {
@@ -2092,8 +2281,14 @@ const ChartAdapter = {
 
   setPaneVisibility(context, paneKey, isVisible) {
     const chartData = _ctxData(context);
-    if (!chartData?.monolith || !chartData.layoutManager) return;
-    chartData.layoutManager.setPaneVisibility(paneKey, isVisible, chartData.chart);
+    if (!chartData?.elements) return;
+    const wrap = paneKey === 'wozduh' || paneKey === 'osc'
+      ? chartData.elements.oscWrap
+      : paneKey === 'rsx'
+        ? chartData.elements.rsxWrap
+        : chartData.elements.priceWrap;
+    if (wrap) wrap.style.display = isVisible ? '' : 'none';
+    resizeChartInstance(chartData);
   },
 
   applyOrderFlowTimeScale(enabled) { applyOrderFlowTimeScale(enabled); },
@@ -2114,7 +2309,6 @@ const ChartAdapter = {
   setTradeMarkers(markers) {
     _tradeMarkers = markers || [];
     _cachedPriceMarkers = [..._tradeMarkers, ..._spikeMarkers].sort((a, b) => a.time - b.time);
-    _flushPriceMarkerCache();
   },
 
   setSpikeMarkers(markers) {
@@ -2122,7 +2316,9 @@ const ChartAdapter = {
     _cachedPriceMarkers = [..._tradeMarkers, ..._spikeMarkers].sort((a, b) => a.time - b.time);
   },
 
-  applyAllMarkers() { applyAllMarkersFromState(); },
+  applyAllMarkers() { refreshPriceMarkersFromStore(); },
+
+  refreshPriceMarkers() { refreshPriceMarkersFromStore(); },
 
   initEquity() { initEquityChart(); },
 
@@ -2151,9 +2347,7 @@ const ChartAdapter = {
     } else if (legendId === 'wozduh') {
       if (visible) applyWozduhVisibilityToChart(chartData, context);
       else Object.values(chartData.wozduxSeries || {}).forEach((s) => s?.applyOptions({ visible: false }));
-      if (chartData.monolith && chartData.layoutManager) {
-        chartData.layoutManager.setPaneVisibility('wozduh', visible, chartData.chart);
-      }
+      ChartAdapter.setPaneVisibility(context, 'wozduh', visible);
     } else if (legendId === 'rsx') {
       chartData.rsxSeries?.applyOptions({ visible });
       chartData.rsxSignalSeries?.applyOptions({ visible });
@@ -2161,9 +2355,7 @@ const ChartAdapter = {
         chartData.rsxSeries?.applyOptions({ visible: false });
         chartData.rsxSignalSeries?.applyOptions({ visible: false });
       }
-      if (chartData.monolith && chartData.layoutManager) {
-        chartData.layoutManager.setPaneVisibility('rsx', visible, chartData.chart);
-      }
+      ChartAdapter.setPaneVisibility(context, 'rsx', visible);
     } else if (legendId === 'trendlines') {
       const plugin = getNavigatorPluginForPane(chartData, pane);
       plugin?.setLinesVisible(visible);
@@ -2225,6 +2417,10 @@ const ChartAdapter = {
 
   syncVisibleLogicalRange(chart, range, options = {}) {
     syncVisibleLogicalRange(chart, range, options);
+  },
+
+  setVisibleLogicalRange(context, range, options = {}) {
+    setVisibleLogicalRangeAll(_ctxData(context), range, options);
   },
 
   applyBacktestMarkers(trades, osc) {

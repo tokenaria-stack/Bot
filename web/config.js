@@ -389,18 +389,18 @@ const LIVE_CHART_SELECTORS = {
   priceWrap: 'price-wrap',
   oscWrap: 'osc-wrap',
   rsxWrap: 'rsx-wrap',
-  chartContainer: 'chart-container',
-  oscContainer: 'osc-container',
-  rsxContainer: 'rsx-container',
+  chartContainer: 'price-chart',
+  oscContainer: 'wozduh-chart',
+  rsxContainer: 'rsx-chart',
 };
 
 const BACKTEST_CHART_SELECTORS = {
   priceWrap: 'bt-price-wrap',
   oscWrap: 'bt-osc-wrap',
   rsxWrap: 'bt-rsx-wrap',
-  chartContainer: 'bt-chart-container',
-  oscContainer: 'bt-osc-container',
-  rsxContainer: 'bt-rsx-container',
+  chartContainer: 'bt-price-chart',
+  oscContainer: 'bt-wozduh-chart',
+  rsxContainer: 'bt-rsx-chart',
 };
 
 const PANE_STACK_CONFIG = {

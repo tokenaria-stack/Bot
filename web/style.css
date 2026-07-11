@@ -551,29 +551,88 @@
 .charts-stack {
   display: flex;
   flex-direction: column;
-  flex: 1 1 100%;
-  min-height: 0;
+  flex: 1;
   height: 100%;
+  min-height: 0;
   position: relative;
+}
+
+#price-chart {
+  flex: 55;
+  min-height: 150px;
+  position: relative;
+  width: 100%;
+}
+
+#wozduh-chart {
+  flex: 22;
+  min-height: 100px;
+  position: relative;
+  width: 100%;
+}
+
+#rsx-chart {
+  flex: 23;
+  min-height: 100px;
+  position: relative;
+  width: 100%;
+}
+
+#bt-price-chart {
+  flex: 55;
+  min-height: 150px;
+  position: relative;
+  width: 100%;
+}
+
+#bt-wozduh-chart {
+  flex: 22;
+  min-height: 100px;
+  position: relative;
+  width: 100%;
+}
+
+#bt-rsx-chart {
+  flex: 23;
+  min-height: 100px;
+  position: relative;
+  width: 100%;
 }
 
 .chart-host,
 #price-wrap,
-#bt-price-wrap {
+#bt-price-wrap,
+#osc-wrap,
+#bt-osc-wrap,
+#rsx-wrap,
+#bt-rsx-wrap {
   display: flex;
   flex-direction: column;
-  flex: 1 1 100%;
   min-height: 0;
-  height: 100%;
   position: relative;
 }
 
-#chart-container,
-#bt-chart-container,
+#price-wrap,
+#bt-price-wrap {
+  flex: 55 1 0;
+}
+
+#osc-wrap,
+#bt-osc-wrap {
+  flex: 22 1 0;
+}
+
+#rsx-wrap,
+#bt-rsx-wrap {
+  flex: 23 1 0;
+}
+
+.lwc-host,
 #backtest-chart-container {
   display: flex;
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   position: relative;
 }
 

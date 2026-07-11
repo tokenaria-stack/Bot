@@ -319,7 +319,7 @@ async function reloadRsxChartFromServer() {
     const tf = getLiveStoreTf();
     const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
     const endTimeSec = liveColumnarStore.lastTimeSec() ?? Math.floor(Date.now() / 1000);
-    const limit = Math.max(liveColumnarStore.barCount(), 300);
+    const limit = Math.max(liveColumnarStore.barCount(), 3000);
     const columnar = await API.fetchColumnarHistory({
       tf,
       endTimeSec,
@@ -329,13 +329,16 @@ async function reloadRsxChartFromServer() {
       symbol,
     });
     if (reloadVersion !== rsxChartReloadVersion) return;
-    if (!columnar?.times?.length) return;
+    if (!columnar?.plots || typeof columnar.plots !== 'object') return;
 
     beginDataUpdate();
     try {
-      liveColumnarStore.replaceMonolith(columnar);
+      liveColumnarStore.updatePlots(columnar.plots);
+      if (Array.isArray(columnar.annotations) && columnar.annotations.length) {
+        liveColumnarStore.mergeAnnotations(columnar.annotations);
+      }
       if (liveRenderScheduler && liveColumnarStore.invariantOk()) {
-        liveRenderScheduler.markDirty({ mode: 'full' });
+        liveRenderScheduler.markDirty({ mode: 'indicators' });
       }
     } finally {
       endDataUpdate();
@@ -924,6 +927,7 @@ function applyTradeMarkers() {
     .filter(Boolean)
     .sort((a, b) => a.time - b.time);
   ChartAdapter.setTradeMarkers(tradeMarkers);
+  ChartAdapter.refreshPriceMarkers();
 }
 
 
@@ -1062,6 +1066,12 @@ function applySeriesData() {
   updateBufferingOverlay();
 }
 
+function liveCandlesFromColumnar() {
+  if (!liveColumnarStore?.barCount()) return [];
+  const snap = liveColumnarStore.snapshot();
+  return columnarToCandles({ times: snap.times, candles: snap.candles });
+}
+
 function commitLiveHeaderState(data, options = {}) {
   syncTradingTimeframeFromState(data);
   ToolbarController.updateHeaderData(data);
@@ -1069,14 +1079,7 @@ function commitLiveHeaderState(data, options = {}) {
     lastTickBufferLen = data.tickBufferLen;
   }
 
-  const candles = Array.isArray(data.candles) && data.candles.length
-    ? toCandles(data.candles)
-    : (liveColumnarStore?.barCount()
-      ? columnarToCandles({
-        times: liveColumnarStore.snapshot().times,
-        candles: liveColumnarStore.snapshot().candles,
-      })
-      : []);
+  const candles = liveCandlesFromColumnar();
 
   const masterState = data.masterState || deriveBotStatus({ ...data, trades: data.trades });
   mergeSessionTrades(data.trades, {
@@ -1084,7 +1087,9 @@ function commitLiveHeaderState(data, options = {}) {
     lastCandleTime: candles.length ? candles[candles.length - 1].time : null,
   });
 
-  historyHasMore = typeof data.hasMore === 'boolean' ? data.hasMore : candles.length > 0;
+  historyHasMore = typeof data.hasMore === 'boolean'
+    ? data.hasMore
+    : (liveColumnarStore?.barCount() > 0);
   if (data.navigators) {
     liveNavigatorResult = data.navigators;
   }
@@ -1194,7 +1199,7 @@ async function pollOrderFlowState() {
     }
     if (liveColumnarStore && liveRenderScheduler) {
       liveColumnarStore.replaceMonolith(rowsPayloadToColumnar(candles, data.annotations));
-      commitLiveHeaderState({ ...data, candles, hasMore: data.hasMore });
+      commitLiveHeaderState({ ...data, hasMore: data.hasMore });
       liveRenderScheduler.markDirty({ mode: 'full', viewport: 'fresh' });
     }
     ChartAdapter.setChartInitialized(true);
@@ -1891,11 +1896,13 @@ function safeInit(moduleName, fn) {
 }
 
 function buildLiveDDRChartRegistry() {
-  const chart = ChartAdapter.getChart('live', 'price');
-  if (!chart) return null;
+  const price = ChartAdapter.getChart('live', 'price');
+  const rsx = ChartAdapter.getChart('live', 'rsx');
+  const wozduh = ChartAdapter.getChart('live', 'wozduh');
+  if (!price || !rsx || !wozduh) return null;
   return {
-    pane_osc: { chart, defaultPriceScaleId: 'rsx' },
-    pane_score: { chart, defaultPriceScaleId: 'wozduh' },
+    pane_osc: { chart: rsx, defaultPriceScaleId: 'right' },
+    pane_score: { chart: wozduh, defaultPriceScaleId: 'right' },
   };
 }
 
@@ -1934,8 +1941,12 @@ function initDDRFactory() {
 function boot() {
   safeInit('DDR factory', initDDRFactory);
   safeInit('Hydration orchestrator', initHydrationOrchestrator);
-  safeInit('UI strategy', () => StrategyController.init());
   safeInit('UI tabs', () => TabsController.init());
+  safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: true }));
+  safeInit('UI toolbar', () => ToolbarController.init());
+  safeInit('UI layout', () => LayoutController.init());
+  syncToolbarToActiveContext();
+  safeInit('UI strategy', () => StrategyController.init());
   safeInit('UI risk', () => RiskController.init());
   safeInit('UI navigator', () => {
     NavigatorController.init();
@@ -1958,8 +1969,6 @@ function boot() {
     BacktestController.onIntervalChange((tf) => handleBacktestIntervalChange(tf));
     backtestTf = getBacktestInterval();
   });
-  safeInit('UI toolbar', () => ToolbarController.init());
-  safeInit('UI layout', () => LayoutController.init());
 
   (async () => {
     try {
@@ -1991,7 +2000,6 @@ function boot() {
           onLiveInit: () => {
             attachLiveHistoryScrollArm();
           },
-          applyTradeMarkers: () => ChartAdapter.applyAllMarkers(),
         });
         if (chartsReady) {
           WozduhController.init();
@@ -2005,9 +2013,6 @@ function boot() {
         setTimeout(boot, 500);
         return;
       }
-
-      safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: true }));
-      syncToolbarToActiveContext();
 
       if (isOrderFlowTf()) {
         ChartAdapter.applyOrderFlowTimeScale(true);

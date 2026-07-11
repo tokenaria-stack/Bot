@@ -235,6 +235,8 @@ class DDRFactory {
 
   static resolvePriceScaleId(component, chartEntry, renderOpts) {
     if (renderOpts?.priceScaleId) return renderOpts.priceScaleId;
+    // Dedicated multi-pane charts use their own right scale.
+    if (chartEntry?.defaultPriceScaleId) return chartEntry.defaultPriceScaleId;
     const byComponent = {
       line_rsx: 'rsx',
       line_rsx_signal: 'rsx',
@@ -245,7 +247,15 @@ class DDRFactory {
       score_total: 'wozduh',
     };
     if (byComponent[component.id]) return byComponent[component.id];
-    return chartEntry?.defaultPriceScaleId || 'right';
+
+    const pane = String(component.pane || '').toLowerCase();
+    if (pane === 'pane_score' || pane.includes('score')) return 'wozduh';
+    if (pane === 'pane_osc' || pane.includes('osc')) {
+      const id = String(component.id || '').toLowerCase();
+      if (id.startsWith('woz_') || id.startsWith('score_')) return 'wozduh';
+      return 'rsx';
+    }
+    return 'right';
   }
 
   static _parseRenderOpts(raw) {
