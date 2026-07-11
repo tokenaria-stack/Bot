@@ -2,7 +2,24 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.0 (DAG) — backend transport ✅, frontend orchestration ✅ (Phase 7A–7B), annotations wire ✅ (Phase 8A).** Live chart **нестабилен** — активная отладка viewport / prepend / DDR cutover. Legacy Falcon + DAG dual replay на columnar path. **Frontend Phase 20 ✅** + **Phase 28 ✅ (backtest black screen).** Следующий фокус: **интеграция Core 2.0** (annotations UI 8B, chart stability, SettingsRenderer Phase 7 debt). См. раздел **Core 2.0 — DDR Pipeline** и **OPEN DEBTS #35–#48**.
+> **Снэпшот MEMORY (июль 2026):** **Project Renaissance (Strangler Fig) — Phase 0 LIVE.** `app.js` → `app.legacy.js`, `chart-adapter.js` → `adapter.legacy.js`. Новые: `boot.js`, `chart-core.js` (7-method sterile ChartAdapter). UI controllers + Shims; индикаторы только DDRFactory; asymmetric TimeScale (Master=Price). Legacy backtest/ruler/RSX sync отключены в Phase 0.
+
+---
+
+## Project Renaissance (Strangler Fig — Core 3.0 Frontend)
+
+| Файл | Роль |
+|------|------|
+| `web/boot.js` | Composition root: Shims, ColumnarStore, RenderScheduler, HydrationOrchestrator, DDRFactory, WS |
+| `web/chart-core.js` | Sterile `window.ChartAdapter` — 7 public methods; 3 LWC panes; one-way TimeScale |
+| `web/app.legacy.js` | Quarantined God Object — reference only |
+| `web/adapter.legacy.js` | Quarantined dual-surface adapter — reference only |
+
+**ChartAdapter contract:** `initLiveCharts`, `getChart`, `applyFullData`, `applyDelta`, `setLiveUpdating`, `getVisibleLogicalRange`, `setVisibleLogicalRange`, `isInitialized`.
+
+**Data Guard:** только Price → slaves по `subscribeVisibleLogicalRangeChange`; подвалы не транслируют.
+
+**Paint path:** ColumnarStore → RenderScheduler → ChartCompositor → ChartAdapter (candles) + DDRFactory (plots).
 
 ---
 
