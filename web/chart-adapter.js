@@ -841,8 +841,45 @@ function _primarySeriesForChart(chartData, chart) {
   return chartData.candleSeries || null;
 }
 
+function _isFiniteLogicalRange(range) {
+  return range
+    && Number.isFinite(range.from)
+    && Number.isFinite(range.to)
+    && range.to > range.from;
+}
+
+/** Live slave panes without plotted data must not broadcast time (prevents price camera reset). */
+function _paneCanBroadcastTimeScale(chartData, chart) {
+  const master = chartData.charts?.price || chartData.chart;
+  if (chart === master) return true;
+  if (chartData._context !== 'live') return true;
+
+  if (chart === chartData.charts?.wozduh) {
+    if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
+      for (const id of window.DDRFactory.seriesMap.keys()) {
+        if (String(id).startsWith('woz_') || String(id).startsWith('score_')) return true;
+      }
+      return false;
+    }
+    return Object.keys(chartData.wozduxSeries || {}).length > 0;
+  }
+
+  if (chart === chartData.charts?.rsx) {
+    if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
+      for (const id of window.DDRFactory.seriesMap.keys()) {
+        if (String(id).startsWith('line_rsx')) return true;
+      }
+      return false;
+    }
+    return !!(chartData.rsxSeries || chartData.rsxSignalSeries);
+  }
+
+  return false;
+}
+
 /**
- * Bidirectional TimeScale sync with reentrancy guard (Master = price).
+ * Master (price) → slaves always when range is valid.
+ * Slaves → others only when pane has plotted data (Data Guard).
  */
 function syncTimeScale(chartData) {
   const charts = _paneCharts(chartData);
@@ -852,15 +889,15 @@ function syncTimeScale(chartData) {
     source.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range || chartData._syncingTimeScale) return;
       if (chartData._context === 'live' && _liveUpdating) return;
+      if (!_isFiniteLogicalRange(range)) return;
+      if (!_paneCanBroadcastTimeScale(chartData, source)) return;
+
       chartData._syncingTimeScale = true;
-      try {
-        charts.forEach((target) => {
-          if (target === source) return;
-          syncVisibleLogicalRange(target, range, { animate: false });
-        });
-      } finally {
-        chartData._syncingTimeScale = false;
-      }
+      charts.forEach((target) => {
+        if (target === source) return;
+        syncVisibleLogicalRange(target, range, { animate: false });
+      });
+      chartData._syncingTimeScale = false;
     });
   });
 }

@@ -466,8 +466,6 @@ func (m *MasterGeneral) handleLiveTick() {
 		return
 	}
 
-	log.Printf("[Master] ⏱ %s candle closed — evaluating strategy...", m.timeframe)
-
 	m.ensureMTFTrackerReady(analyst)
 	m.syncMTFState(analyst)
 
@@ -533,11 +531,6 @@ func (m *MasterGeneral) tryForEntry() {
 	if !analyst.HasMinBars(minScoreBars) {
 		return
 	}
-
-	falcon := analyst.FalconSnapshot()
-	log.Printf("[FALCON] %s Jurik: %.2f | Red: %.2f | Green: %.2f | RSX: %q | VolCross: %q",
-		m.timeframe, falcon.JurikRSX, falcon.RedLine, falcon.GreenLine,
-		analyst.RecentRSXMarker(), falcon.VolCrossMarker)
 
 	decision := m.evaluateScoreDecision(analyst)
 	if !decision.HasFinalSignal() {

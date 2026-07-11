@@ -185,7 +185,6 @@ let isUpdatingData = false;
 let isLoadingHistory = false;
 let _microscopeTickMuted = false;
 let liveHistoryEpoch = 0;
-let pendingHistoryLoad = null;
 /** History lazy-load is armed only after the user scrolls/zooms the live chart (not on TF init). */
 let liveHistoryScrollArmed = false;
 /** @type {HydrationOrchestrator|null} */
@@ -438,7 +437,6 @@ async function fetchLiveState(options = {}) {
 
 function disarmLiveHistoryScroll() {
   liveHistoryScrollArmed = false;
-  pendingHistoryLoad = null;
 }
 
 function updateBufferingOverlay() {
@@ -470,11 +468,6 @@ function beginDataUpdate() {
 
 function endDataUpdate() {
   ChartAdapter.setLiveUpdating(false);
-  if (pendingHistoryLoad) {
-    const job = pendingHistoryLoad;
-    pendingHistoryLoad = null;
-    Promise.resolve().then(() => scheduleHistoryLoad(job.range, job.options));
-  }
 }
 
 
@@ -1663,13 +1656,6 @@ function initHydrationOrchestrator() {
         liveRenderScheduler.markDirty(intent);
       }
     },
-    onAfterPrepend: () => {
-      if (pendingHistoryLoad) {
-        const job = pendingHistoryLoad;
-        pendingHistoryLoad = null;
-        Promise.resolve().then(() => scheduleHistoryLoad(job.range, job.options));
-      }
-    },
     processTick: (tick) => _processLiveTickCore(tick),
   });
 }
@@ -1688,10 +1674,7 @@ function scheduleHistoryLoad(range, options = {}) {
   if (!range || !historyHasMore) return;
   if (!ChartAdapter.chartInitialized() || !liveHistoryScrollArmed) return;
   if (range.from >= LIVE_HISTORY_SCROLL_THRESHOLD) return;
-  if (ChartAdapter.isLiveUpdating() || liveHydrationOrchestrator?.isBusy()) {
-    pendingHistoryLoad = { range, options };
-    return;
-  }
+  if (ChartAdapter.isLiveUpdating() || liveHydrationOrchestrator?.isBusy()) return;
   if (liveHydrationOrchestrator) {
     liveHydrationOrchestrator.schedulePrepend(range, options);
   }
@@ -1941,13 +1924,18 @@ function initDDRFactory() {
 function boot() {
   safeInit('DDR factory', initDDRFactory);
   safeInit('Hydration orchestrator', initHydrationOrchestrator);
+  safeInit('UI strategy', () => StrategyController.init());
+  safeInit('UI risk', () => RiskController.init());
+  safeInit('UI rsx', () => {
+    RsxController.init();
+    RsxController.onSettingsChanged(() => scheduleRsxSettingsSync('live'));
+    fetchRsxIndicatorSettings();
+  });
   safeInit('UI tabs', () => TabsController.init());
   safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: true }));
   safeInit('UI toolbar', () => ToolbarController.init());
   safeInit('UI layout', () => LayoutController.init());
   syncToolbarToActiveContext();
-  safeInit('UI strategy', () => StrategyController.init());
-  safeInit('UI risk', () => RiskController.init());
   safeInit('UI navigator', () => {
     NavigatorController.init();
     NavigatorController.onSettingsChanged(() => triggerNavigatorAutoUpdate());
@@ -1955,11 +1943,6 @@ function boot() {
   safeInit('panel settings', () => {
     initPanelSettingsOutsideClose();
     initPanelSettingsEnterNavigation();
-  });
-  safeInit('UI rsx', () => {
-    RsxController.init();
-    RsxController.onSettingsChanged(() => scheduleRsxSettingsSync('live'));
-    fetchRsxIndicatorSettings();
   });
   safeInit('equity chart', initEquityChart);
   safeInit('UI backtest', () => {

@@ -165,16 +165,6 @@ class HydrationOrchestrator {
           deps.onAfterPrepend(mergeResult, addedBars);
         }
         completed = true;
-
-        if (deps.getHistoryHasMore?.() !== false && epoch === deps.getEpoch()) {
-          const threshold = (typeof CONFIG !== 'undefined' && CONFIG.LIVE_HISTORY_SCROLL_THRESHOLD) || 50;
-          const finalRange = typeof ChartAdapter !== 'undefined'
-            ? ChartAdapter.getVisibleLogicalRange('live')
-            : null;
-          if (finalRange && finalRange.from < threshold) {
-            this.schedulePrepend(finalRange);
-          }
-        }
       } finally {
         if (typeof deps.unsealStore === 'function') deps.unsealStore();
         if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(false);
