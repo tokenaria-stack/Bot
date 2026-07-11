@@ -2,24 +2,53 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Project Renaissance (Strangler Fig) — Phase 0 LIVE.** `app.js` → `app.legacy.js`, `chart-adapter.js` → `adapter.legacy.js`. Новые: `boot.js`, `chart-core.js` (7-method sterile ChartAdapter). UI controllers + Shims; индикаторы только DDRFactory; asymmetric TimeScale (Master=Price). Legacy backtest/ruler/RSX sync отключены в Phase 0.
+> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 2 done.** Sliding window (~3000) + time-anchor + epoch F1/F2 scheduler; `isRenderLocked` удалён. Осталось: geometry sync, whitespace DDR, freeze window across F1/F2.
 
 ---
 
-## Project Renaissance (Strangler Fig — Core 3.0 Frontend)
+## Core 2.3 — Development Plan (ACTIVE)
+
+**Статус:** Этап 1 — Stabilization (Shot 1: sync window + time-anchor).
+
+**Цель:** устранить баги LWC (гармошка, раздутие canvas, рассинхрон) без переписывания ColumnarStore / ChunkLedger / Scene Graph.
+
+**Критерий успеха (1 год):** новый слой (Elliott / Footprint) = новый Layer, без правки Adapter / Store / Scheduler.
+
+### Пять законов
+
+1. Только `ChartAdapter` говорит с LWC (`setData` / `update` / range).
+2. Никто не читает Store напрямую для paint — только через **окно** (`extractWindow` / Provider).
+3. **RenderContext** вместо Scene: window (~3000) + viewport + geometry + visibleLayers + epoch.
+4. Конвейер: `Store → Window (~3000) → Geometry → Series → Adapter`.
+5. Только `RenderScheduler` инициирует paint (`isBusy` / epoch; булевый `isRenderLocked` удалён в Shot 2).
+
+### Этап 1 (сейчас)
+
+| Shot | Содержание | Статус |
+|------|------------|--------|
+| 1 | `extractWindow` sync-slice + ViewportManager time-anchor (убрать index math) | ✅ Shot 1 done |
+| 2 | Epoch open through F1+F2; queue deltas; remove bool lock | ✅ Shot 2 done |
+| 3 | Geometry width/barSpacing; whitespace DDR; freeze window across F1/F2 | ⏳ |
+
+**Synchronous Slice Rule:** один индексный диапазон на `times`, все `candles.*`, все `plots[id]`.  
+**Render window:** LWC всегда ~3000 баров (хвост / окно), Store может расти.  
+**Camera:** только `centerTimeMs` via ViewportManager — запрет `from + addedBars`.  
+**Budget (later):** F1/F2 priority frames, не hard 16ms interrupt of `setData`.
+
+### Этап 2 / 3 (будущее)
+
+- Layer Interface, culling, ChartDataProvider, soft Store eviction  
+- ChunkLedger, SceneFrame/Object Graph, alternate backends — только по необходимости  
+
+### Project Renaissance (база Phase 0)
 
 | Файл | Роль |
 |------|------|
-| `web/boot.js` | Composition root: Shims, ColumnarStore, RenderScheduler, HydrationOrchestrator, DDRFactory, WS |
-| `web/chart-core.js` | Sterile `window.ChartAdapter` — 7 public methods; 3 LWC panes; one-way TimeScale |
-| `web/app.legacy.js` | Quarantined God Object — reference only |
-| `web/adapter.legacy.js` | Quarantined dual-surface adapter — reference only |
+| `web/boot.js` | Composition root: Shims, Store, Scheduler, Orchestrator, DDR, WS |
+| `web/chart-core.js` | Sterile ChartAdapter (7 methods); one-way TimeScale |
+| `web/app.legacy.js` / `adapter.legacy.js` | Quarantined |
 
-**ChartAdapter contract:** `initLiveCharts`, `getChart`, `applyFullData`, `applyDelta`, `setLiveUpdating`, `getVisibleLogicalRange`, `setVisibleLogicalRange`, `isInitialized`.
-
-**Data Guard:** только Price → slaves по `subscribeVisibleLogicalRangeChange`; подвалы не транслируют.
-
-**Paint path:** ColumnarStore → RenderScheduler → ChartCompositor → ChartAdapter (candles) + DDRFactory (plots).
+**Paint path (цель Core 2.3):** Store → extractWindow → RenderScheduler → ChartCompositor → ChartAdapter + DDR.
 
 ---
 

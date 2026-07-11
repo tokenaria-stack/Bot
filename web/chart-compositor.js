@@ -1,8 +1,15 @@
 /**
- * ChartCompositor — sole live-chart paint authority (Core 3.0 Step 2 + Soft Updates).
- * Reads ColumnarStore snapshots; writes to ChartAdapter only.
+ * ChartCompositor — sole live-chart paint authority (Core 2.3).
+ * Reads ColumnarStore snapshots; paints only via Sliding Render Window (~3000).
+ * Writes to ChartAdapter only.
  */
 class ChartCompositor {
+  static get RENDER_WINDOW_LIMIT() {
+    return (typeof HISTORY_CHUNK_LIMIT !== 'undefined' && HISTORY_CHUNK_LIMIT > 0)
+      ? HISTORY_CHUNK_LIMIT
+      : 3000;
+  }
+
   /**
    * @param {object} options
    * @param {ColumnarStore} options.store
@@ -17,6 +24,44 @@ class ChartCompositor {
     this._getNavigatorResult = typeof options.getNavigatorResult === 'function'
       ? options.getNavigatorResult
       : () => null;
+  }
+
+  /**
+   * Synchronous Slice Rule: same tail index range for times, candles.*, and every plots[id].
+   * @param {object} snapshot
+   * @param {number} [limit=3000]
+   * @returns {object}
+   */
+  static extractWindow(snapshot, limit = 3000) {
+    if (!snapshot || !Array.isArray(snapshot.times)) return snapshot;
+    const n = snapshot.times.length;
+    if (n <= limit) return snapshot;
+
+    const start = n - limit;
+    const candlesSrc = snapshot.candles && typeof snapshot.candles === 'object' ? snapshot.candles : {};
+    const candles = {};
+    for (const key of ['open', 'high', 'low', 'close', 'volume']) {
+      const col = candlesSrc[key];
+      candles[key] = Array.isArray(col) ? col.slice(start) : [];
+    }
+
+    const plotsSrc = snapshot.plots && typeof snapshot.plots === 'object' ? snapshot.plots : {};
+    const plots = {};
+    for (const [id, col] of Object.entries(plotsSrc)) {
+      plots[id] = Array.isArray(col) ? col.slice(start) : [];
+    }
+
+    const annotations = Array.isArray(snapshot.annotations)
+      ? snapshot.annotations.slice(-limit)
+      : [];
+
+    return {
+      ...snapshot,
+      times: snapshot.times.slice(start),
+      candles,
+      plots,
+      annotations,
+    };
   }
 
   /**
@@ -42,17 +87,18 @@ class ChartCompositor {
     }
 
     const snapshot = this._store.snapshot();
-    const storeData = ChartCompositor.snapshotToStoreData(
+    const windowedSnapshot = ChartCompositor.extractWindow(
       snapshot,
-      this._store.getAnnotationsMap(),
+      ChartCompositor.RENDER_WINDOW_LIMIT,
     );
+    const storeData = ChartCompositor.snapshotToStoreData(windowedSnapshot);
 
     ChartAdapter.setLiveUpdating(true);
     try {
       if (intent.mode === 'prepend') {
-        this._flushPrepend(storeData, snapshot, intent);
+        this._flushPrepend(storeData, windowedSnapshot, intent);
       } else {
-        this._flushFull(storeData, snapshot, intent);
+        this._flushFull(storeData, windowedSnapshot, intent);
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
@@ -68,14 +114,14 @@ class ChartCompositor {
       console.error('[ChartCompositor] invariant failed — skip indicators', this._store.invariantMeta());
       return;
     }
-    const snapshot = this._store.snapshot();
+    const snapshot = ChartCompositor.extractWindow(
+      this._store.snapshot(),
+      ChartCompositor.RENDER_WINDOW_LIMIT,
+    );
     ChartAdapter.setLiveUpdating(true);
     try {
       this._applyDdrPlots(snapshot);
-      const storeData = ChartCompositor.snapshotToStoreData(
-        snapshot,
-        this._store.getAnnotationsMap(),
-      );
+      const storeData = ChartCompositor.snapshotToStoreData(snapshot);
       this._applyAnnotations(storeData);
     } finally {
       ChartAdapter.setLiveUpdating(false);
@@ -103,69 +149,62 @@ class ChartCompositor {
   }
 
   _flushFull(storeData, snapshot, intent) {
-    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
-    this._applyDdrPlots(snapshot);
-    this._applyAnnotations(storeData);
+    const phase = intent.phase;
+    const runF1 = phase === 'F1' || !phase;
+    const runF2 = phase === 'F2' || !phase;
 
-    const nav = this._getNavigatorResult();
-    if (nav) {
-      ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
-        context: 'live',
-        updateLoadedCandles: false,
-      });
+    if (runF1) {
+      ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
+      this._applyAnnotations(storeData);
+
+      if (intent.anchor && typeof ViewportManager !== 'undefined') {
+        ViewportManager.restore('live', intent.anchor, this._store);
+      } else if (intent.viewport === 'fresh' || intent.viewport == null) {
+        const charts = [
+          ChartAdapter.getChart('live', 'price'),
+          ChartAdapter.getChart('live', 'wozduh'),
+          ChartAdapter.getChart('live', 'rsx'),
+        ];
+        charts.forEach((chart) => {
+          chart?.timeScale()?.scrollToPosition(0, false);
+        });
+      }
     }
 
-    if (intent.anchor && typeof ViewportManager !== 'undefined') {
-      ViewportManager.restore('live', intent.anchor, this._store);
-      return;
-    }
-
-    if (intent.viewport === 'fresh' || intent.viewport == null) {
-      const charts = [
-        ChartAdapter.getChart('live', 'price'),
-        ChartAdapter.getChart('live', 'wozduh'),
-        ChartAdapter.getChart('live', 'rsx'),
-      ];
-      charts.forEach((chart) => {
-        chart?.timeScale()?.scrollToPosition(0, false);
-      });
+    if (runF2) {
+      this._applyDdrPlots(snapshot);
+      const nav = this._getNavigatorResult();
+      if (nav) {
+        ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
+          context: 'live',
+          updateLoadedCandles: false,
+        });
+      }
     }
   }
 
   _flushPrepend(storeData, snapshot, intent) {
-    const chart = ChartAdapter.getChart('live', 'price');
-    const prevRange = intent.viewportRange != null
-      ? intent.viewportRange
-      : ChartAdapter.getVisibleLogicalRange('live');
+    const phase = intent.phase;
+    const runF1 = phase === 'F1' || !phase;
+    const runF2 = phase === 'F2' || !phase;
 
-    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
-    this._applyDdrPlots(snapshot);
-    this._applyAnnotations(storeData);
-
-    const addedBars = Number(intent.addedBars) || 0;
-    if (
-      prevRange != null
-      && Number.isFinite(prevRange.from)
-      && Number.isFinite(prevRange.to)
-      && addedBars > 0
-    ) {
-      const range = {
-        from: prevRange.from + addedBars,
-        to: prevRange.to + addedBars,
-      };
-      if (typeof ChartAdapter.setVisibleLogicalRange === 'function') {
-        ChartAdapter.setVisibleLogicalRange('live', range, { animate: false });
-      } else {
-        chart?.timeScale()?.setVisibleLogicalRange(range);
+    if (runF1) {
+      ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
+      this._applyAnnotations(storeData);
+      if (intent.anchor && typeof ViewportManager !== 'undefined') {
+        ViewportManager.restore('live', intent.anchor, this._store);
       }
     }
 
-    const nav = this._getNavigatorResult();
-    if (nav) {
-      ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
-        context: 'live',
-        updateLoadedCandles: false,
-      });
+    if (runF2) {
+      this._applyDdrPlots(snapshot);
+      const nav = this._getNavigatorResult();
+      if (nav) {
+        ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
+          context: 'live',
+          updateLoadedCandles: false,
+        });
+      }
     }
   }
 

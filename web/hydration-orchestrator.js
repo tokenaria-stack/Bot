@@ -139,6 +139,10 @@ class HydrationOrchestrator {
           ? ChartAdapter.getVisibleLogicalRange('live')
           : null;
 
+        const anchor = typeof ViewportManager !== 'undefined'
+          ? ViewportManager.capture('live')
+          : null;
+
         const mergeResult = deps.mergeIntoStore(data);
         if (!mergeResult || mergeResult.added <= 0) {
           if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
@@ -155,6 +159,7 @@ class HydrationOrchestrator {
             mode: 'prepend',
             addedBars,
             viewportRange: mergeResult.viewportRange ?? viewportRange,
+            anchor,
           });
         }
 

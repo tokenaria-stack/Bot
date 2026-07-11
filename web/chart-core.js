@@ -58,33 +58,44 @@
     };
   }
 
-  function createPriceChart(host, width, height) {
-    return LightweightCharts.createChart(host, {
-      autoSize: false,
-      layout: layoutOptions(),
-      grid: gridOptions(),
-      crosshair: crosshairOptions(),
-      timeScale: timeScaleOptions(),
-      width,
-      height,
-      rightPriceScale: priceScaleOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic }),
-    });
+  function unifiedTimeScaleOptions(showAxisLabels) {
+    const base = timeScaleOptions();
+    return {
+      ...base,
+      timeVisible: showAxisLabels,
+      secondsVisible: false,
+      visible: showAxisLabels,
+    };
   }
 
-  function createSlaveChart(host, width, height, hideTimeAxis) {
+  function createPaneChart(host, width, height, showAxisLabels) {
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
       grid: gridOptions(),
       crosshair: crosshairOptions(),
-      timeScale: hideTimeAxis ? { ...timeScaleOptions(), visible: false } : timeScaleOptions(),
+      timeScale: unifiedTimeScaleOptions(showAxisLabels),
       width,
       height,
       rightPriceScale: priceScaleOptions({
         mode: LightweightCharts.PriceScaleMode.Normal,
-        scaleMargins: { top: 0.05, bottom: 0.05 },
+        scaleMargins: showAxisLabels
+          ? undefined
+          : { top: 0.05, bottom: 0.05 },
       }),
     });
+  }
+
+  function createPriceChart(host, width, height) {
+    const chart = createPaneChart(host, width, height, true);
+    chart.applyOptions({
+      rightPriceScale: priceScaleOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic }),
+    });
+    return chart;
+  }
+
+  function createSlaveChart(host, width, height) {
+    return createPaneChart(host, width, height, false);
   }
 
   function isFiniteLogicalRange(range) {
@@ -96,7 +107,7 @@
 
   function syncVisibleLogicalRange(targetChart, range) {
     if (!targetChart?.timeScale || !isFiniteLogicalRange(range)) return;
-    targetChart.timeScale().setVisibleLogicalRange(range);
+    targetChart.timeScale().setVisibleLogicalRange(range, { animate: false });
   }
 
   /** Asymmetric Data Guard: only Price subscribes; slaves never broadcast. */
@@ -211,8 +222,13 @@
     const rsxSize = hostSize(rsxHost, root?.clientWidth || 800, 140);
 
     const priceChart = createPriceChart(priceHost, priceSize.width, priceSize.height);
-    const wozduhChart = createSlaveChart(wozHost, wozSize.width, wozSize.height, true);
-    const rsxChart = createSlaveChart(rsxHost, rsxSize.width, rsxSize.height, false);
+    const wozduhChart = createSlaveChart(wozHost, wozSize.width, wozSize.height);
+    const rsxChart = createSlaveChart(rsxHost, rsxSize.width, rsxSize.height);
+
+    const sharedTs = unifiedTimeScaleOptions(false);
+    wozduhChart.timeScale().applyOptions(sharedTs);
+    rsxChart.timeScale().applyOptions(sharedTs);
+    priceChart.timeScale().applyOptions(unifiedTimeScaleOptions(true));
 
     const priceCfg = resolvePricePaneConfig();
     const candleOpts = priceCfg?.candle || { upColor: '#089981', downColor: '#f23645', wickUpColor: '#089981', wickDownColor: '#f23645', borderVisible: false };
@@ -316,7 +332,7 @@
         const charts = [_live.charts.price, _live.charts.wozduh, _live.charts.rsx];
         charts.forEach((chart) => {
           if (!chart) return;
-          chart.timeScale().setVisibleLogicalRange(range);
+          chart.timeScale().setVisibleLogicalRange(range, { animate: false });
         });
       } finally {
         _live._syncingTimeScale = false;

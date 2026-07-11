@@ -148,7 +148,9 @@
       store: liveColumnarStore,
       shouldPaint: () => (typeof window.shouldPaintLiveChart === 'function' ? window.shouldPaintLiveChart() : true),
       getNavigatorResult: () => liveNavigatorResult,
-      onAfterFlush: () => updateBufferingOverlay(),
+      onAfterFlush: () => {
+        updateBufferingOverlay();
+      },
     });
     liveRenderScheduler = new RenderScheduler(compositor);
   }
@@ -288,7 +290,7 @@
     if (!range || !window.historyHasMore) return;
     if (!liveHistoryScrollArmed) return;
     if (range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return;
-    if (window.isUpdatingData || liveHydrationOrchestrator?.isBusy()) return;
+    if (window.isUpdatingData || liveHydrationOrchestrator?.isBusy() || liveRenderScheduler?.isBusy()) return;
     liveHydrationOrchestrator?.schedulePrepend(range);
   }
 
