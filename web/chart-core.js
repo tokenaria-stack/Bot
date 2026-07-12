@@ -108,7 +108,7 @@
       width,
       height,
       handleScroll: false,
-      handleScale: false,
+      handleScale: { axisPressedMouseMove: { price: true, time: false }, mouseWheel: false },
       rightPriceScale: priceScaleOptions({
         mode: LightweightCharts.PriceScaleMode.Normal,
         scaleMargins: { top: 0.05, bottom: 0.05 },
@@ -147,15 +147,67 @@
     });
   }
 
+  /** Canonical pane anchors — never hunt seriesMap / score / debt series. */
   function crosshairSeriesForChart(state, chart) {
     if (chart === state.charts.price) return state.candleSeries;
-    if (typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
-      for (const [id, entry] of window.DDRFactory.seriesMap.entries()) {
-        const onWoz = chart === state.charts.wozduh && (String(id).startsWith('woz_') || String(id).startsWith('score_'));
-        const onRsx = chart === state.charts.rsx && String(id).startsWith('line_rsx');
-        if ((onWoz || onRsx) && entry?.series) return entry.series;
-      }
+    const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
+    if (!factory?.cutoverActive || typeof factory.getSeries !== 'function') return null;
+    if (chart === state.charts.wozduh) return factory.getSeries('woz_fast');
+    if (chart === state.charts.rsx) return factory.getSeries('line_rsx');
+    return null;
+  }
+
+  function crosshairAnchorId(state, chart) {
+    if (chart === state.charts.wozduh) return 'woz_fast';
+    if (chart === state.charts.rsx) return 'line_rsx';
+    return null;
+  }
+
+  /** Value at business-time from DDR hydrated buffer (cross-pane when seriesData is empty). */
+  function hydratedValueAtTime(seriesId, time) {
+    const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
+    const points = factory?.getHydratedSeries?.(seriesId);
+    if (!points?.length || time == null) return null;
+    // Exact match first (LWC business-day / unix sec equality).
+    for (let i = points.length - 1; i >= 0; i--) {
+      const p = points[i];
+      if (p?.time !== time) continue;
+      const v = p.value;
+      return Number.isFinite(v) ? v : null; // whitespace → null
     }
+    return null;
+  }
+
+  function candleCloseAtTime(time) {
+    const store = (typeof window !== 'undefined') ? window.liveColumnarStore : null;
+    if (!store || time == null) return null;
+    const snap = typeof store.snapshot === 'function' ? store.snapshot() : null;
+    const times = snap?.times;
+    const closes = snap?.candles?.close;
+    if (!Array.isArray(times) || !Array.isArray(closes)) return null;
+    for (let i = times.length - 1; i >= 0; i--) {
+      const t = times[i];
+      // Columnar times are unix-sec; LWC may use the same after normalize.
+      if (t !== time && t !== time?.timestamp && Number(t) !== Number(time)) continue;
+      const v = Number(closes[i]);
+      return Number.isFinite(v) ? v : null;
+    }
+    return null;
+  }
+
+  /**
+   * Y for setCrosshairPosition must be in the *target* series domain.
+   * Same-chart: seriesData. Cross-pane: hydrated / store (never candle.close on osc).
+   */
+  function resolveCrosshairY(state, targetChart, targetSeries, param) {
+    const point = param.seriesData?.get?.(targetSeries);
+    const fromParam = point?.value ?? point?.close;
+    if (Number.isFinite(fromParam)) return fromParam;
+
+    const anchorId = crosshairAnchorId(state, targetChart);
+    if (anchorId) return hydratedValueAtTime(anchorId, param.time);
+
+    if (targetChart === state.charts.price) return candleCloseAtTime(param.time);
     return null;
   }
 
@@ -176,12 +228,18 @@
           }
           charts.forEach((target) => {
             if (target === source) return;
-            const series = crosshairSeriesForChart(state, target);
-            if (!series || typeof target.setCrosshairPosition !== 'function') return;
-            const price = param.seriesData?.get?.(state.candleSeries)?.close
-              ?? param.seriesData?.get?.(state.candleSeries)?.value
-              ?? 0;
-            target.setCrosshairPosition(Number.isFinite(price) ? price : 0, param.time, series);
+            if (typeof target.setCrosshairPosition !== 'function') return;
+            const targetSeries = crosshairSeriesForChart(state, target);
+            if (!targetSeries) {
+              target.clearCrosshairPosition?.();
+              return;
+            }
+            const yValue = resolveCrosshairY(state, target, targetSeries, param);
+            if (yValue == null || !Number.isFinite(yValue)) {
+              target.clearCrosshairPosition?.();
+              return;
+            }
+            target.setCrosshairPosition(yValue, param.time, targetSeries);
           });
         } finally {
           state._syncingCrosshair = false;

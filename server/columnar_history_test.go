@@ -69,7 +69,7 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 		50,
 		strategy.IndicatorWarmupBars,
 		strategy.GetRSXSettings(),
-		[]string{"line_rsx", "score_total"},
+		[]string{"line_rsx", "woz_fast"},
 		false,
 		"1m",
 		"1m",
@@ -103,6 +103,12 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	}
 	if len(resp.Plots) != 2 {
 		t.Fatalf("plots count = %d want 2", len(resp.Plots))
+	}
+	if _, ok := resp.Plots["line_rsx"]; !ok {
+		t.Fatal("expected line_rsx plot")
+	}
+	if _, ok := resp.Plots["woz_fast"]; !ok {
+		t.Fatal("expected woz_fast plot")
 	}
 }
 

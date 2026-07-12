@@ -82,7 +82,11 @@ const WozduhController = (() => {
       const prefs = loadPrefsForContext(context) || CONFIG.defaultWozduhPrefs();
       applyPrefsToMenu(menu, prefs);
       savePrefs(context, prefs);
-      ChartAdapter.applyWozduhVisibility(context);
+      if (typeof SettingsRenderer !== 'undefined' && context === 'live' && window.DDRFactory?.cutoverActive) {
+        SettingsRenderer.applyWozduhPrefs(context, prefs);
+      } else {
+        ChartAdapter.applyWozduhVisibility(context);
+      }
     });
 
     document.querySelectorAll('.osc-wrap').forEach((wrap) => {

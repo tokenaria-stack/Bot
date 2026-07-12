@@ -2,13 +2,13 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 4.** Native `ChartAdapter.shiftCamera(addedBars)` for prepend (no ViewportManager). Slave timeScale keeps grid (`tickMarkFormatter: ''`), not `visible:false`. Window buffer 15000 + whitespace + F1/F2 epoch.
+> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 6A.** F3 post-render camera commit (shift/restore only after F2). TF anchor pipeline `loadDashboard({ viewportAnchor })`. Canonical DDR routing via `hostId` (`rsx` / `wozduh`). Zombie series eradicated (`removeSeries` in `DDRFactory.clear`).
 
 ---
 
 ## Core 2.3 — Development Plan (ACTIVE)
 
-**Статус:** Этап 1 — Stabilization (Shot 1: sync window + time-anchor).
+**Статус:** Этап 1 — Stabilization (Shot 6A: F3 camera + hostId manifest + TF anchor).
 
 **Цель:** устранить баги LWC (гармошка, раздутие canvas, рассинхрон) без переписывания ColumnarStore / ChunkLedger / Scene Graph.
 
@@ -30,11 +30,15 @@
 | 2 | Epoch open through F1+F2; queue deltas; remove bool lock | ✅ Shot 2 done |
 | 3 | Geometry width 75; whitespace DDR; window buffer 15000; slave scroll lock | ✅ Shot 3 |
 | 4 | Native shiftCamera(addedBars); grid via tickMarkFormatter (no visible:false) | ✅ Shot 4 |
+| 5 | Zombie eradication (`removeSeries`); RSX settings via `RsxController`; `fitContent` on price for `viewport:'fresh'` | ✅ Shot 5 |
+| 6A | F3 camera commit after F2; TF `viewportAnchor` pipeline; `hostId` manifest routing | ✅ Shot 6A |
+| 6B+ | Active Driver / TimeScaleCoordinator for slave scroll (DOM wheel → master) | 🔜 next |
 
 **Synchronous Slice Rule:** один индексный диапазон на `times`, все `candles.*`, все `plots[id]`.  
-**Render window:** LWC всегда ~3000 баров (хвост / окно), Store может расти.  
-**Camera:** только `centerTimeMs` via ViewportManager — запрет `from + addedBars`.  
-**Budget (later):** F1/F2 priority frames, не hard 16ms interrupt of `setData`.
+**Render window:** LWC soft cap 15000 (`RENDER_WINDOW_LIMIT`); Store может расти.  
+**Camera (Shot 6A):** F3 only — после F2. Prepend → `shiftCamera(addedBars, viewportRange)`; TF restore → `ViewportManager.restore(anchor)`; fresh → `fitContent()` на price only. **Запрет** глобальных `isLocked`.  
+**DDR routing:** `component.hostId` → `hostMap[hostId]` (`rsx` / `wozduh`). Pane id (`pane_osc` / `pane_score`) — группировка манифеста, не chart target.  
+**Budget:** F1/F2 priority frames через RenderScheduler RAF split; камера = фаза F3.
 
 ### Этап 2 / 3 (будущее)
 
@@ -45,11 +49,21 @@
 
 | Файл | Роль |
 |------|------|
-| `web/boot.js` | Composition root: Shims, Store, Scheduler, Orchestrator, DDR, WS |
-| `web/chart-core.js` | Sterile ChartAdapter (7 methods); one-way TimeScale |
+| `web/boot.js` | Composition root: Shims, Store, Scheduler, Orchestrator, DDR, WS; `loadDashboard({ viewportAnchor })` |
+| `web/chart-core.js` | Sterile ChartAdapter; `shiftCamera`; one-way TimeScale |
+| `web/chart-compositor.js` | Sole live paint authority; F1/F2/F3 |
+| `web/series-factory.js` | DDRFactory; `buildPanes(hostMap, panes)`; `clear()` → `removeSeries` |
 | `web/app.legacy.js` / `adapter.legacy.js` | Quarantined |
 
-**Paint path (цель Core 2.3):** Store → extractWindow → RenderScheduler → ChartCompositor → ChartAdapter + DDR.
+**Paint path (Core 2.3 Shot 6A):**
+```
+Store → extractWindow → RenderScheduler (F1 RAF → F2 RAF)
+  → ChartCompositor.flush
+      F1: price + annotations
+      F2: DDR plots + navigator
+      F3: shiftCamera | ViewportManager.restore | fitContent(price)
+  → ChartAdapter + DDRFactory
+```
 
 ---
 
@@ -402,6 +416,30 @@ Binance → Marker (Layer1/2 + snapshot) → ScoreEngine → ScoreDecision
 ---
 
 ## Changelog / Статус (июль 2026)
+
+### [Core 2.3 Этап 1 — Shots 5–6A — июль 2026]
+
+#### [Shot 5 — Zombie Eradication & RSX Settings — ✅]
+- `DDRFactory.seriesMap` хранит `{ chart, series }`; `clear()` → `chart.removeSeries(series)` перед Map clear (orphan LWC series eradicated).
+- `boot.js`: `resolveLiveRsxSettings()` → `RsxController.getSettings('live')`; `syncRsxIndicatorSettings()` с seq + promise-chain dedup (no `DEFAULT_RSX_SETTINGS` hardcode).
+- Fresh viewport: `fitContent()` только на price chart (не `scrollToPosition(0)`).
+
+#### [Shot 6A — F3 Physics, TF Anchor Pipeline, Canonical hostId — ✅]
+**Файлы:** `web/chart-compositor.js`, `web/boot.js`, `web/series-factory.js`, `ui_config/rsx_layout.go`, `ui_config/wozduh_layout.go`, `ui_config/score_layout.go`, `core/manifest.go` (`HostID` уже был).
+
+| Механизм | Детали |
+|----------|--------|
+| **F3 camera** | `_commitPrependCamera` / `_commitFullCamera` строго после `runF2`; только при `phase === 'F2' \|\| !phase` |
+| **Prepend** | `shiftCamera(addedBars, intent.viewportRange)` — range снят orchestrator'ом **до** merge; null-safe |
+| **Full / TF** | `intent.anchor` → `ViewportManager.restore`; иначе `viewport:'fresh'` → `fitContent(price)` |
+| **TF pipeline** | `TimeframeController` → `loadDashboard({ viewportAnchor })` → `markDirty({ viewport:'restore', anchor })` |
+| **hostId** | RSX lines → `"rsx"`; Wozduh lines + Score hist/line → `"wozduh"`; `buildPanes({ rsx, wozduh }, panes)` |
+
+**Канон:** нет глобальных locks; рассинхрон лечится порядком исполнения (F1→F2→F3). `boot.js` только связывает; камера — зона Compositor.
+
+**Next (6B):** Active Driver / TimeScaleCoordinator — DOM wheel proxy с slave → master.
+
+---
 
 ### [Frontend SSOT Pipeline — Phase 19.5–20 — июль 2026]
 
@@ -785,7 +823,7 @@ targetFrom = targetTo - windowSize
 | `HistoryBus` | `core/history.go` | Ring buffer per slot; sentinel `MaxFloat64` на wire |
 | `ReplayDAGKlines` | `strategy/dag_shadow.go` | Cold replay для history (Strategy A) |
 | `Projector` | `server/wire/` | `BuildTickJSON` (live WS), `BuildHistoryColumns(Filtered)` |
-| UI Registry | `ui_config/` | `line_rsx`, `woz_fast`, `score_total`, … |
+| UI Registry | `ui_config/` | `HostID` routing: `line_rsx`→`rsx`; `woz_*`/`score_*`→`wozduh` |
 
 **Scoring:** `ScoreNode` stateless; execution gated outside DAG (`TradeManager` on `isClosed`).
 
@@ -802,6 +840,7 @@ targetFrom = targetTo - windowSize
 - `DDRFactory` (`web/series-factory.js`) — manifest panes, `hydratedData`, `updateTick`
 - `mountDDRLiveCutover` — legacy osc hidden (`ddrOscCutoverActive`)
 - Boot: `scheduleDDRCutover` → columnar hydrate + `buildPanes`
+- **Shot 6A:** `buildPanes(hostMap, panes)` routes by `component.hostId` (not pane id). Host map: `{ rsx, wozduh }`. Backend: `core.UIComponent.HostID` + `ui_config/*_layout.go`.
 
 ### Phase 7A — Monolithic Backend Transport ✅
 **Файлы:** `server/columnar_history.go`, `server/wire/history.go`, `server/webserver.go`
@@ -879,10 +918,15 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 | Симптом | Вероятная причина | Статус |
 |---------|-------------------|--------|
-| Viewport jump / «гармошка» | dual transport (fixed 7B); остаток: `prevRange null`, `addedBars` mismatch | 🟡 отладка |
+| Prepend F1/F2 indicator desync | Camera shift before DDR `setData` (master sync on stale slaves) | ✅ Shot 6A F3 |
+| TF jump / lost anchor | `loadDashboard()` ignored `viewportAnchor` | ✅ Shot 6A pipeline |
+| Wozduh lines on RSX pane | Blind `pane_osc → rsx` mapping | ✅ Shot 6A `hostId` |
+| Orphan LWC series after TF | `DDRFactory.clear()` Map-only, no `removeSeries` | ✅ Shot 5 |
+| Viewport jump / «гармошка» | dual transport (fixed 7B); residual edge cases | 🟡 QA |
 | Browser freeze на boot | 3000 bars × N series `setData` + `columnToLWC` object alloc | 🟡 pre-alloc partial |
 | DDR series empty on boot | `fetchAndHydrateHistory` до `buildPanes` → empty `slots` | 🟡 manifest fallback |
 | RSX markers missing on prepend | Annotations на wire (8A) но UI не рисует (8B pending) | 🔜 |
+| Slave panes dead scroll | `handleScroll:false`; need Active Driver (Shot 6B) | 🔜 |
 | Divergence drift DAG vs Falcon | Разные движки для plots vs markers | 🟡 architectural |
 | Scroll spam / lost packets | Debounce + `_inFlight` (7B) | ✅ mitigated |
 | Legacy osc hidden, DDR only | Phase 6 cutover — regression if DDR fails | 🟡 |
@@ -899,8 +943,13 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **39** | **SettingsRenderer (Phase 7)** | `series-factory.js` | 🔜 Wozduh DDR series visibility |
 | **40** | **Backtest DDR cutover** | `backtest-pipeline.js` | 🔜 live only |
 | **41** | **wsQueue hard cap** | `hydration-orchestrator.js` | 🟡 cap 64 on slow server |
-| **42** | **`added` server vs client mismatch warn** | `app.js` | 🟢 log if `data.added !== store.added` |
+| **42** | **`added` server vs client mismatch warn** | `boot.js` | 🟢 log if `data.added !== store.added` |
 | **43** | **Boot slots from manifest** | `series-factory.js` | 🟡 `resolveLiveSlotIds()` fallback |
+| **49** | **Active Driver / slave scroll (Shot 6B)** | `chart-core.js`, `boot.js` | 🔜 wheel proxy → master |
+| **50** | ~~**F1/F2 prepend desync**~~ | `chart-compositor.js` | ✅ Shot 6A F3 |
+| **51** | ~~**TF viewportAnchor dropped**~~ | `boot.js` | ✅ Shot 6A |
+| **52** | ~~**Manifest pane→chart misroute**~~ | `ui_config/`, `series-factory.js` | ✅ Shot 6A hostId |
+| **53** | ~~**Orphan LWC series (zombies)**~~ | `series-factory.js` | ✅ Shot 5 removeSeries |
 | **44** | **Order Flow deprecation** | `webserver.go` | 🔜 roadmap |
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
 | **46** | **MEMORY sync** | this file | ✅ Phase 7–8A logged |
@@ -966,10 +1015,11 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Backtest | `strategy/backtest.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `cmd/backtest/` |
 | Stats / Trades | `domain/trade_history.go`, `server/backtest_run.go`, `server/stats_test.go` |
 | API / WS | `server/webserver.go`, `server/ram_router.go`, `server/chart_cache.go`, `server/columnar_history.go`, `server/micro_broadcast.go` |
-| Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
-| DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js` |
+| Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
+| DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js`, `web/chart-compositor.js`, `web/render-scheduler.js` |
 | Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
-| Frontend core | `web/app.js`, `web/store.js`, `web/chart-adapter.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend core | `web/boot.js`, `web/store.js`, `web/chart-core.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |

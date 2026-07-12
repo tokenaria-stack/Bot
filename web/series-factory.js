@@ -230,6 +230,9 @@ class DDRFactory {
     const priceScaleId = DDRFactory.resolvePriceScaleId(component, chartEntry, renderOpts);
     const seriesOpts = { ...renderOpts, priceScaleId };
     delete seriesOpts.title;
+    // scaleMargins belongs on PriceScale, not SeriesOptions.
+    const scaleMargins = seriesOpts.scaleMargins;
+    delete seriesOpts.scaleMargins;
 
     let series;
     switch (kind) {
@@ -244,31 +247,19 @@ class DDRFactory {
         series = chart.addLineSeries(seriesOpts);
         break;
     }
+    // Own scale only — never push margins onto shared right/overlay host (would crush Wozduh).
+    if (scaleMargins && priceScaleId !== '' && priceScaleId != null) {
+      series.priceScale()?.applyOptions?.({ scaleMargins });
+    }
     this.seriesMap.set(component.id, { chart, series });
   }
 
   static resolvePriceScaleId(component, chartEntry, renderOpts) {
-    if (renderOpts?.priceScaleId) return renderOpts.priceScaleId;
-    // Dedicated multi-pane charts use their own right scale.
-    if (chartEntry?.defaultPriceScaleId) return chartEntry.defaultPriceScaleId;
-    const byComponent = {
-      line_rsx: 'rsx',
-      line_rsx_signal: 'rsx',
-      woz_fast: 'wozduh',
-      woz_slow: 'wozduh',
-      score_div_macro: 'wozduh',
-      score_div_micro: 'wozduh',
-      score_total: 'wozduh',
-    };
-    if (byComponent[component.id]) return byComponent[component.id];
-
-    const pane = String(component.pane || '').toLowerCase();
-    if (pane === 'pane_score' || pane.includes('score')) return 'wozduh';
-    if (pane === 'pane_osc' || pane.includes('osc')) {
-      const id = String(component.id || '').toLowerCase();
-      if (id.startsWith('woz_') || id.startsWith('score_')) return 'wozduh';
-      return 'rsx';
+    // Explicit "" means LWC overlay mode — must not fall through (falsy check).
+    if (renderOpts && Object.prototype.hasOwnProperty.call(renderOpts, 'priceScaleId')) {
+      return renderOpts.priceScaleId;
     }
+    if (chartEntry?.defaultPriceScaleId) return chartEntry.defaultPriceScaleId;
     return 'right';
   }
 

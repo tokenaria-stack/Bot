@@ -21,6 +21,12 @@ const (
 	SlotMicroDivScore
 	SlotTotalScore
 
+	// Chaos atoms (Layer 2) — DDR debt: slots reserved; DAG node wiring TBD.
+	SlotAO
+	SlotAD
+	SlotStoch
+	SlotOrangeRSI
+
 	// SlotCount is the number of defined slots (valid indices: 0 .. SlotCount-1).
 	SlotCount
 )
