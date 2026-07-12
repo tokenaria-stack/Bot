@@ -6,7 +6,7 @@
   'use strict';
 
   const PRICE_SCALE_MIN = 75;
-  /** @type {{ charts: object, candleSeries: object, volumeSeries: object, _syncingTimeScale: boolean, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
+  /** @type {{ charts: object, candleSeries: object, volumeSeries: object, _syncingTimeScale: boolean, _syncingCrosshair: boolean, _cameraGesturing: boolean, _gestureTimer: ReturnType<typeof setTimeout>|null, _disposers: (() => void)[] }|null} */
   let _live = null;
   let _liveUpdating = false;
 
@@ -27,11 +27,13 @@
     };
   }
 
-  function gridOptions() {
+  function gridOptions(horzVisible = true) {
     const tv = typeof TV !== 'undefined' ? TV : { grid: '#1e222d' };
     return {
       vertLines: { color: tv.grid, style: LightweightCharts.LineStyle.Dotted },
-      horzLines: { color: tv.grid, style: LightweightCharts.LineStyle.Dotted },
+      horzLines: horzVisible
+        ? { color: tv.grid, style: LightweightCharts.LineStyle.Dotted }
+        : { visible: false },
     };
   }
 
@@ -102,7 +104,7 @@
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
-      grid: gridOptions(),
+      grid: gridOptions(false),
       crosshair: crosshairOptions(),
       timeScale: unifiedTimeScaleOptions(false),
       width,
@@ -137,6 +139,11 @@
     master.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range || state._syncingTimeScale || _liveUpdating) return;
       if (!isFiniteLogicalRange(range)) return;
+
+      // User gesture: mute crosshair sync while camera is moving.
+      state._cameraGesturing = true;
+      clearTimeout(state._gestureTimer);
+      state._gestureTimer = setTimeout(() => { state._cameraGesturing = false; }, 100);
 
       state._syncingTimeScale = true;
       try {
@@ -215,6 +222,12 @@
     const charts = [state.charts.price, state.charts.wozduh, state.charts.rsx].filter(Boolean);
     charts.forEach((source) => {
       source.subscribeCrosshairMove((param) => {
+        // No physical mouse point → camera-scroll echo; never setCrosshairPosition.
+        if (!param || !param.point) return;
+        // Gesture mute: wheel/zoom range changes — do not fight the mouse.
+        if (state._cameraGesturing) return;
+        // Flyaway guard: never fight programmatic camera / paint frames.
+        if (state._syncingTimeScale || _liveUpdating) return;
         if (state._syncingCrosshair) return;
         state._syncingCrosshair = true;
         try {
@@ -246,6 +259,37 @@
         }
       });
     });
+  }
+
+  /**
+   * Active Driver Lite: slave wheel → price timeScale only.
+   * Master→slave subscription then mirrors range (no handleScroll on slaves).
+   */
+  function attachSlaveWheelProxy(host, priceChart, state, disposers) {
+    if (!host || !priceChart?.timeScale) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (state._syncingTimeScale || _liveUpdating) return;
+      const ts = priceChart.timeScale();
+      const barSpacing = ts.options()?.barSpacing || 6;
+      const raw = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+      if (!Number.isFinite(raw) || raw === 0) return;
+      // LWC: larger scrollPosition = view shifted left (older bars).
+      const barsDelta = raw / barSpacing;
+      const pos = ts.scrollPosition?.() ?? 0;
+      if (typeof ts.scrollToPosition === 'function') {
+        ts.scrollToPosition(pos + barsDelta, false);
+        return;
+      }
+      const range = ts.getVisibleLogicalRange();
+      if (!isFiniteLogicalRange(range)) return;
+      ts.setVisibleLogicalRange({
+        from: range.from + barsDelta,
+        to: range.to + barsDelta,
+      }, { animate: false });
+    };
+    host.addEventListener('wheel', onWheel, { passive: false });
+    disposers.push(() => host.removeEventListener('wheel', onWheel));
   }
 
   function bindResize(host, chart, disposers) {
@@ -331,12 +375,16 @@
       volumeSeries,
       _syncingTimeScale: false,
       _syncingCrosshair: false,
+      _cameraGesturing: false,
+      _gestureTimer: null,
       _disposers: [],
     };
 
     bindResize(priceHost, priceChart, state._disposers);
     bindResize(wozHost, wozduhChart, state._disposers);
     bindResize(rsxHost, rsxChart, state._disposers);
+    attachSlaveWheelProxy(wozHost, priceChart, state, state._disposers);
+    attachSlaveWheelProxy(rsxHost, priceChart, state, state._disposers);
     syncTimeScaleMasterToSlaves(state);
     syncCrosshair(state);
     return state;
@@ -399,29 +447,6 @@
     getVisibleLogicalRange(context) {
       if (context !== 'live' || !_live?.charts?.price) return null;
       return _live.charts.price.timeScale().getVisibleLogicalRange();
-    },
-
-    /**
-     * Shift visible logical range after history prepend (native camera hold).
-     * @param {string} context
-     * @param {number} addedBars bars inserted on the left
-     * @param {{ from: number, to: number }|null} [baseRange] pre-setData range (preferred)
-     */
-    shiftCamera(context, addedBars, baseRange = null) {
-      if (context !== 'live' || !_live?.charts?.price) return;
-      const n = Number(addedBars);
-      if (!Number.isFinite(n) || n <= 0) return;
-
-      const timeScale = _live.charts.price.timeScale();
-      const range = (baseRange && isFiniteLogicalRange(baseRange))
-        ? baseRange
-        : timeScale.getVisibleLogicalRange();
-      if (!isFiniteLogicalRange(range)) return;
-
-      this.setVisibleLogicalRange(context, {
-        from: range.from + n,
-        to: range.to + n,
-      }, { animate: false });
     },
 
     setVisibleLogicalRange(context, range, options = {}) {

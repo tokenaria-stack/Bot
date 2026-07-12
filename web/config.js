@@ -376,7 +376,8 @@ const SHARED_TIME_SCALE = {
   borderColor: TV.border,
   timeVisible: true,
   secondsVisible: false,
-  minBarSpacing: 0.001,
+  // Floor stops fitContent / zoom from crushing bars into accordion hairlines.
+  minBarSpacing: 0.5,
   fixLeftEdge: false,
   fixRightEdge: false,
 };

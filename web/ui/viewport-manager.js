@@ -1,8 +1,18 @@
 /**
  * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 Multi-Chart).
+ * Shot 6D: poison recovery clamps density only; preserves centerTimeMs (no right-edge force).
  * No logical-index hacks. No try/catch. Deterministic binary search on store.times.
  */
 (function initViewportManager(global) {
+  /** Comfortable candle width — SSOT for cold boot + poison recovery. */
+  const HEALTHY_BAR_SPACING = 6;
+  /** Above this → camera crushed all history into one screen (accordion). */
+  const MAX_HEALTHY_VISIBLE_BARS = 400;
+  /** Below this → LWC crushed barSpacing (poison). */
+  const MIN_HEALTHY_BAR_SPACING = 1;
+  /** Default window when recovering / right-edge restore. */
+  const HEALTHY_VISIBLE_BARS = 150;
+
   function storeForContext(context) {
     if (context === 'backtest') {
       return typeof backtestStore !== 'undefined' ? backtestStore : null;
@@ -43,7 +53,37 @@
     return lo;
   }
 
+  /**
+   * Poison = accordion leftovers from fitContent / extreme zoom.
+   * @param {{ barSpacing?: number|null, visibleBars?: number, from?: number }} state
+   */
+  function isPoisonCameraState(state) {
+    if (!state) return true;
+    if (Number.isFinite(state.from) && state.from < 0) return true;
+    if (Number.isFinite(state.barSpacing) && state.barSpacing < MIN_HEALTHY_BAR_SPACING) return true;
+    if (Number.isFinite(state.visibleBars) && state.visibleBars > MAX_HEALTHY_VISIBLE_BARS) return true;
+    return false;
+  }
+
+  function applyBarSpacingAll(context, barSpacing) {
+    if (barSpacing == null || !Number.isFinite(barSpacing)) return;
+    if (typeof ChartAdapter === 'undefined') return;
+    ['price', 'wozduh', 'rsx'].forEach((pane) => {
+      ChartAdapter.getChart(context, pane)?.timeScale()?.applyOptions({ barSpacing });
+    });
+  }
+
+  function _paneScrollToRight(context) {
+    ['price', 'wozduh', 'rsx'].forEach((pane) => {
+      ChartAdapter.getChart(context, pane)?.timeScale()?.scrollToPosition(0, false);
+    });
+  }
+
   const ViewportManager = {
+    HEALTHY_BAR_SPACING,
+    HEALTHY_VISIBLE_BARS,
+    isPoisonCameraState,
+
     capture(context) {
       const range = typeof ChartAdapter !== 'undefined'
         ? ChartAdapter.getVisibleLogicalRange(context)
@@ -54,24 +94,35 @@
       const times = timesSecFromStore(store);
       if (!times.length) return null;
 
+      let visibleBars = range.to - range.from;
       const centerIndex = Math.floor((range.from + range.to) / 2);
       const clampedIndex = Math.max(0, Math.min(times.length - 1, centerIndex));
       const centerSec = Number(times[clampedIndex]);
       if (!Number.isFinite(centerSec)) return null;
+      const centerTimeMs = Math.floor(centerSec * 1000);
 
       const mainChart = typeof ChartAdapter !== 'undefined'
         ? ChartAdapter.getChart(context, 'price')
         : null;
       const timeScale = mainChart?.timeScale();
       const scrollPos = timeScale?.scrollPosition?.() ?? 0;
-      const isAtRightEdge = scrollPos >= -1;
-      const barSpacing = timeScale?.options()?.barSpacing ?? null;
+      let barSpacing = timeScale?.options()?.barSpacing ?? null;
+
+      // Scalpel: trim density only — never discard centerTimeMs / force right edge.
+      if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
+        barSpacing = HEALTHY_BAR_SPACING;
+        visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
+      }
+
+      const nearRight = scrollPos >= -1;
+      const nearLastIndex = clampedIndex >= times.length - 3;
+      const isAtRightEdge = nearRight && nearLastIndex && range.from >= 0;
 
       return {
-        centerTimeMs: Math.floor(centerSec * 1000),
-        visibleBars: range.to - range.from,
+        centerTimeMs,
+        visibleBars,
         isAtRightEdge,
-        barSpacing,
+        barSpacing: Number.isFinite(barSpacing) ? barSpacing : HEALTHY_BAR_SPACING,
       };
     },
 
@@ -86,35 +137,63 @@
       const mainChart = ChartAdapter.getChart(context, 'price');
       if (!mainChart?.timeScale) return;
 
-      if (anchor.barSpacing != null && Number.isFinite(anchor.barSpacing)) {
-        mainChart.timeScale().applyOptions({ barSpacing: anchor.barSpacing });
+      // Defense in depth: clamp density only — never discard centerTimeMs / force right edge.
+      let safeAnchor = { ...anchor };
+      if (isPoisonCameraState({
+        barSpacing: anchor.barSpacing,
+        visibleBars: anchor.visibleBars,
+        from: 0,
+      })) {
+        safeAnchor.barSpacing = HEALTHY_BAR_SPACING;
+        const currentBars = Number(anchor.visibleBars) || HEALTHY_VISIBLE_BARS;
+        safeAnchor.visibleBars = Math.max(50, Math.min(currentBars, MAX_HEALTHY_VISIBLE_BARS));
       }
 
-      if (anchor.isAtRightEdge) {
-        _paneScrollToRight(context);
+      const spacing = Number.isFinite(safeAnchor.barSpacing)
+        ? safeAnchor.barSpacing
+        : HEALTHY_BAR_SPACING;
+      applyBarSpacingAll(context, spacing);
+
+      if (safeAnchor.isAtRightEdge) {
+        const n = times.length;
+        const visible = Number(safeAnchor.visibleBars) > 0
+          ? Number(safeAnchor.visibleBars)
+          : HEALTHY_VISIBLE_BARS;
+        if (typeof ChartAdapter.setVisibleLogicalRange === 'function' && n > 0) {
+          const from = Math.max(0, n - visible);
+          ChartAdapter.setVisibleLogicalRange(context, { from, to: n }, { animate: false });
+        } else {
+          _paneScrollToRight(context);
+        }
         return;
       }
 
-      const newCenterIndex = findIndexByTimeMs(times, anchor.centerTimeMs);
-      const half = (Number(anchor.visibleBars) || 80) / 2;
-      const range = {
-        from: newCenterIndex - half,
-        to: newCenterIndex + half,
-      };
+      const newCenterIndex = findIndexByTimeMs(times, safeAnchor.centerTimeMs);
+      const half = (Number(safeAnchor.visibleBars) || HEALTHY_VISIBLE_BARS) / 2;
+      const n = times.length;
+      let from = newCenterIndex - half;
+      let to = newCenterIndex + half;
+      if (from < 0) {
+        to -= from;
+        from = 0;
+      }
+      if (to > n) {
+        const over = to - n;
+        from = Math.max(0, from - over);
+        to = n;
+      }
+      if (from >= to) {
+        from = Math.max(0, n - (Number(safeAnchor.visibleBars) || HEALTHY_VISIBLE_BARS));
+        to = n;
+      }
 
       if (typeof ChartAdapter.setVisibleLogicalRange === 'function') {
-        ChartAdapter.setVisibleLogicalRange(context, range, { animate: false });
+        ChartAdapter.setVisibleLogicalRange(context, { from, to }, { animate: false });
       } else {
-        ChartAdapter.syncVisibleLogicalRange(mainChart, range, { animate: false });
+        mainChart.timeScale().setVisibleLogicalRange({ from, to });
       }
     },
   };
-
-  function _paneScrollToRight(context) {
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      ChartAdapter.getChart(context, pane)?.timeScale()?.scrollToPosition(0, false);
-    });
-  }
 
   global.ViewportManager = ViewportManager;
 })(typeof window !== 'undefined' ? window : globalThis);

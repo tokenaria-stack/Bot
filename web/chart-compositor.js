@@ -67,7 +67,11 @@ class ChartCompositor {
    * @param {{ mode: 'full'|'prepend'|'delta'|'indicators', addedBars?: number, viewport?: string, viewportRange?: object|null, anchor?: object, tick?: object, delta?: object }} intent
    */
   flush(intent) {
-    if (!this._store || !this._shouldPaint()) return;
+    // Lonely candle: LWC cannot build a sane X-axis from <2 points (WS race vs REST).
+    if (!this._store || (typeof this._store.barCount === 'function' && this._store.barCount() < 2)) {
+      return;
+    }
+    if (!this._shouldPaint()) return;
     if (typeof ChartAdapter === 'undefined') return;
 
     if (intent.mode === 'delta') {
@@ -148,60 +152,46 @@ class ChartCompositor {
   }
 
   _flushFull(storeData, snapshot, intent) {
-    const phase = intent.phase;
-    const runF1 = phase === 'F1' || !phase;
-    const runF2 = phase === 'F2' || !phase;
+    // Shot 7 atomic frame: Scheduler may still split F1/F2 RAF, but paint+camera
+    // must commit in one call stack. F2 RAF is a no-op (already painted on F1).
+    if (intent.phase === 'F2') return;
 
-    if (runF1) {
-      ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
-      this._applyAnnotations(storeData);
+    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
+    this._applyAnnotations(storeData);
+    this._applyDdrPlots(snapshot);
+    const nav = this._getNavigatorResult();
+    if (nav) {
+      ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
+        context: 'live',
+        updateLoadedCandles: false,
+      });
     }
-
-    if (runF2) {
-      this._applyDdrPlots(snapshot);
-      const nav = this._getNavigatorResult();
-      if (nav) {
-        ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
-          context: 'live',
-          updateLoadedCandles: false,
-        });
-      }
-    }
-
-    // F3: camera commit only after price (F1) and indicators (F2) share the same window.
-    if (phase === 'F2' || !phase) {
-      this._commitFullCamera(intent);
-    }
+    this._commitFullCamera(intent);
   }
 
   _flushPrepend(storeData, snapshot, intent) {
-    const phase = intent.phase;
-    const runF1 = phase === 'F1' || !phase;
-    const runF2 = phase === 'F2' || !phase;
+    // Shot 7 atomic frame: capture → setData → DDR → camera in one stack (F2 no-op).
+    if (intent.phase === 'F2') return;
 
-    if (runF1) {
-      ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
-      this._applyAnnotations(storeData);
+    const prependAnchor = ChartCompositor._captureLeftEdgeAnchor();
+    ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
+    this._applyAnnotations(storeData);
+    this._applyDdrPlots(snapshot);
+    const nav = this._getNavigatorResult();
+    if (nav) {
+      ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
+        context: 'live',
+        updateLoadedCandles: false,
+      });
     }
-
-    if (runF2) {
-      this._applyDdrPlots(snapshot);
-      const nav = this._getNavigatorResult();
-      if (nav) {
-        ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {
-          context: 'live',
-          updateLoadedCandles: false,
-        });
-      }
-    }
-
-    // F3: shift camera only after DDR plots match the prepended price window.
-    if (phase === 'F2' || !phase) {
-      this._commitPrependCamera(intent);
-    }
+    this._commitPrependCamera(snapshot, prependAnchor);
   }
 
-  /** @param {{ anchor?: object, viewport?: string }} intent */
+  /**
+   * Anchor present (TF) → ViewportManager.restore (sanitized barSpacing).
+   * Fresh / cold boot → healthy defaults (never fitContent).
+   * @param {{ anchor?: object, viewport?: string }} intent
+   */
   _commitFullCamera(intent) {
     const anchor = intent?.anchor;
     if (anchor?.centerTimeMs != null && typeof ViewportManager !== 'undefined') {
@@ -209,20 +199,130 @@ class ChartCompositor {
       return;
     }
     if (intent?.viewport === 'fresh' || intent?.viewport == null) {
-      ChartAdapter.getChart('live', 'price')?.timeScale()?.fitContent();
+      this._commitFreshCamera();
     }
   }
 
-  /** @param {{ addedBars?: number, viewportRange?: object|null }} intent */
-  _commitPrependCamera(intent) {
-    const addedBars = Number(intent?.addedBars);
-    if (!Number.isFinite(addedBars) || addedBars <= 0) return;
-    if (typeof ChartAdapter.shiftCamera !== 'function') return;
+  /**
+   * Cold boot camera: barSpacing 6 on all panes + last ~150 bars (no fitContent).
+   */
+  _commitFreshCamera() {
+    const spacing = (typeof ViewportManager !== 'undefined'
+      && Number.isFinite(ViewportManager.HEALTHY_BAR_SPACING))
+      ? ViewportManager.HEALTHY_BAR_SPACING
+      : 6;
+    const visible = (typeof ViewportManager !== 'undefined'
+      && Number.isFinite(ViewportManager.HEALTHY_VISIBLE_BARS))
+      ? ViewportManager.HEALTHY_VISIBLE_BARS
+      : 150;
 
-    const baseRange = ChartCompositor._isFiniteLogicalRange(intent?.viewportRange)
-      ? intent.viewportRange
+    ['price', 'wozduh', 'rsx'].forEach((pane) => {
+      const chart = typeof ChartAdapter !== 'undefined'
+        ? ChartAdapter.getChart('live', pane)
+        : null;
+      chart?.timeScale()?.applyOptions({ barSpacing: spacing });
+    });
+
+    const n = typeof this._store?.barCount === 'function' ? this._store.barCount() : 0;
+    if (n > 0 && typeof ChartAdapter.setVisibleLogicalRange === 'function') {
+      const from = Math.max(0, n - visible);
+      ChartAdapter.setVisibleLogicalRange('live', { from, to: n }, { animate: false });
+      return;
+    }
+
+    ChartAdapter.getChart('live', 'price')?.timeScale()?.scrollToPosition(0, false);
+  }
+
+  /**
+   * Re-align camera so the pre-prepend left-edge time stays at logical `from`.
+   * Works when extractWindow truncates — index math cannot.
+   * @param {object} windowedSnapshot
+   * @param {{ leftTimeMs: number, visibleBars: number }|null} anchor
+   */
+  _commitPrependCamera(windowedSnapshot, anchor) {
+    if (!anchor || anchor.leftTimeMs == null || !Number.isFinite(anchor.leftTimeMs)) return;
+    const times = windowedSnapshot?.times;
+    if (!Array.isArray(times) || !times.length) return;
+    if (typeof ChartAdapter.setVisibleLogicalRange !== 'function') return;
+
+    const fromIdx = ChartCompositor.findIndexByTimeMs(times, anchor.leftTimeMs);
+    const visibleBars = Number.isFinite(anchor.visibleBars) && anchor.visibleBars > 0
+      ? anchor.visibleBars
+      : 80;
+    const n = times.length;
+    let from = fromIdx;
+    let to = fromIdx + visibleBars;
+    if (to > n) {
+      const over = to - n;
+      from = Math.max(0, from - over);
+      to = n;
+    }
+    if (from >= to) {
+      from = Math.max(0, n - visibleBars);
+      to = n;
+    }
+    ChartAdapter.setVisibleLogicalRange('live', { from, to }, { animate: false });
+  }
+
+  /**
+   * Left visible bar time from live LWC *before* setData (logical → pixel → time).
+   * @returns {{ leftTimeMs: number, visibleBars: number }|null}
+   */
+  static _captureLeftEdgeAnchor() {
+    const chart = typeof ChartAdapter !== 'undefined'
+      ? ChartAdapter.getChart('live', 'price')
       : null;
-    ChartAdapter.shiftCamera('live', addedBars, baseRange);
+    const ts = chart?.timeScale?.();
+    if (!ts) return null;
+    const range = ts.getVisibleLogicalRange();
+    if (!ChartCompositor._isFiniteLogicalRange(range)) return null;
+
+    const fromFloor = Math.floor(range.from);
+    const coord = typeof ts.logicalToCoordinate === 'function'
+      ? ts.logicalToCoordinate(fromFloor)
+      : null;
+    if (coord == null || !Number.isFinite(coord) || typeof ts.coordinateToTime !== 'function') {
+      return null;
+    }
+    const time = ts.coordinateToTime(coord);
+    const leftTimeMs = ChartCompositor._timeLikeToMs(time);
+    if (leftTimeMs == null) return null;
+    return {
+      leftTimeMs,
+      visibleBars: range.to - range.from,
+    };
+  }
+
+  /** @param {unknown} time */
+  static _timeLikeToMs(time) {
+    if (time == null) return null;
+    if (typeof time === 'object' && time.timestamp != null) {
+      const n = Number(time.timestamp);
+      return Number.isFinite(n) ? (n < 1e12 ? Math.floor(n * 1000) : Math.floor(n)) : null;
+    }
+    const n = Number(time);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
+  }
+
+  /** Nearest index in ascending unix-seconds (or ms) array for target unix-ms. O(log n). */
+  static findIndexByTimeMs(timesSec, timeMs) {
+    if (!timesSec?.length || timeMs == null || !Number.isFinite(timeMs)) return 0;
+    const first = Number(timesSec[0]);
+    const targetSec = first > 1e12 ? timeMs : timeMs / 1000;
+    let lo = 0;
+    let hi = timesSec.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(timesSec[mid]) < targetSec) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) {
+      const prevDelta = Math.abs(Number(timesSec[lo - 1]) - targetSec);
+      const currDelta = Math.abs(Number(timesSec[lo]) - targetSec);
+      if (prevDelta < currDelta) return lo - 1;
+    }
+    return lo;
   }
 
   /** @param {{ from: number, to: number }|null|undefined} range */
