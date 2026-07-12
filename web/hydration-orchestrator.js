@@ -139,10 +139,6 @@ class HydrationOrchestrator {
           ? ChartAdapter.getVisibleLogicalRange('live')
           : null;
 
-        const anchor = typeof ViewportManager !== 'undefined'
-          ? ViewportManager.capture('live')
-          : null;
-
         const mergeResult = deps.mergeIntoStore(data);
         if (!mergeResult || mergeResult.added <= 0) {
           if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
@@ -150,16 +146,16 @@ class HydrationOrchestrator {
           return;
         }
 
-        const addedBars = Number.isFinite(data.added) && data.added > 0
-          ? data.added
-          : mergeResult.added;
+        // Prefer store merge count (real bars prepended); fall back to API data.added.
+        const addedBars = Number(mergeResult.added) > 0
+          ? Number(mergeResult.added)
+          : (Number.isFinite(data.added) && data.added > 0 ? data.added : 0);
 
         if (typeof deps.markDirty === 'function') {
           deps.markDirty({
             mode: 'prepend',
             addedBars,
             viewportRange: mergeResult.viewportRange ?? viewportRange,
-            anchor,
           });
         }
 

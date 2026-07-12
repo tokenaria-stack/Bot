@@ -159,14 +159,7 @@ class ChartCompositor {
       if (intent.anchor && typeof ViewportManager !== 'undefined') {
         ViewportManager.restore('live', intent.anchor, this._store);
       } else if (intent.viewport === 'fresh' || intent.viewport == null) {
-        const charts = [
-          ChartAdapter.getChart('live', 'price'),
-          ChartAdapter.getChart('live', 'wozduh'),
-          ChartAdapter.getChart('live', 'rsx'),
-        ];
-        charts.forEach((chart) => {
-          chart?.timeScale()?.scrollToPosition(0, false);
-        });
+        ChartAdapter.getChart('live', 'price')?.timeScale()?.fitContent();
       }
     }
 
@@ -188,10 +181,14 @@ class ChartCompositor {
     const runF2 = phase === 'F2' || !phase;
 
     if (runF1) {
+      const prevRange = ChartAdapter.getVisibleLogicalRange('live');
       ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
       this._applyAnnotations(storeData);
-      if (intent.anchor && typeof ViewportManager !== 'undefined') {
-        ViewportManager.restore('live', intent.anchor, this._store);
+
+      const addedBars = Number(intent.addedBars) || 0;
+      if (addedBars > 0 && typeof ChartAdapter.shiftCamera === 'function') {
+        // Prefer pre-setData range: after setData LWC may reset to the right edge.
+        ChartAdapter.shiftCamera('live', addedBars, prevRange);
       }
     }
 

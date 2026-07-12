@@ -60,12 +60,16 @@
 
   function unifiedTimeScaleOptions(showAxisLabels) {
     const base = timeScaleOptions();
-    return {
+    const opts = {
       ...base,
       timeVisible: showAxisLabels,
       secondsVisible: false,
-      visible: showAxisLabels,
     };
+    // Keep axis/grid geometry; hide tick labels on slave panes only.
+    if (!showAxisLabels) {
+      opts.tickMarkFormatter = () => '';
+    }
+    return opts;
   }
 
   function createPaneChart(host, width, height, showAxisLabels) {
@@ -337,6 +341,29 @@
     getVisibleLogicalRange(context) {
       if (context !== 'live' || !_live?.charts?.price) return null;
       return _live.charts.price.timeScale().getVisibleLogicalRange();
+    },
+
+    /**
+     * Shift visible logical range after history prepend (native camera hold).
+     * @param {string} context
+     * @param {number} addedBars bars inserted on the left
+     * @param {{ from: number, to: number }|null} [baseRange] pre-setData range (preferred)
+     */
+    shiftCamera(context, addedBars, baseRange = null) {
+      if (context !== 'live' || !_live?.charts?.price) return;
+      const n = Number(addedBars);
+      if (!Number.isFinite(n) || n <= 0) return;
+
+      const timeScale = _live.charts.price.timeScale();
+      const range = (baseRange && isFiniteLogicalRange(baseRange))
+        ? baseRange
+        : timeScale.getVisibleLogicalRange();
+      if (!isFiniteLogicalRange(range)) return;
+
+      this.setVisibleLogicalRange(context, {
+        from: range.from + n,
+        to: range.to + n,
+      }, { animate: false });
     },
 
     setVisibleLogicalRange(context, range, options = {}) {

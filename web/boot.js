@@ -30,22 +30,106 @@
   window.lastFibZones = window.lastFibZones ?? [];
   window.currentBacktestPayload = window.currentBacktestPayload || null;
 
-  const DEFAULT_RSX_SETTINGS = {
-    length: 14,
-    signal_length: 9,
-    source: 'close',
-    div_method: 'standard',
-    pivot_radius: 5,
-    div_lookback: 60,
-    min_price_delta_ratio: 0.1,
-    min_osc_delta: 0.1,
-  };
-
   let backendTradingTimeframe = null;
   let liveHistoryEpoch = 0;
   let liveHistoryScrollArmed = false;
   let liveNavigatorResult = null;
   let liveHydrationOrchestrator = null;
+  /** Monotonic token: only the latest RSX settings sync may commit store + paint. */
+  let rsxSettingsSyncSeq = 0;
+  /** Serializes overlapping syncRsxIndicatorSettings calls (rapid Save). */
+  let rsxSettingsSyncTail = Promise.resolve();
+
+  function resolveLiveRsxSettings() {
+    if (typeof RsxController !== 'undefined' && typeof coerceRsxSettingsForAPI === 'function') {
+      return coerceRsxSettingsForAPI(RsxController.getSettings('live'));
+    }
+    if (typeof coerceRsxSettingsForAPI === 'function' && typeof defaultRsxSettings === 'function') {
+      return coerceRsxSettingsForAPI(defaultRsxSettings());
+    }
+    return {
+      length: 14,
+      signal_length: 9,
+      source: 'close',
+      div_method: 'standard',
+      pivot_radius: 5,
+      div_lookback: 60,
+      min_price_delta_ratio: 0.1,
+      min_osc_delta: 0.1,
+    };
+  }
+
+  async function syncRsxIndicatorSettings(context = 'live') {
+    if (context !== 'live') {
+      return typeof RsxController !== 'undefined' ? RsxController.syncFromMenu(context) : null;
+    }
+    if (typeof RsxController === 'undefined') return null;
+
+    const applied = RsxController.syncFromMenu('live');
+    RsxController.persist('live', applied);
+
+    const seq = ++rsxSettingsSyncSeq;
+    rsxSettingsSyncTail = rsxSettingsSyncTail
+      .catch(() => {})
+      .then(() => reloadLiveForRsxSettings(seq));
+    await rsxSettingsSyncTail;
+    return applied;
+  }
+
+  async function reloadLiveForRsxSettings(seq) {
+    if (seq !== rsxSettingsSyncSeq) return;
+    if (!liveColumnarStore || !ChartAdapter.isInitialized('live')) return;
+
+    window.__isSettingsUpdating = true;
+    const reqId = ++window.currentLiveRequestId;
+    try {
+      if (window.DDRFactory && !window.DDRFactory.manifest) {
+        await window.DDRFactory.fetchManifest();
+      }
+      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+
+      const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+      const endTimeSec = Math.floor(Date.now() / 1000);
+      const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+
+      const columnar = await API.fetchColumnarHistory({
+        tf: window.currentTf,
+        endTimeSec,
+        limit,
+        slots: resolveLiveSlotIds(),
+        rsxSettings: resolveLiveRsxSettings(),
+        symbol,
+      });
+      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+      if (!columnar?.times?.length) {
+        console.warn('[Renaissance] RSX settings sync — empty columnar response');
+        return;
+      }
+
+      liveColumnarStore.replaceMonolith(columnar);
+      if (!liveColumnarStore.invariantOk()) {
+        console.error('[Renaissance] RSX settings sync — invariant failed', liveColumnarStore.invariantMeta());
+        return;
+      }
+
+      window.historyHasMore = columnar.hasMore !== false;
+      await mountDDRLiveCutover();
+      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+
+      beginDataUpdate();
+      try {
+        liveRenderScheduler?.markDirty({ mode: 'full', viewport: 'fresh' });
+      } finally {
+        endDataUpdate();
+      }
+    } catch (err) {
+      console.error('[Renaissance] syncRsxIndicatorSettings failed:', err);
+    } finally {
+      if (seq === rsxSettingsSyncSeq) {
+        window.__isSettingsUpdating = false;
+      }
+    }
+  }
 
   function installGlobalShims() {
     const fns = {
@@ -67,7 +151,7 @@
       shouldPaintLiveChart: () => TabsController?.isLiveTabActive?.() !== false,
       runBacktest: noopAsync,
       stopBacktest: noop,
-      syncRsxIndicatorSettings: noopAsync,
+      syncRsxIndicatorSettings,
       pushRsxSettingsToServer: noopAsync,
       reloadRsxChartFromServer: noopAsync,
       fetchRsxIndicatorSettings: noopAsync,
@@ -261,7 +345,7 @@
           endTimeSec,
           limit: typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000,
           slots: resolveLiveSlotIds(),
-          rsxSettings: DEFAULT_RSX_SETTINGS,
+          rsxSettings: resolveLiveRsxSettings(),
           symbol,
         });
       },
@@ -353,7 +437,7 @@
           endTimeSec,
           limit,
           slots: resolveLiveSlotIds(),
-          rsxSettings: DEFAULT_RSX_SETTINGS,
+          rsxSettings: resolveLiveRsxSettings(),
           symbol,
         }),
         API.fetchLiveState({ navigatorsOnly: true }),

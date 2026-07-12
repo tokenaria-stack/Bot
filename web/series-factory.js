@@ -9,7 +9,7 @@ class DDRFactory {
   }
 
   constructor(options = {}) {
-    /** @type {Map<string, import('lightweight-charts').ISeriesApi>} */
+    /** @type {Map<string, { chart: import('lightweight-charts').IChartApi, series: import('lightweight-charts').ISeriesApi }>} */
     this.seriesMap = new Map();
     /** @type {{ panes?: Record<string, object[]> } | null} */
     this.manifest = null;
@@ -124,15 +124,24 @@ class DDRFactory {
         if (Array.isArray(points)) this.hydratedData.set(id, points);
       }
     }
-    for (const [id, series] of this.seriesMap) {
+    for (const [id, entry] of this.seriesMap) {
+      const series = DDRFactory._seriesFromEntry(entry);
       const points = source instanceof Map ? source.get(id) : this.hydratedData.get(id);
-      if (!points?.length) continue;
+      if (!series || !points?.length) continue;
       try {
         series.setData(points);
       } catch {
         /* skip invalid setData during cutover */
       }
     }
+  }
+
+  /** @param {{ chart?: object, series?: object }|object|null} entry */
+  static _seriesFromEntry(entry) {
+    if (!entry) return null;
+    if (entry.series && typeof entry.series.setData === 'function') return entry.series;
+    if (typeof entry.setData === 'function') return entry;
+    return null;
   }
 
   static columnToLWC(times, values, sentinel, normalizeTime) {
@@ -164,7 +173,7 @@ class DDRFactory {
       return;
     }
     for (const [key, rawValue] of Object.entries(plots)) {
-      const series = this.seriesMap.get(key);
+      const series = DDRFactory._seriesFromEntry(this.seriesMap.get(key));
       if (!series) continue;
       const value = Number(rawValue);
       if (!Number.isFinite(value)) continue;
@@ -177,17 +186,27 @@ class DDRFactory {
   }
 
   getSeries(id) {
-    return this.seriesMap.get(id);
+    return DDRFactory._seriesFromEntry(this.seriesMap.get(id));
   }
 
   setSeriesVisible(id, visible) {
-    const series = this.seriesMap.get(id);
+    const series = DDRFactory._seriesFromEntry(this.seriesMap.get(id));
     if (!series) return false;
     series.applyOptions({ visible: visible !== false });
     return true;
   }
 
   clear() {
+    for (const entry of this.seriesMap.values()) {
+      const chart = entry?.chart;
+      const series = DDRFactory._seriesFromEntry(entry);
+      if (!chart || !series) continue;
+      try {
+        chart.removeSeries(series);
+      } catch {
+        /* series may already be detached */
+      }
+    }
     this.seriesMap.clear();
     this.hydratedData.clear();
     this.manifest = null;
@@ -222,7 +241,7 @@ class DDRFactory {
         series = chart.addLineSeries(seriesOpts);
         break;
     }
-    this.seriesMap.set(component.id, series);
+    this.seriesMap.set(component.id, { chart, series });
   }
 
   static resolvePriceScaleId(component, chartEntry, renderOpts) {

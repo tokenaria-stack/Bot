@@ -2,7 +2,7 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 3 done.** Window buffer 15000, slave handleScroll/Scale off, priceScale width 75, DDR whitespace. Осталось: freeze window across F1/F2 (optional), TF UI refactor.
+> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Этап 1 Shot 4.** Native `ChartAdapter.shiftCamera(addedBars)` for prepend (no ViewportManager). Slave timeScale keeps grid (`tickMarkFormatter: ''`), not `visible:false`. Window buffer 15000 + whitespace + F1/F2 epoch.
 
 ---
 
@@ -28,7 +28,8 @@
 |------|------------|--------|
 | 1 | `extractWindow` sync-slice + ViewportManager time-anchor (убрать index math) | ✅ Shot 1 done |
 | 2 | Epoch open through F1+F2; queue deltas; remove bool lock | ✅ Shot 2 done |
-| 3 | Geometry width/barSpacing; whitespace DDR; window buffer 15000; slave scroll lock | ✅ Shot 3 done |
+| 3 | Geometry width 75; whitespace DDR; window buffer 15000; slave scroll lock | ✅ Shot 3 |
+| 4 | Native shiftCamera(addedBars); grid via tickMarkFormatter (no visible:false) | ✅ Shot 4 |
 
 **Synchronous Slice Rule:** один индексный диапазон на `times`, все `candles.*`, все `plots[id]`.  
 **Render window:** LWC всегда ~3000 баров (хвост / окно), Store может расти.  
