@@ -155,12 +155,6 @@ class ChartCompositor {
     if (runF1) {
       ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
       this._applyAnnotations(storeData);
-
-      if (intent.anchor && typeof ViewportManager !== 'undefined') {
-        ViewportManager.restore('live', intent.anchor, this._store);
-      } else if (intent.viewport === 'fresh' || intent.viewport == null) {
-        ChartAdapter.getChart('live', 'price')?.timeScale()?.fitContent();
-      }
     }
 
     if (runF2) {
@@ -172,6 +166,11 @@ class ChartCompositor {
           updateLoadedCandles: false,
         });
       }
+    }
+
+    // F3: camera commit only after price (F1) and indicators (F2) share the same window.
+    if (phase === 'F2' || !phase) {
+      this._commitFullCamera(intent);
     }
   }
 
@@ -181,15 +180,8 @@ class ChartCompositor {
     const runF2 = phase === 'F2' || !phase;
 
     if (runF1) {
-      const prevRange = ChartAdapter.getVisibleLogicalRange('live');
       ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
       this._applyAnnotations(storeData);
-
-      const addedBars = Number(intent.addedBars) || 0;
-      if (addedBars > 0 && typeof ChartAdapter.shiftCamera === 'function') {
-        // Prefer pre-setData range: after setData LWC may reset to the right edge.
-        ChartAdapter.shiftCamera('live', addedBars, prevRange);
-      }
     }
 
     if (runF2) {
@@ -202,6 +194,43 @@ class ChartCompositor {
         });
       }
     }
+
+    // F3: shift camera only after DDR plots match the prepended price window.
+    if (phase === 'F2' || !phase) {
+      this._commitPrependCamera(intent);
+    }
+  }
+
+  /** @param {{ anchor?: object, viewport?: string }} intent */
+  _commitFullCamera(intent) {
+    const anchor = intent?.anchor;
+    if (anchor?.centerTimeMs != null && typeof ViewportManager !== 'undefined') {
+      ViewportManager.restore('live', anchor, this._store);
+      return;
+    }
+    if (intent?.viewport === 'fresh' || intent?.viewport == null) {
+      ChartAdapter.getChart('live', 'price')?.timeScale()?.fitContent();
+    }
+  }
+
+  /** @param {{ addedBars?: number, viewportRange?: object|null }} intent */
+  _commitPrependCamera(intent) {
+    const addedBars = Number(intent?.addedBars);
+    if (!Number.isFinite(addedBars) || addedBars <= 0) return;
+    if (typeof ChartAdapter.shiftCamera !== 'function') return;
+
+    const baseRange = ChartCompositor._isFiniteLogicalRange(intent?.viewportRange)
+      ? intent.viewportRange
+      : null;
+    ChartAdapter.shiftCamera('live', addedBars, baseRange);
+  }
+
+  /** @param {{ from: number, to: number }|null|undefined} range */
+  static _isFiniteLogicalRange(range) {
+    return range
+      && Number.isFinite(range.from)
+      && Number.isFinite(range.to)
+      && range.to > range.from;
   }
 
   _applyDdrPlots(snapshot) {

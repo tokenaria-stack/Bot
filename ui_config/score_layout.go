@@ -12,6 +12,7 @@ func ScoreComponents() []core.UIComponent {
 		{
 			ID:         "score_div_macro",
 			Pane:       "pane_score",
+			HostID:     "wozduh",
 			Kind:       "histogram",
 			DataMode:   "scalar",
 			Slot:       core.SlotDivScore,
@@ -20,6 +21,7 @@ func ScoreComponents() []core.UIComponent {
 		{
 			ID:         "score_div_micro",
 			Pane:       "pane_score",
+			HostID:     "wozduh",
 			Kind:       "histogram",
 			DataMode:   "scalar",
 			Slot:       core.SlotMicroDivScore,
@@ -28,6 +30,7 @@ func ScoreComponents() []core.UIComponent {
 		{
 			ID:         "score_total",
 			Pane:       "pane_score",
+			HostID:     "wozduh",
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotTotalScore,

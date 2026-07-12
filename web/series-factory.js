@@ -40,20 +40,23 @@ class DDRFactory {
   }
 
   /**
-   * Mounts manifest components onto charts via pane registry.
+   * Mounts manifest components onto charts via hostId routing from the backend manifest.
    *
-   * @param {Record<string, { chart: import('lightweight-charts').IChartApi, defaultPriceScaleId?: string }>} chartRegistry
-   * @param {Record<string, object[]>} [manifestPanes]
+   * @param {Record<string, { chart: import('lightweight-charts').IChartApi, defaultPriceScaleId?: string }>} hostMap
+   * @param {Record<string, object[]>} [panesData]
    */
-  buildPanes(chartRegistry, manifestPanes) {
-    const panes = manifestPanes || this.manifest?.panes;
-    if (!chartRegistry || !panes || typeof panes !== 'object') {
+  buildPanes(hostMap, panesData) {
+    const panes = panesData || this.manifest?.panes;
+    if (!hostMap || !panes || typeof panes !== 'object') {
       return;
     }
-    for (const [paneId, components] of Object.entries(panes)) {
-      const entry = chartRegistry[paneId];
-      if (!entry?.chart || !Array.isArray(components)) continue;
+    for (const components of Object.values(panes)) {
+      if (!Array.isArray(components)) continue;
       for (const component of components) {
+        const hostId = component.hostId || component.hostID;
+        if (!hostId) continue;
+        const entry = hostMap[hostId];
+        if (!entry?.chart) continue;
         this._mountComponent(entry, component);
       }
     }

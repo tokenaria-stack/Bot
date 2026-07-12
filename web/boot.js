@@ -310,8 +310,8 @@
     const wozduh = ChartAdapter.getChart('live', 'wozduh');
     if (!rsx || !wozduh) return false;
     window.DDRFactory.buildPanes({
-      pane_osc: { chart: rsx, defaultPriceScaleId: 'right' },
-      pane_score: { chart: wozduh, defaultPriceScaleId: 'right' },
+      rsx: { chart: rsx, defaultPriceScaleId: 'right' },
+      wozduh: { chart: wozduh, defaultPriceScaleId: 'right' },
     }, window.DDRFactory.manifest.panes);
     if (typeof SettingsRenderer !== 'undefined') SettingsRenderer.refreshFromManifest();
     return true;
@@ -412,10 +412,11 @@
     });
   }
 
-  async function loadDashboard() {
+  async function loadDashboard(options = {}) {
+    const viewportAnchor = options.viewportAnchor ?? null;
     const reqId = ++window.currentLiveRequestId;
     if (!ChartAdapter.isInitialized('live') && !ChartAdapter.initLiveCharts()) {
-      setTimeout(loadDashboard, 500);
+      setTimeout(() => loadDashboard(options), 500);
       return;
     }
 
@@ -445,7 +446,7 @@
       if (reqId !== window.currentLiveRequestId) return;
 
       if (stateResult?.warmingUp) {
-        setTimeout(loadDashboard, 2000);
+        setTimeout(() => loadDashboard(options), 2000);
         return;
       }
 
@@ -465,7 +466,11 @@
 
       beginDataUpdate();
       try {
-        liveRenderScheduler?.markDirty({ mode: 'full', viewport: 'fresh' });
+        liveRenderScheduler?.markDirty({
+          mode: 'full',
+          viewport: viewportAnchor ? 'restore' : 'fresh',
+          anchor: viewportAnchor,
+        });
       } finally {
         endDataUpdate();
       }

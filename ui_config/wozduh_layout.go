@@ -12,6 +12,7 @@ func WozduhComponents() []core.UIComponent {
 		{
 			ID:         "woz_fast",
 			Pane:       "pane_osc",
+			HostID:     "wozduh",
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotWozduhFast,
@@ -20,6 +21,7 @@ func WozduhComponents() []core.UIComponent {
 		{
 			ID:         "woz_slow",
 			Pane:       "pane_osc",
+			HostID:     "wozduh",
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotWozduhSlow,

@@ -12,6 +12,7 @@ func RSXComponents() []core.UIComponent {
 		{
 			ID:         "line_rsx",
 			Pane:       "pane_osc",
+			HostID:     "rsx",
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikRSX,
@@ -20,6 +21,7 @@ func RSXComponents() []core.UIComponent {
 		{
 			ID:         "line_rsx_signal",
 			Pane:       "pane_osc",
+			HostID:     "rsx",
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikSignal,
