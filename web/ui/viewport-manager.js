@@ -105,7 +105,6 @@
         ? ChartAdapter.getChart(context, 'price')
         : null;
       const timeScale = mainChart?.timeScale();
-      const scrollPos = timeScale?.scrollPosition?.() ?? 0;
       let barSpacing = timeScale?.options()?.barSpacing ?? null;
 
       // Scalpel: trim density only — never discard centerTimeMs / force right edge.
@@ -114,9 +113,9 @@
         visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
       }
 
-      const nearRight = scrollPos >= -1;
-      const nearLastIndex = clampedIndex >= times.length - 3;
-      const isAtRightEdge = nearRight && nearLastIndex && range.from >= 0;
+      // Live edge = live candle visible in frame (not "center near last bars").
+      const isLiveCandleVisible = range.to >= times.length - 1;
+      const isAtRightEdge = isLiveCandleVisible && range.from >= 0;
 
       return {
         centerTimeMs,

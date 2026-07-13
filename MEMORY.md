@@ -954,7 +954,10 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
 | **46** | **MEMORY sync** | this file | ✅ Phase 7–8A logged |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
-| **48** | **Debug agent logs cleanup** | `app.js` | 🟡 session 39f875 ingest |
+| **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
+| **55** | **PersistenceQueue (P0b)** — closed bar → async batch UPSERT SQLite; не sync из Analyst | `strategy/`, `data/history_db.go` | 🔜 after 9A |
+| **56** | **SQLiteNeedsCatchUp (P0c)** — развести RAM gap-fill vs archive tip lag | `strategy/kline_gap.go` | 🔜 after 9A |
+| **57** | ~~**HistoryProvider / Sync Gap delivery**~~ | `server/history_provider.go` | ✅ Shot 9A GetWindow = SQLite∪RAM |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
@@ -965,7 +968,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | 2 | **Navigator background zones** | `web/trendline_plugin.js` | 🟡 |
 | 3 | ~~**Backtest viewport**~~ | `web/ui/viewport-manager.js` | ✅ 20.4C (supersedes `viewport.js`) |
 | 4 | **Backend 1M** — UI `1M`→`1w` | `server/`, `main.go` | 🟢 |
-| 5 | **Microscope `endTime`** | `web/app.js` | 🟡 TF switch без center-anchor API |
+| **5** | **Microscope `endTime`** — boot всегда `endTimeSec=now`; deep-history TF relies on `centerTimeMs` inside loaded window. Live-edge vs history split = Shot 8 `isLiveCandleVisible`. Full center-anchored fetch still optional. | `web/boot.js`, `viewport-manager.js` | 🟡 Shot 8 partial; fetch-around-center if window miss |
 | 6 | **Forward lazy load** | `web/app.js` | 🟡 scroll prepend only (pre-fetch закрывает initial) |
 | 7 | **SQLite clear в Cache** | `server/webserver.go` | 🟡 |
 | 8 | **Qdrant in main** | `main.go`, `vector_db/` | 🔜 |

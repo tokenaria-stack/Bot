@@ -1488,7 +1488,20 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		if err := requestCtxErr(r.Context()); err != nil {
 			return
 		}
-		klines := d.ramKlines(spec.ID, candleLimit+strategy.IndicatorWarmupBars)
+		resolvedEndMs := endTimeMs
+		if resolvedEndMs <= 0 {
+			resolvedEndMs = historyEndTimeToMs(endTimeSec)
+		}
+		win, okWin := d.GetWindow(r.Context(), HistoryWindowQuery{
+			Spec:        spec,
+			EndTimeMs:   resolvedEndMs,
+			CandleLimit: candleLimit,
+		})
+		if !okWin || len(win.Klines) == 0 {
+			http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+			return
+		}
+		klines := win.Klines
 		analyst := d.analystForSpec(spec)
 		if analyst != nil && len(klines) > 0 {
 			trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
@@ -1517,14 +1530,19 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
-	klines := d.loadRESTKlinesFromStore(r.Context(), spec, resolvedEndMs, candleLimit, true)
+	win, okWin := d.GetWindow(r.Context(), HistoryWindowQuery{
+		Spec:        spec,
+		EndTimeMs:   resolvedEndMs,
+		CandleLimit: candleLimit,
+	})
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	if len(klines) == 0 {
+	if !okWin || len(win.Klines) == 0 {
 		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
 		return
 	}
+	klines := win.Klines
 
 	trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
 	if err := requestCtxErr(r.Context()); err != nil {
@@ -1549,7 +1567,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if len(resp.Candles) > 0 {
-		resp.HasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, resp.Candles[0].Time*1000)
+		resp.HasMore = win.HasMore
 	}
 	log.Printf("[Dashboard] history prepend %s %s: %d candles (from %d klines) hasMore=%v",
 		d.symbol, spec.BinanceInterval, len(resp.Candles), len(klines), resp.HasMore)

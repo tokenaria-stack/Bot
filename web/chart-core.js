@@ -45,7 +45,13 @@
   }
 
   function crosshairOptions() {
-    return typeof SHARED_CROSSHAIR !== 'undefined' ? { ...SHARED_CROSSHAIR } : { mode: LightweightCharts.CrosshairMode.Normal };
+    const base = typeof SHARED_CROSSHAIR !== 'undefined' ? { ...SHARED_CROSSHAIR } : {};
+    return {
+      ...base,
+      mode: 0, // CrosshairMode.Normal — free float with mouse (no Magnet)
+      vertLine: { ...(base.vertLine || {}), width: 1, style: 1 }, // LineStyle.Dotted
+      horzLine: { ...(base.horzLine || {}), width: 1, style: 1 },
+    };
   }
 
   function priceScaleOptions(extra = {}) {
@@ -105,7 +111,10 @@
       autoSize: false,
       layout: layoutOptions(),
       grid: gridOptions(false),
-      crosshair: crosshairOptions(),
+      crosshair: {
+        ...crosshairOptions(),
+        horzLine: { visible: false, labelVisible: false },
+      },
       timeScale: unifiedTimeScaleOptions(false),
       width,
       height,

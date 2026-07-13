@@ -228,7 +228,12 @@ class DDRFactory {
 
     const renderOpts = DDRFactory._parseRenderOpts(component.renderOptions);
     const priceScaleId = DDRFactory.resolvePriceScaleId(component, chartEntry, renderOpts);
-    const seriesOpts = { ...renderOpts, priceScaleId };
+    const seriesOpts = {
+      ...renderOpts,
+      priceScaleId,
+      crosshairMarkerVisible: false,
+      crosshairMarkerRadius: 0,
+    };
     delete seriesOpts.title;
     // scaleMargins belongs on PriceScale, not SeriesOptions.
     const scaleMargins = seriesOpts.scaleMargins;

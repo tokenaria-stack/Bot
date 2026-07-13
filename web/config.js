@@ -199,8 +199,9 @@ function ensureChartLibraryStyles() {
   seriesDefaults: {
     priceLineVisible: false,
     lastValueVisible: false,
-    crosshairMarkerRadius: 1,
-    crosshairMarkerBorderWidth: 1,
+    crosshairMarkerVisible: false,
+    crosshairMarkerRadius: 0,
+    crosshairMarkerBorderWidth: 0,
     crosshairMarkerBorderColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshairMarkerBorder : '#90ee90',
   },
   candle: {
@@ -359,8 +360,8 @@ function ensureChartLibraryStyles() {
 
   SHARED_CROSSHAIR = {
     mode: LC.CrosshairMode.Normal,
-    vertLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
-    horzLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
+    vertLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dotted },
+    horzLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dotted },
   };
 
   return true;
@@ -377,7 +378,7 @@ const SHARED_TIME_SCALE = {
   timeVisible: true,
   secondsVisible: false,
   // Floor stops fitContent / zoom from crushing bars into accordion hairlines.
-  minBarSpacing: 0.5,
+  minBarSpacing: 0.1,
   fixLeftEdge: false,
   fixRightEdge: false,
 };

@@ -220,41 +220,37 @@ func (d *DashboardServer) writeColumnarHistory(
 	}
 
 	warmup := strategy.IndicatorWarmupBars
-	var klines []exchange.Kline
-	var hasMore bool
+	resolvedEndMs := endTimeMs
+	if resolvedEndMs <= 0 {
+		resolvedEndMs = historyEndTimeToMs(endTimeSec)
+	}
 
-	if spec.Kind == TFRAMOnly {
-		klines = d.ramKlines(spec.ID, candleLimit+warmup)
-		hasMore = false
-	} else {
-		resolvedEndMs := endTimeMs
-		if resolvedEndMs <= 0 {
-			resolvedEndMs = historyEndTimeToMs(endTimeSec)
-		}
-		klines = d.loadRESTKlinesFromStore(r.Context(), spec, resolvedEndMs, candleLimit, true)
-		if err := requestCtxErr(r.Context()); err != nil {
-			return
-		}
-		if len(klines) == 0 {
-			http.Error(w, "no historical data available", http.StatusServiceUnavailable)
-			return
-		}
-		hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, exchange.ChartTimeSec(klines[0].OpenTime)*1000)
+	win, okWin := d.GetWindow(r.Context(), HistoryWindowQuery{
+		Spec:        spec,
+		EndTimeMs:   resolvedEndMs,
+		CandleLimit: candleLimit,
+	})
+	if err := requestCtxErr(r.Context()); err != nil {
+		return
+	}
+	if !okWin || len(win.Klines) == 0 {
+		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+		return
 	}
 
 	resp, ok := d.buildColumnarHistoryPayload(
 		r.Context(),
-		klines,
+		win.Klines,
 		candleLimit,
 		warmup,
 		rsxSettings,
 		slotIDs,
-		hasMore,
+		win.HasMore,
 		spec.ID,
 		spec.BinanceInterval,
 	)
 	if !ok {
-		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(klines))
+		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(win.Klines))
 		http.Error(w, "history replay empty", http.StatusServiceUnavailable)
 		return
 	}
@@ -262,6 +258,6 @@ func (d *DashboardServer) writeColumnarHistory(
 		return
 	}
 	log.Printf("[Dashboard] columnar history %s %s: %d bars (from %d klines) slots=%d anns=%d hasMore=%v",
-		d.symbol, spec.BinanceInterval, resp.Added, len(klines), len(resp.Plots), len(resp.Annotations), resp.HasMore)
+		d.symbol, spec.BinanceInterval, resp.Added, len(win.Klines), len(resp.Plots), len(resp.Annotations), resp.HasMore)
 	writeJSON(w, resp)
 }
