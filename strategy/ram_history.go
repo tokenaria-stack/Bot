@@ -8,7 +8,8 @@ import (
 	"trading_bot/exchange"
 )
 
-// LoadRAMHistory reads klines for Marker boot with mandatory REST catch-up when SQLite has gaps.
+// LoadRAMHistory boots Marker RAM from SQLite, then REST-fills holes via FetchClosedRangePages.
+// Sterile (Shot 9E): never synthesizes bars; never writes SQLite (PersistenceQueue owns disk).
 func LoadRAMHistory(rest *exchange.BinanceExchange, symbol, interval string, maxBars int) []exchange.Kline {
 	if maxBars <= 0 {
 		maxBars = LiveKlineRAMCap
@@ -25,16 +26,26 @@ func LoadRAMHistory(rest *exchange.BinanceExchange, symbol, interval string, max
 	if intervalSkipsKlineGapFill(interval) {
 		return LoadRAMHistoryFromDB(symbol, interval, maxBars)
 	}
-	if rest != nil {
-		candles, fetchErr := rest.FetchHistoricalKlines(symbol, interval, startMs, endMs)
-		if fetchErr == nil && len(candles) > 0 {
-			return exchange.KlinesFromCandles(candles)
-		}
-		if fetchErr != nil {
-			log.Printf("[RAM] gap-fill %s %s: %v — SQLite fallback", symbol, interval, fetchErr)
-		}
+
+	db := LoadRAMHistoryFromDB(symbol, interval, maxBars)
+	if rest == nil {
+		return db
 	}
-	return LoadRAMHistoryFromDB(symbol, interval, maxBars)
+
+	candles, fetchErr := rest.FetchClosedRangePages(symbol, interval, startMs, endMs)
+	if fetchErr != nil {
+		log.Printf("[RAM] FetchClosedRangePages %s %s: %v — SQLite fallback", symbol, interval, fetchErr)
+		return db
+	}
+	if len(candles) == 0 {
+		return db
+	}
+	restKlines := exchange.KlinesFromCandles(candles)
+	if len(db) == 0 {
+		return restKlines
+	}
+	// Overlay: REST wins on duplicate open_time (exchange is source of truth for OHLCV).
+	return mergeKlinesByOpenTime(db, restKlines)
 }
 
 // LoadRAMHistoryFromDB reads up to maxBars klines from SQLite once (startup / hydrate only).

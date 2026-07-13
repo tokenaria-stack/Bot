@@ -215,19 +215,27 @@ func (a *Marker) saveLayer2StreamingState() {
 }
 
 func (a *Marker) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	a.falcon.RestoreState()
-	a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
-	if isClosed {
-		a.falcon.SaveState()
+	// Shot 9F: ChartOnly skips Falcon.Evaluate; DAG always runs for Projector/WS plots.
+	if EngineAllowsStrategies() && a.falcon != nil {
+		a.falcon.RestoreState()
+		a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
+		if isClosed {
+			a.falcon.SaveState()
+		}
 	}
 	a.runDAGShadowLocked(k, barIndex, isClosed)
 }
 
 func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	if !a.bulkReplayMode {
+	if EngineAllowsStrategies() && !a.bulkReplayMode {
 		a.restoreLayer2StreamingState()
 	}
+	// DAG (and Falcon when Live) — chart delivery oxygen.
 	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
+	if !EngineAllowsStrategies() {
+		return
+	}
+
 	curRed := a.falconSignals.RedLine
 	curGreen := a.falconSignals.GreenLine
 	a.redLineCrossGreenUp = detectRedLineCrossGreenUp(a.prevFalconRed, a.prevFalconGreen, curRed, curGreen)

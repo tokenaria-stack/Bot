@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"log"
 
 	"trading_bot/exchange"
 	"trading_bot/strategy"
@@ -22,9 +21,6 @@ func (d *DashboardServer) buildLiveChartFromRAM(
 	result, ok := strategy.ExportChartSeriesForWindow(analyst, klines, settings)
 	if !ok {
 		return nil, nil, nil, false
-	}
-	if len(result.ChartPoints) > stateTailPollLimit+strategy.IndicatorWarmupBars {
-		log.Printf("[ChartCache] RAM marker export: %d bars (zero replay)", len(result.ChartPoints))
 	}
 	candles, oscillators, annotations := chartSeriesFromReplayResult(result, true)
 	return candles, oscillators, annotations, true

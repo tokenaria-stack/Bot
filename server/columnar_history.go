@@ -257,7 +257,5 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	log.Printf("[Dashboard] columnar history %s %s: %d bars (from %d klines) slots=%d anns=%d hasMore=%v",
-		d.symbol, spec.BinanceInterval, resp.Added, len(win.Klines), len(resp.Plots), len(resp.Annotations), resp.HasMore)
 	writeJSON(w, resp)
 }

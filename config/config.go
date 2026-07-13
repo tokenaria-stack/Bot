@@ -16,6 +16,8 @@ type Config struct {
 	SandboxMode      bool
 	Symbol           string
 	Timeframe        string
+	// EngineMode: ChartOnly (default) = data delivery; Live = trading stack.
+	EngineMode string
 }
 
 // LoadConfig loads .env (optional) and reads Binance USD-M Futures credentials.
@@ -56,6 +58,7 @@ func LoadConfig() (*Config, error) {
 		SandboxMode:      envTruthy("HYPER_SCALP_TEST", "SANDBOX_MODE"),
 		Symbol:           symbol,
 		Timeframe:        timeframe,
+		EngineMode:       firstNonEmpty(os.Getenv("ENGINE_MODE"), "ChartOnly"),
 	}, nil
 }
 

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"trading_bot/exchange"
@@ -83,9 +82,6 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	if len(merged) > 0 && spec.BinanceInterval != "" {
 		hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, exchange.ChartTimeSec(merged[0].OpenTime)*1000)
 	}
-
-	log.Printf("[HistoryProvider] GetWindow %s end=%d db=%d ram=%d merged=%d hasMore=%v",
-		spec.ID, endTimeMs, len(dbKlines), len(ramKlines), len(merged), hasMore)
 
 	return HistoryWindow{Klines: merged, HasMore: hasMore}, true
 }

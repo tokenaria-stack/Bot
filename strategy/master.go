@@ -11,6 +11,7 @@ import (
 
 	"trading_bot/exchange"
 	"trading_bot/execution"
+	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/vector_db"
 )
@@ -58,6 +59,8 @@ type MasterGeneral struct {
 	onClosedTrade    func(trade domain.ClosedTrade, isVirtual bool)
 
 	TickLiveCh chan struct{}
+
+	persistQ *data.PersistenceQueue
 
 	mtfTracker      *WalkForwardMTFTracker
 	navigatorPanes  map[string]NavigatorUISettings
@@ -272,6 +275,16 @@ func (m *MasterGeneral) SetOnTick(fn func(kline exchange.Kline, jurik, redLine, 
 func (m *MasterGeneral) SetOnTelemetry(fn func(tick exchange.WsTick, falcon FalconSignals, decision ScoreDecision)) {
 	m.mu.Lock()
 	m.onTelemetry = fn
+	m.mu.Unlock()
+}
+
+// SetPersistenceQueue binds the sole SQLite archive writer (Shot 9E).
+func (m *MasterGeneral) SetPersistenceQueue(q *data.PersistenceQueue) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.persistQ = q
 	m.mu.Unlock()
 }
 

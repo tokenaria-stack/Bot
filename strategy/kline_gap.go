@@ -64,7 +64,7 @@ func klineReconcileWindowMs(interval string, maxBars int) (startMs, endMs int64)
 	return startMs, endMs
 }
 
-// StartKlineGapFillLoop runs an immediate reconcile and periodic gap-fill on the write path (Master SSOT).
+// StartKlineGapFillLoop runs an immediate reconcile and periodic RAM gap-fill (Master SSOT).
 func (m *MasterGeneral) StartKlineGapFillLoop(ctx context.Context) {
 	if m == nil {
 		return
@@ -84,7 +84,7 @@ func (m *MasterGeneral) StartKlineGapFillLoop(ctx context.Context) {
 	}()
 }
 
-// ReconcileAllKlineGaps checks every Marker for holes and backfills via REST → SQLite → RAM.
+// ReconcileAllKlineGaps checks every Marker for holes and backfills via FetchClosedRange → RAM.
 func (m *MasterGeneral) ReconcileAllKlineGaps() {
 	if m == nil || m.exchangeClient == nil {
 		return
@@ -121,11 +121,12 @@ func (m *MasterGeneral) reconcileKlineGap(symbol, interval string, analyst *Mark
 		return
 	}
 	tail := analyst.GetKlines()
+	// RAM-only gate: healthy Analyst skips REST. SQLite tip heal is StartSQLiteArchiveCatchUpLoop.
 	if len(tail) > 0 && !KlineSeriesNeedsGapFill(tail, endMs, intervalMs) {
 		return
 	}
 
-	candles, err := m.exchangeClient.FetchHistoricalKlines(symbol, interval, startMs, endMs)
+	candles, err := m.exchangeClient.FetchClosedRangePages(symbol, interval, startMs, endMs)
 	if err != nil {
 		log.Printf("[Master] gap-fill %s %s [%d..%d]: %v", symbol, interval, startMs, endMs, err)
 		return
@@ -135,7 +136,9 @@ func (m *MasterGeneral) reconcileKlineGap(symbol, interval string, analyst *Mark
 	}
 	klines := exchange.KlinesFromCandles(candles)
 	analyst.LoadHistoricalKlines(klines)
-	log.Printf("[Master] gap-fill reconciled %s %s: %d bars", symbol, interval, len(klines))
+
+	// Archive the same real bars via sole writer (does not mutate RAM).
+	m.enqueueArchiveCandles(symbol, interval, candles)
 
 	m.mu.RLock()
 	workTF := m.timeframe
@@ -143,5 +146,22 @@ func (m *MasterGeneral) reconcileKlineGap(symbol, interval string, analyst *Mark
 	if interval == workTF {
 		m.SeedClosedBarTelemetry()
 		m.rebuildMTFTrackerIfReady()
+	}
+}
+
+func (m *MasterGeneral) enqueueArchiveCandles(symbol, interval string, candles []exchange.Candle) {
+	if m == nil || len(candles) == 0 {
+		return
+	}
+	m.mu.RLock()
+	q := m.persistQ
+	m.mu.RUnlock()
+	if q == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := q.AppendClosedBars(ctx, symbol, interval, exchange.CandlesToData(candles)); err != nil {
+		log.Printf("[Master] archive enqueue %s %s: %v", symbol, interval, err)
 	}
 }

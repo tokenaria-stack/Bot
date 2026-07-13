@@ -82,6 +82,8 @@ func InitDB() error {
 	for _, pragma := range []string{
 		`PRAGMA journal_mode=WAL`,
 		`PRAGMA synchronous=NORMAL`,
+		// Serialize writers under load (REST catch-up + PersistenceQueue) without failing busy.
+		`PRAGMA busy_timeout=5000`,
 	} {
 		if _, dbErr = db.Exec(pragma); dbErr != nil {
 			return fmt.Errorf("%s: %w", pragma, dbErr)
@@ -148,24 +150,24 @@ func logDBStatsLocked() {
 
 	var total int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM historical_klines`).Scan(&total); err != nil {
-		log.Printf("[DEBUG] history DB stats failed (path=%s): %v", absPath, err)
+		log.Printf("[Init] history DB stats failed (path=%s): %v", absPath, err)
 		return
 	}
 
-	log.Printf("[DEBUG] history DB path=%s total_klines=%d", absPath, total)
+	log.Printf("[Init] history DB path=%s total_klines=%d", absPath, total)
 
 	var minT, maxT sql.NullInt64
 	if err := db.QueryRow(`SELECT MIN(open_time), MAX(open_time) FROM historical_klines`).Scan(&minT, &maxT); err != nil {
-		log.Printf("[DEBUG] history DB open_time range query failed: %v", err)
+		log.Printf("[Init] history DB open_time range query failed: %v", err)
 		return
 	}
 	if !minT.Valid {
-		log.Printf("[DEBUG] historical_klines table is empty")
+		log.Printf("[Init] historical_klines table is empty")
 		return
 	}
 
 	log.Printf(
-		"[DEBUG] stored open_time range: min=%d (%s) max=%d (%s)",
+		"[Init] stored open_time range: min=%d (%s) max=%d (%s)",
 		minT.Int64, describeTimeUnit(minT.Int64),
 		maxT.Int64, describeTimeUnit(maxT.Int64),
 	)
@@ -197,8 +199,10 @@ func ensureUnixMillis(ts int64) int64 {
 }
 
 // SaveKlines upserts candles in a single transaction.
-// open_time and close_time are stored as Unix milliseconds (Binance native format).
-// ON CONFLICT updates OHLCV so a stale/partial row never blocks a fresher closed bar (Shot 9C).
+// SaveKlines UPSERTs candles into historical_klines.
+// Production runtime: call only from PersistenceQueue (Shot 9E single-writer).
+// Tests and offline tools (cmd/history_sync) may call directly.
+// ON CONFLICT updates OHLCV so a stale/partial row never blocks a fresher closed bar.
 func SaveKlines(symbol, interval string, klines []Candle) error {
 	if err := InitDB(); err != nil {
 		return err
@@ -262,14 +266,6 @@ func LoadKlines(symbol, interval string, startTime, endTime int64, limit int) ([
 	startTime = ensureUnixMillis(startTime)
 	endTime = ensureUnixMillis(endTime)
 
-	fmt.Printf("Querying: %d to %d\n", startTime, endTime)
-	log.Printf(
-		"[DEBUG] Executing: SELECT * FROM historical_klines WHERE symbol='%s' AND interval='%s' AND open_time >= %d AND open_time <= %d",
-		symbol, interval, startTime, endTime,
-	)
-	warnIfTimeLooksLikeSeconds("startTime", startTime)
-	warnIfTimeLooksLikeSeconds("endTime", endTime)
-
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -311,17 +307,6 @@ ORDER BY open_time ASC`,
 		return nil, fmt.Errorf("iterate klines: %w", err)
 	}
 
-	log.Printf("[DEBUG] LoadKlines returned %d rows for %s %s", len(out), symbol, interval)
-	if len(out) > 0 {
-		first := out[0]
-		last := out[len(out)-1]
-		log.Printf(
-			"[DEBUG] result open_time range: first=%d (%s) last=%d (%s)",
-			first.OpenTime, describeTimeUnit(first.OpenTime),
-			last.OpenTime, describeTimeUnit(last.OpenTime),
-		)
-	}
-
 	return out, nil
 }
 
@@ -331,6 +316,28 @@ type KlineCacheBounds struct {
 	MinTime int64
 	MaxTime int64
 	HasData bool
+}
+
+// QueryKlineTipMaxOpenTime returns MAX(open_time) for (symbol, interval).
+// hasTip is false when the archive has no rows (tipOpenMs is then 0).
+func QueryKlineTipMaxOpenTime(symbol, interval string) (tipOpenMs int64, hasTip bool, err error) {
+	if err := InitDB(); err != nil {
+		return 0, false, err
+	}
+	symbol = normalizeSymbol(symbol)
+	interval = strings.TrimSpace(interval)
+
+	var maxT sql.NullInt64
+	if err := db.QueryRow(
+		`SELECT MAX(open_time) FROM historical_klines WHERE symbol = ? AND interval = ?`,
+		symbol, interval,
+	).Scan(&maxT); err != nil {
+		return 0, false, fmt.Errorf("max open_time: %w", err)
+	}
+	if !maxT.Valid {
+		return 0, false, nil
+	}
+	return maxT.Int64, true, nil
 }
 
 // QueryKlineCacheBounds returns row count and min/max open_time (ms) in SQLite.

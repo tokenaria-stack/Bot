@@ -68,7 +68,8 @@ func (a *Marker) runDAGShadowLocked(k exchange.Kline, barIndex int, isClosed boo
 }
 
 func (a *Marker) validateDAGShadowLocked() {
-	if a.dag == nil {
+	// Falcon parity checks only make sense when Falcon is evaluating (Live).
+	if a.dag == nil || !EngineAllowsStrategies() {
 		return
 	}
 	bus := a.dag.Bus()

@@ -198,8 +198,9 @@ func (a *Marker) JurikRSXColor() string {
 	return RSXColor(a.jurikValue, a.jurikPrevBar)
 }
 
-// LoadHistoricalKlines merges SQLite backfill with the live RAM buffer (overlay wins on
+// LoadHistoricalKlines merges real exchange bars with the live RAM buffer (overlay wins on
 // duplicate OpenTime), then replays streaming engines once.
+// Callers must pass exchange-sourced bars only (FetchClosedRange / WS) — never synthetic fills.
 //
 // Mutex contract: analyst.mu is a plain sync.Mutex (blocking wait, no timeout).
 // UpdateKlineTick and LoadHistoricalKlines are the only writers; both call Lock once.
@@ -273,9 +274,13 @@ func (a *Marker) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
 	a.evaluateTickLocked(k, barIndex, isClosed)
 }
 
-// evaluateTickBulkChartLocked is the chart-only cold replay path (falcon + RSX markers, zero snap churn).
+// evaluateTickBulkChartLocked is the chart-only cold replay path.
+// Shot 9F: ChartOnly → DAG only; Live → Falcon + RSX markers (legacy export).
 func (a *Marker) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isClosed bool) {
 	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
+	if !EngineAllowsStrategies() {
+		return
+	}
 	a.recordDataBusBarLocked(barIndex, a.falconSignals)
 	a.cachedRSXMarkerBar = barIndex
 	a.cachedRSXMarkerLabel = ""

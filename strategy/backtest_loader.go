@@ -14,12 +14,12 @@ type LoadBacktestCandlesOpts struct {
 	Interval string
 	StartMs  int64
 	EndMs    int64
-	Rest     *exchange.BinanceExchange // optional REST gap-fill when SQLite is sparse
+	Rest     *exchange.BinanceExchange // optional REST fill when SQLite is sparse
 }
 
 // LoadBacktestCandles reads OHLCV from SQLite (continuous contract stitch).
-// When Rest is set and bars are below BacktestMinBars(), it fetches via the same
-// unified layer as the dashboard (SQLite write-through + reload).
+// When Rest is set and bars are below BacktestMinBars(), it fetches via FetchClosedRangePages
+// (sterile — no synthesize). Does not write SQLite; callers that want archive should use PersistenceQueue.
 func LoadBacktestCandles(opts LoadBacktestCandlesOpts) ([]exchange.Candle, int64, error) {
 	if opts.Symbol == "" {
 		opts.Symbol = "BTCUSDT"
@@ -49,7 +49,7 @@ func LoadBacktestCandles(opts LoadBacktestCandlesOpts) ([]exchange.Candle, int64
 
 	minBars := BacktestMinBars()
 	if len(candles) < minBars && opts.Rest != nil {
-		fetched, fetchErr := opts.Rest.FetchHistoricalKlines(opts.Symbol, opts.Interval, effectiveStart, opts.EndMs)
+		fetched, fetchErr := opts.Rest.FetchClosedRangePages(opts.Symbol, opts.Interval, effectiveStart, opts.EndMs)
 		if fetchErr != nil {
 			return nil, effectiveStart, fmt.Errorf("sqlite %d bars, rest fetch: %w", len(candles), fetchErr)
 		}
@@ -63,7 +63,7 @@ func LoadBacktestCandles(opts LoadBacktestCandlesOpts) ([]exchange.Candle, int64
 		}
 		effectiveStart = paddedStart
 		if opts.Rest != nil {
-			candles, err = opts.Rest.FetchHistoricalKlines(opts.Symbol, opts.Interval, effectiveStart, opts.EndMs)
+			candles, err = opts.Rest.FetchClosedRangePages(opts.Symbol, opts.Interval, effectiveStart, opts.EndMs)
 		} else {
 			candles, err = loadCandlesRange(opts.Symbol, opts.Interval, effectiveStart, opts.EndMs)
 		}

@@ -133,6 +133,43 @@ func TestPersistenceQueue_EnqueueNonBlocking(t *testing.T) {
 	t.Fatal("worker did not persist expected closed bars in time")
 }
 
+func TestPersistenceQueue_AppendClosedBars(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "test_append_bars.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	q := NewPersistenceQueue(64)
+	q.Start(ctx)
+
+	open := int64(1_700_000_000_000)
+	bars := make([]Candle, 10)
+	for i := range bars {
+		ot := open + int64(i)*60_000
+		bars[i] = Candle{
+			OpenTime: ot, Open: 1, High: 2, Low: 1, Close: 1.5, Volume: float64(i + 1), CloseTime: ot + 59_999,
+		}
+	}
+	if err := q.AppendClosedBars(ctx, "BTCUSDT", "1m", bars); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		got, err := LoadKlines("BTCUSDT", "1m", open, open+10*60_000, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) == 10 {
+			cancel()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("AppendClosedBars did not persist all bars")
+}
+
 func TestExpectedKlineCount(t *testing.T) {
 	count, err := ExpectedKlineCount("1m", 0, 60_000*100)
 	if err != nil {

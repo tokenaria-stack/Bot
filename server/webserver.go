@@ -729,9 +729,10 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 		tf = d.tradingTimeframe
 	}
 	reqStart := time.Now()
-	log.Printf("[Dashboard] GET /api/state tf=%s started", tf)
 	defer func() {
-		log.Printf("[Dashboard] GET /api/state tf=%s completed in %v", tf, time.Since(reqStart))
+		if elapsed := time.Since(reqStart); elapsed >= 50*time.Millisecond {
+			log.Printf("[Dashboard] GET /api/state tf=%s completed in %v", tf, elapsed)
+		}
 	}()
 
 	spec, err := ResolveTimeframe(tf)
@@ -1189,7 +1190,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
 
 	effectiveStartMs := startMs
-	candles, err := d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
+	candles, err := d.rest.FetchClosedRangePages(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
 	if err != nil {
 		log.Printf("[Backtest] fetch history failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -1207,7 +1208,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"),
 			time.UnixMilli(paddedStart).UTC().Format("2006-01-02"))
 		effectiveStartMs = paddedStart
-		candles, err = d.rest.FetchHistoricalKlines(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
+		candles, err = d.rest.FetchClosedRangePages(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
 		if err != nil {
 			log.Printf("[Backtest] fetch history failed after padding: %v", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
@@ -1592,8 +1593,6 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	if len(resp.Candles) > 0 {
 		resp.HasMore = win.HasMore
 	}
-	log.Printf("[Dashboard] history prepend %s %s: %d candles (from %d klines) hasMore=%v",
-		d.symbol, spec.BinanceInterval, len(resp.Candles), len(klines), resp.HasMore)
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
@@ -2023,7 +2022,6 @@ func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec Time
 			if wantBars > 0 && len(klines) > wantBars {
 				klines = klines[len(klines)-wantBars:]
 			}
-			log.Printf("[Dashboard] SQLite fast path %s %s: %d bars (cap %d)", d.symbol, spec.BinanceInterval, len(klines), wantBars)
 			return klines
 		}
 	} else {
@@ -2405,8 +2403,6 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 		_ = client.Close()
 	}()
 
-	log.Printf("[Dashboard] ws client connected: %s", r.RemoteAddr)
-
 	if err := client.WriteJSON(map[string]string{
 		"type":    "welcome",
 		"message": "dashboard websocket ready",
@@ -2429,7 +2425,6 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Type == "subscribe" && msg.TF != "" {
 			d.setClientTimeframe(client, msg.TF)
-			log.Printf("[Dashboard] ws subscribe tf=%s from %s", msg.TF, r.RemoteAddr)
 		}
 	}
 }

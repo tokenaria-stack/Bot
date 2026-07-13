@@ -956,9 +956,11 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
 | **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
 | **55** | ~~**PersistenceQueue (P0b)**~~ — closed bar → async batch UPSERT SQLite; не sync из Analyst | `data/persistence_queue.go`, `data/history_db.go`, `main.go` | ✅ Shot 9C |
-| **56** | **SQLiteNeedsCatchUp (P0c)** — развести RAM gap-fill vs archive tip lag | `strategy/kline_gap.go` | 🔜 optional after 9C live tip write |
+| **56** | ~~**SQLiteNeedsCatchUp (P0c)**~~ — SQLite tip self-heal independent of RAM gap-fill; 9E: FetchClosedRange → PersistenceQueue | `data/sqlite_tip.go`, `strategy/sqlite_catchup.go`, `main.go` | ✅ Shot 9D+9E |
 | **57** | ~~**HistoryProvider / Sync Gap delivery**~~ | `server/history_provider.go` | ✅ Shot 9A GetWindow = SQLite∪RAM |
 | **58** | ~~**Atomic chart tick (hollow PriceBar)**~~ | `server/webserver.go`, `main.go`, `strategy/master.go` | ✅ Shot 9B BroadcastChartTick all TFs; Falcon/Score telemetry frozen |
+| **59** | ~~**Ingestion sterilization (P0)**~~ — FetchClosedRange sterile pipe; FetchHistoricalKlines+synthesize deleted; PersistenceQueue sole runtime writer | `exchange/klines.go`, `strategy/kline_gap.go`, `strategy/ram_history.go`, `data/persistence_queue.go` | ✅ Shot 9E |
+| **60** | ~~**EngineMode ChartOnly/Live (P0)**~~ — gate Falcon/Score/Run; DAG stays; hot-path log silence | `strategy/engine_mode.go`, `strategy/layer2.go`, `main.go`, `data/history_db.go`, `server/` | ✅ Shot 9F |
 
 ### [🔜 OPEN DEBTS — приоритет]
 

@@ -7,6 +7,7 @@ import (
 )
 
 const defaultPersistenceQueueCap = 4096
+const persistenceFlushBatchMax = 256
 
 // PersistJob is one closed bar destined for the SQLite archive.
 type PersistJob struct {
@@ -15,8 +16,10 @@ type PersistJob struct {
 	Candle   Candle
 }
 
-// PersistenceQueue isolates disk I/O from the live WS/DAG hot path (Shot 9C).
+// PersistenceQueue isolates disk I/O from the live WS/DAG hot path (Shot 9C/9E).
+// It is the sole production writer into historical_klines (via SaveKlines).
 // Enqueue never blocks the caller; a full buffer drops the job and increments Dropped.
+// AppendClosedBars blocks (for REST catch-up) until space is available or ctx cancels.
 type PersistenceQueue struct {
 	ch      chan PersistJob
 	Dropped atomic.Uint64
@@ -31,7 +34,6 @@ func NewPersistenceQueue(buffer int) *PersistenceQueue {
 }
 
 // Start launches the single worker that drains the queue into SaveKlines (UPSERT).
-// Returns when ctx is cancelled after the channel is drained for in-flight jobs up to buffer.
 func (q *PersistenceQueue) Start(ctx context.Context) {
 	if q == nil {
 		return
@@ -60,6 +62,23 @@ func (q *PersistenceQueue) Enqueue(symbol, interval string, candle Candle) bool 
 	}
 }
 
+// AppendClosedBars enqueues real closed bars for archive write (blocking).
+// Used by SQLite tip catch-up so REST never calls SaveKlines directly (Shot 9E).
+func (q *PersistenceQueue) AppendClosedBars(ctx context.Context, symbol, interval string, candles []Candle) error {
+	if q == nil || q.ch == nil {
+		return nil
+	}
+	for _, c := range candles {
+		job := PersistJob{Symbol: symbol, Interval: interval, Candle: c}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case q.ch <- job:
+		}
+	}
+	return nil
+}
+
 func (q *PersistenceQueue) worker(ctx context.Context) {
 	log.Printf("[PersistenceQueue] worker started (cap=%d)", cap(q.ch))
 	for {
@@ -69,24 +88,59 @@ func (q *PersistenceQueue) worker(ctx context.Context) {
 			log.Printf("[PersistenceQueue] worker stopped dropped=%d", q.Dropped.Load())
 			return
 		case job := <-q.ch:
-			q.flushJob(job)
+			q.flushBatch(collectPersistBatch(q.ch, job))
 		}
 	}
 }
 
-func (q *PersistenceQueue) flushJob(job PersistJob) {
-	if err := SaveKlines(job.Symbol, job.Interval, []Candle{job.Candle}); err != nil {
-		log.Printf("[PersistenceQueue] SaveKlines %s %s open=%d: %v",
-			job.Symbol, job.Interval, job.Candle.OpenTime, err)
+func collectPersistBatch(ch <-chan PersistJob, first PersistJob) []PersistJob {
+	batch := []PersistJob{first}
+	for len(batch) < persistenceFlushBatchMax {
+		select {
+		case job := <-ch:
+			batch = append(batch, job)
+		default:
+			return batch
+		}
+	}
+	return batch
+}
+
+func (q *PersistenceQueue) flushBatch(jobs []PersistJob) {
+	if len(jobs) == 0 {
+		return
+	}
+	// Group by symbol+interval for one UPSERT transaction each.
+	type key struct{ sym, iv string }
+	groups := make(map[key][]Candle, 4)
+	order := make([]key, 0, 4)
+	for _, job := range jobs {
+		k := key{job.Symbol, job.Interval}
+		if _, ok := groups[k]; !ok {
+			order = append(order, k)
+		}
+		groups[k] = append(groups[k], job.Candle)
+	}
+	for _, k := range order {
+		if err := SaveKlines(k.sym, k.iv, groups[k]); err != nil {
+			log.Printf("[PersistenceQueue] SaveKlines %s %s n=%d: %v",
+				k.sym, k.iv, len(groups[k]), err)
+		}
 	}
 }
 
 func (q *PersistenceQueue) drainRemaining() {
+	var jobs []PersistJob
 	for {
 		select {
 		case job := <-q.ch:
-			q.flushJob(job)
+			jobs = append(jobs, job)
+			if len(jobs) >= persistenceFlushBatchMax {
+				q.flushBatch(jobs)
+				jobs = jobs[:0]
+			}
 		default:
+			q.flushBatch(jobs)
 			return
 		}
 	}

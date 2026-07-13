@@ -68,13 +68,21 @@ func main() {
 	}
 	strategy.SetSandboxMode(cfg.SandboxMode)
 
-	loadedMatrix, err := strategy.LoadMatrixConfig(strategy.MatrixConfigPath)
-	if err != nil {
-		log.Printf("[Init] Failed to load scoring matrix from %s: %v — using defaults", strategy.MatrixConfigPath, err)
-		loadedMatrix = strategy.DefaultScoringMatrix()
+	engineMode := strategy.NormalizeEngineMode(cfg.EngineMode)
+	strategy.SetEngineMode(engineMode)
+	log.Printf("[Init] EngineMode=%s (ENGINE_MODE)", engineMode)
+
+	if strategy.EngineAllowsStrategies() {
+		loadedMatrix, err := strategy.LoadMatrixConfig(strategy.MatrixConfigPath)
+		if err != nil {
+			log.Printf("[Init] Failed to load scoring matrix from %s: %v — using defaults", strategy.MatrixConfigPath, err)
+			loadedMatrix = strategy.DefaultScoringMatrix()
+		}
+		strategy.SetScoringMatrix(loadedMatrix)
+		log.Printf("[Init] Loaded Scoring Matrix configuration from %s", strategy.MatrixConfigPath)
+	} else {
+		log.Println("[Init] ChartOnly: ScoreMatrix not loaded (trading stack gated)")
 	}
-	strategy.SetScoringMatrix(loadedMatrix)
-	log.Printf("[Init] Loaded Scoring Matrix configuration from %s", strategy.MatrixConfigPath)
 
 	log.Println("[Init] Order Flow buffers ready (100k ticks, 1k liquidations)")
 
@@ -146,12 +154,16 @@ func main() {
 	)
 	dashboard.BindMaster(master)
 	master.SetNavigatorPanes(strategy.DefaultLiveNavigatorPanes())
-	master.StartKlineGapFillLoop(ctx)
-	master.SeedClosedBarTelemetry()
 
-	// Shot 9C: async SQLite archive — closed bars only; never blocks WS/DAG.
+	// Shot 9C/9E: sole SQLite writer — bind before gap-fill / tip catch-up.
 	persistQ := data.NewPersistenceQueue(4096)
 	persistQ.Start(ctx)
+	master.SetPersistenceQueue(persistQ)
+
+	master.StartKlineGapFillLoop(ctx)
+	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Analyst touch).
+	master.StartSQLiteArchiveCatchUpLoop(ctx)
+	master.SeedClosedBarTelemetry()
 
 	// Shot 9B: all chart TFs equal — atomic OHLCV+plots via BroadcastChartTick.
 	// Legacy SetOnTelemetry (Falcon/ScoreMatrix dashboard spam) removed.
@@ -207,10 +219,14 @@ func main() {
 		}
 	}()
 
-	go func() {
-		log.Println("[Main] Starting MasterGeneral Event Loop...")
-		master.Run(ctx)
-	}()
+	if strategy.EngineAllowsStrategies() {
+		go func() {
+			log.Println("[Main] Starting MasterGeneral Event Loop (Live)...")
+			master.Run(ctx)
+		}()
+	} else {
+		log.Println("[Main] ChartOnly: MasterGeneral.Run not started")
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
