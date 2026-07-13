@@ -363,7 +363,48 @@ func validOHLC(open, high, low, closePrice float64) bool {
 	return true
 }
 
-// BroadcastTick pushes a live candle + oscillator + brain telemetry update to all dashboard clients.
+// BroadcastChartTick pushes an atomic chart frame: OHLCV + DAG plots for any timeframe (Shot 9B).
+// Contract: every live tick carries plots when the Analyst DAG frame is available — never price-only.
+func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
+	chart, ok := ChartCandleFromDomain(candle)
+	if !ok {
+		return
+	}
+	if timeframe == "" {
+		timeframe = d.tradingTimeframe
+	}
+	if dagFrame == nil {
+		if a := d.analystForTimeframe(timeframe); a != nil {
+			dagFrame = a.DAGTickFrame()
+		}
+	}
+	var plots map[string]float64
+	if dagFrame != nil && d.projector != nil {
+		plots = d.projector.BuildTickJSON(dagFrame)
+	}
+	d.broadcast(wsEnvelope{
+		Type: "tick",
+		Data: tickPayload{
+			Timeframe: timeframe,
+			Time:      chart.Time,
+			Open:      chart.Open,
+			High:      chart.High,
+			Low:       chart.Low,
+			Close:     chart.Close,
+			Volume:    chart.Volume,
+			IsClosed:  isClosed,
+			Plots:     plots,
+		},
+	})
+}
+
+// BroadcastPriceBar is deprecated (Shot 9B) — forwards to BroadcastChartTick so legacy callers stay atomic.
+func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Candle) {
+	d.BroadcastChartTick(timeframe, candle, false, nil)
+}
+
+// BroadcastTick pushes a live candle with optional legacy scoring fields (dashboard header).
+// Chart plots always come from dagFrame via the same atomic path as BroadcastChartTick.
 func (d *DashboardServer) BroadcastTick(
 	timeframe string,
 	candle domain.Candle,
@@ -385,6 +426,8 @@ func (d *DashboardServer) BroadcastTick(
 	var plots map[string]float64
 	if dagFrame != nil && d.projector != nil {
 		plots = d.projector.BuildTickJSON(dagFrame)
+	} else if a := d.analystForTimeframe(timeframe); a != nil && d.projector != nil {
+		plots = d.projector.BuildTickJSON(a.DAGTickFrame())
 	}
 	d.broadcast(wsEnvelope{
 		Type: "tick",
@@ -419,26 +462,6 @@ func (d *DashboardServer) BroadcastTick(
 			IsClosed:         isClosed,
 			VolatilityRegime: volatilityRegime,
 			Plots:            plots,
-		},
-	})
-}
-
-// BroadcastPriceBar pushes a live OHLCV update for any standard timeframe.
-func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Candle) {
-	chart, ok := ChartCandleFromDomain(candle)
-	if !ok {
-		return
-	}
-	d.broadcast(wsEnvelope{
-		Type: "tick",
-		Data: tickPayload{
-			Timeframe: timeframe,
-			Time:      chart.Time,
-			Open:      chart.Open,
-			High:      chart.High,
-			Low:       chart.Low,
-			Close:     chart.Close,
-			Volume:    chart.Volume,
 		},
 	})
 }
@@ -1942,11 +1965,24 @@ func (d *DashboardServer) loadKlines(ctx context.Context, spec TimeframeSpec, li
 }
 
 func (d *DashboardServer) analystKlines(spec TimeframeSpec) []exchange.Kline {
-	if analyst, ok := d.analysts[spec.ID]; ok {
-		return analyst.GetKlines()
+	if a := d.analystForTimeframe(spec.ID); a != nil {
+		return a.GetKlines()
 	}
-	if analyst, ok := d.analysts[spec.BinanceInterval]; ok {
-		return analyst.GetKlines()
+	if spec.BinanceInterval != "" {
+		if a := d.analystForTimeframe(spec.BinanceInterval); a != nil {
+			return a.GetKlines()
+		}
+	}
+	return nil
+}
+
+// analystForTimeframe returns the live Marker for a chart/trading timeframe id (thread-safe reads via Marker APIs).
+func (d *DashboardServer) analystForTimeframe(tf string) *strategy.Marker {
+	if d == nil || tf == "" {
+		return nil
+	}
+	if a, ok := d.analysts[tf]; ok {
+		return a
 	}
 	return nil
 }

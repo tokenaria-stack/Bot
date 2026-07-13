@@ -53,7 +53,7 @@ type MasterGeneral struct {
 	memoryStore      *vector_db.MemoryStore
 	onTick           func(kline exchange.Kline, jurik, redLine, greenLine, blueLine float64)
 	onTelemetry      func(tick exchange.WsTick, falcon FalconSignals, decision ScoreDecision)
-	onKlineBar       func(timeframe string, kline exchange.Kline)
+	onKlineBar       func(timeframe string, kline exchange.Kline, isClosed bool)
 	onTrade          func(event TradeEvent)
 	onClosedTrade    func(trade domain.ClosedTrade, isVirtual bool)
 
@@ -328,14 +328,18 @@ func (m *MasterGeneral) refreshClosedBarTelemetry(tf string, analyst *Marker) {
 	if m == nil || analyst == nil || tf == "" {
 		return
 	}
-	decision := m.evaluateScoreDecision(analyst)
-	regime := analyst.ClosedVolatilityRegime()
-	m.mu.Lock()
-	if m.closedTelemetry == nil {
-		m.closedTelemetry = make(map[string]closedBarTelemetry)
-	}
-	m.closedTelemetry[tf] = closedBarTelemetry{decision: decision, regime: regime}
-	m.mu.Unlock()
+	// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
+	return
+	/*
+		decision := m.evaluateScoreDecision(analyst)
+		regime := analyst.ClosedVolatilityRegime()
+		m.mu.Lock()
+		if m.closedTelemetry == nil {
+			m.closedTelemetry = make(map[string]closedBarTelemetry)
+		}
+		m.closedTelemetry[tf] = closedBarTelemetry{decision: decision, regime: regime}
+		m.mu.Unlock()
+	*/
 }
 
 func (m *MasterGeneral) closedBarTelemetryFor(tf string) (closedBarTelemetry, bool) {
@@ -346,7 +350,8 @@ func (m *MasterGeneral) closedBarTelemetryFor(tf string) (closedBarTelemetry, bo
 }
 
 // SetOnKlineBar registers a callback for live kline updates on any subscribed timeframe.
-func (m *MasterGeneral) SetOnKlineBar(fn func(timeframe string, kline exchange.Kline)) {
+// isClosed is Binance k.x (bar finalized). Shot 9B: used for atomic chart delivery on every TF.
+func (m *MasterGeneral) SetOnKlineBar(fn func(timeframe string, kline exchange.Kline, isClosed bool)) {
 	m.mu.Lock()
 	m.onKlineBar = fn
 	m.mu.Unlock()
@@ -1163,7 +1168,8 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 				klineCB := m.onKlineBar
 				m.mu.RUnlock()
 				if klineCB != nil {
-					klineCB(tick.Timeframe, tick.Kline)
+					// Shot 9B: every TF gets atomic chart delivery (OHLCV + plots).
+					klineCB(tick.Timeframe, tick.Kline, tick.IsClosed)
 				}
 
 				if tick.IsClosed {
@@ -1172,35 +1178,29 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 
 				if tick.Timeframe == workTF {
 					if tick.IsClosed {
-						m.ensureMTFTrackerReady(analyst)
-						m.syncMTFState(analyst)
-						m.refreshClosedBarTelemetry(tick.Timeframe, analyst)
+						// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
+						// Legacy scalper path frozen: no MTF score refresh, no TickLiveCh trading trigger.
+						// m.ensureMTFTrackerReady(analyst)
+						// m.syncMTFState(analyst)
+						// m.refreshClosedBarTelemetry(tick.Timeframe, analyst)
+						// select {
+						// case m.TickLiveCh <- struct{}{}:
+						// default:
+						// }
 					}
-					m.mu.RLock()
-					telemetryCB := m.onTelemetry
-					tickCB := m.onTick
-					m.mu.RUnlock()
-					if telemetryCB != nil {
-						falcon := analyst.FalconSnapshot()
-						decision := m.ScoreDecisionForTelemetry(analyst)
-						telemetryCB(tick, falcon, decision)
-					} else if tick.IsClosed && tickCB != nil {
-						falcon := analyst.FalconSnapshot()
-						tickCB(
-							tick.Kline,
-							falcon.JurikRSX,
-							falcon.RedLine,
-							falcon.GreenLine,
-							falcon.BlueLine,
-						)
-					}
-
-					if tick.IsClosed {
-						select {
-						case m.TickLiveCh <- struct{}{}:
-						default:
-						}
-					}
+					// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
+					// Chart WS delivery no longer goes through onTelemetry (see SetOnKlineBar / BroadcastChartTick).
+					// m.mu.RLock()
+					// telemetryCB := m.onTelemetry
+					// tickCB := m.onTick
+					// m.mu.RUnlock()
+					// if telemetryCB != nil {
+					// 	falcon := analyst.FalconSnapshot()
+					// 	decision := m.ScoreDecisionForTelemetry(analyst)
+					// 	telemetryCB(tick, falcon, decision)
+					// } else if tick.IsClosed && tickCB != nil {
+					// 	...
+					// }
 				}
 			}
 		}

@@ -196,8 +196,9 @@ func ensureUnixMillis(ts int64) int64 {
 	return ts
 }
 
-// SaveKlines inserts candles in a single transaction (INSERT OR IGNORE on PK).
+// SaveKlines upserts candles in a single transaction.
 // open_time and close_time are stored as Unix milliseconds (Binance native format).
+// ON CONFLICT updates OHLCV so a stale/partial row never blocks a fresher closed bar (Shot 9C).
 func SaveKlines(symbol, interval string, klines []Candle) error {
 	if err := InitDB(); err != nil {
 		return err
@@ -216,11 +217,18 @@ func SaveKlines(symbol, interval string, klines []Candle) error {
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.Prepare(`
-INSERT OR IGNORE INTO historical_klines
+INSERT INTO historical_klines
     (symbol, interval, open_time, open, high, low, close, volume, close_time)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
+    open=excluded.open,
+    high=excluded.high,
+    low=excluded.low,
+    close=excluded.close,
+    volume=excluded.volume,
+    close_time=excluded.close_time`)
 	if err != nil {
-		return fmt.Errorf("prepare insert: %w", err)
+		return fmt.Errorf("prepare upsert: %w", err)
 	}
 	defer stmt.Close()
 
@@ -231,7 +239,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 			symbol, interval, openTime,
 			k.Open, k.High, k.Low, k.Close, k.Volume, closeTime,
 		); err != nil {
-			return fmt.Errorf("insert kline open_time=%d: %w", openTime, err)
+			return fmt.Errorf("upsert kline open_time=%d: %w", openTime, err)
 		}
 	}
 

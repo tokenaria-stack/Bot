@@ -6,7 +6,8 @@ import (
 	"trading_bot/exchange"
 )
 
-func TestScoreDecisionForTelemetryReadOnly(t *testing.T) {
+// Shot 9B: ScoreMatrix/Falcon closed-bar telemetry is frozen (refreshClosedBarTelemetry no-op).
+func TestScoreDecisionForTelemetryFrozen_Shot9B(t *testing.T) {
 	cfg := ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34}
 	marker := NewMarker(nil, nil, "1m", "", cfg)
 	master := NewMasterGeneral(
@@ -18,18 +19,17 @@ func TestScoreDecisionForTelemetryReadOnly(t *testing.T) {
 
 	k := exchange.Kline{OpenTime: 1_700_000_000_000, CloseTime: 1_700_000_060_000, High: 101, Low: 99, Close: 100, Volume: 10}
 	marker.UpdateKlineTick(k, true)
+	before := marker.ClosedVolatilityRegime()
 	master.SeedClosedBarTelemetry()
 
-	before := marker.ClosedVolatilityRegime()
 	decision := master.ScoreDecisionForTelemetry(marker)
-	if decision.FinalAction == "" && decision.RawAction == "" {
-		t.Fatal("expected seeded closed-bar decision")
+	if decision.FinalAction != "" || decision.RawAction != "" || len(decision.Factors) != 0 {
+		t.Fatalf("Shot 9B: expected empty frozen telemetry, got %+v", decision)
 	}
 	if marker.ClosedVolatilityRegime() != before {
-		t.Fatal("ScoreDecisionForTelemetry must not mutate marker layer2 snapshot")
+		t.Fatal("SeedClosedBarTelemetry must not mutate marker when scoring is frozen")
 	}
 
-	// Intra-bar tick must not refresh telemetry cache via ScoreDecisionForTelemetry.
 	k2 := exchange.Kline{OpenTime: 1_700_000_060_000, CloseTime: 1_700_000_120_000, High: 105, Low: 95, Close: 102, Volume: 50}
 	marker.UpdateKlineTick(k2, false)
 	_ = master.ScoreDecisionForTelemetry(marker)

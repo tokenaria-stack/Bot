@@ -148,33 +148,36 @@ func main() {
 	master.SetNavigatorPanes(strategy.DefaultLiveNavigatorPanes())
 	master.StartKlineGapFillLoop(ctx)
 	master.SeedClosedBarTelemetry()
-	master.SetOnTelemetry(func(tick exchange.WsTick, falcon strategy.FalconSignals, decision strategy.ScoreDecision) {
-		analyst := analysts[tradingTF]
+
+	// Shot 9C: async SQLite archive — closed bars only; never blocks WS/DAG.
+	persistQ := data.NewPersistenceQueue(4096)
+	persistQ.Start(ctx)
+
+	// Shot 9B: all chart TFs equal — atomic OHLCV+plots via BroadcastChartTick.
+	// Legacy SetOnTelemetry (Falcon/ScoreMatrix dashboard spam) removed.
+	// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
+	master.SetOnKlineBar(func(tf string, k exchange.Kline, isClosed bool) {
+		analyst := analysts[tf]
 		if analyst == nil {
 			return
 		}
-		rsxColor := analyst.JurikRSXColor()
-		brainStatus := strategy.TelemetryBrainStatus(decision, signalAnalyst)
-		aiStatus := strategy.TelemetryAIStatus(context.Background(), analyst, nil)
-		regime := master.ClosedVolatilityRegimeForTelemetry(analyst)
-
-		dashboard.BroadcastTick(
-			tradingTF,
-			domain.CandleFromKline(tick.Kline),
-			falcon,
-			rsxColor,
-			decision,
-			brainStatus, aiStatus,
-			regime,
-			tick.IsClosed,
+		dashboard.BroadcastChartTick(
+			tf,
+			domain.CandleFromKline(k),
+			isClosed,
 			analyst.DAGTickFrame(),
 		)
-	})
-	master.SetOnKlineBar(func(tf string, k exchange.Kline) {
-		if tf == tradingTF {
-			return
+		if isClosed {
+			persistQ.Enqueue(symbol, tf, data.Candle{
+				OpenTime:  k.OpenTime,
+				Open:      k.Open,
+				High:      k.High,
+				Low:       k.Low,
+				Close:     k.Close,
+				Volume:    k.Volume,
+				CloseTime: k.CloseTime,
+			})
 		}
-		dashboard.BroadcastPriceBar(tf, domain.CandleFromKline(k))
 	})
 	master.SetOnTrade(func(event strategy.TradeEvent) {
 		dashboard.BroadcastMarker(event.Side, event.Price, event.BarTime, event.Reason, event.Kind)

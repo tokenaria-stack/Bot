@@ -1,8 +1,10 @@
 package data
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSaveAndLoadKlines(t *testing.T) {
@@ -62,6 +64,73 @@ func TestLoadKlines_LimitReturnsTailAscending(t *testing.T) {
 	if got[0].Close != 103 || got[1].Close != 104 {
 		t.Fatalf("expected last two bars, got closes %+v", []float64{got[0].Close, got[1].Close})
 	}
+}
+
+func TestSaveKlines_UpsertOverwritesOHLCV(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "test_upsert.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	open := int64(1_700_000_000_000)
+	first := []Candle{{
+		OpenTime: open, Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 10, CloseTime: open + 59_999,
+	}}
+	if err := SaveKlines("BTCUSDT", "1m", first); err != nil {
+		t.Fatal(err)
+	}
+	second := []Candle{{
+		OpenTime: open, Open: 100, High: 110, Low: 95, Close: 108, Volume: 99, CloseTime: open + 59_999,
+	}}
+	if err := SaveKlines("BTCUSDT", "1m", second); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadKlines("BTCUSDT", "1m", open, open+60_000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d want 1 (no duplicate PK)", len(got))
+	}
+	if got[0].Close != 108 || got[0].High != 110 || got[0].Volume != 99 {
+		t.Fatalf("UPSERT did not apply fresher OHLCV: %+v", got[0])
+	}
+}
+
+func TestPersistenceQueue_EnqueueNonBlocking(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "test_persist_q.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	q := NewPersistenceQueue(4)
+	q.Start(ctx)
+
+	open := int64(1_700_000_000_000)
+	for i := 0; i < 8; i++ {
+		ot := open + int64(i)*60_000
+		ok := q.Enqueue("BTCUSDT", "1m", Candle{
+			OpenTime: ot, Open: 1, High: 2, Low: 1, Close: 1.5, Volume: float64(i + 1), CloseTime: ot + 59_999,
+		})
+		if !ok && q.Dropped.Load() == 0 {
+			t.Fatal("Enqueue returned false without Dropped increment")
+		}
+	}
+	// Allow worker to drain.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		got, err := LoadKlines("BTCUSDT", "1m", open, open+8*60_000, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) >= 4 {
+			cancel()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("worker did not persist expected closed bars in time")
 }
 
 func TestExpectedKlineCount(t *testing.T) {

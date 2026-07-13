@@ -955,9 +955,10 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **46** | **MEMORY sync** | this file | ✅ Phase 7–8A logged |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
 | **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
-| **55** | **PersistenceQueue (P0b)** — closed bar → async batch UPSERT SQLite; не sync из Analyst | `strategy/`, `data/history_db.go` | 🔜 after 9A |
-| **56** | **SQLiteNeedsCatchUp (P0c)** — развести RAM gap-fill vs archive tip lag | `strategy/kline_gap.go` | 🔜 after 9A |
+| **55** | ~~**PersistenceQueue (P0b)**~~ — closed bar → async batch UPSERT SQLite; не sync из Analyst | `data/persistence_queue.go`, `data/history_db.go`, `main.go` | ✅ Shot 9C |
+| **56** | **SQLiteNeedsCatchUp (P0c)** — развести RAM gap-fill vs archive tip lag | `strategy/kline_gap.go` | 🔜 optional after 9C live tip write |
 | **57** | ~~**HistoryProvider / Sync Gap delivery**~~ | `server/history_provider.go` | ✅ Shot 9A GetWindow = SQLite∪RAM |
+| **58** | ~~**Atomic chart tick (hollow PriceBar)**~~ | `server/webserver.go`, `main.go`, `strategy/master.go` | ✅ Shot 9B BroadcastChartTick all TFs; Falcon/Score telemetry frozen |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
