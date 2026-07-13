@@ -1526,22 +1526,10 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		klines := win.Klines
-		analyst := d.analystForSpec(spec)
-		if analyst != nil && len(klines) > 0 {
-			trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
-			if candles, oscillators, annotations, ok := d.buildLiveChartFromRAM(analyst, klines, rsxSettings); ok {
-				if trimBars > 0 && len(candles) > trimBars {
-					candles = candles[trimBars:]
-					oscillators = oscillators[trimBars:]
-					annotations = trimAnnotations(annotations, trimBars, klines)
-				}
-				resp.Candles, resp.Oscillators, resp.Annotations = candles, oscillators, annotations
-			}
-		} else {
-			resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
-				r.Context(), klines, strategy.IndicatorWarmupBars, spec.ID, rsxSettings,
-			)
-		}
+		trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+		resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
+			r.Context(), klines, trimBars, spec.ID, rsxSettings,
+		)
 		resp.HasMore = false
 		if err := requestCtxErr(r.Context()); err != nil {
 			return
@@ -1764,77 +1752,55 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 	if err := requestCtxErr(ctx); err != nil {
 		return nil, err
 	}
+	_ = rsxLookback
+	_ = endTimeMs
 	if navigatorsOnly {
 		return d.buildNavigatorOnlyState(ctx, spec, candleLimit)
 	}
-	if candleLimit <= 0 {
-		candleLimit = defaultStateCandleLimit
+
+	// Shot 9H: /api/state is a lightweight metadata container.
+	// Charts come from columnar REST + BroadcastChartTick — never Falcon export / Candles+Oscillators.
+	state := &MarketState{
+		Status:           "ready",
+		Symbol:           d.symbol,
+		Timeframe:        spec.ID,
+		TradingTimeframe: d.tradingTimeframe,
+		UpdatedAt:        time.Now().Unix(),
+		Trades:           d.sessionTradesForChart(),
+		PaperTrading:     d.paperTrading,
+		SandboxMode:      d.sandboxMode,
+		Candles:          []ChartCandle{},
+		Oscillators:      []ChartOscillator{},
+		Factors:          map[string]strategy.ScoreFactor{},
 	}
-	klines := d.loadLiveKlinesFromRAM(spec, candleLimit)
-	if (spec.Kind == TFRAMOnly || IsOrderFlowTimeframe(spec)) && len(klines) == 0 {
-		state := &MarketState{
-			Status:           "ready",
-			Symbol:           d.symbol,
-			Timeframe:        spec.ID,
-			TradingTimeframe: d.tradingTimeframe,
-			UpdatedAt:        time.Now().Unix(),
-			Trades:           d.sessionTradesForChart(),
-			PaperTrading:     d.paperTrading,
-			SandboxMode:      d.sandboxMode,
-		}
-		if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
-			state.TickBufferLen = d.orderFlow.Ticks.Len()
-		}
-		return state, nil
-	}
-	if len(klines) == 0 {
-		return nil, errWarmingUp
+	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
+		state.TickBufferLen = d.orderFlow.Ticks.Len()
 	}
 
-	settings := strategy.GetRSXSettings()
-
-	// Tail poll: one candle from Marker RAM (or OHLC for Order Flow).
-	if tailPoll {
-		windowSize := candleLimit + strategy.IndicatorWarmupBars
-		if IsOrderFlowTimeframe(spec) {
-			windowSize = candleLimit
-		}
-		if len(klines) > windowSize {
-			klines = klines[len(klines)-windowSize:]
-		}
-		var candles []ChartCandle
-		var oscillators []ChartOscillator
-		var annotations []strategy.ChartAnnotation
-		if IsOrderFlowTimeframe(spec) {
-			if len(klines) > 0 {
-				candles, oscillators, annotations = buildOHLCChartFromKlines(klines[len(klines)-1:])
-			}
-		} else if analyst, ok := d.analysts[spec.ID]; ok {
-			candles, oscillators, annotations = d.buildTailPollChartFromRAM(analyst, klines)
-		} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
-			candles, oscillators, annotations = d.buildTailPollChartFromRAM(analyst, klines)
-		}
-		return d.assembleMarketState(spec, candles, oscillators, annotations, klines, settings, false, tailPoll), nil
-	}
-
-	// RAM Router SSOT: Marker tail + ExportChartSeriesForWindow (no replay accumulator).
-	export, err := d.buildRAMChartExport(ctx, spec, candleLimit, settings)
-	if err != nil {
-		return nil, err
-	}
-	if err := requestCtxErr(ctx); err != nil {
-		return nil, err
-	}
-	state := d.assembleMarketState(spec, export.candles, export.oscillators, export.annotations, export.klines, settings, export.hasMore, tailPoll)
 	if !tailPoll && candleLimit > stateTailPollLimit {
 		if err := requestCtxErr(ctx); err != nil {
 			return nil, err
 		}
-		binanceInterval := spec.BinanceInterval
-		trimBars := historyWarmupTrim(len(export.klines), candleLimit, strategy.IndicatorWarmupBars)
-		state.Navigators = buildNavigatorsFromSeries(
-			ctx, d.symbol, export.klines, export.oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
-		)
+		klines := d.loadLiveKlinesFromRAM(spec, candleLimit)
+		if len(klines) > 0 {
+			trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+			binanceInterval := spec.BinanceInterval
+			if spec.Kind == TFRAMOnly {
+				binanceInterval = spec.ID
+			}
+			rsxVals, wozVals := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+			state.Navigators = buildNavigatorsFromSeries(
+				ctx, d.symbol, klines, rsxVals, wozVals, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
+			)
+		}
+	}
+
+	if strategy.EngineAllowsStrategies() {
+		if analyst, ok := d.analysts[spec.ID]; ok {
+			d.enrichFromAnalyst(state, analyst, nil)
+		} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+			d.enrichFromAnalyst(state, analyst, nil)
+		}
 	}
 	return state, nil
 }
@@ -1846,7 +1812,6 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 	if displayLimit <= 0 {
 		displayLimit = defaultStateCandleLimit
 	}
-	settings := strategy.GetRSXSettings()
 	klines := d.loadLiveKlinesFromRAM(spec, displayLimit)
 	if len(klines) == 0 {
 		return nil, errWarmingUp
@@ -1856,13 +1821,10 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 	if spec.Kind == TFRAMOnly {
 		binanceInterval = spec.ID
 	}
-	analyst := d.analystForSpec(spec)
-	_, oscillators, _, ok := d.buildLiveChartFromRAM(analyst, klines, settings)
-	if !ok {
+
+	rsxVals, wozVals := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+	if len(rsxVals) == 0 {
 		return nil, errWarmingUp
-	}
-	if trimBars > 0 && len(oscillators) > trimBars {
-		oscillators = oscillators[trimBars:]
 	}
 	if err := requestCtxErr(ctx); err != nil {
 		return nil, err
@@ -1873,46 +1835,13 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 		Timeframe:        spec.ID,
 		TradingTimeframe: d.tradingTimeframe,
 		UpdatedAt:        time.Now().Unix(),
+		Candles:          []ChartCandle{},
+		Oscillators:      []ChartOscillator{},
+		Factors:          map[string]strategy.ScoreFactor{},
 		Navigators: buildNavigatorsFromSeries(
-			ctx, d.symbol, klines, oscillators, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
+			ctx, d.symbol, klines, rsxVals, wozVals, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 		),
 	}, nil
-}
-
-func (d *DashboardServer) assembleMarketState(
-	spec TimeframeSpec,
-	candles []ChartCandle,
-	oscillators []ChartOscillator,
-	annotations []strategy.ChartAnnotation,
-	klines []exchange.Kline,
-	settings strategy.RSXSettings,
-	hasMore bool,
-	tailPoll bool,
-) *MarketState {
-	state := &MarketState{
-		Status:           "ready",
-		Symbol:           d.symbol,
-		Timeframe:        spec.ID,
-		TradingTimeframe: d.tradingTimeframe,
-		UpdatedAt:        time.Now().Unix(),
-		Candles:          candles,
-		Oscillators:      oscillators,
-		Annotations:      annotations,
-		Trades:           d.sessionTradesForChart(),
-		PaperTrading:     d.paperTrading,
-		SandboxMode:      d.sandboxMode,
-		HasMore:          hasMore,
-	}
-	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
-		state.TickBufferLen = d.orderFlow.Ticks.Len()
-	}
-	if analyst, ok := d.analysts[spec.ID]; ok {
-		d.enrichFromAnalyst(state, analyst, klines)
-	} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
-		d.enrichFromAnalyst(state, analyst, klines)
-	}
-	_ = tailPoll
-	return state
 }
 
 func (d *DashboardServer) loadLiveKlinesFromRAM(spec TimeframeSpec, limit int) []exchange.Kline {
@@ -2209,25 +2138,20 @@ func (d *DashboardServer) scoreDecisionForAnalyst(analyst *strategy.Marker) stra
 }
 
 func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strategy.Marker, klines []exchange.Kline) {
+	if state == nil || analyst == nil {
+		return
+	}
+	// ChartOnly: no Falcon/Score/Fib telemetry on MarketState (Shot 9H).
+	if !strategy.EngineAllowsStrategies() {
+		return
+	}
+	_ = klines
 	decision := d.scoreDecisionForAnalyst(analyst)
 	applyScoreTelemetryToMarketState(state, decision)
 	state.BrainStatus = strategy.TelemetryBrainStatus(decision, d.signalAnalyst)
 	state.AIStatus = strategy.TelemetryAIStatus(context.Background(), analyst, nil)
 	if d.master != nil {
 		state.MasterState = string(d.master.State())
-	}
-
-	if !analyst.HasMinBars(strategy.BacktestMinBars()) {
-		if len(klines) == 0 {
-			return
-		}
-		falcon := strategy.NewFalconEngine()
-		last := klines[len(klines)-1]
-		sig := falcon.Evaluate(last.High, last.Low, last.Close, last.Volume)
-		state.Jurik = sig.JurikRSX
-		state.RedLine = sig.RedLine
-		state.GreenLine = sig.GreenLine
-		return
 	}
 
 	vol := analyst.VolatilityStateSnapshot()
@@ -2305,7 +2229,7 @@ func buildNavigatorsFromSeries(
 	ctx context.Context,
 	symbol string,
 	klines []exchange.Kline,
-	oscillators []ChartOscillator,
+	rsxVals, wozVals []float64,
 	trimBars int,
 	interval string,
 	panes map[string]strategy.NavigatorUISettings,
@@ -2314,31 +2238,37 @@ func buildNavigatorsFromSeries(
 	if err := requestCtxErr(ctx); err != nil {
 		return nil
 	}
-	if len(klines) == 0 || len(oscillators) == 0 || len(panes) == 0 {
+	if len(klines) == 0 || len(rsxVals) == 0 || len(panes) == 0 {
 		return nil
 	}
 
 	navKlines := klines
+	navRSX := rsxVals
+	navWoz := wozVals
 	if trimBars > 0 && len(navKlines) > trimBars {
 		navKlines = navKlines[trimBars:]
+		if len(navRSX) > trimBars {
+			navRSX = navRSX[trimBars:]
+		}
+		if len(navWoz) > trimBars {
+			navWoz = navWoz[trimBars:]
+		}
 	}
-	if len(navKlines) > len(oscillators) {
-		navKlines = navKlines[len(navKlines)-len(oscillators):]
-	} else if len(oscillators) > len(navKlines) {
-		oscillators = oscillators[len(oscillators)-len(navKlines):]
+	n := len(navKlines)
+	if len(navRSX) < n {
+		n = len(navRSX)
 	}
-	if len(navKlines) == 0 {
+	if len(navWoz) < n {
+		n = len(navWoz)
+	}
+	if n <= 0 {
 		return nil
 	}
+	navKlines = navKlines[len(navKlines)-n:]
+	navRSX = navRSX[len(navRSX)-n:]
+	navWoz = navWoz[len(navWoz)-n:]
 
-	rsxVals := make([]float64, len(oscillators))
-	wozVals := make([]float64, len(oscillators))
-	for i, o := range oscillators {
-		rsxVals[i] = o.RSX
-		wozVals[i] = o.RsiVolSlow
-	}
-
-	return strategy.BuildAllNavigators(panes, symbol, navKlines, rsxVals, wozVals, interval, htf)
+	return strategy.BuildAllNavigators(panes, symbol, navKlines, navRSX, navWoz, interval, htf)
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

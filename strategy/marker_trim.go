@@ -31,7 +31,6 @@ func (a *Marker) trimMarkerRAMLocked(drop int) {
 	a.JurikLines = trimTailLocked(a.JurikLines, drop)
 	a.WozduhRed = trimTailLocked(a.WozduhRed, drop)
 	a.WozduhGreen = trimTailLocked(a.WozduhGreen, drop)
-	a.chartExportPoints = trimTailLocked(a.chartExportPoints, drop)
 	a.closeLines = trimTailLocked(a.closeLines, drop)
 	a.rsxPriceLines = trimTailLocked(a.rsxPriceLines, drop)
 

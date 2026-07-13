@@ -27,23 +27,18 @@ func syntheticKlines(n int) []exchange.Kline {
 	return out
 }
 
-func TestMarkerExport_3000BarsTiming(t *testing.T) {
+func TestExtractDAGNavigatorSeries_3000BarsTiming(t *testing.T) {
 	klines := syntheticKlines(3050)
 	settings := NormalizeRSXSettings(GetRSXSettings())
-	cfg := ChartStreamingReplayConfig(settings, "1m")
-	m := NewMarker(nil, nil, "1m", "", cfg.ChaosCfg)
-	m.ApplyBacktestRSXConfig(settings)
-	for _, k := range klines {
-		m.UpdateKlineTick(k, true)
-	}
+	window := klines[len(klines)-3000:]
 
 	start := time.Now()
-	result, ok := ExportChartSeriesForWindow(m, klines[len(klines)-3000:], settings)
+	rsx, woz := ExtractDAGNavigatorSeries(window, settings)
 	elapsed := time.Since(start)
-	if !ok {
-		t.Fatal("export failed")
+	if len(rsx) != 3000 || len(woz) != 3000 {
+		t.Fatalf("series len rsx=%d woz=%d", len(rsx), len(woz))
 	}
-	t.Logf("marker export 3000 bars: %s (%d points)", elapsed.Round(time.Millisecond), len(result.ChartPoints))
+	t.Logf("DAG navigator series 3000 bars: %s", elapsed.Round(time.Millisecond))
 }
 
 func BenchmarkStreamingReplayAccumulator_3000Bars(b *testing.B) {
@@ -58,15 +53,11 @@ func BenchmarkStreamingReplayAccumulator_3000Bars(b *testing.B) {
 }
 
 func TestStreamingReplayAccumulator_3000BarsUnderBudget(t *testing.T) {
-	if testing.Short() {
-		t.Skip("cold replay budget check")
-	}
 	klines := syntheticKlines(3050)
 	settings := NormalizeRSXSettings(GetRSXSettings())
 	cfg := ChartStreamingReplayConfig(settings, "1m")
-
 	start := time.Now()
-	acc := NewStreamingReplayAccumulator(klines, cfg)
+	_ = NewStreamingReplayAccumulator(klines, cfg)
 	elapsed := time.Since(start)
-	t.Logf("cold replay 3050 bars: %s (%d points)", elapsed.Round(time.Millisecond), len(acc.Result().ChartPoints))
+	t.Logf("streaming replay 3050 bars: %s", elapsed.Round(time.Millisecond))
 }

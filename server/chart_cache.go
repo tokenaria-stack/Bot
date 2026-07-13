@@ -7,25 +7,6 @@ import (
 	"trading_bot/strategy"
 )
 
-func (d *DashboardServer) buildLiveChartFromRAM(
-	analyst *strategy.Marker,
-	klines []exchange.Kline,
-	settings strategy.RSXSettings,
-) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation, bool) {
-	if analyst == nil || len(klines) == 0 {
-		return nil, nil, nil, false
-	}
-	if !strategy.RSXSettingsEqual(analyst.EffectiveRSXSettings(), settings) {
-		return nil, nil, nil, false
-	}
-	result, ok := strategy.ExportChartSeriesForWindow(analyst, klines, settings)
-	if !ok {
-		return nil, nil, nil, false
-	}
-	candles, oscillators, annotations := chartSeriesFromReplayResult(result, true)
-	return candles, oscillators, annotations, true
-}
-
 // buildOHLCChartFromKlines materializes price candles without indicator replay (Order Flow SSOT).
 func buildOHLCChartFromKlines(klines []exchange.Kline) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
 	if len(klines) == 0 {
@@ -38,59 +19,6 @@ func buildOHLCChartFromKlines(klines []exchange.Kline) ([]ChartCandle, []ChartOs
 		}
 	}
 	return candles, nil, nil
-}
-
-// buildTailPollChartFromRAM serves lightweight GET /api/state?poll=1 requests:
-// one live candle + one oscillator point from Marker RAM (no chart export walk).
-func (d *DashboardServer) buildTailPollChartFromRAM(
-	analyst *strategy.Marker,
-	klines []exchange.Kline,
-) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
-	if analyst == nil || len(klines) == 0 {
-		return nil, nil, nil
-	}
-	lastK := klines[len(klines)-1]
-	candle, ok := ChartCandleFromKline(lastK)
-	if !ok {
-		return nil, nil, nil
-	}
-	osc := tailOscillatorFromSnapshot(analyst.TailPollSnapshot(), lastK)
-	return []ChartCandle{candle}, []ChartOscillator{osc}, nil
-}
-
-func tailOscillatorFromSnapshot(snap strategy.MarkerTailPollSnapshot, k exchange.Kline) ChartOscillator {
-	sig := snap.Falcon
-	barTimeSec := exchange.ChartTimeSec(k.OpenTime)
-	osc := ChartOscillator{
-		Time:           barTimeSec,
-		Jurik:          sig.JurikRSX,
-		RSX:            sig.JurikRSX,
-		RSXSignal:      sig.JurikRSXSignal,
-		Red:            sig.RedLine,
-		Green:          sig.GreenLine,
-		RedLine:        sig.RedLine,
-		GreenLine:      sig.GreenLine,
-		Blue:           sig.BlueLine,
-		RsiPrice:       sig.RsiPrice,
-		EmaRsi:         sig.EmaRsi,
-		RsiRsi:         sig.RsiRsi,
-		RsiHl2:         sig.RsiHl2,
-		RsiVolFast:     sig.RsiVolFast,
-		RsiVolSlow:     sig.RsiVolSlow,
-		MacdRsi:        sig.MacdRsi,
-		RsiAd:          sig.RsiAd,
-		RsiHl2Vol:      sig.RsiHl2Vol,
-		VolCrossMarker: sig.VolCrossMarker,
-		VolChanMid:     sig.VolChanMid,
-		VolChanUp:      sig.VolChanUp,
-		VolChanDn:      sig.VolChanDn,
-		PriceChanMid:   sig.PriceChanMid,
-		PriceChanUp:    sig.PriceChanUp,
-		PriceChanDn:    sig.PriceChanDn,
-		Color:          snap.RSXColor,
-		Marker:         snap.RSXMarker,
-	}
-	return compactChartOscillator(osc)
 }
 
 func chartSeriesFromReplayResult(result *strategy.StreamingReplayResult, compact bool) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
@@ -155,6 +83,7 @@ func chartOscillatorFromReplayPoint(pt strategy.BacktestChartPoint) ChartOscilla
 }
 
 // buildHistoryChartSeriesTrimmed replays a SQLite history chunk without touching live Marker RAM.
+// Legacy JSON /api/history path only — live charts use columnar + DAG Projector (Shot 9H).
 func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 	ctx context.Context,
 	klines []exchange.Kline,

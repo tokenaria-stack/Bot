@@ -76,22 +76,19 @@ func TestBuildNavigatorsFromSeries(t *testing.T) {
 		}
 	}
 
-	d := &DashboardServer{}
-	candles, oscillators, _ := d.buildHistoryChartSeriesTrimmed(context.Background(), klines, 100, "1m", strategy.GetRSXSettings())
-	if len(candles) == 0 {
-		t.Fatal("expected trimmed oscillators")
+	rsx, woz := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+	if len(rsx) == 0 {
+		t.Fatal("expected DAG navigator series")
 	}
 
 	panes := defaultLiveNavigatorPanes()
-	nav := buildNavigatorsFromSeries(context.Background(), "BTCUSDT", klines, oscillators, 100, "15m", panes, nil)
+	nav := buildNavigatorsFromSeries(context.Background(), "BTCUSDT", klines, rsx, woz, 100, "15m", panes, nil)
 	if nav == nil {
 		t.Fatal("expected navigators map")
 	}
-	priceNav, ok := nav["price"]
-	if !ok {
+	if _, ok := nav["price"]; !ok {
 		t.Fatal("expected price navigator key")
 	}
-	_ = priceNav // line count depends on pivot geometry in synthetic data
 }
 
 func TestParseRSXSettingsFromRequest(t *testing.T) {

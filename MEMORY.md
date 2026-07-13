@@ -961,6 +961,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **58** | ~~**Atomic chart tick (hollow PriceBar)**~~ | `server/webserver.go`, `main.go`, `strategy/master.go` | ✅ Shot 9B BroadcastChartTick all TFs; Falcon/Score telemetry frozen |
 | **59** | ~~**Ingestion sterilization (P0)**~~ — FetchClosedRange sterile pipe; FetchHistoricalKlines+synthesize deleted; PersistenceQueue sole runtime writer | `exchange/klines.go`, `strategy/kline_gap.go`, `strategy/ram_history.go`, `data/persistence_queue.go` | ✅ Shot 9E |
 | **60** | ~~**EngineMode ChartOnly/Live (P0)**~~ — gate Falcon/Score/Run; DAG stays; hot-path log silence | `strategy/engine_mode.go`, `strategy/layer2.go`, `main.go`, `data/history_db.go`, `server/` | ✅ Shot 9F |
+| **61** | ~~**Navigator DAG + Export purge (P0)**~~ — `/api/state` navigators from DAG; kill ExportChartSeries/chartExportPoints; lightweight MarketState | `strategy/dag_navigator_series.go`, `server/webserver.go`, `server/chart_cache.go` | ✅ Shot 9H |
 
 ### [🔜 OPEN DEBTS — приоритет]
 

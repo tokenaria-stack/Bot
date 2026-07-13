@@ -80,7 +80,7 @@ func (a *Marker) replayStreamingLocked() {
 	for i, k := range klines {
 		a.evaluateTickLocked(k, i, true)
 	}
-	a.ensureChartExportPointsAlignedLocked()
+	a.alignAllDataBusToKlinesLocked()
 	a.clampDataBusToKlinesLocked()
 }
 
@@ -111,7 +111,6 @@ type layer2StreamingSnapshot struct {
 	jurikLines            []float64
 	wozduhRed             []float64
 	wozduhGreen           []float64
-	chartExportPoints     []BacktestChartPoint
 }
 
 func (a *Marker) restoreLayer2StreamingState() {
@@ -210,7 +209,6 @@ func (a *Marker) saveLayer2StreamingState() {
 		jurikLines:            append([]float64(nil), a.JurikLines...),
 		wozduhRed:             append([]float64(nil), a.WozduhRed...),
 		wozduhGreen:           append([]float64(nil), a.WozduhGreen...),
-		chartExportPoints:     append([]BacktestChartPoint(nil), a.chartExportPoints...),
 	}
 }
 
@@ -325,10 +323,6 @@ func (a *Marker) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed boo
 	}
 	if isClosed && divAnn != nil {
 		a.appendRSXAnnotationLocked(a.chartAnnotationFromDivAnn(*divAnn))
-	}
-
-	if barIndex >= 0 && barIndex < len(a.klines) {
-		a.recordChartExportPointLocked(barIndex, k, a.falconSignals)
 	}
 
 	if isClosed && !a.bulkReplayMode {

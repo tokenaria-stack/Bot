@@ -87,7 +87,6 @@ type Marker struct {
 	JurikLines           []float64
 	WozduhRed            []float64
 	WozduhGreen          []float64
-	chartExportPoints    []BacktestChartPoint
 	Annotations          []ChartAnnotation
 	layer2Snap           layer2StreamingSnapshot
 	mtfStates            map[string]*HTFState
@@ -216,7 +215,7 @@ func (a *Marker) LoadHistoricalKlines(klines []exchange.Kline) {
 	}
 	a.klines = merged
 	a.replayStreamingLocked()
-	a.ensureChartExportPointsAlignedLocked()
+	a.alignAllDataBusToKlinesLocked()
 }
 
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
@@ -256,7 +255,7 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 		a.evalTick(last, lastIdx, true)
 		a.klines = append(a.klines, k)
 		a.evalTick(k, len(a.klines)-1, isClosed)
-		a.ensureChartExportPointsAlignedLocked()
+		a.alignAllDataBusToKlinesLocked()
 		a.trimKlinesToCapLocked()
 		a.clampDataBusToKlinesLocked()
 		return
