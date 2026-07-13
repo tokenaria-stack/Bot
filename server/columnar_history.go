@@ -20,17 +20,17 @@ type columnarCandles struct {
 }
 
 type columnarHistoryResponse struct {
-	Format        string                     `json:"format"`
-	Status        string                     `json:"status"`
-	Timeframe     string                     `json:"timeframe"`
-	WarmupDropped int                        `json:"warmupDropped"`
-	Added         int                        `json:"added"`
-	Times         []int64                    `json:"times"`
-	Candles       columnarCandles            `json:"candles"`
-	Plots         map[string][]float64       `json:"plots"`
-	Annotations   []strategy.ChartAnnotation `json:"annotations"`
-	Sentinel      float64                    `json:"sentinel"`
-	HasMore       bool                       `json:"hasMore"`
+	Format        string               `json:"format"`
+	Status        string               `json:"status"`
+	Timeframe     string               `json:"timeframe"`
+	WarmupDropped int                  `json:"warmupDropped"`
+	Added         int                  `json:"added"`
+	Times         []int64              `json:"times"`
+	Candles       columnarCandles      `json:"candles"`
+	Plots         map[string][]float64 `json:"plots"`
+	Annotations   []wire.Annotation    `json:"annotations"`
+	Sentinel      float64              `json:"sentinel"`
+	HasMore       bool                 `json:"hasMore"`
 }
 
 func parseSlotsParam(raw string) []string {
@@ -60,6 +60,8 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	timeframe string,
 	binanceInterval string,
 ) (columnarHistoryResponse, bool) {
+	_ = ctx
+	_ = binanceInterval
 	if d == nil || d.projector == nil || len(klines) == 0 {
 		return columnarHistoryResponse{}, false
 	}
@@ -79,10 +81,14 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	}
 
 	hist := strategy.ReplayDAGKlines(klines, rsxSettings)
-	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, columnarTimesFromKlines(display), slotIDs)
+	times := columnarTimesFromKlines(display)
+	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)
+	annotations := d.projector.BuildHistoryAnnotations(hist, times)
+	if annotations == nil {
+		annotations = []wire.Annotation{}
+	}
 
 	n := len(display)
-	times := make([]int64, n)
 	candles := columnarCandles{
 		Open:   make([]float64, n),
 		High:   make([]float64, n),
@@ -91,7 +97,6 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		Volume: make([]float64, n),
 	}
 	for i, k := range display {
-		times[i] = exchange.ChartTimeSec(k.OpenTime)
 		candles.Open[i] = k.Open
 		candles.High[i] = k.High
 		candles.Low[i] = k.Low
@@ -101,12 +106,6 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 
 	if !columnarLenInvariant(times, candles, plots) {
 		return columnarHistoryResponse{}, false
-	}
-
-	legacyAnns := legacyChartAnnotationsFromKlines(ctx, klines, trimBars, binanceInterval, rsxSettings)
-	annotations := filterAnnotationsByDisplayTimes(legacyAnns, times)
-	if annotations == nil {
-		annotations = []strategy.ChartAnnotation{}
 	}
 
 	return columnarHistoryResponse{
@@ -124,40 +123,16 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	}, true
 }
 
-// legacyChartAnnotationsFromKlines runs Falcon streaming replay on the same kline window
-// used for DAG columnar output and returns warmup-trimmed RSX divergence markers.
-func legacyChartAnnotationsFromKlines(
-	ctx context.Context,
-	klines []exchange.Kline,
-	trimBars int,
-	interval string,
-	settings strategy.RSXSettings,
-) []strategy.ChartAnnotation {
-	if len(klines) == 0 {
-		return nil
-	}
-	if err := requestCtxErr(ctx); err != nil {
-		return nil
-	}
-	cfg := strategy.ChartStreamingReplayConfig(settings, interval)
-	acc := strategy.NewStreamingReplayAccumulatorCtx(ctx, klines, cfg)
-	if err := acc.LastReplayErr(); err != nil {
-		return nil
-	}
-	_, _, annotations := chartSeriesFromReplayResult(acc.Result(), true)
-	return trimAnnotations(annotations, trimBars, klines)
-}
-
 // filterAnnotationsByDisplayTimes keeps markers whose time is an exact member of display times.
-func filterAnnotationsByDisplayTimes(annotations []strategy.ChartAnnotation, times []int64) []strategy.ChartAnnotation {
+func filterAnnotationsByDisplayTimes(annotations []wire.Annotation, times []int64) []wire.Annotation {
 	if len(annotations) == 0 || len(times) == 0 {
-		return []strategy.ChartAnnotation{}
+		return []wire.Annotation{}
 	}
 	allowed := make(map[int64]struct{}, len(times))
 	for _, t := range times {
 		allowed[t] = struct{}{}
 	}
-	out := make([]strategy.ChartAnnotation, 0, len(annotations))
+	out := make([]wire.Annotation, 0, len(annotations))
 	for _, ann := range annotations {
 		if _, ok := allowed[ann.Time]; ok {
 			out = append(out, ann)

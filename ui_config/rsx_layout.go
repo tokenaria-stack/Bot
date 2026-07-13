@@ -27,5 +27,15 @@ func RSXComponents() []core.UIComponent {
 			Slot:       core.SlotJurikSignal,
 			RenderOpts: json.RawMessage(`{"color":"#8B9BB4","lineWidth":1,"title":"RSX Signal"}`),
 		},
+		{
+			// Shot 9I: Projector packs SlotDivState → LWC markers; DAG never knows colors/shapes.
+			ID:         "ann_rsx_div",
+			Pane:       "pane_osc",
+			HostID:     "rsx",
+			Kind:       "marker",
+			DataMode:   "annotations",
+			Slot:       core.SlotDivState,
+			RenderOpts: json.RawMessage(`{"title":"RSX Div"}`),
+		},
 	}
 }

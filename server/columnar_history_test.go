@@ -115,7 +115,7 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 func TestFilterAnnotationsByDisplayTimes(t *testing.T) {
 	t.Parallel()
 	times := []int64{100, 200, 300}
-	anns := []strategy.ChartAnnotation{
+	anns := []wire.Annotation{
 		{Time: 50, Label: "LL", Pane: "rsx"},
 		{Time: 200, Label: "SS", Pane: "rsx"},
 		{Time: 999, Label: "L", Pane: "rsx"},
@@ -134,7 +134,7 @@ func TestFilterAnnotationsByDisplayTimes_emptyInputs(t *testing.T) {
 	if len(filterAnnotationsByDisplayTimes(nil, []int64{1})) != 0 {
 		t.Fatal("expected empty for nil annotations")
 	}
-	if len(filterAnnotationsByDisplayTimes([]strategy.ChartAnnotation{{Time: 1}}, nil)) != 0 {
+	if len(filterAnnotationsByDisplayTimes([]wire.Annotation{{Time: 1}}, nil)) != 0 {
 		t.Fatal("expected empty for nil times")
 	}
 }

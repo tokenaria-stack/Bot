@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"math"
 
+	"trading_bot/core"
 	"trading_bot/exchange"
+	"trading_bot/server/wire"
 	"trading_bot/strategy"
 )
 
@@ -21,69 +24,8 @@ func buildOHLCChartFromKlines(klines []exchange.Kline) ([]ChartCandle, []ChartOs
 	return candles, nil, nil
 }
 
-func chartSeriesFromReplayResult(result *strategy.StreamingReplayResult, compact bool) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
-	if result == nil || len(result.ChartPoints) == 0 {
-		return nil, nil, nil
-	}
-	candles := make([]ChartCandle, 0, len(result.ChartPoints))
-	oscillators := make([]ChartOscillator, 0, len(result.ChartPoints))
-	for _, pt := range result.ChartPoints {
-		if !validOHLC(pt.Open, pt.High, pt.Low, pt.Close) {
-			continue
-		}
-		candles = append(candles, ChartCandle{
-			Time:   exchange.ChartTimeSec(pt.Time),
-			Open:   roundWirePrice(pt.Open),
-			High:   roundWirePrice(pt.High),
-			Low:    roundWirePrice(pt.Low),
-			Close:  roundWirePrice(pt.Close),
-			Volume: roundWireVolume(pt.Volume),
-		})
-		osc := chartOscillatorFromReplayPoint(pt)
-		if compact {
-			osc = compactChartOscillator(osc)
-		}
-		oscillators = append(oscillators, osc)
-	}
-	return candles, oscillators, result.Annotations
-}
-
-func chartOscillatorFromReplayPoint(pt strategy.BacktestChartPoint) ChartOscillator {
-	return ChartOscillator{
-		Time:            exchange.ChartTimeSec(pt.Time),
-		Jurik:           pt.Jurik,
-		RSX:             pt.RSX,
-		RSXSignal:       pt.RSXSignal,
-		Red:             pt.RsiHl2,
-		Green:           pt.EmaRsi,
-		RedLine:         pt.RsiHl2,
-		GreenLine:       pt.EmaRsi,
-		Blue:            pt.RsiVolFast,
-		RsiPrice:        pt.RsiPrice,
-		EmaRsi:          pt.EmaRsi,
-		RsiRsi:          pt.RsiRsi,
-		RsiHl2:          pt.RsiHl2,
-		RsiVolFast:      pt.RsiVolFast,
-		RsiVolSlow:      pt.RsiVolSlow,
-		MacdRsi:         pt.MacdRsi,
-		RsiAd:           pt.RsiAd,
-		RsiHl2Vol:       pt.RsiHl2Vol,
-		VolCrossMarker:  pt.VolCrossMarker,
-		VolChanMid:      pt.VolChanMid,
-		VolChanUp:       pt.VolChanUp,
-		VolChanDn:       pt.VolChanDn,
-		PriceChanMid:    pt.PriceChanMid,
-		PriceChanUp:     pt.PriceChanUp,
-		PriceChanDn:     pt.PriceChanDn,
-		Color:           pt.Color,
-		Marker:          pt.Marker,
-		VolumeSpikeUp:   pt.VolumeSpikeUp,
-		VolumeSpikeDown: pt.VolumeSpikeDown,
-	}
-}
-
-// buildHistoryChartSeriesTrimmed replays a SQLite history chunk without touching live Marker RAM.
-// Legacy JSON /api/history path only — live charts use columnar + DAG Projector (Shot 9H).
+// buildHistoryChartSeriesTrimmed builds legacy JSON history without Falcon/StreamingReplay.
+// Candles from klines; oscillators + annotations from DAG → Projector (Shot 9I).
 func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 	ctx context.Context,
 	klines []exchange.Kline,
@@ -91,21 +33,94 @@ func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 	interval string,
 	settings strategy.RSXSettings,
 ) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
+	_ = interval
 	if len(klines) == 0 {
 		return nil, nil, nil
 	}
 	if err := requestCtxErr(ctx); err != nil {
 		return nil, nil, nil
 	}
-	cfg := strategy.ChartStreamingReplayConfig(settings, interval)
-	acc := strategy.NewStreamingReplayAccumulatorCtx(ctx, klines, cfg)
-	if err := acc.LastReplayErr(); err != nil {
+
+	display := klines
+	if trim > 0 && len(display) > trim {
+		display = display[trim:]
+	}
+	if len(display) == 0 {
 		return nil, nil, nil
 	}
-	result := acc.Result()
-	candles, oscillators, annotations := chartSeriesFromReplayResult(result, true)
-	if trim <= 0 || len(candles) <= trim {
-		return candles, oscillators, trimAnnotations(annotations, trim, klines)
+
+	candles := make([]ChartCandle, 0, len(display))
+	for _, k := range display {
+		if c, ok := ChartCandleFromKline(k); ok {
+			candles = append(candles, c)
+		}
 	}
-	return candles[trim:], oscillators[trim:], trimAnnotations(annotations, trim, klines)
+	if len(candles) == 0 {
+		return nil, nil, nil
+	}
+
+	times := columnarTimesFromKlines(display)
+	hist := strategy.ReplayDAGKlines(klines, settings)
+	oscillators := dagOscillatorsFromHistory(hist, times)
+	annotations := dagAnnotationsFromHistory(d, hist, times)
+	return candles, oscillators, annotations
+}
+
+func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times []int64) []strategy.ChartAnnotation {
+	if d == nil || d.projector == nil {
+		return nil
+	}
+	wireAnns := d.projector.BuildHistoryAnnotations(hist, times)
+	return strategyAnnotationsFromWire(wireAnns)
+}
+
+func strategyAnnotationsFromWire(anns []wire.Annotation) []strategy.ChartAnnotation {
+	if len(anns) == 0 {
+		return nil
+	}
+	out := make([]strategy.ChartAnnotation, len(anns))
+	for i, a := range anns {
+		out[i] = strategy.ChartAnnotation{
+			Time:     a.Time,
+			Pane:     a.Pane,
+			Label:    a.Label,
+			Color:    a.Color,
+			Position: a.Position,
+			Shape:    a.Shape,
+		}
+	}
+	return out
+}
+
+// dagOscillatorsFromHistory fills legacy ChartOscillator rows from DAG slots (no Falcon).
+func dagOscillatorsFromHistory(hist *core.HistoryBus, times []int64) []ChartOscillator {
+	n := len(times)
+	out := make([]ChartOscillator, n)
+	histCount := 0
+	if hist != nil {
+		histCount = hist.Count()
+	}
+	for i := 0; i < n; i++ {
+		lookback := n - i
+		out[i] = ChartOscillator{Time: times[i]}
+		if hist == nil || lookback > histCount {
+			continue
+		}
+		out[i].Jurik = finiteOrZero(hist.Get(core.SlotJurikRSX, lookback))
+		out[i].RSX = out[i].Jurik
+		out[i].RSXSignal = finiteOrZero(hist.Get(core.SlotJurikSignal, lookback))
+		fast := finiteOrZero(hist.Get(core.SlotWozduhFast, lookback))
+		slow := finiteOrZero(hist.Get(core.SlotWozduhSlow, lookback))
+		out[i].Blue = fast
+		out[i].RsiVolFast = fast
+		out[i].RsiVolSlow = slow
+	}
+	return out
+}
+
+func finiteOrZero(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	return v
 }

@@ -95,6 +95,9 @@ type DashboardServer struct {
 	backtestRuns     *backtestRunManager
 	uiRegistry       *core.UIRegistry
 	projector        *wire.Projector
+	// Shot 9I: rising-edge DivState → WS annotation (per timeframe).
+	lastDivMu    sync.Mutex
+	lastDivState map[string]float64
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -232,6 +235,9 @@ type tickPayload struct {
 	IsClosed         bool                            `json:"isClosed,omitempty"`
 	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
 	Plots            map[string]float64              `json:"plots,omitempty"`
+	// Shot 9I: DAG DivState → Projector markers (no Falcon).
+	Marker      string            `json:"marker,omitempty"`
+	Annotations []wire.Annotation `json:"annotations,omitempty"`
 }
 
 type markerPayload struct {
@@ -297,6 +303,7 @@ func NewDashboardServer(
 		liveNavigators:   defaultLiveNavigatorPanes(),
 		uiRegistry:       uiReg,
 		projector:        wire.NewProjector(uiReg),
+		lastDivState:     make(map[string]float64),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -365,6 +372,7 @@ func validOHLC(open, high, low, closePrice float64) bool {
 
 // BroadcastChartTick pushes an atomic chart frame: OHLCV + DAG plots for any timeframe (Shot 9B).
 // Contract: every live tick carries plots when the Analyst DAG frame is available — never price-only.
+// Shot 9I: divergence markers from Projector(SlotDivState), never Falcon.
 func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
@@ -382,20 +390,56 @@ func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Can
 	if dagFrame != nil && d.projector != nil {
 		plots = d.projector.BuildTickJSON(dagFrame)
 	}
+	marker, anns := d.risingEdgeDivAnnotations(timeframe, dagFrame, chart.Time, isClosed)
 	d.broadcast(wsEnvelope{
 		Type: "tick",
 		Data: tickPayload{
-			Timeframe: timeframe,
-			Time:      chart.Time,
-			Open:      chart.Open,
-			High:      chart.High,
-			Low:       chart.Low,
-			Close:     chart.Close,
-			Volume:    chart.Volume,
-			IsClosed:  isClosed,
-			Plots:     plots,
+			Timeframe:   timeframe,
+			Time:        chart.Time,
+			Open:        chart.Open,
+			High:        chart.High,
+			Low:         chart.Low,
+			Close:       chart.Close,
+			Volume:      chart.Volume,
+			IsClosed:    isClosed,
+			Plots:       plots,
+			Marker:      marker,
+			Annotations: anns,
 		},
 	})
+}
+
+// risingEdgeDivAnnotations emits a wire marker only when closed-bar DivState changes.
+func (d *DashboardServer) risingEdgeDivAnnotations(
+	timeframe string,
+	frame *core.TickFrame,
+	timeSec int64,
+	isClosed bool,
+) (string, []wire.Annotation) {
+	if !isClosed || d == nil || d.projector == nil || frame == nil {
+		return "", nil
+	}
+	state := frame.Get(core.SlotDivState)
+	if !jsonSafeDivState(state) {
+		state = core.DivStateNone
+	}
+	d.lastDivMu.Lock()
+	prev := d.lastDivState[timeframe]
+	d.lastDivState[timeframe] = state
+	d.lastDivMu.Unlock()
+
+	if state == core.DivStateNone || state == prev {
+		return "", nil
+	}
+	ann, ok := d.projector.BuildTickAnnotation(frame, timeSec)
+	if !ok {
+		return "", nil
+	}
+	return ann.Label, []wire.Annotation{ann}
+}
+
+func jsonSafeDivState(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
 // BroadcastPriceBar is deprecated (Shot 9B) — forwards to BroadcastChartTick so legacy callers stay atomic.
@@ -427,8 +471,10 @@ func (d *DashboardServer) BroadcastTick(
 	if dagFrame != nil && d.projector != nil {
 		plots = d.projector.BuildTickJSON(dagFrame)
 	} else if a := d.analystForTimeframe(timeframe); a != nil && d.projector != nil {
-		plots = d.projector.BuildTickJSON(a.DAGTickFrame())
+		dagFrame = a.DAGTickFrame()
+		plots = d.projector.BuildTickJSON(dagFrame)
 	}
+	marker, anns := d.risingEdgeDivAnnotations(timeframe, dagFrame, chart.Time, isClosed)
 	d.broadcast(wsEnvelope{
 		Type: "tick",
 		Data: tickPayload{
@@ -462,6 +508,8 @@ func (d *DashboardServer) BroadcastTick(
 			IsClosed:         isClosed,
 			VolatilityRegime: volatilityRegime,
 			Plots:            plots,
+			Marker:           marker,
+			Annotations:      anns,
 		},
 	})
 }
