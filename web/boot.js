@@ -500,6 +500,7 @@
     safeInit('UI tabs', () => TabsController.init());
     safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: false }));
     safeInit('UI toolbar', () => ToolbarController.init());
+    safeInit('UI scale', () => ScaleController.init());
     safeInit('UI layout', () => LayoutController.init());
     safeInit('UI navigator', () => NavigatorController.init());
     safeInit('UI backtest', () => BacktestController.init());

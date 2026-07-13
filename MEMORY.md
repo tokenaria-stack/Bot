@@ -2,10 +2,10 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Data Foundation + ChartOnly (Shots 9A–9J).**  
+> **Снэпшот MEMORY (июль 2026):** **Core 3.0 frontend polish + Core 2.3 Data Foundation (Shots 9A–9J, 10A).**  
 > Инвариант: **State → Projection (Projector) → Transport**. Ingestion стерилен (`FetchClosedRange`).  
-> Charts = columnar REST + `BroadcastChartTick` (DAG plots + Div annotations + header tip). `/api/state` = метаданные + navigators + DAG Jurik.  
-> Default `ENGINE_MODE=ChartOnly`. **Delivery path без Falcon** (charts + header). Trading — только `ENGINE_MODE=live`.
+> Charts = columnar REST + `BroadcastChartTick` (DAG). Scale modes = `ScaleController` SSOT (`chart_scale_prefs`).  
+> Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.
 
 ---
 
@@ -64,11 +64,15 @@
 **DDR routing:** `component.hostId` → `hostMap[hostId]` (`rsx` / `wozduh`). Pane id (`pane_osc` / `pane_score`) — группировка манифеста, не chart target.  
 **Budget:** F1/F2 priority frames через RenderScheduler RAF split; камера = фаза F3.
 
-### Этап 2 / 3 (будущее)
+### Этап 2 / 3 (будущее) + Core 3.0 Frontend
+
+| Shot | Содержание | Статус |
+|------|------------|--------|
+| **10A** | Declarative Auto/Log scale modes (`ScaleController`, localStorage, manual Y-drag sync) | ✅ |
 
 - Layer Interface, culling, ChartDataProvider, soft Store eviction  
 - ChunkLedger, SceneFrame/Object Graph, alternate backends — только по необходимости  
-- Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65)  
+- Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65 FE)  
 - `ENGINE_MODE=live` re-enable when trading stack reconfigured  
 
 ### Project Renaissance (база Phase 0)
@@ -1143,7 +1147,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
 | Docs | `MEMORY.md` (this file), `.cursor/rules/jeweler-protocol.mdc` |
-| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
+| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/scale-controller.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
