@@ -40,6 +40,52 @@
   /** Serializes overlapping syncRsxIndicatorSettings calls (rapid Save). */
   let rsxSettingsSyncTail = Promise.resolve();
 
+  // ── Shot 10B: Zero-gap live tick handoff while monolith history loads ──
+  const LIVE_TICK_BUFFER_MAX = 5000;
+  /** @type {object[]} */
+  let pendingLiveTicks = [];
+  let tickBufferActive = false;
+  let tickBufferTf = '';
+  let tickBufferReqId = 0;
+
+  function beginLiveTickBuffer() {
+    pendingLiveTicks = [];
+    tickBufferActive = true;
+    tickBufferTf = String(window.currentTf || '').toLowerCase();
+    tickBufferReqId = window.currentLiveRequestId;
+  }
+
+  function abortLiveTickBuffer() {
+    tickBufferActive = false;
+    pendingLiveTicks = [];
+    tickBufferTf = '';
+    tickBufferReqId = 0;
+  }
+
+  /**
+   * While buffer is active: absorb ticks (never write store).
+   * Stale TF / superseded reqId ticks are discarded.
+   * @returns {boolean} true if caller must skip immediate store write
+   */
+  function bufferLiveTick(tick) {
+    if (!tickBufferActive || !tick) return false;
+    const wantTf = String(window.currentTf || tickBufferTf || '').toLowerCase();
+    const tickTf = String(
+      tick.timeframe || backendTradingTimeframe || wantTf || '',
+    ).toLowerCase();
+    if (tickBufferReqId !== window.currentLiveRequestId) {
+      return true;
+    }
+    if (tickTf && wantTf && tickTf !== wantTf) {
+      return true;
+    }
+    pendingLiveTicks.push(tick);
+    if (pendingLiveTicks.length > LIVE_TICK_BUFFER_MAX) {
+      pendingLiveTicks.splice(0, pendingLiveTicks.length - LIVE_TICK_BUFFER_MAX);
+    }
+    return true;
+  }
+
   function resolveLiveRsxSettings() {
     if (typeof RsxController !== 'undefined' && typeof coerceRsxSettingsForAPI === 'function') {
       return coerceRsxSettingsForAPI(RsxController.getSettings('live'));
@@ -82,6 +128,9 @@
 
     window.__isSettingsUpdating = true;
     const reqId = ++window.currentLiveRequestId;
+    beginLiveTickBuffer();
+    wsSubscribeTf(window.currentTf);
+    let completed = false;
     try {
       if (window.DDRFactory && !window.DDRFactory.manifest) {
         await window.DDRFactory.fetchManifest();
@@ -107,6 +156,8 @@
       }
 
       liveColumnarStore.replaceMonolith(columnar);
+      flushLiveTickBuffer();
+      completed = true;
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] RSX settings sync — invariant failed', liveColumnarStore.invariantMeta());
         return;
@@ -125,6 +176,9 @@
     } catch (err) {
       console.error('[Renaissance] syncRsxIndicatorSettings failed:', err);
     } finally {
+      if (reqId !== window.currentLiveRequestId || !completed) {
+        abortLiveTickBuffer();
+      }
       if (seq === rsxSettingsSyncSeq) {
         window.__isSettingsUpdating = false;
       }
@@ -265,6 +319,7 @@
 
   function clearChartData() {
     liveHistoryEpoch += 1;
+    abortLiveTickBuffer();
     liveHydrationOrchestrator?.reset();
     disarmLiveHistoryScroll();
     liveColumnarStore?.clear();
@@ -378,10 +433,11 @@
     liveHydrationOrchestrator?.schedulePrepend(range);
   }
 
-  function pushLiveTickDelta(tick) {
+  function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
     const appendResult = liveColumnarStore.appendTick(tick);
     if (!appendResult?.candle) return false;
+    if (options.silent) return true;
     liveRenderScheduler.markDirty({
       mode: 'delta',
       tick,
@@ -394,7 +450,31 @@
     return true;
   }
 
+  /** Replay buffered ticks onto the fresh monolith (TF + reqId gated). */
+  function flushLiveTickBuffer() {
+    tickBufferActive = false;
+    const pending = pendingLiveTicks;
+    pendingLiveTicks = [];
+    const wantTf = String(window.currentTf || tickBufferTf || '').toLowerCase();
+    const reqId = tickBufferReqId;
+    tickBufferTf = '';
+    tickBufferReqId = 0;
+    if (!pending.length) return;
+    for (let i = 0; i < pending.length; i++) {
+      if (reqId !== window.currentLiveRequestId) break;
+      const tick = pending[i];
+      const tickTf = String(
+        tick?.timeframe || backendTradingTimeframe || wantTf || '',
+      ).toLowerCase();
+      if (tickTf && wantTf && tickTf !== wantTf) continue;
+      // Silent: store only — caller issues one full paint after handoff.
+      pushLiveTickDelta(tick, { silent: true });
+    }
+  }
+
   function handleLiveTick(d) {
+    // Shot 10B: absorb ticks during monolith load (never write store until flush).
+    if (bufferLiveTick(d)) return;
     if (liveHydrationOrchestrator?.queueTick(d)) return;
     const tickTf = (d.timeframe || backendTradingTimeframe || window.currentTf || '15m').toLowerCase();
     if (tickTf !== window.currentTf.toLowerCase()) return;
@@ -420,8 +500,20 @@
       return;
     }
 
+    // Shot 10B: absorb WS ticks until monolith + replay.
+    // WarmingUp retries must keep the buffer (do not drop ticks from the wait window).
+    const wantTf = String(window.currentTf || '').toLowerCase();
+    if (tickBufferActive && tickBufferTf === wantTf) {
+      tickBufferReqId = window.currentLiveRequestId;
+    } else {
+      beginLiveTickBuffer();
+    }
     window.__isDashboardLoading = true;
+    wsSubscribeTf(window.currentTf);
     if (typeof ToolbarController !== 'undefined') ToolbarController.setBuffering(true);
+
+    let completed = false;
+    let retrying = false;
     try {
       if (window.DDRFactory && !window.DDRFactory.manifest) {
         await window.DDRFactory.fetchManifest();
@@ -446,6 +538,7 @@
       if (reqId !== window.currentLiveRequestId) return;
 
       if (stateResult?.warmingUp) {
+        retrying = true;
         setTimeout(() => loadDashboard(options), 2000);
         return;
       }
@@ -456,6 +549,10 @@
       }
 
       liveColumnarStore.replaceMonolith(columnar);
+      // Replay ticks that arrived during fetch — then paint one continuous frame.
+      flushLiveTickBuffer();
+      completed = true;
+
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());
         return;
@@ -478,8 +575,18 @@
       console.error('[Renaissance] loadDashboard failed:', err);
     } finally {
       liveColumnarStore?.unseal?.();
-      window.__isDashboardLoading = false;
-      updateBufferingOverlay();
+      if (reqId !== window.currentLiveRequestId) {
+        abortLiveTickBuffer();
+        window.__isDashboardLoading = false;
+        updateBufferingOverlay();
+      } else if (retrying) {
+        // Keep buffer + loading flag across warmingUp retry.
+        window.__isDashboardLoading = true;
+      } else {
+        if (!completed) abortLiveTickBuffer();
+        window.__isDashboardLoading = false;
+        updateBufferingOverlay();
+      }
     }
   }
 
@@ -522,8 +629,9 @@
       });
 
       safeInit('UI wozduh', () => WozduhController.init());
-      await loadDashboard();
+      // Shot 10B: open WS before history fetch so ticks buffer during load (no Startup Gap).
       initLiveWebSocket();
+      await loadDashboard();
       window.isAppInitialized = true;
     })().catch((err) => console.error('[Renaissance] boot async failed:', err));
   }

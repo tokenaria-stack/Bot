@@ -69,6 +69,7 @@
 | Shot | Содержание | Статус |
 |------|------------|--------|
 | **10A** | Declarative Auto/Log scale modes (`ScaleController`, localStorage, manual Y-drag sync) | ✅ |
+| **10B** | Zero-gap handoff: WS-first + tick buffer around `replaceMonolith` (Startup/Overwrite gaps) | ✅ |
 
 - Layer Interface, culling, ChartDataProvider, soft Store eviction  
 - ChunkLedger, SceneFrame/Object Graph, alternate backends — только по необходимости  
@@ -1143,7 +1144,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
 | DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js`, `web/chart-compositor.js`, `web/render-scheduler.js` |
 | Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
-| Frontend core | `web/boot.js`, `web/store.js`, `web/chart-core.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend core | `web/boot.js` (Shot 10B tick buffer handoff), `web/store.js`, `web/chart-core.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
 | Docs | `MEMORY.md` (this file), `.cursor/rules/jeweler-protocol.mdc` |
