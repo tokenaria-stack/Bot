@@ -10,11 +10,11 @@ type stubDataBus struct {
 	jurik, red, green, prices, closes []float64
 }
 
-func (s *stubDataBus) JurikSeries() []float64        { return s.jurik }
-func (s *stubDataBus) WozduhRedSeries() []float64    { return s.red }
+func (s *stubDataBus) JurikSeries() []float64       { return s.jurik }
+func (s *stubDataBus) WozduhRedSeries() []float64   { return s.red }
 func (s *stubDataBus) WozduhGreenSeries() []float64 { return s.green }
-func (s *stubDataBus) RSXPriceSeries() []float64     { return s.prices }
-func (s *stubDataBus) CloseSeries() []float64        { return s.closes }
+func (s *stubDataBus) RSXPriceSeries() []float64    { return s.prices }
+func (s *stubDataBus) CloseSeries() []float64       { return s.closes }
 
 func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	t.Parallel()

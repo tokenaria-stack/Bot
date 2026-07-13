@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultRSXMacroPivotRadius = 7
+	DefaultRSXMacroPivotRadius   = 7
 	DefaultRSXPeakIndexTolerance = 2
 	DefaultRSXPivotRadius        = 2
 	DefaultRSXLookback           = 90

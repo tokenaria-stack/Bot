@@ -19,8 +19,8 @@ const (
 	macroHiddenLongWeight = 30
 
 	saucerRSIThreshold = 30.0
-	saucerScore          = 15
-	vSpikeScore          = 20
+	saucerScore        = 15
+	vSpikeScore        = 20
 
 	cascadeDoubleMult = 1.5
 	cascadeTripleMult = 2.0
@@ -60,9 +60,9 @@ type SmartDivergenceEngine struct {
 	tickIdx     int
 	tickCount   int
 
-	savedSnapshots  [maxDivSnapshots]Snapshot
-	savedSnapIdx    int
-	savedSnapCount  int
+	savedSnapshots   [maxDivSnapshots]Snapshot
+	savedSnapIdx     int
+	savedSnapCount   int
 	savedOrangeTicks [maxMicroTicks]float64
 	savedRedTicks    [maxMicroTicks]float64
 	savedTickIdx     int

@@ -6,9 +6,9 @@ func TestResolveBacktestInterval(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		in       string
-		binance  string
-		wantErr  bool
+		in      string
+		binance string
+		wantErr bool
 	}{
 		{"1m", "1m", false},
 		{"1D", "1d", false},
