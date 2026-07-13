@@ -23,7 +23,6 @@ import (
 	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/exchange"
-	"trading_bot/indicators"
 	"trading_bot/server/wire"
 	"trading_bot/strategy"
 	"trading_bot/ui_config"
@@ -370,9 +369,9 @@ func validOHLC(open, high, low, closePrice float64) bool {
 	return true
 }
 
-// BroadcastChartTick pushes an atomic chart frame: OHLCV + DAG plots for any timeframe (Shot 9B).
+// BroadcastChartTick pushes an atomic chart frame: OHLCV + DAG plots + DAG header tip (Shot 9B/9J).
 // Contract: every live tick carries plots when the Analyst DAG frame is available — never price-only.
-// Shot 9I: divergence markers from Projector(SlotDivState), never Falcon.
+// Header Jurik/Wozduh come from DAG slots only — never FalconSnapshot.
 func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
@@ -391,22 +390,33 @@ func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Can
 		plots = d.projector.BuildTickJSON(dagFrame)
 	}
 	marker, anns := d.risingEdgeDivAnnotations(timeframe, dagFrame, chart.Time, isClosed)
-	d.broadcast(wsEnvelope{
-		Type: "tick",
-		Data: tickPayload{
-			Timeframe:   timeframe,
-			Time:        chart.Time,
-			Open:        chart.Open,
-			High:        chart.High,
-			Low:         chart.Low,
-			Close:       chart.Close,
-			Volume:      chart.Volume,
-			IsClosed:    isClosed,
-			Plots:       plots,
-			Marker:      marker,
-			Annotations: anns,
-		},
-	})
+	hdr := dagHeaderFromFrame(dagFrame)
+	payload := tickPayload{
+		Timeframe:   timeframe,
+		Time:        chart.Time,
+		Open:        chart.Open,
+		High:        chart.High,
+		Low:         chart.Low,
+		Close:       chart.Close,
+		Volume:      chart.Volume,
+		IsClosed:    isClosed,
+		Plots:       plots,
+		Marker:      marker,
+		Annotations: anns,
+		Factors:     map[string]strategy.ScoreFactor{},
+	}
+	applyDAGHeaderToTick(&payload, hdr)
+	d.broadcast(wsEnvelope{Type: "tick", Data: payload})
+}
+
+// BroadcastTick is deprecated (Shot 9J) — forwards to BroadcastChartTick (DAG header only).
+func (d *DashboardServer) BroadcastTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
+	d.BroadcastChartTick(timeframe, candle, isClosed, dagFrame)
+}
+
+// BroadcastPriceBar is deprecated (Shot 9B) — forwards to BroadcastChartTick so legacy callers stay atomic.
+func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Candle) {
+	d.BroadcastChartTick(timeframe, candle, false, nil)
 }
 
 // risingEdgeDivAnnotations emits a wire marker only when closed-bar DivState changes.
@@ -440,78 +450,6 @@ func (d *DashboardServer) risingEdgeDivAnnotations(
 
 func jsonSafeDivState(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
-}
-
-// BroadcastPriceBar is deprecated (Shot 9B) — forwards to BroadcastChartTick so legacy callers stay atomic.
-func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Candle) {
-	d.BroadcastChartTick(timeframe, candle, false, nil)
-}
-
-// BroadcastTick pushes a live candle with optional legacy scoring fields (dashboard header).
-// Chart plots always come from dagFrame via the same atomic path as BroadcastChartTick.
-func (d *DashboardServer) BroadcastTick(
-	timeframe string,
-	candle domain.Candle,
-	falcon strategy.FalconSignals,
-	rsxColor string,
-	decision strategy.ScoreDecision,
-	brainStatus, aiStatus string,
-	volatilityRegime string,
-	isClosed bool,
-	dagFrame *core.TickFrame,
-) {
-	chart, ok := ChartCandleFromDomain(candle)
-	if !ok {
-		return
-	}
-	if timeframe == "" {
-		timeframe = d.tradingTimeframe
-	}
-	var plots map[string]float64
-	if dagFrame != nil && d.projector != nil {
-		plots = d.projector.BuildTickJSON(dagFrame)
-	} else if a := d.analystForTimeframe(timeframe); a != nil && d.projector != nil {
-		dagFrame = a.DAGTickFrame()
-		plots = d.projector.BuildTickJSON(dagFrame)
-	}
-	marker, anns := d.risingEdgeDivAnnotations(timeframe, dagFrame, chart.Time, isClosed)
-	d.broadcast(wsEnvelope{
-		Type: "tick",
-		Data: tickPayload{
-			Timeframe:        timeframe,
-			Time:             chart.Time,
-			Open:             chart.Open,
-			High:             chart.High,
-			Low:              chart.Low,
-			Close:            chart.Close,
-			Volume:           chart.Volume,
-			Jurik:            falcon.JurikRSX,
-			RSX:              falcon.JurikRSX,
-			RSXSignal:        falcon.JurikRSXSignal,
-			RSXColor:         rsxColor,
-			RedLine:          falcon.RedLine,
-			GreenLine:        falcon.GreenLine,
-			BlueLine:         falcon.BlueLine,
-			RsiPrice:         falcon.RsiPrice,
-			RsiHl2:           falcon.RsiHl2,
-			RsiVolFast:       falcon.RsiVolFast,
-			RsiVolSlow:       falcon.RsiVolSlow,
-			LongScore:        decision.LongScore,
-			ShortScore:       decision.ShortScore,
-			RawAction:        string(decision.RawAction),
-			FinalAction:      string(decision.FinalAction),
-			IsVetoed:         decision.IsVetoed,
-			VetoReason:       decision.VetoReason,
-			Factors:          decision.Factors,
-			BrainStatus:      brainStatus,
-			AIStatus:         aiStatus,
-			IsClosed:         isClosed,
-			VolatilityRegime: volatilityRegime,
-			Plots:            plots,
-			Marker:           marker,
-			Annotations:      anns,
-		},
-	})
 }
 
 // BroadcastMarker records a trade and pushes a marker to all dashboard clients.
@@ -1843,12 +1781,10 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 		}
 	}
 
-	if strategy.EngineAllowsStrategies() {
-		if analyst, ok := d.analysts[spec.ID]; ok {
-			d.enrichFromAnalyst(state, analyst, nil)
-		} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
-			d.enrichFromAnalyst(state, analyst, nil)
-		}
+	if analyst, ok := d.analysts[spec.ID]; ok {
+		d.enrichFromDAG(state, analyst)
+	} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+		d.enrichFromDAG(state, analyst)
 	}
 	return state, nil
 }
@@ -2167,55 +2103,105 @@ func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {
 	return klines
 }
 
-func applyScoreTelemetryToMarketState(state *MarketState, decision strategy.ScoreDecision) {
-	state.LongScore = decision.LongScore
-	state.ShortScore = decision.ShortScore
-	state.RawAction = string(decision.RawAction)
-	state.FinalAction = string(decision.FinalAction)
-	state.IsVetoed = decision.IsVetoed
-	state.VetoReason = decision.VetoReason
-	state.Factors = decision.Factors
-}
-
-func (d *DashboardServer) scoreDecisionForAnalyst(analyst *strategy.Marker) strategy.ScoreDecision {
-	if d.master != nil {
-		return d.master.ScoreDecisionForTelemetry(analyst)
-	}
-	decision := strategy.CalculateScoreGlobal(analyst)
-	return strategy.ApplyExecutionVetoes(decision, analyst, d.signalAnalyst, strategy.NewChiefAnalyst())
-}
-
-func (d *DashboardServer) enrichFromAnalyst(state *MarketState, analyst *strategy.Marker, klines []exchange.Kline) {
+func (d *DashboardServer) enrichFromDAG(state *MarketState, analyst *strategy.Marker) {
 	if state == nil || analyst == nil {
 		return
 	}
-	// ChartOnly: no Falcon/Score/Fib telemetry on MarketState (Shot 9H).
+	frame := analyst.DAGTickFrame()
+	hdr := dagHeaderFromFrame(frame)
+	applyDAGHeaderToMarketState(state, hdr)
+
+	// ChartOnly (and Live UI): no ScoreEngine / Veto / Fib / Layer2 regime for header.
+	// Optional tip: SlotTotalScore → LongScore only when strategies are enabled.
+	state.ShortScore = 0
+	state.RawAction = ""
+	state.FinalAction = ""
+	state.IsVetoed = false
+	state.VetoReason = ""
+	state.Factors = map[string]strategy.ScoreFactor{}
+	state.BrainStatus = ""
+	state.AIStatus = ""
+	state.FibZones = nil
+	state.VolatilityRegime = ""
+
 	if !strategy.EngineAllowsStrategies() {
+		state.LongScore = 0
 		return
 	}
-	_ = klines
-	decision := d.scoreDecisionForAnalyst(analyst)
-	applyScoreTelemetryToMarketState(state, decision)
-	state.BrainStatus = strategy.TelemetryBrainStatus(decision, d.signalAnalyst)
-	state.AIStatus = strategy.TelemetryAIStatus(context.Background(), analyst, nil)
-	if d.master != nil {
-		state.MasterState = string(d.master.State())
-	}
-
-	vol := analyst.VolatilityStateSnapshot()
-	falcon := analyst.FalconSnapshot()
-	if d.master != nil {
-		state.VolatilityRegime = d.master.ClosedVolatilityRegimeForTelemetry(analyst)
-	} else {
-		state.VolatilityRegime = analyst.ClosedVolatilityRegime()
-		if state.VolatilityRegime == "" {
-			state.VolatilityRegime = string(vol.Regime)
+	if frame != nil {
+		if total := frame.Get(core.SlotTotalScore); jsonSafeDivState(total) {
+			state.LongScore = int(math.Round(total))
 		}
 	}
-	state.Jurik = falcon.JurikRSX
-	state.RedLine = falcon.RedLine
-	state.GreenLine = falcon.GreenLine
-	state.FibZones = chartFibZonesFromFib(analyst.FibZonesSnapshot())
+}
+
+// dagHeader holds dashboard tip values projected from DAG slots (no Falcon).
+type dagHeader struct {
+	Jurik     float64
+	RSX       float64
+	RSXSignal float64
+	BlueLine  float64
+	VolFast   float64
+	VolSlow   float64
+}
+
+func dagHeaderFromFrame(frame *core.TickFrame) dagHeader {
+	if frame == nil {
+		return dagHeader{}
+	}
+	h := dagHeader{}
+	if v := frame.Get(core.SlotJurikRSX); jsonSafeDivState(v) {
+		h.Jurik = v
+		h.RSX = v
+	}
+	if v := frame.Get(core.SlotJurikSignal); jsonSafeDivState(v) {
+		h.RSXSignal = v
+	}
+	if v := frame.Get(core.SlotWozduhFast); jsonSafeDivState(v) {
+		h.BlueLine = v
+		h.VolFast = v
+	}
+	if v := frame.Get(core.SlotWozduhSlow); jsonSafeDivState(v) {
+		h.VolSlow = v
+	}
+	return h
+}
+
+func applyDAGHeaderToMarketState(state *MarketState, h dagHeader) {
+	if state == nil {
+		return
+	}
+	state.Jurik = h.Jurik
+	// RedLine/GreenLine have no DAG price-RSI slots yet — leave zero (honest empty tip).
+	state.RedLine = 0
+	state.GreenLine = 0
+}
+
+func applyDAGHeaderToTick(p *tickPayload, h dagHeader) {
+	if p == nil {
+		return
+	}
+	p.Jurik = h.Jurik
+	p.RSX = h.RSX
+	p.RSXSignal = h.RSXSignal
+	p.BlueLine = h.BlueLine
+	p.RsiVolFast = h.VolFast
+	p.RsiVolSlow = h.VolSlow
+	// No Falcon Red/Green / ScoreEngine on wire.
+	p.RedLine = 0
+	p.GreenLine = 0
+	p.LongScore = 0
+	p.ShortScore = 0
+	p.RawAction = ""
+	p.FinalAction = ""
+	p.IsVetoed = false
+	p.VetoReason = ""
+	p.BrainStatus = ""
+	p.AIStatus = ""
+	p.VolatilityRegime = ""
+	if p.Factors == nil {
+		p.Factors = map[string]strategy.ScoreFactor{}
+	}
 }
 
 func trimAnnotations(annotations []strategy.ChartAnnotation, trim int, klines []exchange.Kline) []strategy.ChartAnnotation {
@@ -2339,24 +2325,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func chartFibZonesFromFib(zones []indicators.FibZone) []ChartFibZone {
-	if len(zones) == 0 {
-		return nil
-	}
-	out := make([]ChartFibZone, 0, len(zones))
-	for _, z := range zones {
-		if z.Type != indicators.Retracement && z.Type != indicators.Extension {
-			continue
-		}
-		out = append(out, ChartFibZone{
-			Ratio:    z.Ratio,
-			Price:    z.TargetValue,
-			IsActive: z.IsActive,
-		})
-	}
-	return out
 }
 
 func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {

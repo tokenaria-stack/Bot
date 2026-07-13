@@ -2,16 +2,16 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Data Foundation + ChartOnly (Shots 9A–9I).**  
+> **Снэпшот MEMORY (июль 2026):** **Core 2.3 — Data Foundation + ChartOnly (Shots 9A–9J).**  
 > Инвариант: **State → Projection (Projector) → Transport**. Ingestion стерилен (`FetchClosedRange`).  
-> Charts = columnar REST + `BroadcastChartTick` (DAG plots + Div annotations). `/api/state` = метаданные + navigators.  
-> Default `ENGINE_MODE=ChartOnly`. Chart delivery **без Falcon**. Trading — только `ENGINE_MODE=live`.
+> Charts = columnar REST + `BroadcastChartTick` (DAG plots + Div annotations + header tip). `/api/state` = метаданные + navigators + DAG Jurik.  
+> Default `ENGINE_MODE=ChartOnly`. **Delivery path без Falcon** (charts + header). Trading — только `ENGINE_MODE=live`.
 
 ---
 
 ## Core 2.3 — Development Plan (ACTIVE)
 
-**Статус:** Этап 1 (UI camera) ✅ 6A–8; **Этап Data Foundation ✅ 9A–9I**; ChartOnly delivery server — текущий default.
+**Статус:** Этап 1 (UI camera) ✅ 6A–8; **Этап Data Foundation ✅ 9A–9J**; ChartOnly delivery server — текущий default.
 
 **Цель UI:** устранить баги LWC без Scene Graph.  
 **Цель Data:** разделить Owners (RAM realtime ≠ SQLite archive); убить Falcon-export на delivery path.
@@ -43,7 +43,7 @@
 | 6B+ | Active Driver / slave scroll | 🔜 |
 | 7–8 | Camera contracts; live-edge visibility | ✅ partial |
 
-### Этап Data Foundation (Shots 9A–9I) — ✅ CLOSED
+### Этап Data Foundation (Shots 9A–9J) — ✅ CLOSED
 
 | Shot | Содержание | Статус |
 |------|------------|--------|
@@ -56,6 +56,7 @@
 | **9G** | Audit: 503 = phantom `chartExportPoints` (not panic) | ✅ analysis |
 | **9H** | Navigators from DAG; purge ExportChartSeries/`chartExportPoints`; lightweight `/api/state` | ✅ |
 | **9I** | DAG Div annotations via Projector; purge `legacyChartAnnotationsFromKlines`; Falcon-free chart REST/WS | ✅ |
+| **9J** | Live header sterilization: `enrichFromDAG` / tick tip from DAG slots; no FalconSnapshot/ScoreEngine in server UI | ✅ |
 
 **Synchronous Slice Rule:** один индексный диапазон на `times`, все `candles.*`, все `plots[id]`.  
 **Render window:** LWC soft cap 15000 (`RENDER_WINDOW_LIMIT`); Store может расти.  
@@ -92,7 +93,7 @@ Store → extractWindow → RenderScheduler (F1 RAF → F2 RAF)
 
 ---
 
-## Core 2.3 — Data Foundation Canon (Shots 9A–9I) — июль 2026
+## Core 2.3 — Data Foundation Canon (Shots 9A–9J) — июль 2026
 
 ### Владельцы (Owners)
 
@@ -144,28 +145,30 @@ Annotations
 - Полный state: metadata + optional navigators; ChartOnly без Falcon/Score/Fib в payload.
 - Charts: `GET /api/history?format=columnar` + WS `BroadcastChartTick`.
 
-### Annotations (Shot 9I)
+### Annotations (Shot 9I) + Header (Shot 9J)
 
 - DAG `DivergenceNode`: ZigZag swings × oscillator slot → `SlotDivScore` / `SlotDivState` (чистая математика, без Falcon).
 - Projector: rising-edge `SlotDivState` → `wire.Annotation` (цвет/форма); манифест `ann_rsx_div` (`dataMode=annotations`).
 - Columnar + legacy JSON history + WS tick: **без** `legacyChartAnnotationsFromKlines` / StreamingReplay.
 - StreamingReplay остаётся только для backtest/lab.
+- **Header:** `enrichFromDAG` / `BroadcastChartTick` → `SlotJurikRSX` (+ Wozduh vol slots на tick). `RedLine`/`GreenLine` = 0 (нет price-RSI слотов). ChartOnly: scores/actions/fib/regime empty. Live UI: `LongScore` = `SlotTotalScore` only (no ScoreEngine).
 
 ### Удалённый легаси (не возвращать)
 
 - `ExportChartSeriesForWindow` / `chartExportPoints` / `buildLiveChartFromRAM` / `buildRAMChartExport` / `buildTailPollChartFromRAM`
 - `legacyChartAnnotationsFromKlines` + Falcon chart annotations path
+- `enrichFromAnalyst` / `scoreDecisionForAnalyst` / `FalconSnapshot` / `FibZonesSnapshot` на UI path
 - `FetchHistoricalKlines` + forward-fill synthesize
-- `NewFalconEngine()` ad-hoc в `enrichFromAnalyst`
+- `NewFalconEngine()` ad-hoc в UI enrich
 - Hot-path DEBUG spam (`LoadKlines` SELECT logs, HistoryProvider GetWindow spam)
 
-### Оставшийся Falcon (не chart delivery)
+### Оставшийся Falcon (не chart delivery / не UI header)
 
 | Место | Зачем ещё жив | Приоритет |
 |-------|---------------|-----------|
-| `BroadcastTick` / `enrichFromAnalyst` | Live header Jurik/Red/Green telemetry | #65 toolbar tip from DAG |
-| Marker Layer2 / MTF / scoring | `ENGINE_MODE=live` trading stack | OK gated |
+| Marker Layer2 / MTF / scoring | `ENGINE_MODE=live` trading stack only | OK gated |
 | Streaming replay / backtest | Lab path | OK until Live chart rewrite |
+| `boot.js` header wire | backend fills `jurik` on state/tick; modern boot may not call `updateHeaderData` | 🟡 optional FE hook |
 
 ---
 
@@ -1054,7 +1057,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **53** | ~~**Orphan LWC series (zombies)**~~ | `series-factory.js` | ✅ Shot 5 removeSeries |
 | **44** | **Order Flow deprecation** | `webserver.go` | 🔜 roadmap |
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
-| **46** | **MEMORY sync** | this file | ✅ Shots 9A–9I logged (июль 2026) |
+| **46** | **MEMORY sync** | this file | ✅ Shots 9A–9J logged (июль 2026) |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
 | **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
 | **55** | ~~**PersistenceQueue (P0b)**~~ — closed bar → async batch UPSERT SQLite; не sync из Analyst | `data/persistence_queue.go`, `data/history_db.go`, `main.go` | ✅ Shot 9C |
@@ -1067,7 +1070,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **62** | ~~**Columnar annotations still Falcon**~~ — Projector packs `SlotDivState` → wire markers; `legacyChartAnnotationsFromKlines` deleted; legacy JSON history also DAG-only | `server/wire/annotation.go`, `projector.go`, `columnar_history.go`, `chart_cache.go` | ✅ Shot 9I |
 | **63** | ~~**Non-columnar `/api/history` JSON Falcon**~~ — `buildHistoryChartSeriesTrimmed` now OHLC + DAG oscillators/annotations (no StreamingReplay) | `server/chart_cache.go` | ✅ Shot 9I |
 | **64** | **Navigators full ReplayDAGKlines each request** — CPU on `navigators=1` | `dag_navigator_series.go` | 🟡 later: live HistoryBus tail |
-| **65** | **Toolbar/header MarketState fields** — Jurik/Red/Green empty in ChartOnly | `web/`, `MarketState` | 🟡 fix header from DAG tick / columnar tip |
+| **65** | ~~**Toolbar/header MarketState Falcon**~~ — `enrichFromDAG` / `BroadcastChartTick` from SlotJurikRSX (+ Wozduh); no FalconSnapshot/ScoreEngine; ChartOnly scores empty | `server/webserver.go` | ✅ Shot 9J (backend). Residual: `boot.js` may not call `ToolbarController.updateHeaderData` yet |
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
 
 ### [🔜 OPEN DEBTS — приоритет]
@@ -1148,4 +1151,4 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, **ChartOnly** delivery by default. `ENGINE_MODE=live` включает ScoreMatrix + `Master.Run`. `make ab-test` — CLI A/B backtest.
 
-**Следующий шаг:** рестарт бота → boot без 503; debt **#65** (toolbar tip from DAG); опционально live `tick.annotations` → ColumnarStore upsert (сейчас history annotations + `marker` на WS). Trading — только `ENGINE_MODE=live`.
+**Следующий шаг:** рестарт бота; проверить `/api/state.jurik` из DAG. Опционально: `boot.js` → `ToolbarController.updateHeaderData` из state/tick. Trading — только `ENGINE_MODE=live`.
