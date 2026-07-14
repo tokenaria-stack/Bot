@@ -138,8 +138,9 @@ func main() {
 	})
 	// #endregion
 
-	orderFlow := domain.NewOrderFlowStore()
-	var _ exchange.OrderFlowSink = orderFlow
+	// Order Flow amputated (debt #44): no aggTrade ring (was DefaultTickBufferCap=100k).
+	// Re-enable with strategy settings later — pass domain.NewOrderFlowStore() + WS sink.
+	var orderFlow *domain.OrderFlowStore
 
 	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
 	htfProvider := exchange.NewHTFProvider()

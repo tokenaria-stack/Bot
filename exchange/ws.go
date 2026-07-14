@@ -119,8 +119,9 @@ func (c *WsClient) connectAndListen(ctx context.Context) error {
 		fmt.Sprintf("%s@kline_1d", c.symbol),
 		fmt.Sprintf("%s@kline_1w", c.symbol),
 		fmt.Sprintf("%s@kline_1M", c.symbol),
-		fmt.Sprintf("%s@aggTrade", c.symbol),
-		fmt.Sprintf("%s@forceOrder", c.symbol),
+		// Order Flow amputated (debt #44) — aggTrade/forceOrder leak RAM until strategy settings restore.
+		// fmt.Sprintf("%s@aggTrade", c.symbol),
+		// fmt.Sprintf("%s@forceOrder", c.symbol),
 	}
 
 	url := FuturesWSCombinedURL() + strings.Join(streams, "/")
@@ -160,10 +161,10 @@ func (c *WsClient) connectAndListen(ctx context.Context) error {
 		switch {
 		case strings.Contains(envelope.Stream, "@kline_"):
 			c.handleKline(ctx, envelope.Data)
-		case strings.Contains(envelope.Stream, "@aggTrade"):
-			c.handleAggTrade(envelope.Data)
-		case strings.Contains(envelope.Stream, "@forceOrder"):
-			c.handleForceOrder(envelope.Data)
+		// Order Flow amputated (#44) — ignore if a stale combined stream still carries micro events.
+		case strings.Contains(envelope.Stream, "@aggTrade"),
+			strings.Contains(envelope.Stream, "@forceOrder"):
+			continue
 		}
 	}
 }

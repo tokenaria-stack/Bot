@@ -2064,25 +2064,8 @@ func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
 }
 
 func (d *DashboardServer) loadOrderFlowKlines(spec TimeframeSpec, endTimeSec int64, maxCandles int) []exchange.Kline {
-	if d.orderFlow == nil || d.orderFlow.Ticks == nil {
-		return nil
-	}
-
-	var trades []domain.AggTrade
-	if endTimeSec > 0 {
-		trades = d.orderFlow.Ticks.Before(historyEndTimeToMs(endTimeSec))
-	} else {
-		trades = d.orderFlow.Ticks.All()
-	}
-
-	chartCandles := SynthesizeMicroCandles(trades, spec.ID)
-	if len(chartCandles) == 0 {
-		return nil
-	}
-	if len(chartCandles) > maxCandles {
-		chartCandles = chartCandles[len(chartCandles)-maxCandles:]
-	}
-	return chartCandlesToKlines(chartCandles)
+	// Order Flow amputated (debt #44) — restore with strategy settings; no micro-candle synthesis.
+	return nil
 }
 
 func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {

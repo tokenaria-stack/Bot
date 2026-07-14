@@ -94,7 +94,8 @@
 - Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65 FE)  
 - **IIR tip SSOT (#67):** align live Analyst warmup depth with history Replay (kill tip cliff vs TV)  
 - Osc fixed scale bounds in manifest (#68)  
-- ~~MemoryBudget (#69)~~ ✅ 3.4.4 prune-right + island detach  
+- MemoryBudget (#69) — deferred (prune-right interfered; revisit after #67)  
+- Order Flow (#44) — **amputated** until strategy settings  
 - `ENGINE_MODE=live` re-enable when trading stack reconfigured
 
 ### Project Renaissance (база Phase 0)
@@ -1015,7 +1016,7 @@ targetFrom = targetTo - windowSize
 | **Atomic apply** | `ChartAdapter.applyAtomicPrepend` — `_liveUpdating` → candles → `DDRFactory.applyHydratedData` → **один** `setVisibleLogicalRange` |
 | **Pre-alloc merge** | `DDRFactory.prependColumnarChunk` + `mergePrependPoints` (no push) |
 | **TF reset** | `clearChartData` → `liveHistoryEpoch++` + `orchestrator.reset()` |
-| **Microscope guard** | WS ticks only (legacy `_microscopeTickMuted` / Store `_detachedFromLive`). **Never** block `shouldLoad` REST prepend (#5) |
+| **Microscope guard** | WS ticks only (legacy `_microscopeTickMuted` in processTick). **Never** block `shouldLoad` REST prepend (#5) |
 
 **Поток scroll-left:**
 ```
@@ -1084,7 +1085,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **51** | ~~**TF viewportAnchor dropped**~~ | `boot.js` | ✅ Shot 6A |
 | **52** | ~~**Manifest pane→chart misroute**~~ | `ui_config/`, `series-factory.js` | ✅ Shot 6A hostId |
 | **53** | ~~**Orphan LWC series (zombies)**~~ | `series-factory.js` | ✅ Shot 5 removeSeries |
-| **44** | **Order Flow deprecation** | `webserver.go` | 🔜 roadmap |
+| **44** | **Order Flow** — **amputated** (no `@aggTrade`/`@forceOrder` WS; `loadOrderFlowKlines` stub; no `OrderFlowStore` alloc). Restore with strategy settings UI later | `exchange/ws.go`, `main.go`, `server/webserver.go`, `domain/orderflow.go` | ⏸ amputated; re-enable w/ settings |
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
 | **46** | **MEMORY sync** | this file | ✅ Shots 9A–11E + 11D hotfixes logged (июль 2026) |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
@@ -1103,7 +1104,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
 | **67** | **IIR Tip SSOT (critical)** — History `ReplayDAGKlines` warm depth ≫ live `AnalystBootKlineLimit=400` → tip cliff vs TV after 11A XOR. Fix: same warmup continuum / tip plots from live DAG closed bars, not orphan Replay | `live_kline.go`, `columnar_history.go`, `dag_shadow.go` | 🔴 NEXT math |
 | **68** | **Osc fixed scale bounds** — RSX/Wozduh manifests lack TV-like `[-5,105]` / `autoscaleInfoProvider`; scale depends on data extremes | `ui_config/rsx_layout.go`, `wozduh_layout.go`, DDR RenderOpts | 🟡 after #67 |
-| **69** | ~~**MemoryBudget / WindowPolicy**~~ — `MAX_MEMORY_BARS=12000`; `prependMonolith` → prune RIGHT (island) + `_detachedFromLive` blocks tip stitch. Paint still `extractWindow` 15k | `columnar-store.js` | ✅ 3.4.4 |
+| **69** | **MemoryBudget / WindowPolicy** — ColumnarStore can grow unbounded on left-scroll; paint window 15k separate. **Deferred** — prune-right island interfered with microscope; revisit after #67 | `columnar-store.js`, `config.js` | ⏸ deferred |
 | **70** | **ScaleController only binds price** — osc slave `right` scales not in `applyAll`; rely on setData + sentinel. Optional: register rsx/wozduh or re-arm after DDR hydrate | `scale-controller.js`, `chart-core.js`, `chart-compositor.js` | 🟢 residual |
 | **71** | **FrameDiagnostics** — one snapshot per publish (epoch, barCount, autoScale, cameraMode, forming) for camera/scale regressions | `boot.js` / compositor | 🟢 cheap insurance |
 | **72** | ~~**TF camera accordion / Live Edge wipe**~~ | `viewport-manager.js`, `timeframe-controller.js` | ✅ 11D–11D-VIEWPORT; **TF mechanics CLOSED** |
