@@ -1,8 +1,14 @@
 /**
  * RenderScheduler — Core 2.3 epoch loop + priority frames (F1 price, F2 indicators).
+ * Shot 11E: NewBar is a boundary event — never coalesced away (delta chain).
  * Modules only markDirty; this class alone drives compositor.flush.
  */
 class RenderScheduler {
+  /** Soft cap: extreme bursts keep last N boundary+tip slots (still contiguous). */
+  static get DELTA_CHAIN_CAP() {
+    return 64;
+  }
+
   /**
    * @param {{ flush: (intent: object) => void }} compositor
    */
@@ -63,7 +69,39 @@ class RenderScheduler {
     });
   }
 
-  /** @returns {object|null} */
+  /** Normalize a delta intent into parallel deltas[] / ticks[] chains. */
+  static _asDeltaChain(intent) {
+    if (!intent || intent.mode !== 'delta') {
+      return { deltas: [], ticks: [] };
+    }
+    if (Array.isArray(intent.deltas) && intent.deltas.length) {
+      const ticks = Array.isArray(intent.ticks) ? intent.ticks : [];
+      return {
+        deltas: intent.deltas.slice(),
+        ticks: ticks.length === intent.deltas.length
+          ? ticks.slice()
+          : intent.deltas.map((_, i) => ticks[i] ?? (i === intent.deltas.length - 1 ? intent.tick : null)),
+      };
+    }
+    if (intent.delta?.candle) {
+      return { deltas: [intent.delta], ticks: [intent.tick ?? null] };
+    }
+    return { deltas: [], ticks: [] };
+  }
+
+  static _trimDeltaChain(deltas, ticks) {
+    const cap = RenderScheduler.DELTA_CHAIN_CAP;
+    if (deltas.length <= cap) return { deltas, ticks };
+    return {
+      deltas: deltas.slice(deltas.length - cap),
+      ticks: ticks.slice(ticks.length - cap),
+    };
+  }
+
+  /**
+   * Shot 11E: coalesce same-bar tips; append on isNewBar (never overwrite a boundary).
+   * @returns {object|null}
+   */
   static _coalesce(prev, next) {
     if (!prev) return { ...next };
     if (next.mode === 'full') {
@@ -76,10 +114,33 @@ class RenderScheduler {
     if (prev.mode === 'indicators' && next.mode === 'delta') return { ...next };
     if (prev.mode === 'delta' && next.mode === 'indicators') return { mode: 'indicators' };
     if (prev.mode === 'delta' && next.mode === 'delta') {
+      const { deltas, ticks } = RenderScheduler._asDeltaChain(prev);
+      const nextDelta = next.delta;
+      const nextTick = next.tick ?? null;
+      if (!nextDelta?.candle) {
+        return prev;
+      }
+
+      const nextIsNewBar = nextDelta.isNewBar === true;
+      if (nextIsNewBar || deltas.length === 0) {
+        // Boundary (or empty chain): append — closing tip of prior bar stays in chain.
+        deltas.push(nextDelta);
+        ticks.push(nextTick);
+      } else {
+        // Same forming bar: rewrite tip only.
+        deltas[deltas.length - 1] = nextDelta;
+        ticks[ticks.length - 1] = nextTick;
+      }
+
+      const trimmed = RenderScheduler._trimDeltaChain(deltas, ticks);
+      const tip = trimmed.deltas[trimmed.deltas.length - 1];
+      const tipTick = trimmed.ticks[trimmed.ticks.length - 1];
       return {
         mode: 'delta',
-        tick: next.tick ?? prev.tick,
-        delta: next.delta ?? prev.delta,
+        deltas: trimmed.deltas,
+        ticks: trimmed.ticks,
+        delta: tip,
+        tick: tipTick,
       };
     }
     if (prev.mode === 'prepend' && next.mode === 'prepend') {

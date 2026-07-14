@@ -133,18 +133,28 @@ class ChartCompositor {
   }
 
   _flushDelta(intent) {
-    const delta = intent.delta;
-    if (!delta?.candle) return;
+    const chain = Array.isArray(intent?.deltas) && intent.deltas.length
+      ? intent.deltas
+      : (intent?.delta?.candle ? [intent.delta] : []);
+    if (!chain.length) return;
+
+    const ticks = Array.isArray(intent?.ticks) ? intent.ticks : [];
+    const fallbackTick = intent?.tick ?? null;
 
     ChartAdapter.setLiveUpdating(true);
     try {
-      if (intent.tick?.plots && typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
-        window.DDRFactory.updateTick(intent.tick.time, intent.tick.plots);
+      for (let i = 0; i < chain.length; i++) {
+        const delta = chain[i];
+        if (!delta?.candle) continue;
+        const tick = ticks[i] ?? (i === chain.length - 1 ? fallbackTick : null);
+        if (tick?.plots && typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
+          window.DDRFactory.updateTick(tick.time, tick.plots);
+        }
+        ChartAdapter.applyDelta('live', {
+          ...delta,
+          barCount: delta.barCount ?? this._store.barCount(),
+        });
       }
-      ChartAdapter.applyDelta('live', {
-        ...delta,
-        barCount: delta.barCount ?? this._store.barCount(),
-      });
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);

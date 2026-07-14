@@ -457,7 +457,15 @@
     },
 
     applyDelta(context, delta) {
-      if (context !== 'live' || !_live || !delta?.candle) return;
+      if (context !== 'live' || !_live || !delta) return;
+      // Shot 11E: compositor may pass a boundary chain (close tip → open new bar).
+      if (Array.isArray(delta)) {
+        for (let i = 0; i < delta.length; i++) {
+          ChartAdapter.applyDelta(context, delta[i]);
+        }
+        return;
+      }
+      if (!delta.candle) return;
       const barCount = Number.isFinite(delta.barCount) ? delta.barCount : 0;
       if (barCount <= 1) {
         const candles = delta.candle ? [delta.candle] : [];
