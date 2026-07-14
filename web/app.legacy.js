@@ -1618,7 +1618,7 @@ function initHydrationOrchestrator() {
     unsealStore: () => { liveColumnarStore?.unseal(); },
     shouldLoad: (range, options) => {
       if (!ChartAdapter.isInitialized('live') || window.__isDashboardLoading) return false;
-      if (_microscopeTickMuted) return false;
+      // Microscope mute guards WS ticks only — never block historical REST prepend (#5).
       const force = options.force === true;
       if (isLoadingHistory || liveHydrationOrchestrator?.isBusy() || !historyHasMore) return false;
       if (!shouldPaintLiveChart()) return false;

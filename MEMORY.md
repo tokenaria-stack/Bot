@@ -2,10 +2,12 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 3.0 frontend polish + Core 2.3 Data Foundation (Shots 9A–9J, 10A).**  
-> Инвариант: **State → Projection (Projector) → Transport**. Ingestion стерилен (`FetchClosedRange`).  
-> Charts = columnar REST + `BroadcastChartTick` (DAG). Scale modes = `ScaleController` SSOT (`chart_scale_prefs`).  
-> Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.
+> **Снэпшот MEMORY (июль 2026):** **Core 3.5 Projection Contracts (Shots 11A–11E + 11D hotfixes) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
+> Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick` (DAG). TF camera = Sticky Live Edge / Microscope router.  
+> Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
+> Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.  
+> **TF mechanics (11C–11D-VIEWPORT) — CLOSED** (Atomic Swap + Smart Camera + rightOffset). Polishing later.
 
 ---
 
@@ -64,26 +66,48 @@
 **DDR routing:** `component.hostId` → `hostMap[hostId]` (`rsx` / `wozduh`). Pane id (`pane_osc` / `pane_score`) — группировка манифеста, не chart target.  
 **Budget:** F1/F2 priority frames через RenderScheduler RAF split; камера = фаза F3.
 
-### Этап 2 / 3 (будущее) + Core 3.0 Frontend
+### Этап 2 / 3 (будущее) + Core 3.0–3.5 Frontend
 
 | Shot | Содержание | Статус |
 |------|------------|--------|
-| **10A** | Declarative Auto/Log scale modes (`ScaleController`, localStorage, manual Y-drag sync) | ✅ |
-| **10B** | Zero-gap handoff: WS-first + tick buffer around `replaceMonolith` (Startup/Overwrite gaps) | ✅ |
+| **10A** | Declarative Auto/Log scale (`ScaleController`, localStorage, manual Y-drag sync) | ✅ |
+| **10B** | Zero-gap handoff: WS-first + tick buffer around `replaceMonolith` | ✅ |
+| **11A** | History Tip Protocol: `dropFormingTip` before `ReplayDAGKlines` (closed XOR forming) | ✅ |
+| **11B** | `window.projectionEpoch` SSOT discard axis (replaces requestId + historyEpoch) | ✅ |
+| **11C** | Atomic Publish: soft TF handoff (`prepareLiveTfHandoff`); one `markDirty(full)` after monolith+DDR | ✅ |
+| **11D** | Scale default Auto ON; Smart Camera router (Sticky Edge / Microscope / Zoom-OUT) | ✅ |
+| **11D-FIX** | Sticky Live Edge priority before zoom direction | ✅ |
+| **11D-HOTFIX** | `updateTick` sentinel filter; `ScaleController.applyAll()` after candle `setData` | ✅ |
+| **11D-VIEWPORT** | Live Edge preserves `visibleBars` + `rightOffset` (no hard 150 reset) | ✅ **TF mechanics CLOSED** |
+| **11E** | Delta Integrity: NewBar boundary → delta chain in `RenderScheduler` | ✅ |
 
-- Layer Interface, culling, ChartDataProvider, soft Store eviction  
-- ChunkLedger, SceneFrame/Object Graph, alternate backends — только по необходимости  
+**Projection laws (Shots 11x — canon):**
+
+1. **Tip Ownership:** REST history = closed bars only (`dropFormingTip`); forming tip = WS `BroadcastChartTick` only.
+2. **ProjectionEpoch:** one discard axis for TF / load / buffer / hydrate / WS.
+3. **Atomic Publish:** TF switch keeps old LWC frame under buffering until one full paint (no `setData([])` wipe).
+4. **CameraIntent:** `tipVisible ≠ isAtRightEdge`; Live Edge carries `visibleBars`+`rightOffset`, never `barSpacing` across TF; Microscope = zoom-IN off-edge + healthy spacing.
+5. **Delta Integrity:** `isNewBar` never coalesces away (`deltas[]` chain → sequential `applyDelta`).
+
+- Layer Interface, culling, ChartDataProvider  
+- ChunkLedger, SceneFrame/Object Graph — только по необходимости  
 - Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65 FE)  
-- `ENGINE_MODE=live` re-enable when trading stack reconfigured  
+- **IIR tip SSOT (#67):** align live Analyst warmup depth with history Replay (kill tip cliff vs TV)  
+- Osc fixed scale bounds in manifest (#68)  
+- ~~MemoryBudget (#69)~~ ✅ 3.4.4 prune-right + island detach  
+- `ENGINE_MODE=live` re-enable when trading stack reconfigured
 
 ### Project Renaissance (база Phase 0)
 
 | Файл | Роль |
 |------|------|
-| `web/boot.js` | Composition root: Shims, Store, Scheduler, Orchestrator, DDR, WS; `loadDashboard({ viewportAnchor })` |
-| `web/chart-core.js` | Sterile ChartAdapter; `shiftCamera`; one-way TimeScale |
-| `web/chart-compositor.js` | Sole live paint authority; F1/F2/F3 |
-| `web/series-factory.js` | DDRFactory; `buildPanes(hostMap, panes)`; `clear()` → `removeSeries` |
+| `web/boot.js` | Composition root; ProjectionEpoch; tick buffer; Atomic `loadDashboard` / `prepareLiveTfHandoff` |
+| `web/chart-core.js` | Sterile ChartAdapter; Scale re-arm after `setData`; one-way TimeScale |
+| `web/chart-compositor.js` | Sole live paint; F1/F2/F3; delta chain flush |
+| `web/render-scheduler.js` | NewBar boundary coalesce (`deltas[]`) |
+| `web/series-factory.js` | DDRFactory; `columnToLWC` + `updateTick` sentinel parity |
+| `web/ui/viewport-manager.js` | Camera router + Live Edge `visibleBars`/`rightOffset` |
+| `web/ui/scale-controller.js` | Auto/Log SSOT (`chart_scale_prefs_v2`, default Auto ON) |
 | `web/app.legacy.js` / `adapter.legacy.js` | Quarantined |
 
 **Paint path (Core 2.3 Shot 6A):**
@@ -991,7 +1015,7 @@ targetFrom = targetTo - windowSize
 | **Atomic apply** | `ChartAdapter.applyAtomicPrepend` — `_liveUpdating` → candles → `DDRFactory.applyHydratedData` → **один** `setVisibleLogicalRange` |
 | **Pre-alloc merge** | `DDRFactory.prependColumnarChunk` + `mergePrependPoints` (no push) |
 | **TF reset** | `clearChartData` → `liveHistoryEpoch++` + `orchestrator.reset()` |
-| **Microscope guard** | `shouldLoad` → `false` if `_microscopeTickMuted` |
+| **Microscope guard** | WS ticks only (legacy `_microscopeTickMuted` / Store `_detachedFromLive`). **Never** block `shouldLoad` REST prepend (#5) |
 
 **Поток scroll-left:**
 ```
@@ -1062,7 +1086,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **53** | ~~**Orphan LWC series (zombies)**~~ | `series-factory.js` | ✅ Shot 5 removeSeries |
 | **44** | **Order Flow deprecation** | `webserver.go` | 🔜 roadmap |
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
-| **46** | **MEMORY sync** | this file | ✅ Shots 9A–9J logged (июль 2026) |
+| **46** | **MEMORY sync** | this file | ✅ Shots 9A–11E + 11D hotfixes logged (июль 2026) |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
 | **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
 | **55** | ~~**PersistenceQueue (P0b)**~~ — closed bar → async batch UPSERT SQLite; не sync из Analyst | `data/persistence_queue.go`, `data/history_db.go`, `main.go` | ✅ Shot 9C |
@@ -1077,6 +1101,13 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **64** | **Navigators full ReplayDAGKlines each request** — CPU on `navigators=1` | `dag_navigator_series.go` | 🟡 later: live HistoryBus tail |
 | **65** | ~~**Toolbar/header MarketState Falcon**~~ — `enrichFromDAG` / `BroadcastChartTick` from SlotJurikRSX (+ Wozduh); no FalconSnapshot/ScoreEngine; ChartOnly scores empty | `server/webserver.go` | ✅ Shot 9J (backend). Residual: `boot.js` may not call `ToolbarController.updateHeaderData` yet |
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
+| **67** | **IIR Tip SSOT (critical)** — History `ReplayDAGKlines` warm depth ≫ live `AnalystBootKlineLimit=400` → tip cliff vs TV after 11A XOR. Fix: same warmup continuum / tip plots from live DAG closed bars, not orphan Replay | `live_kline.go`, `columnar_history.go`, `dag_shadow.go` | 🔴 NEXT math |
+| **68** | **Osc fixed scale bounds** — RSX/Wozduh manifests lack TV-like `[-5,105]` / `autoscaleInfoProvider`; scale depends on data extremes | `ui_config/rsx_layout.go`, `wozduh_layout.go`, DDR RenderOpts | 🟡 after #67 |
+| **69** | ~~**MemoryBudget / WindowPolicy**~~ — `MAX_MEMORY_BARS=12000`; `prependMonolith` → prune RIGHT (island) + `_detachedFromLive` blocks tip stitch. Paint still `extractWindow` 15k | `columnar-store.js` | ✅ 3.4.4 |
+| **70** | **ScaleController only binds price** — osc slave `right` scales not in `applyAll`; rely on setData + sentinel. Optional: register rsx/wozduh or re-arm after DDR hydrate | `scale-controller.js`, `chart-core.js`, `chart-compositor.js` | 🟢 residual |
+| **71** | **FrameDiagnostics** — one snapshot per publish (epoch, barCount, autoScale, cameraMode, forming) for camera/scale regressions | `boot.js` / compositor | 🟢 cheap insurance |
+| **72** | ~~**TF camera accordion / Live Edge wipe**~~ | `viewport-manager.js`, `timeframe-controller.js` | ✅ 11D–11D-VIEWPORT; **TF mechanics CLOSED** |
+| **73** | ~~**Y-axis squash / sentinel live tick**~~ | `series-factory.js`, `chart-core.js`, `scale-controller.js` | ✅ 11D-HOTFIX |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
@@ -1087,36 +1118,36 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | 2 | **Navigator background zones** | `web/trendline_plugin.js` | 🟡 |
 | 3 | ~~**Backtest viewport**~~ | `web/ui/viewport-manager.js` | ✅ 20.4C (supersedes `viewport.js`) |
 | 4 | **Backend 1M** — UI `1M`→`1w` | `server/`, `main.go` | 🟢 |
-| **5** | **Microscope `endTime`** — boot всегда `endTimeSec=now`; deep-history TF relies on `centerTimeMs` inside loaded window. Live-edge vs history split = Shot 8 `isLiveCandleVisible`. Full center-anchored fetch still optional. | `web/boot.js`, `viewport-manager.js` | 🟡 Shot 8 partial; fetch-around-center if window miss |
-| 6 | **Forward lazy load** | `web/app.js` | 🟡 scroll prepend only (pre-fetch закрывает initial) |
+| **5** | **Microscope fetch** — `shouldLoad` no longer gated by tick-mute (boot never had it; legacy row removed). Residual: boot `endTimeSec=now`; center-anchored fetch if window miss still optional. | `web/boot.js`, `viewport-manager.js`, `app.legacy.js` | 🟡 mute bug ✅; fetch-around-center optional |
+| 6 | **Forward lazy load** | `web/boot.js` | 🟡 scroll prepend only |
 | 7 | **SQLite clear в Cache** | `server/webserver.go` | 🟡 |
 | 8 | **Qdrant in main** | `main.go`, `vector_db/` | 🔜 |
 | 9 | **expose `masterState`** | `server/webserver.go` | 🔜 |
 | **10** | ~~**Factors UI panel**~~ | `web/app.js`, `index.html` | ✅ 5.62 → 5.75 compact line |
 | **11** | ~~**MTF walk-forward на live**~~ | `master.go`, `mtf_tracker.go` | ✅ 5.68–5.70 |
-| **12** | **MTF scoring tune / weight calibration** | `scoring.go`, `matrix.json`, Stats A/B | 🔜 NEXT |
+| **12** | **MTF scoring tune / weight calibration** | `scoring.go`, `matrix.json`, Stats A/B | 🔜 |
 | **13** | ~~**Backtest longScore/shortScore per bar**~~ | `backtest.go` | ✅ 5.63 |
 | **14** | ~~**RSX/Wozduh HTF в scoring**~~ | `mtf_tracker.go`, `scoring.go` | ✅ 5.69 + 5.72 |
-| **15** | **WS full Wozduh / mergeOsc** | `webserver.go`, `web/app.js` | 🟡 |
+| **15** | **WS full Wozduh / mergeOsc** | `webserver.go`, `web/boot.js` | 🟡 |
 | **16** | ~~**Slippage model**~~ | `backtest.go` | ✅ 5.64 (0.03% default) |
 | **17** | **max_drawdown enforcement** | `risk.go`, `master.go` | 🔜 |
 | **18** | **fixed_pct stop в UI** | `computePositionStop` | 🔜 |
 | **19** | **mergeKlines SSOT** | `kline_merge.go` vs `webserver.go` dup | 🟡 |
 | **20** | ~~**Flaky tests**~~ | `rsx_settings_test.go` | ✅ 5.71 fixed |
 | **21** | **Stats trade history persistence** | `domain/trade_history.go` | 🔜 SQLite |
-| **22** | **Live Trade Inspector** | `web/app.js` | 🔜 scoring history buffer |
-| **23** | **Backtest stop: await partial JSON** | `web/app.js` | 🟡 prefer server response over AbortController |
+| **22** | **Live Trade Inspector** | `web/boot.js` | 🔜 scoring history buffer |
+| **23** | **Backtest stop: await partial JSON** | legacy path | 🟡 |
 | **24** | **Stats live initial balance sync** | `domain/trade_history.go` | 🟡 uses DefaultSessionCapital |
 | **25** | ~~**Frontend monolith / live viewport hacks**~~ | `web/app.js`, `viewport.js` | ✅ Phase 19.5–20 |
 | **26** | ~~**Live volume exponential growth**~~ | `web/time-normalizer.js` | ✅ 20.4B LWW |
 | **27** | ~~**Chain-reaction history load**~~ | `app.js`, `viewport-manager.js` | ✅ 20.4F guards + no animate |
 | **28** | ~~**Backtest black screen (0×0 tab nesting)**~~ | `web/index.html`, `chart-projection.js` | ✅ Phase 28 — HTML `</div>` + Data/View split |
-| **29** | **Backtest history bypasses Projection** | `web/app.js` `maybeLoadBacktestHistory` | 🟡 прямой `ChartAdapter.applyHistoryPrepend` — асимметрия с Phase 28 |
-| **30** | **trySync: re-mark dirty on paint fail** | `web/ui/chart-projection.js` | 🟡 `consumeViewDirty` до успешного paint; poison pill v2 если series пустой после `clearSeries` |
-| **31** | **Debug agent logs cleanup** | `backtest-pipeline.js`, `chart-adapter.js`, `app.js` | 🟡 `#region agent log` fetch ingest (session 39f875) |
-| **32** | **Overlay navigators in intent** | `backtest-pipeline.js`, `chart-projection.js` | 🟡 simOnly overlay без `result.navigators` в intent |
-| **33** | **`coversRange` not wired to `needsBaseReload`** | `backtest-pipeline.js`, `store.js` | 🟡 fingerprint-only reload policy |
-| **34** | **`runBacktest(autoSwitchTab)` dead param** | `web/app.js` | 🟢 не переключает на Backtest tab |
+| **29** | **Backtest history bypasses Projection** | backtest path | 🟡 прямой prepend — асимметрия с live Atomic |
+| **30** | **trySync: re-mark dirty on paint fail** | `web/ui/chart-projection.js` | 🟡 |
+| **31** | **Debug agent logs cleanup** | various | 🟡 `#region agent log` |
+| **32** | **Overlay navigators in intent** | `backtest-pipeline.js` | 🟡 |
+| **33** | **`coversRange` not wired to `needsBaseReload`** | `backtest-pipeline.js`, `store.js` | 🟡 |
+| **34** | **`runBacktest(autoSwitchTab)` dead param** | legacy | 🟢 |
 | **35** | **DAG → TradeManager wiring (PAUSED)** — ChartOnly default; re-enable only with `ENGINE_MODE=live` | `strategy/master.go`, `core/runner.go` | ⏸ shadow DAG; Live gated |
 | **36** | **TradeIntent wire contract** | `strategy/score_types.go`, WS/API | ⏸ |
 | **37** | **Execution gate `isClosed` only** | `strategy/master.go` | ⏸ TickLiveCh frozen in ChartOnly |
@@ -1144,11 +1175,11 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
 | DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js`, `web/chart-compositor.js`, `web/render-scheduler.js` |
 | Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
-| Frontend core | `web/boot.js` (Shot 10B tick buffer handoff), `web/store.js`, `web/chart-core.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend core | `web/boot.js` (epoch + Atomic + tick buffer), `web/chart-core.js`, `web/render-scheduler.js`, `web/series-factory.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
 | Docs | `MEMORY.md` (this file), `.cursor/rules/jeweler-protocol.mdc` |
-| Frontend UI | `web/ui/viewport-manager.js`, `web/ui/chart-projection.js`, `web/ui/scale-controller.js`, `web/ui/backtest-pipeline.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/tabs-controller.js`, … |
+| Frontend UI | `web/ui/viewport-manager.js` (11D camera CLOSED), `web/ui/scale-controller.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
@@ -1156,4 +1187,4 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, **ChartOnly** delivery by default. `ENGINE_MODE=live` включает ScoreMatrix + `Master.Run`. `make ab-test` — CLI A/B backtest.
 
-**Следующий шаг:** рестарт бота; проверить `/api/state.jurik` из DAG. Опционально: `boot.js` → `ToolbarController.updateHeaderData` из state/tick. Trading — только `ENGINE_MODE=live`.
+**Следующий шаг (TF mechanics CLOSED):** **#67 IIR Tip SSOT** — выровнять live Analyst warmup с history Replay (убрать tip cliff vs TV). Затем #68 osc fixed bounds, #69 MemoryBudget. Опционально: #65 FE toolbar hook. Trading — только `ENGINE_MODE=live`.

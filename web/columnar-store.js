@@ -1,7 +1,12 @@
 /**
  * ColumnarStore — SSOT for live columnar history (Core 3.0).
  * Mirrors server wire JSON; annotations indexed by snapped ms for O(1) marker patches.
+ *
+ * MemoryBudget (#69): after history prepend, prune RIGHT so Store stays ≤ MAX_MEMORY_BARS.
+ * Paint still uses ChartCompositor.extractWindow; this caps RAM / LWC-feeding SSOT.
  */
+const MAX_MEMORY_BARS = 12000;
+
 class ColumnarStore {
   constructor() {
     this._times = [];
@@ -13,6 +18,8 @@ class ColumnarStore {
     this._annotationMap = new Map();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
+    /** True after prune-right dropped the live tip — reject WS append until replaceMonolith. */
+    this._detachedFromLive = false;
   }
 
   static _toMs(timeLike) {
@@ -37,6 +44,7 @@ class ColumnarStore {
     this._annotationMap.clear();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
+    this._detachedFromLive = false;
   }
 
   seal() {
@@ -76,6 +84,7 @@ class ColumnarStore {
       warmupDropped: Number(data.warmupDropped) || 0,
       added: Number(data.added) || times.length,
     };
+    this._detachedFromLive = false;
   }
 
   /**
@@ -236,6 +245,9 @@ class ColumnarStore {
     const lastTime = n > 0 ? this._times[n - 1] : null;
     if (lastTime != null && time < lastTime) return null;
 
+    // Island sterility (#69): after prune-right the tip is historical — never stitch live onto it.
+    if (this._detachedFromLive && (lastTime == null || time > lastTime)) return null;
+
     const isNewBar = lastTime == null || time > lastTime;
     const plots = tick.plots && typeof tick.plots === 'object' ? tick.plots : null;
     const absent = ColumnarStore.plotAbsent();
@@ -381,7 +393,41 @@ class ColumnarStore {
       added: this._times.length,
     };
 
+    this._pruneRightToBudget();
     return { added };
+  }
+
+  /**
+   * MemoryBudget (#69): keep left (older) history, drop right (newer / live tip).
+   * Silent — no events; next renderState sees ≤ MAX_MEMORY_BARS.
+   * Sets _detachedFromLive so appendTick cannot stitch a live tip onto the island.
+   */
+  _pruneRightToBudget() {
+    const n = this._times.length;
+    if (n <= MAX_MEMORY_BARS) return;
+
+    this._times.length = MAX_MEMORY_BARS;
+    this._candles.open.length = MAX_MEMORY_BARS;
+    this._candles.high.length = MAX_MEMORY_BARS;
+    this._candles.low.length = MAX_MEMORY_BARS;
+    this._candles.close.length = MAX_MEMORY_BARS;
+    this._candles.volume.length = MAX_MEMORY_BARS;
+    for (const id of Object.keys(this._plots)) {
+      const col = this._plots[id];
+      if (Array.isArray(col) && col.length > MAX_MEMORY_BARS) col.length = MAX_MEMORY_BARS;
+    }
+
+    const lastMs = ColumnarStore._toMs(this.lastTimeSec());
+    if (lastMs != null) {
+      this._annotations = this._annotations.filter((ann) => {
+        const ms = ColumnarStore._toMs(ann?.time ?? ann?.Time);
+        return ms != null && ms <= lastMs;
+      });
+      this._rebuildAnnotationMapFromArray(this._annotations);
+    }
+
+    this._meta = { ...this._meta, added: this._times.length };
+    this._detachedFromLive = true;
   }
 
   invariantOk() {
@@ -440,8 +486,9 @@ class ColumnarStore {
 
 if (typeof window !== 'undefined') {
   window.ColumnarStore = ColumnarStore;
+  window.MAX_MEMORY_BARS = MAX_MEMORY_BARS;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { ColumnarStore };
+  module.exports = { ColumnarStore, MAX_MEMORY_BARS };
 }
