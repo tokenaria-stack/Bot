@@ -1,6 +1,6 @@
 /**
  * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 / Shot 11D).
- * tipVisible ≠ pinnedRight. Live-edge restore never carries poisoned barSpacing/visibleBars.
+ * tipVisible ≠ pinnedRight. Live-edge preserves visibleBars + rightOffset; never carries barSpacing.
  */
 (function initViewportManager(global) {
   /** Comfortable candle width — SSOT for cold boot + live-edge / poison recovery. */
@@ -99,10 +99,12 @@
    */
   function cameraIntentForTfSwitch(captured, fromTf, toTf) {
     const centerTimeMs = captured?.centerTimeMs != null ? captured.centerTimeMs : Date.now();
+    const visibleBars = captured?.visibleBars || HEALTHY_VISIBLE_BARS;
+    const rightOffset = captured?.rightOffset || 0;
 
     // Priority 1 — Sticky Live Edge: tip-pinned user stays on live market regardless of zoom.
     if (captured?.isAtRightEdge === true) {
-      return { centerTimeMs, isAtRightEdge: true };
+      return { centerTimeMs, isAtRightEdge: true, visibleBars, rightOffset };
     }
 
     const intervalFn = (typeof TimeNormalizer !== 'undefined' && TimeNormalizer.getIntervalMs)
@@ -125,7 +127,7 @@
     }
 
     // Priority 3 — Zoom OUT from history (or unknown weights): reset to Live Edge.
-    return { centerTimeMs, isAtRightEdge: true };
+    return { centerTimeMs, isAtRightEdge: true, visibleBars, rightOffset };
   }
 
   const ViewportManager = {
@@ -164,12 +166,14 @@
 
       const tipVisible = range.to >= times.length - 1;
       const atRightEdge = isPinnedRight(range, times.length);
+      const rightOffset = Math.max(0, range.to - (times.length - 1));
 
       return {
         centerTimeMs,
         visibleBars,
         tipVisible,
         isAtRightEdge: atRightEdge,
+        rightOffset,
         barSpacing: Number.isFinite(barSpacing) ? barSpacing : HEALTHY_BAR_SPACING,
       };
     },
@@ -185,13 +189,16 @@
       const mainChart = ChartAdapter.getChart(context, 'price');
       if (!mainChart?.timeScale) return;
 
-      // Live Edge: pin right + healthy spacing only — never carry old visibleBars/barSpacing.
+      // Live Edge: healthy barSpacing (no density carry) + preserved visibleBars / rightOffset.
       if (anchor.isAtRightEdge) {
         applyBarSpacingAll(context, HEALTHY_BAR_SPACING);
         const n = times.length;
         if (typeof ChartAdapter.setVisibleLogicalRange === 'function' && n > 0) {
-          const from = Math.max(0, n - HEALTHY_VISIBLE_BARS);
-          ChartAdapter.setVisibleLogicalRange(context, { from, to: n }, { animate: false });
+          const bars = Number.isFinite(anchor.visibleBars) ? anchor.visibleBars : HEALTHY_VISIBLE_BARS;
+          const offset = Number.isFinite(anchor.rightOffset) ? anchor.rightOffset : 0;
+          const targetTo = (n - 1) + Math.max(0, offset);
+          const from = Math.max(0, targetTo - bars);
+          ChartAdapter.setVisibleLogicalRange(context, { from, to: targetTo }, { animate: false });
         } else {
           _paneScrollToRight(context);
         }
