@@ -175,11 +175,13 @@ class DDRFactory {
     if (chartTime == null || !plots || typeof plots !== 'object') {
       return;
     }
+    const absent = DDRFactory.HISTORY_ABSENT;
     for (const [key, rawValue] of Object.entries(plots)) {
       const series = DDRFactory._seriesFromEntry(this.seriesMap.get(key));
       if (!series) continue;
       const value = Number(rawValue);
-      if (!Number.isFinite(value)) continue;
+      // Shot 11D-HOTFIX: same isAbsent contract as columnToLWC — never feed Sentinel into LWC.
+      if (!Number.isFinite(value) || value >= absent) continue;
       try {
         series.update({ time: chartTime, value });
       } catch {

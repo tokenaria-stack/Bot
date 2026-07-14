@@ -423,6 +423,10 @@
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.setData(toVolumeBars(candles));
     }
+    // Shot 11D-HOTFIX: re-arm Auto after setData so LWC recomputes Y on real bars, not empty canvas.
+    if (typeof ScaleController !== 'undefined' && typeof ScaleController.applyAll === 'function') {
+      ScaleController.applyAll();
+    }
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }

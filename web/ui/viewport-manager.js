@@ -91,19 +91,27 @@
   }
 
   /**
-   * Build TF-switch camera intent from zoom direction (Shot 11D Smart Microscope).
-   * Zoom IN (finer TF): keep centerTimeMs. Zoom OUT / equal: live edge, no density carry.
+   * Shot 11D-FIX: Decision Router for TF-switch camera.
+   * Priority: Sticky Live Edge → Microscope (zoom IN in history) → Live Edge (zoom OUT).
    * @param {object|null} captured from capture()
    * @param {string} fromTf
    * @param {string} toTf
    */
   function cameraIntentForTfSwitch(captured, fromTf, toTf) {
+    const centerTimeMs = captured?.centerTimeMs != null ? captured.centerTimeMs : Date.now();
+
+    // Priority 1 — Sticky Live Edge: tip-pinned user stays on live market regardless of zoom.
+    if (captured?.isAtRightEdge === true) {
+      return { centerTimeMs, isAtRightEdge: true };
+    }
+
     const intervalFn = (typeof TimeNormalizer !== 'undefined' && TimeNormalizer.getIntervalMs)
       || (typeof getIntervalMs === 'function' ? getIntervalMs : null);
     const fromMs = intervalFn ? Number(intervalFn(fromTf)) : NaN;
     const toMs = intervalFn ? Number(intervalFn(toTf)) : NaN;
     const zoomIn = Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs < fromMs;
 
+    // Priority 2 — Microscope: zoom IN while viewing historical (non-edge) window.
     if (zoomIn && captured?.centerTimeMs != null) {
       let visibleBars = Number(captured.visibleBars) || HEALTHY_VISIBLE_BARS;
       if (visibleBars > MAX_HEALTHY_VISIBLE_BARS) visibleBars = MAX_HEALTHY_VISIBLE_BARS;
@@ -112,16 +120,12 @@
         centerTimeMs: captured.centerTimeMs,
         visibleBars,
         isAtRightEdge: false,
-        // Microscope: healthy spacing on finer grid — never carry crushed accordion.
         barSpacing: HEALTHY_BAR_SPACING,
       };
     }
 
-    // Zoom OUT or unknown: Live Edge — discard poisoned density entirely.
-    return {
-      centerTimeMs: captured?.centerTimeMs != null ? captured.centerTimeMs : Date.now(),
-      isAtRightEdge: true,
-    };
+    // Priority 3 — Zoom OUT from history (or unknown weights): reset to Live Edge.
+    return { centerTimeMs, isAtRightEdge: true };
   }
 
   const ViewportManager = {
