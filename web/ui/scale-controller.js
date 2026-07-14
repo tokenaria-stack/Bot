@@ -1,13 +1,14 @@
 /**
- * ScaleController — declarative price-scale modes (Core 3.0 Shot 10A).
+ * ScaleController — declarative price-scale modes (Core 3.0 Shot 10A / 11D).
  * SSOT: { isAuto, isLog } → localStorage → applyScaleMode(chart) → UI .active
- * Manual Y-drag / wheel on the right price scale turns isAuto off (event-driven, no polling).
+ * Boot invariant (11D): autoScale defaults ON. Off only after user Y-gesture on price scale.
  */
 const ScaleController = (() => {
   'use strict';
 
-  const STORAGE_KEY = 'chart_scale_prefs';
-  const DEFAULT_STATE = Object.freeze({ isAuto: false, isLog: false });
+  // Shot 11D: bump key so stale {isAuto:false} from the old default cannot blank candles.
+  const STORAGE_KEY = 'chart_scale_prefs_v2';
+  const DEFAULT_STATE = Object.freeze({ isAuto: true, isLog: false });
 
   /** @type {{ isAuto: boolean, isLog: boolean }} */
   let state = { ...DEFAULT_STATE };
@@ -23,7 +24,8 @@ const ScaleController = (() => {
       if (!raw) return { ...DEFAULT_STATE };
       const parsed = JSON.parse(raw);
       return {
-        isAuto: parsed?.isAuto === true,
+        // Default ON; only an explicit false (user gesture / toggle) disables Auto.
+        isAuto: parsed?.isAuto !== false,
         isLog: parsed?.isLog === true,
       };
     } catch {

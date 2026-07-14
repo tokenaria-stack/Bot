@@ -148,12 +148,16 @@ const TimeframeController = (() => {
 
     const changed = resolved !== currentTf;
     let viewportAnchor = null;
+    const prevTf = currentTf;
 
     if (changed) {
       abortLiveStateFetch();
-      ++currentLiveRequestId;
-      if (ChartAdapter.isInitialized('live')) {
-        viewportAnchor = window.ViewportManager.capture('live');
+      window.projectionEpoch = (Number(window.projectionEpoch) || 0) + 1;
+      if (ChartAdapter.isInitialized('live') && typeof ViewportManager !== 'undefined') {
+        const captured = ViewportManager.capture('live');
+        viewportAnchor = typeof ViewportManager.cameraIntentForTfSwitch === 'function'
+          ? ViewportManager.cameraIntentForTfSwitch(captured, prevTf, resolved)
+          : captured;
       }
     }
 
@@ -161,12 +165,15 @@ const TimeframeController = (() => {
     localStorage.setItem(LS_TF_KEY, resolved);
     historyHasMore = true;
     disarmLiveHistoryScroll();
-
     syncToolbar();
 
     if (changed) {
-      clearChartData();
-      ChartAdapter.setChartInitialized(false);
+      // Shot 11C: soft handoff after currentTf is set so the tick buffer binds the new TF.
+      if (typeof prepareLiveTfHandoff === 'function') {
+        prepareLiveTfHandoff();
+      } else if (typeof clearChartData === 'function') {
+        clearChartData({ keepProjection: true });
+      }
     }
 
     loadDashboard({ userTfChange: changed, viewportAnchor });
@@ -183,7 +190,7 @@ const TimeframeController = (() => {
     } else {
       ChartAdapter.applyOrderFlowTimeScale(false);
     }
-    updateBufferingOverlay();
+    // Buffering overlay owned by loadDashboard (Atomic Publish) — do not clear here.
   }
 
   function switchBacktestTimeframe(tf, event) {

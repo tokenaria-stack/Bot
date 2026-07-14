@@ -58,7 +58,7 @@
     const tv = typeof TV !== 'undefined' ? TV : { border: '#2a2e39' };
     const prefs = typeof ScaleController !== 'undefined'
       ? ScaleController.getState()
-      : { isAuto: false, isLog: false };
+      : { isAuto: true, isLog: false };
     return {
       borderColor: tv.border,
       autoScale: !!prefs.isAuto,
@@ -104,7 +104,7 @@
   function createPriceChart(host, width, height) {
     const prefs = typeof ScaleController !== 'undefined'
       ? ScaleController.getState()
-      : { isAuto: false, isLog: false };
+      : { isAuto: true, isLog: false };
     const mode = (typeof LightweightCharts !== 'undefined' && prefs.isLog)
       ? LightweightCharts.PriceScaleMode.Logarithmic
       : LightweightCharts.PriceScaleMode.Normal;
@@ -379,7 +379,7 @@
     const volumeMargins = priceCfg?.volumeScale?.scaleMargins || { top: 0.82, bottom: 0 };
     const prefs = typeof ScaleController !== 'undefined'
       ? ScaleController.getState()
-      : { isAuto: false, isLog: false };
+      : { isAuto: true, isLog: false };
     const priceMode = (typeof LightweightCharts !== 'undefined' && prefs.isLog)
       ? LightweightCharts.PriceScaleMode.Logarithmic
       : LightweightCharts.PriceScaleMode.Normal;

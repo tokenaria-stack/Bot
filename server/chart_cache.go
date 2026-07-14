@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"math"
+	"time"
 
 	"trading_bot/core"
 	"trading_bot/exchange"
@@ -38,6 +39,12 @@ func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 		return nil, nil, nil
 	}
 	if err := requestCtxErr(ctx); err != nil {
+		return nil, nil, nil
+	}
+
+	// Shot 11A: same History Tip Protocol as columnar — closed bars only for Replay.
+	klines = dropFormingTip(klines, time.Now().UnixMilli())
+	if len(klines) == 0 {
 		return nil, nil, nil
 	}
 

@@ -11,7 +11,8 @@
   // ── Global state (legacy UI contract) — must live on window for UI controllers ──
   window.currentTf = window.currentTf || '15m';
   window.backtestTf = window.backtestTf || '15m';
-  window.currentLiveRequestId = window.currentLiveRequestId ?? 0;
+  // Shot 11B: single discard axis for TF / history / WS / buffer (replaces requestId + historyEpoch).
+  window.projectionEpoch = window.projectionEpoch ?? 0;
   window.navigatorRequestId = window.navigatorRequestId ?? 0;
   window.historyHasMore = window.historyHasMore ?? true;
   window.isLoadingHistory = window.isLoadingHistory ?? false;
@@ -31,7 +32,6 @@
   window.currentBacktestPayload = window.currentBacktestPayload || null;
 
   let backendTradingTimeframe = null;
-  let liveHistoryEpoch = 0;
   let liveHistoryScrollArmed = false;
   let liveNavigatorResult = null;
   let liveHydrationOrchestrator = null;
@@ -40,31 +40,41 @@
   /** Serializes overlapping syncRsxIndicatorSettings calls (rapid Save). */
   let rsxSettingsSyncTail = Promise.resolve();
 
+  /** Shot 11B: bump ProjectionEpoch (SSOT discard axis). */
+  function bumpProjectionEpoch() {
+    window.projectionEpoch = (Number(window.projectionEpoch) || 0) + 1;
+    return window.projectionEpoch;
+  }
+
+  function isCurrentEpoch(epoch) {
+    return epoch === window.projectionEpoch;
+  }
+
   // ── Shot 10B: Zero-gap live tick handoff while monolith history loads ──
   const LIVE_TICK_BUFFER_MAX = 5000;
   /** @type {object[]} */
   let pendingLiveTicks = [];
   let tickBufferActive = false;
   let tickBufferTf = '';
-  let tickBufferReqId = 0;
+  let tickBufferEpoch = 0;
 
   function beginLiveTickBuffer() {
     pendingLiveTicks = [];
     tickBufferActive = true;
     tickBufferTf = String(window.currentTf || '').toLowerCase();
-    tickBufferReqId = window.currentLiveRequestId;
+    tickBufferEpoch = window.projectionEpoch;
   }
 
   function abortLiveTickBuffer() {
     tickBufferActive = false;
     pendingLiveTicks = [];
     tickBufferTf = '';
-    tickBufferReqId = 0;
+    tickBufferEpoch = 0;
   }
 
   /**
    * While buffer is active: absorb ticks (never write store).
-   * Stale TF / superseded reqId ticks are discarded.
+   * Stale TF / superseded projectionEpoch ticks are discarded (not buffered).
    * @returns {boolean} true if caller must skip immediate store write
    */
   function bufferLiveTick(tick) {
@@ -73,8 +83,8 @@
     const tickTf = String(
       tick.timeframe || backendTradingTimeframe || wantTf || '',
     ).toLowerCase();
-    if (tickBufferReqId !== window.currentLiveRequestId) {
-      return true;
+    if (tickBufferEpoch !== window.projectionEpoch) {
+      return true; // destroy stale-epoch tick
     }
     if (tickTf && wantTf && tickTf !== wantTf) {
       return true;
@@ -127,7 +137,7 @@
     if (!liveColumnarStore || !ChartAdapter.isInitialized('live')) return;
 
     window.__isSettingsUpdating = true;
-    const reqId = ++window.currentLiveRequestId;
+    const epoch = bumpProjectionEpoch();
     beginLiveTickBuffer();
     wsSubscribeTf(window.currentTf);
     let completed = false;
@@ -135,7 +145,7 @@
       if (window.DDRFactory && !window.DDRFactory.manifest) {
         await window.DDRFactory.fetchManifest();
       }
-      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
       const endTimeSec = Math.floor(Date.now() / 1000);
@@ -149,7 +159,7 @@
         rsxSettings: resolveLiveRsxSettings(),
         symbol,
       });
-      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
       if (!columnar?.times?.length) {
         console.warn('[Renaissance] RSX settings sync — empty columnar response');
         return;
@@ -165,7 +175,7 @@
 
       window.historyHasMore = columnar.hasMore !== false;
       await mountDDRLiveCutover();
-      if (seq !== rsxSettingsSyncSeq || reqId !== window.currentLiveRequestId) return;
+      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
 
       beginDataUpdate();
       try {
@@ -176,7 +186,7 @@
     } catch (err) {
       console.error('[Renaissance] syncRsxIndicatorSettings failed:', err);
     } finally {
-      if (reqId !== window.currentLiveRequestId || !completed) {
+      if (!isCurrentEpoch(epoch) || !completed) {
         abortLiveTickBuffer();
       }
       if (seq === rsxSettingsSyncSeq) {
@@ -189,6 +199,7 @@
     const fns = {
       loadDashboard,
       clearChartData,
+      prepareLiveTfHandoff,
       wsSubscribeTf,
       startLivePollTimer: noop,
       isOrderFlowTf: () => false,
@@ -317,13 +328,32 @@
     if (typeof WS !== 'undefined') WS.subscribe(tf, tf);
   }
 
-  function clearChartData() {
-    liveHistoryEpoch += 1;
+  function clearChartData(options = {}) {
+    bumpProjectionEpoch();
     abortLiveTickBuffer();
     liveHydrationOrchestrator?.reset();
     disarmLiveHistoryScroll();
-    liveColumnarStore?.clear();
-    window.DDRFactory?.clear?.();
+    // Shot 11C: keepProjection leaves LWC + store visible until Atomic Swap replaceMonolith/paint.
+    if (!options.keepProjection) {
+      liveColumnarStore?.clear();
+      window.DDRFactory?.clear?.();
+    }
+    liveNavigatorResult = null;
+    window.historyHasMore = true;
+    window.isLoadingHistory = false;
+  }
+
+  /**
+   * Soft TF handoff (Shot 11C): epoch/buffer/hydration only — no store/DDR wipe, no setData([]).
+   * Old candles stay on screen under the buffering overlay until one full paint swaps the frame.
+   * Caller must set window.currentTf before this so the buffer binds the new TF.
+   */
+  function prepareLiveTfHandoff() {
+    bumpProjectionEpoch();
+    abortLiveTickBuffer();
+    beginLiveTickBuffer();
+    liveHydrationOrchestrator?.reset();
+    disarmLiveHistoryScroll();
     liveNavigatorResult = null;
     window.historyHasMore = true;
     window.isLoadingHistory = false;
@@ -376,8 +406,8 @@
     if (typeof HydrationOrchestrator === 'undefined') return;
     liveHydrationOrchestrator = new HydrationOrchestrator();
     liveHydrationOrchestrator.init({
-      getEpoch: () => liveHistoryEpoch,
-      getReqId: () => window.currentLiveRequestId,
+      getEpoch: () => window.projectionEpoch,
+      getReqId: () => window.projectionEpoch,
       getHistoryHasMore: () => window.historyHasMore,
       setHistoryHasMore: (v) => { window.historyHasMore = v; },
       setLoadingHistory: (v) => { window.isLoadingHistory = v; },
@@ -450,18 +480,18 @@
     return true;
   }
 
-  /** Replay buffered ticks onto the fresh monolith (TF + reqId gated). */
+  /** Replay buffered ticks onto the fresh monolith (TF + projectionEpoch gated). */
   function flushLiveTickBuffer() {
     tickBufferActive = false;
     const pending = pendingLiveTicks;
     pendingLiveTicks = [];
     const wantTf = String(window.currentTf || tickBufferTf || '').toLowerCase();
-    const reqId = tickBufferReqId;
+    const epoch = tickBufferEpoch;
     tickBufferTf = '';
-    tickBufferReqId = 0;
+    tickBufferEpoch = 0;
     if (!pending.length) return;
     for (let i = 0; i < pending.length; i++) {
-      if (reqId !== window.currentLiveRequestId) break;
+      if (!isCurrentEpoch(epoch)) break;
       const tick = pending[i];
       const tickTf = String(
         tick?.timeframe || backendTradingTimeframe || wantTf || '',
@@ -473,13 +503,17 @@
   }
 
   function handleLiveTick(d) {
+    const epoch = window.projectionEpoch;
     // Shot 10B: absorb ticks during monolith load (never write store until flush).
     if (bufferLiveTick(d)) return;
+    if (!isCurrentEpoch(epoch)) return;
     if (liveHydrationOrchestrator?.queueTick(d)) return;
+    if (!isCurrentEpoch(epoch)) return;
     const tickTf = (d.timeframe || backendTradingTimeframe || window.currentTf || '15m').toLowerCase();
     if (tickTf !== window.currentTf.toLowerCase()) return;
     if (!ChartAdapter.isInitialized('live')) return;
     if (typeof chartTime === 'function' && chartTime(d.time) == null) return;
+    if (!isCurrentEpoch(epoch)) return;
     pushLiveTickDelta(d);
   }
 
@@ -494,7 +528,7 @@
 
   async function loadDashboard(options = {}) {
     const viewportAnchor = options.viewportAnchor ?? null;
-    const reqId = ++window.currentLiveRequestId;
+    const epoch = bumpProjectionEpoch();
     if (!ChartAdapter.isInitialized('live') && !ChartAdapter.initLiveCharts()) {
       setTimeout(() => loadDashboard(options), 500);
       return;
@@ -504,7 +538,7 @@
     // WarmingUp retries must keep the buffer (do not drop ticks from the wait window).
     const wantTf = String(window.currentTf || '').toLowerCase();
     if (tickBufferActive && tickBufferTf === wantTf) {
-      tickBufferReqId = window.currentLiveRequestId;
+      tickBufferEpoch = window.projectionEpoch;
     } else {
       beginLiveTickBuffer();
     }
@@ -518,7 +552,7 @@
       if (window.DDRFactory && !window.DDRFactory.manifest) {
         await window.DDRFactory.fetchManifest();
       }
-      if (reqId !== window.currentLiveRequestId) return;
+      if (!isCurrentEpoch(epoch)) return;
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
       const endTimeSec = Math.floor(Date.now() / 1000);
@@ -535,7 +569,7 @@
         }),
         API.fetchLiveState({ navigatorsOnly: true }),
       ]);
-      if (reqId !== window.currentLiveRequestId) return;
+      if (!isCurrentEpoch(epoch)) return;
 
       if (stateResult?.warmingUp) {
         retrying = true;
@@ -548,11 +582,9 @@
         return;
       }
 
+      // Shot 11C Atomic Swap: mutate store + ensure DDR hosts offline, then ONE full paint.
       liveColumnarStore.replaceMonolith(columnar);
-      // Replay ticks that arrived during fetch — then paint one continuous frame.
       flushLiveTickBuffer();
-      completed = true;
-
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());
         return;
@@ -560,7 +592,9 @@
 
       window.historyHasMore = columnar.hasMore !== false;
       await mountDDRLiveCutover();
+      if (!isCurrentEpoch(epoch)) return;
 
+      completed = true;
       beginDataUpdate();
       try {
         liveRenderScheduler?.markDirty({
@@ -575,7 +609,7 @@
       console.error('[Renaissance] loadDashboard failed:', err);
     } finally {
       liveColumnarStore?.unseal?.();
-      if (reqId !== window.currentLiveRequestId) {
+      if (!isCurrentEpoch(epoch)) {
         abortLiveTickBuffer();
         window.__isDashboardLoading = false;
         updateBufferingOverlay();

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"trading_bot/exchange"
 	"trading_bot/server/wire"
@@ -49,6 +50,25 @@ func parseSlotsParam(raw string) []string {
 	return out
 }
 
+// dropFormingTip removes the last kline when it has not yet closed (Shot 11A History Tip Protocol).
+// Law: last bar belongs to History (closed) XOR Live (forming) — never both.
+// Forming predicate: CloseTime > 0 && nowMs <= CloseTime.
+// Empty input / sole forming bar → nil/empty slice (caller must treat as unavailable).
+func dropFormingTip(klines []exchange.Kline, nowMs int64) []exchange.Kline {
+	n := len(klines)
+	if n == 0 {
+		return klines
+	}
+	last := klines[n-1]
+	if last.CloseTime > 0 && nowMs <= last.CloseTime {
+		if n == 1 {
+			return nil
+		}
+		return klines[:n-1]
+	}
+	return klines
+}
+
 func (d *DashboardServer) buildColumnarHistoryPayload(
 	ctx context.Context,
 	klines []exchange.Kline,
@@ -66,6 +86,12 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		return columnarHistoryResponse{}, false
 	}
 
+	// Shot 11A: strip forming tip before replay + display. Live owns the open bar via WS.
+	klines = dropFormingTip(klines, time.Now().UnixMilli())
+	if len(klines) == 0 {
+		return columnarHistoryResponse{}, false
+	}
+
 	trimBars := historyWarmupTrim(len(klines), candleLimit, warmupBars)
 
 	// Drop leading warmup bars before display window; client never sees warmup prefix.
@@ -80,6 +106,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		return columnarHistoryResponse{}, false
 	}
 
+	// Closed-only stream: ReplayDAGKlines must never see the forming tip.
 	hist := strategy.ReplayDAGKlines(klines, rsxSettings)
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)

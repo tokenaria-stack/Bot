@@ -1,10 +1,9 @@
 /**
- * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 Multi-Chart).
- * Shot 6D: poison recovery clamps density only; preserves centerTimeMs (no right-edge force).
- * No logical-index hacks. No try/catch. Deterministic binary search on store.times.
+ * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 / Shot 11D).
+ * tipVisible ≠ pinnedRight. Live-edge restore never carries poisoned barSpacing/visibleBars.
  */
 (function initViewportManager(global) {
-  /** Comfortable candle width — SSOT for cold boot + poison recovery. */
+  /** Comfortable candle width — SSOT for cold boot + live-edge / poison recovery. */
   const HEALTHY_BAR_SPACING = 6;
   /** Above this → camera crushed all history into one screen (accordion). */
   const MAX_HEALTHY_VISIBLE_BARS = 400;
@@ -12,6 +11,8 @@
   const MIN_HEALTHY_BAR_SPACING = 1;
   /** Default window when recovering / right-edge restore. */
   const HEALTHY_VISIBLE_BARS = 150;
+  /** Logical slack: tip in frame does not alone mean pinned to right. */
+  const RIGHT_EDGE_SLACK = 1.5;
 
   function storeForContext(context) {
     if (context === 'backtest') {
@@ -79,10 +80,55 @@
     });
   }
 
+  /**
+   * Shot 11D: tip in frame ≠ pinned to live edge.
+   * Pinned = last bar visible AND logical `to` sits on the series tip (slack).
+   */
+  function isPinnedRight(range, barCount) {
+    if (!range || !Number.isFinite(barCount) || barCount <= 0) return false;
+    if (range.to < barCount - 1) return false;
+    return (barCount - range.to) <= RIGHT_EDGE_SLACK;
+  }
+
+  /**
+   * Build TF-switch camera intent from zoom direction (Shot 11D Smart Microscope).
+   * Zoom IN (finer TF): keep centerTimeMs. Zoom OUT / equal: live edge, no density carry.
+   * @param {object|null} captured from capture()
+   * @param {string} fromTf
+   * @param {string} toTf
+   */
+  function cameraIntentForTfSwitch(captured, fromTf, toTf) {
+    const intervalFn = (typeof TimeNormalizer !== 'undefined' && TimeNormalizer.getIntervalMs)
+      || (typeof getIntervalMs === 'function' ? getIntervalMs : null);
+    const fromMs = intervalFn ? Number(intervalFn(fromTf)) : NaN;
+    const toMs = intervalFn ? Number(intervalFn(toTf)) : NaN;
+    const zoomIn = Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs < fromMs;
+
+    if (zoomIn && captured?.centerTimeMs != null) {
+      let visibleBars = Number(captured.visibleBars) || HEALTHY_VISIBLE_BARS;
+      if (visibleBars > MAX_HEALTHY_VISIBLE_BARS) visibleBars = MAX_HEALTHY_VISIBLE_BARS;
+      if (visibleBars < 50) visibleBars = 50;
+      return {
+        centerTimeMs: captured.centerTimeMs,
+        visibleBars,
+        isAtRightEdge: false,
+        // Microscope: healthy spacing on finer grid — never carry crushed accordion.
+        barSpacing: HEALTHY_BAR_SPACING,
+      };
+    }
+
+    // Zoom OUT or unknown: Live Edge — discard poisoned density entirely.
+    return {
+      centerTimeMs: captured?.centerTimeMs != null ? captured.centerTimeMs : Date.now(),
+      isAtRightEdge: true,
+    };
+  }
+
   const ViewportManager = {
     HEALTHY_BAR_SPACING,
     HEALTHY_VISIBLE_BARS,
     isPoisonCameraState,
+    cameraIntentForTfSwitch,
 
     capture(context) {
       const range = typeof ChartAdapter !== 'undefined'
@@ -107,20 +153,19 @@
       const timeScale = mainChart?.timeScale();
       let barSpacing = timeScale?.options()?.barSpacing ?? null;
 
-      // Scalpel: trim density only — never discard centerTimeMs / force right edge.
       if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
         barSpacing = HEALTHY_BAR_SPACING;
         visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
       }
 
-      // Live edge = live candle visible in frame (not "center near last bars").
-      const isLiveCandleVisible = range.to >= times.length - 1;
-      const isAtRightEdge = isLiveCandleVisible && range.from >= 0;
+      const tipVisible = range.to >= times.length - 1;
+      const atRightEdge = isPinnedRight(range, times.length);
 
       return {
         centerTimeMs,
         visibleBars,
-        isAtRightEdge,
+        tipVisible,
+        isAtRightEdge: atRightEdge,
         barSpacing: Number.isFinite(barSpacing) ? barSpacing : HEALTHY_BAR_SPACING,
       };
     },
@@ -136,7 +181,19 @@
       const mainChart = ChartAdapter.getChart(context, 'price');
       if (!mainChart?.timeScale) return;
 
-      // Defense in depth: clamp density only — never discard centerTimeMs / force right edge.
+      // Live Edge: pin right + healthy spacing only — never carry old visibleBars/barSpacing.
+      if (anchor.isAtRightEdge) {
+        applyBarSpacingAll(context, HEALTHY_BAR_SPACING);
+        const n = times.length;
+        if (typeof ChartAdapter.setVisibleLogicalRange === 'function' && n > 0) {
+          const from = Math.max(0, n - HEALTHY_VISIBLE_BARS);
+          ChartAdapter.setVisibleLogicalRange(context, { from, to: n }, { animate: false });
+        } else {
+          _paneScrollToRight(context);
+        }
+        return;
+      }
+
       let safeAnchor = { ...anchor };
       if (isPoisonCameraState({
         barSpacing: anchor.barSpacing,
@@ -152,20 +209,6 @@
         ? safeAnchor.barSpacing
         : HEALTHY_BAR_SPACING;
       applyBarSpacingAll(context, spacing);
-
-      if (safeAnchor.isAtRightEdge) {
-        const n = times.length;
-        const visible = Number(safeAnchor.visibleBars) > 0
-          ? Number(safeAnchor.visibleBars)
-          : HEALTHY_VISIBLE_BARS;
-        if (typeof ChartAdapter.setVisibleLogicalRange === 'function' && n > 0) {
-          const from = Math.max(0, n - visible);
-          ChartAdapter.setVisibleLogicalRange(context, { from, to: n }, { animate: false });
-        } else {
-          _paneScrollToRight(context);
-        }
-        return;
-      }
 
       const newCenterIndex = findIndexByTimeMs(times, safeAnchor.centerTimeMs);
       const half = (Number(safeAnchor.visibleBars) || HEALTHY_VISIBLE_BARS) / 2;
