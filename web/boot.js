@@ -399,6 +399,9 @@
       wozduh: { chart: wozduh, defaultPriceScaleId: 'right' },
     }, window.DDRFactory.manifest.panes);
     if (typeof SettingsRenderer !== 'undefined') SettingsRenderer.refreshFromManifest();
+    if (typeof LegendRenderer !== 'undefined') {
+      LegendRenderer.mountFromManifest(window.DDRFactory.manifest);
+    }
     return true;
   }
 
@@ -515,13 +518,6 @@
     if (typeof chartTime === 'function' && chartTime(d.time) == null) return;
     if (!isCurrentEpoch(epoch)) return;
     pushLiveTickDelta(d);
-    if (typeof ToolbarController !== 'undefined') {
-      ToolbarController.updateHeaderData({
-        plots: d.plots,
-        jurik: d.jurik ?? d.rsx,
-        timeframe: d.timeframe,
-      });
-    }
   }
 
   function initLiveWebSocket() {
@@ -595,16 +591,6 @@
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());
         return;
-      }
-
-      if (typeof ToolbarController !== 'undefined' && columnar.plots) {
-        const tipPlots = {};
-        for (const [id, col] of Object.entries(columnar.plots)) {
-          if (!Array.isArray(col) || !col.length) continue;
-          const v = Number(col[col.length - 1]);
-          if (Number.isFinite(v)) tipPlots[id] = v;
-        }
-        ToolbarController.updateHeaderData({ plots: tipPlots, jurik: tipPlots.line_rsx });
       }
 
       window.historyHasMore = columnar.hasMore !== false;

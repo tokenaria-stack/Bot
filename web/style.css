@@ -225,13 +225,34 @@
   margin-top: -1px;
 }
 
-/* Oscillator panes: horizontal row */
+/* Oscillator panes: horizontal row; gear/clicks must hit legend */
 .chart-legend[data-pane="wozduh"],
 .chart-legend[data-pane="rsx"] {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
   max-width: calc(100% - 72px);
+  pointer-events: auto;
+}
+
+.chart-legend .settings-toggle-btn {
+  pointer-events: auto;
+  flex-shrink: 0;
+  margin-right: 4px;
+  padding: 0 4px;
+  height: 18px;
+  border: 1px solid rgba(42, 46, 57, 0.85);
+  border-radius: 2px;
+  background: rgba(19, 23, 34, 0.72);
+  color: var(--tv-muted, #787b86);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chart-legend .settings-toggle-btn:hover {
+  color: var(--tv-text, #d1d4dc);
+  border-color: var(--tv-muted, #787b86);
 }
 
 .chart-legend[data-pane="wozduh"] .legend-item + .legend-item,

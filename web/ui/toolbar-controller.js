@@ -8,10 +8,6 @@ const ToolbarController = (() => {
     if (el && el.textContent !== next) el.textContent = next;
   }
 
-  function fmt(v) {
-    return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '—';
-  }
-
   function fmtVolume(v) {
     if (!Number.isFinite(v) || v <= 0) return '—';
     if (v >= 1e9) return `${(v / 1e9).toFixed(2)} B`;
@@ -25,12 +21,6 @@ const ToolbarController = (() => {
       || (typeof getActiveTf === 'function' ? getActiveTf() : null)
       || '1m';
     return TF_DISPLAY[tf] || tf;
-  }
-
-  function plotTip(plots, id) {
-    if (!plots || typeof plots !== 'object') return null;
-    const v = Number(plots[id]);
-    return Number.isFinite(v) ? v : null;
   }
 
   function updateHeaderData(state) {
@@ -60,52 +50,15 @@ const ToolbarController = (() => {
       }
     }
 
-    const plots = state.plots;
-    // Tip SSOT: DDR plot ids (Stage 5). Legacy redLine/greenLine ignored.
-    const jurik = plotTip(plots, 'line_rsx') ?? (state.jurik != null ? Number(state.jurik) : null);
-    // Header R = legacy RedLine semantics → RSI(HL2); G = EMA(RSI).
-    const red = plotTip(plots, 'woz_rsi_hl2') ?? plotTip(plots, 'woz_rsi_price');
-    const green = plotTip(plots, 'woz_ema_rsi');
-
-    if (jurik != null) {
-      setTextIfChanged(document.getElementById('jurik-val'), fmt(jurik));
-    }
-    if (red != null) {
-      setTextIfChanged(document.getElementById('red-val'), fmt(red));
-    }
-    if (green != null) {
-      setTextIfChanged(document.getElementById('green-val'), fmt(green));
-    }
-
     const sandboxEl = document.getElementById('sandbox-badge');
     if (sandboxEl && sandboxEl.classList.contains('active') !== isSandbox) {
       sandboxEl.classList.toggle('active', isSandbox);
     }
   }
 
-  function updateRsxValue(val, color) {
-    const el = document.getElementById('rsx-val');
-    if (!el) return;
-    const n = Number(val);
-    if (!Number.isFinite(n)) {
-      el.textContent = '—';
-      return;
-    }
-    el.textContent = n.toFixed(1);
-    if (color) el.style.color = color;
-  }
+  function updateRsxValue() { /* RSX tip DOM removed — no per-tick HTML */ }
 
-  function updateOscHeader(pt) {
-    if (!pt) return;
-    updateHeaderData({
-      plots: pt.plots,
-      jurik: pt.rsx ?? pt.jurik,
-    });
-    const rsxVal = plotTip(pt.plots, 'line_rsx') ?? parseFloat(pt.rsx ?? pt.jurik);
-    if (Number.isFinite(rsxVal)) {
-      updateRsxValue(rsxVal, pt.color || RSX_DEFAULT_COLOR);
-    }
-  }
+  function updateOscHeader() { /* oscillator tip DOM removed */ }
 
   function setBuffering(isVisible) {
     const el = document.getElementById('orderflow-buffer');
