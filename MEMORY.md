@@ -2,18 +2,19 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 3.5 Projection Contracts (Shots 11A–11E + 11D hotfixes) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Снэпшот MEMORY (июль 2026):** **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
 > Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
 > Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick` (DAG). TF camera = Sticky Live Edge / Microscope router.  
 > Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
 > Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.  
-> **TF mechanics (11C–11D-VIEWPORT) — CLOSED** (Atomic Swap + Smart Camera + rightOffset). Polishing later.
+> **TF mechanics CLOSED.** **Wozduh = DAG bus only** (Falcon Evaluate gated). **Legend = chrome only** (no per-tick HTML metrics). Floating menus = `position:fixed` viewport.  
+> **NEXT math:** **#67 IIR Tip SSOT**. Затем #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`.
 
 ---
 
 ## Core 2.3 — Development Plan (ACTIVE)
 
-**Статус:** Этап 1 (UI camera) ✅ 6A–8; **Этап Data Foundation ✅ 9A–9J**; ChartOnly delivery server — текущий default.
+**Статус:** Этап 1 (UI camera) ✅ 6A–8; **Data Foundation ✅ 9A–9J**; **Core 3.5 Projection ✅ 11A–11E**; **Core 4.0 Great Purge ✅ Stages 1–5 + TV Floating UI**; ChartOnly delivery — current default.
 
 **Цель UI:** устранить баги LWC без Scene Graph.  
 **Цель Data:** разделить Owners (RAM realtime ≠ SQLite archive); убить Falcon-export на delivery path.
@@ -81,6 +82,26 @@
 | **11D-VIEWPORT** | Live Edge preserves `visibleBars` + `rightOffset` (no hard 150 reset) | ✅ **TF mechanics CLOSED** |
 | **11E** | Delta Integrity: NewBar boundary → delta chain in `RenderScheduler` | ✅ |
 
+### Core 4.0 — Great Purge (Wozduh → DAG + DDR UI + Floating) — ✅ Stages 1–5 + TV UI
+
+| Stage | Содержание | Статус |
+|-------|------------|--------|
+| **1 Primitives** | MACD Snap fields; RollingSum/CumSum `SaveState`; `TestMACD_SaveRestore_IntraBarRollback` | ✅ |
+| **2 Slots** | 15× `SlotWozduh*` atoms перед `SlotCount` (`core/slots.go`) | ✅ |
+| **3 WozduhNode** | Полная Falcon Woz math → bus only; golden parity vs Falcon; Jurik остаётся в RSXNode; `falcon.go` **сохранить** | ✅ |
+| **4 Manifest/UI** | `Configurable` на `UIComponent`; полный `wozduh_layout.go`; data-driven `settings-renderer.js` | ✅ |
+| **5 Wire purge** | Falcon line fields strip из tip/`MarketState`; tip via `plots`; Falcon Evaluate только за `EngineAllowsStrategies()`; toolbar/legend без per-tick tip HTML | ✅ |
+| **TV Floating UI** | Legend title **Woz** + 👁 (`visibility` on `.lwc-host`); gear → `FloatingMenu`; Woz menu drag-handle + Ok; fixed-up open; outside close; drag | ✅ |
+
+**Канон UI chrome (не ломать):**
+- `LegendRenderer` — только title + eye + gear (никаких live `leg-val-*` thrashing).
+- `FloatingMenu` (`web/ui/floating-menu.js`) — единственный owner open/drag/outside; `position:fixed` к окну (не chart-absolute).
+- Open: `left = anchor.left`, `bottom = innerHeight - anchor.top` (меню растёт **вверх** от шестерёнки).
+- Eye: `host.style.visibility` toggle — layout/LWC resize observers живы.
+- Outside-click listener — один глобальный (`outsideBound` idempotent).
+- Woz settings: handle `⋮⋮⋮ Woz Settings` + Ok closes; RSX static HTML Save/handle; `bindAll`/`initDrag` на оба.
+- Composition root: `web/boot.js` (не `app.js` / `app.legacy.js`).
+
 **Projection laws (Shots 11x — canon):**
 
 1. **Tip Ownership:** REST history = closed bars only (`dropFormingTip`); forming tip = WS `BroadcastChartTick` only.
@@ -91,12 +112,14 @@
 
 - Layer Interface, culling, ChartDataProvider  
 - ChunkLedger, SceneFrame/Object Graph — только по необходимости  
-- Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65 FE)  
-- **IIR tip SSOT (#67):** align live Analyst warmup depth with history Replay (kill tip cliff vs TV)  
-- Osc fixed scale bounds in manifest (#68)  
-- MemoryBudget (#69) — deferred (prune-right interfered; revisit after #67)  
+- Live `tick.annotations` upsert in ColumnarStore (optional); HistoryBus tip for navigators (#64); toolbar tip from DAG (#65 FE residual)
+- **IIR tip SSOT (#67):** align live Analyst warmup depth with history Replay (kill tip cliff vs TV) — **NEXT**
+- Osc fixed scale bounds in manifest (#68)
+- MemoryBudget (#69) — deferred (prune-right interfered; revisit after #67)
 - Order Flow (#44) — **amputated** until strategy settings  
+- **Stage 6 ScoreNodes (#76)** — later; keep `strategy/falcon.go`
 - `ENGINE_MODE=live` re-enable when trading stack reconfigured
+- Great Purge Stages 1–5 + TV Floating UI — ✅ (see Core 4.0 table above)
 
 ### Project Renaissance (база Phase 0)
 
@@ -110,6 +133,9 @@
 | `web/ui/viewport-manager.js` | Camera router + Live Edge `visibleBars`/`rightOffset` |
 | `web/ui/scale-controller.js` | Auto/Log SSOT (`chart_scale_prefs_v2`, default Auto ON) |
 | `web/app.legacy.js` / `adapter.legacy.js` | Quarantined |
+| `web/ui/floating-menu.js` | TV-like fixed menus: open-up, drag, outside close |
+| `web/ui/legend-renderer.js` | Pane chrome: Woz/RSX title + eye + gear |
+| `web/ui/settings-renderer.js` | DDR Configurable → Woz checkboxes + Ok + drag handle |
 
 **Paint path (Core 2.3 Shot 6A):**
 ```
@@ -977,6 +1003,20 @@ targetFrom = targetTo - windowSize
 - Boot: `scheduleDDRCutover` → columnar hydrate + `buildPanes`
 - **Shot 6A:** `buildPanes(hostMap, panes)` routes by `component.hostId` (not pane id). Host map: `{ rsx, wozduh }`. Backend: `core.UIComponent.HostID` + `ui_config/*_layout.go`.
 
+### Core 4.0 — Great Purge (Wozduh bus + TV chrome) ✅
+**Инвариант:** Wozduh math живёт в `WozduhNode` → `SlotWozduh*`; UI читает только DDR plots/manifest. `strategy/falcon.go` **не удалять** до Stage 6 ScoreNodes (#76).
+
+| Кусок | Канон |
+|-------|-------|
+| Primitives | MACD / RollingSum / CumSum Snapshot-Restore; intra-bar rollback test |
+| Slots | `SlotWozduhRsiPrice` … `SlotWozduhVolCross` (+ Fast/Slow) before `SlotCount` |
+| Node | Golden parity vs Falcon Evaluate; Jurik stays in RSXNode |
+| Manifest | `UIComponent.Configurable`; full `wozduh_layout.go` |
+| Wire | Tip via `plots`; no Falcon line DTO on ChartOnly tip path |
+| Legend | Title + 👁 + ⚙ only — no per-tick metric HTML |
+| Floating | `FloatingMenu.open`: `fixed`, grow up via `bottom`; one outside listener; drag on handle |
+| Eye | `chart-wrap .lwc-host` → `style.visibility` (not `display`) |
+
 ### Phase 7A — Monolithic Backend Transport ✅
 **Файлы:** `server/columnar_history.go`, `server/wire/history.go`, `server/webserver.go`
 
@@ -1075,7 +1115,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **36** | **Chart stability QA** | browser + `app.js` | 🔜 viewport jump, freeze, scroll-left 3×3000 |
 | **37** | **Dual replay CPU** | `columnar_history.go` | 🟢 acceptable ~30–80ms; parallel optional |
 | **38** | **DAG vs Falcon div drift** | `dag_shadow.go`, `streaming_replay_accum.go` | 🟡 Strangler until unified div in DAG |
-| **39** | **SettingsRenderer (Phase 7)** | `series-factory.js` | 🔜 Wozduh DDR series visibility |
+| **39** | ~~**SettingsRenderer (Phase 7)**~~ — DDR `Configurable` + `settings-renderer.js` + Legend eye/gear + `FloatingMenu` (Core 4.0) | `settings-renderer.js`, `legend-renderer.js`, `floating-menu.js`, `wozduh_layout.go` | ✅ Great Purge Stage 4 + TV UI |
 | **40** | **Backtest DDR cutover** | `backtest-pipeline.js` | 🔜 live only |
 | **41** | **wsQueue hard cap** | `hydration-orchestrator.js` | 🟡 cap 64 on slow server |
 | **42** | **`added` server vs client mismatch warn** | `boot.js` | 🟢 log if `data.added !== store.added` |
@@ -1087,7 +1127,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **53** | ~~**Orphan LWC series (zombies)**~~ | `series-factory.js` | ✅ Shot 5 removeSeries |
 | **44** | **Order Flow** — **amputated** (no `@aggTrade`/`@forceOrder` WS; `loadOrderFlowKlines` stub; no `OrderFlowStore` alloc). Restore with strategy settings UI later | `exchange/ws.go`, `main.go`, `server/webserver.go`, `domain/orderflow.go` | ⏸ amputated; re-enable w/ settings |
 | **45** | **Backtest → columnar** | `api.js` | 🔜 roadmap |
-| **46** | **MEMORY sync** | this file | ✅ Shots 9A–11E + 11D hotfixes logged (июль 2026) |
+| **46** | **MEMORY sync** | this file | ✅ Core 4.0 Great Purge + TV Floating UI logged (июль 2026) |
 | **47** | **LeftBars DynamicFractal vs Williams** | `dynamic_fractal.go` | 🟡 shadow validation |
 | **54** | **CameraState SSOT** — камера всё ещё LWC-derived at `capture`; Shot 7 ужесточил контракты (`restore` scalpel, atomic F1, `_cameraGesturing`). Полный SSOT (`CameraState` → Adapter → LWC, никогда наоборот) — **только если** TF/edge регрессии вернутся. | `viewport-manager.js`, `chart-compositor.js`, `chart-core.js` | 🟡 deferred; сейчас дешевле, чем после роста bypass-путей |
 | **55** | ~~**PersistenceQueue (P0b)**~~ — closed bar → async batch UPSERT SQLite; не sync из Analyst | `data/persistence_queue.go`, `data/history_db.go`, `main.go` | ✅ Shot 9C |
@@ -1100,7 +1140,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **62** | ~~**Columnar annotations still Falcon**~~ — Projector packs `SlotDivState` → wire markers; `legacyChartAnnotationsFromKlines` deleted; legacy JSON history also DAG-only | `server/wire/annotation.go`, `projector.go`, `columnar_history.go`, `chart_cache.go` | ✅ Shot 9I |
 | **63** | ~~**Non-columnar `/api/history` JSON Falcon**~~ — `buildHistoryChartSeriesTrimmed` now OHLC + DAG oscillators/annotations (no StreamingReplay) | `server/chart_cache.go` | ✅ Shot 9I |
 | **64** | **Navigators full ReplayDAGKlines each request** — CPU on `navigators=1` | `dag_navigator_series.go` | 🟡 later: live HistoryBus tail |
-| **65** | ~~**Toolbar/header MarketState Falcon**~~ — `enrichFromDAG` / `BroadcastChartTick` from SlotJurikRSX (+ Wozduh); no FalconSnapshot/ScoreEngine; ChartOnly scores empty | `server/webserver.go` | ✅ Shot 9J (backend). Residual: `boot.js` may not call `ToolbarController.updateHeaderData` yet |
+| **65** | ~~**Toolbar/header MarketState Falcon**~~ — DAG tip/plots; Falcon line fields stripped (Core 4.0 Stage 5); no per-tick legend HTML metrics | `server/webserver.go`, `legend-renderer.js`, `toolbar-controller.js` | ✅ 9J + Great Purge Stage 5. Residual: optional `ToolbarController.updateHeaderData` hook |
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
 | **67** | **IIR Tip SSOT (critical)** — History `ReplayDAGKlines` warm depth ≫ live `AnalystBootKlineLimit=400` → tip cliff vs TV after 11A XOR. Fix: same warmup continuum / tip plots from live DAG closed bars, not orphan Replay | `live_kline.go`, `columnar_history.go`, `dag_shadow.go` | 🔴 NEXT math |
 | **68** | **Osc fixed scale bounds** — RSX/Wozduh manifests lack TV-like `[-5,105]` / `autoscaleInfoProvider`; scale depends on data extremes | `ui_config/rsx_layout.go`, `wozduh_layout.go`, DDR RenderOpts | 🟡 after #67 |
@@ -1109,6 +1149,9 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **71** | **FrameDiagnostics** — one snapshot per publish (epoch, barCount, autoScale, cameraMode, forming) for camera/scale regressions | `boot.js` / compositor | 🟢 cheap insurance |
 | **72** | ~~**TF camera accordion / Live Edge wipe**~~ | `viewport-manager.js`, `timeframe-controller.js` | ✅ 11D–11D-VIEWPORT; **TF mechanics CLOSED** |
 | **73** | ~~**Y-axis squash / sentinel live tick**~~ | `series-factory.js`, `chart-core.js`, `scale-controller.js` | ✅ 11D-HOTFIX |
+| **74** | ~~**Wozduh Falcon→DAG bus**~~ — slots + WozduhNode + golden parity; Falcon Evaluate gated; tip via plots | `core/slots.go`, `core/nodes/wozduh.go`, `ui_config/wozduh_layout.go`, `strategy/falcon.go` (keep) | ✅ Core 4.0 Stages 1–5 |
+| **75** | ~~**TV Floating UI**~~ — fixed-up menus, eye hide `.lwc-host`, drag, outside close | `web/ui/floating-menu.js`, `legend-renderer.js`, `settings-renderer.js`, `boot.js`, `style.css` | ✅ Core 4.0 TV UI |
+| **76** | **Stage 6 ScoreNodes** — migrate Score/Falcon decision graph into DAG nodes; **do not delete** `strategy/falcon.go` until then | `core/nodes/`, `strategy/falcon.go`, `scoring.go` | 🔜 after #67 |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
@@ -1129,7 +1172,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **12** | **MTF scoring tune / weight calibration** | `scoring.go`, `matrix.json`, Stats A/B | 🔜 |
 | **13** | ~~**Backtest longScore/shortScore per bar**~~ | `backtest.go` | ✅ 5.63 |
 | **14** | ~~**RSX/Wozduh HTF в scoring**~~ | `mtf_tracker.go`, `scoring.go` | ✅ 5.69 + 5.72 |
-| **15** | **WS full Wozduh / mergeOsc** | `webserver.go`, `web/boot.js` | 🟡 |
+| **15** | ~~**WS full Wozduh / mergeOsc**~~ — tip via DAG plots (Great Purge Stage 5); residual FE header hook optional | `webserver.go`, `web/boot.js` | ✅ bus path; 🟡 optional toolbar hook |
 | **16** | ~~**Slippage model**~~ | `backtest.go` | ✅ 5.64 (0.03% default) |
 | **17** | **max_drawdown enforcement** | `risk.go`, `master.go` | 🔜 |
 | **18** | **fixed_pct stop в UI** | `computePositionStop` | 🔜 |
@@ -1180,12 +1223,13 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
 | Docs | `MEMORY.md` (this file), `.cursor/rules/jeweler-protocol.mdc` |
-| Frontend UI | `web/ui/viewport-manager.js` (11D camera CLOSED), `web/ui/scale-controller.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, … |
+| Frontend UI | `web/ui/viewport-manager.js` (11D camera CLOSED), `web/ui/scale-controller.js`, `web/ui/timeframe-controller.js`, `web/ui/toolbar-controller.js`, `web/ui/floating-menu.js`, `web/ui/legend-renderer.js`, `web/ui/settings-renderer.js`, … |
 | Frontend style | `web/style.css`, `web/trade_marker_plugin.js`, `web/trendline_plugin.js` |
+| Wozduh DAG | `core/nodes/wozduh.go`, `core/slots.go` (`SlotWozduh*`), `ui_config/wozduh_layout.go` |
 | Правила AI | `.cursor/rules/senior-quant-architect.mdc`, `jeweler-protocol.mdc` |
 
 **Env:** `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, `READ_ONLY`, `SANDBOX_MODE`, **`ENGINE_MODE`** (`ChartOnly` default | `live`).
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, **ChartOnly** delivery by default. `ENGINE_MODE=live` включает ScoreMatrix + `Master.Run`. `make ab-test` — CLI A/B backtest.
 
-**Следующий шаг (TF mechanics CLOSED):** **#67 IIR Tip SSOT** — выровнять live Analyst warmup с history Replay (убрать tip cliff vs TV). Затем #68 osc fixed bounds, #69 MemoryBudget. Опционально: #65 FE toolbar hook. Trading — только `ENGINE_MODE=live`.
+**Следующий шаг (TF CLOSED + Great Purge Stages 1–5 + TV UI ✅):** **#67 IIR Tip SSOT** — выровнять live Analyst warmup с history Replay (убрать tip cliff vs TV). Затем #68 osc fixed bounds, #69 MemoryBudget. Later: **#76 Stage 6 ScoreNodes** (keep `falcon.go` until then). Trading — только `ENGINE_MODE=live`.
