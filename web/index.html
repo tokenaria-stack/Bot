@@ -1273,15 +1273,7 @@
         <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
         <div id="wozduh-chart" class="lwc-host"></div>
         <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2" checked /> Фиолетовая — RSI(HL2)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiVol" checked /> Голубая/Синяя — Vol RSI + Dots</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
-          <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
+          <!-- Live: SettingsRenderer mounts checkboxes from DDR manifest (configurable). -->
         </div>
       </div>
       <div class="pane-splitter" data-boundary="wozduh-rsx" aria-hidden="true"></div>
@@ -1417,6 +1409,7 @@
               <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
               <div id="bt-wozduh-chart" class="lwc-host"></div>
               <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
+                <!-- Backtest: legacy static menu still required until BT DDR cutover. -->
                 <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
                 <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
                 <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
@@ -1714,7 +1707,7 @@
   <script src="/trade_marker_plugin.js?v=3.1.0"></script>
   <script src="/config.js?v=3.1.0" defer></script>
   <script src="/mappers.js?v=3.1.0" defer></script>
-  <script src="/series-factory.js?v=3.4.2" defer></script>
+  <script src="/series-factory.js?v=4.0.0" defer></script>
   <script src="/hydration-orchestrator.js?v=3.1.0" defer></script>
   <script src="/time-normalizer.js?v=3.1.0" defer></script>
   <script src="/store.js?v=3.1.0" defer></script>
@@ -1733,15 +1726,15 @@
   <script src="/ui/tabs-controller.js?v=3.1.0" defer></script>
   <script src="/ui/strategy-controller.js?v=3.1.0" defer></script>
   <script src="/ui/navigator-controller.js?v=3.1.0" defer></script>
-  <script src="/ui/wozduh-controller.js?v=3.1.0" defer></script>
+  <script src="/ui/wozduh-controller.js?v=4.0.0" defer></script>
   <script src="/ui/risk-controller.js?v=3.1.0" defer></script>
   <script src="/ui/timeframe-controller.js?v=3.4.0" defer></script>
   <script src="/ui/backtest-controller.js?v=3.1.0" defer></script>
   <script src="/ui/rsx-controller.js?v=3.1.0" defer></script>
-  <script src="/ui/settings-renderer.js?v=3.1.0" defer></script>
-  <script src="/ui/toolbar-controller.js?v=3.2.0" defer></script>
+  <script src="/ui/settings-renderer.js?v=4.0.0" defer></script>
+  <script src="/ui/toolbar-controller.js?v=4.0.0" defer></script>
   <script src="/ui/layout-controller.js?v=3.1.0" defer></script>
   <!-- <script src="/app.legacy.js?v=3.1.0" defer></script> -->
-  <script src="/boot.js?v=3.4.0" defer></script>
+  <script src="/boot.js?v=4.0.0" defer></script>
 </body>
 </html>

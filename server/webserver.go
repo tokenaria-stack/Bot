@@ -108,8 +108,6 @@ type MarketState struct {
 	UpdatedAt        int64                                  `json:"updatedAt"`
 	VolatilityRegime string                                 `json:"volatilityRegime"`
 	Jurik            float64                                `json:"jurik"`
-	RedLine          float64                                `json:"redLine"`
-	GreenLine        float64                                `json:"greenLine"`
 	LongScore        int                                    `json:"longScore"`
 	ShortScore       int                                    `json:"shortScore"`
 	RawAction        string                                 `json:"rawAction,omitempty"`
@@ -130,6 +128,8 @@ type MarketState struct {
 	HasMore          bool                                   `json:"hasMore,omitempty"`
 	Navigators       map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
 	Annotations      []strategy.ChartAnnotation             `json:"annotations,omitempty"`
+	// Tip slot→wire map (component ids). Header/toolbar reads plots — never Falcon line fields.
+	Plots map[string]float64 `json:"plots,omitempty"`
 }
 
 // ChartTrade is a virtual or live trade marker for the price chart (time in Unix seconds).
@@ -210,27 +210,20 @@ type tickPayload struct {
 	Low              float64                         `json:"low"`
 	Close            float64                         `json:"close"`
 	Volume           float64                         `json:"volume,omitempty"`
-	Jurik            float64                         `json:"jurik"`
-	RSXColor         string                          `json:"rsxColor,omitempty"`
-	RSXMarker        string                          `json:"rsxMarker,omitempty"`
+	Jurik            float64                         `json:"jurik,omitempty"`
 	RSX              float64                         `json:"rsx,omitempty"`
 	RSXSignal        float64                         `json:"rsx_signal,omitempty"`
-	RedLine          float64                         `json:"redLine"`
-	GreenLine        float64                         `json:"greenLine"`
-	BlueLine         float64                         `json:"blueLine"`
-	RsiPrice         float64                         `json:"rsiPrice,omitempty"`
-	RsiHl2           float64                         `json:"rsiHl2,omitempty"`
-	RsiVolFast       float64                         `json:"rsiVolFast,omitempty"`
-	RsiVolSlow       float64                         `json:"rsiVolSlow,omitempty"`
-	LongScore        int                             `json:"longScore"`
-	ShortScore       int                             `json:"shortScore"`
+	RSXColor         string                          `json:"rsxColor,omitempty"`
+	RSXMarker        string                          `json:"rsxMarker,omitempty"`
+	LongScore        int                             `json:"longScore,omitempty"`
+	ShortScore       int                             `json:"shortScore,omitempty"`
 	RawAction        string                          `json:"rawAction,omitempty"`
 	FinalAction      string                          `json:"finalAction,omitempty"`
 	IsVetoed         bool                            `json:"isVetoed,omitempty"`
 	VetoReason       string                          `json:"vetoReason,omitempty"`
-	Factors          map[string]strategy.ScoreFactor `json:"factors"`
-	BrainStatus      string                          `json:"brainStatus"`
-	AIStatus         string                          `json:"aiStatus"`
+	Factors          map[string]strategy.ScoreFactor `json:"factors,omitempty"`
+	BrainStatus      string                          `json:"brainStatus,omitempty"`
+	AIStatus         string                          `json:"aiStatus,omitempty"`
 	IsClosed         bool                            `json:"isClosed,omitempty"`
 	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
 	Plots            map[string]float64              `json:"plots,omitempty"`
@@ -2093,6 +2086,9 @@ func (d *DashboardServer) enrichFromDAG(state *MarketState, analyst *strategy.Ma
 	frame := analyst.DAGTickFrame()
 	hdr := dagHeaderFromFrame(frame)
 	applyDAGHeaderToMarketState(state, hdr)
+	if frame != nil && d.projector != nil {
+		state.Plots = d.projector.BuildTickJSON(frame)
+	}
 
 	// ChartOnly (and Live UI): no ScoreEngine / Veto / Fib / Layer2 regime for header.
 	// Optional tip: SlotTotalScore → LongScore only when strategies are enabled.
@@ -2118,14 +2114,11 @@ func (d *DashboardServer) enrichFromDAG(state *MarketState, analyst *strategy.Ma
 	}
 }
 
-// dagHeader holds dashboard tip values projected from DAG slots (no Falcon).
+// dagHeader holds Jurik tip aliases from DAG (Wozduh lines live only in plots).
 type dagHeader struct {
 	Jurik     float64
 	RSX       float64
 	RSXSignal float64
-	BlueLine  float64
-	VolFast   float64
-	VolSlow   float64
 }
 
 func dagHeaderFromFrame(frame *core.TickFrame) dagHeader {
@@ -2140,13 +2133,6 @@ func dagHeaderFromFrame(frame *core.TickFrame) dagHeader {
 	if v := frame.Get(core.SlotJurikSignal); jsonSafeDivState(v) {
 		h.RSXSignal = v
 	}
-	if v := frame.Get(core.SlotWozduhFast); jsonSafeDivState(v) {
-		h.BlueLine = v
-		h.VolFast = v
-	}
-	if v := frame.Get(core.SlotWozduhSlow); jsonSafeDivState(v) {
-		h.VolSlow = v
-	}
 	return h
 }
 
@@ -2155,9 +2141,6 @@ func applyDAGHeaderToMarketState(state *MarketState, h dagHeader) {
 		return
 	}
 	state.Jurik = h.Jurik
-	// RedLine/GreenLine have no DAG price-RSI slots yet — leave zero (honest empty tip).
-	state.RedLine = 0
-	state.GreenLine = 0
 }
 
 func applyDAGHeaderToTick(p *tickPayload, h dagHeader) {
@@ -2167,12 +2150,7 @@ func applyDAGHeaderToTick(p *tickPayload, h dagHeader) {
 	p.Jurik = h.Jurik
 	p.RSX = h.RSX
 	p.RSXSignal = h.RSXSignal
-	p.BlueLine = h.BlueLine
-	p.RsiVolFast = h.VolFast
-	p.RsiVolSlow = h.VolSlow
-	// No Falcon Red/Green / ScoreEngine on wire.
-	p.RedLine = 0
-	p.GreenLine = 0
+	// Wire purge Stage 5: no Falcon Red/Green/Blue / ScoreEngine fields on tick.
 	p.LongScore = 0
 	p.ShortScore = 0
 	p.RawAction = ""

@@ -237,6 +237,7 @@ class DDRFactory {
       crosshairMarkerRadius: 0,
     };
     delete seriesOpts.title;
+    delete seriesOpts.defaultVisible;
     // scaleMargins belongs on PriceScale, not SeriesOptions.
     const scaleMargins = seriesOpts.scaleMargins;
     delete seriesOpts.scaleMargins;

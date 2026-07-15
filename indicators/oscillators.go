@@ -92,6 +92,10 @@ type MACD struct {
 	macdLine   float64
 	signalLine float64
 	hist       float64
+
+	snapMacdLine   float64
+	snapSignalLine float64
+	snapHist       float64
 }
 
 // NewMACD creates a streaming MACD indicator.
@@ -139,12 +143,18 @@ func (m *MACD) SaveState() {
 	m.fastEMA.SaveState()
 	m.slowEMA.SaveState()
 	m.signalEMA.SaveState()
+	m.snapMacdLine = m.macdLine
+	m.snapSignalLine = m.signalLine
+	m.snapHist = m.hist
 }
 
 func (m *MACD) RestoreState() {
 	m.fastEMA.RestoreState()
 	m.slowEMA.RestoreState()
 	m.signalEMA.RestoreState()
+	m.macdLine = m.snapMacdLine
+	m.signalLine = m.snapSignalLine
+	m.hist = m.snapHist
 }
 
 type stochCandle struct {

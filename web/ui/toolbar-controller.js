@@ -27,6 +27,12 @@ const ToolbarController = (() => {
     return TF_DISPLAY[tf] || tf;
   }
 
+  function plotTip(plots, id) {
+    if (!plots || typeof plots !== 'object') return null;
+    const v = Number(plots[id]);
+    return Number.isFinite(v) ? v : null;
+  }
+
   function updateHeaderData(state) {
     if (!state) return;
 
@@ -54,14 +60,21 @@ const ToolbarController = (() => {
       }
     }
 
-    if (state.jurik != null) {
-      setTextIfChanged(document.getElementById('jurik-val'), fmt(state.jurik));
+    const plots = state.plots;
+    // Tip SSOT: DDR plot ids (Stage 5). Legacy redLine/greenLine ignored.
+    const jurik = plotTip(plots, 'line_rsx') ?? (state.jurik != null ? Number(state.jurik) : null);
+    // Header R = legacy RedLine semantics → RSI(HL2); G = EMA(RSI).
+    const red = plotTip(plots, 'woz_rsi_hl2') ?? plotTip(plots, 'woz_rsi_price');
+    const green = plotTip(plots, 'woz_ema_rsi');
+
+    if (jurik != null) {
+      setTextIfChanged(document.getElementById('jurik-val'), fmt(jurik));
     }
-    if (state.redLine != null) {
-      setTextIfChanged(document.getElementById('red-val'), fmt(state.redLine));
+    if (red != null) {
+      setTextIfChanged(document.getElementById('red-val'), fmt(red));
     }
-    if (state.greenLine != null) {
-      setTextIfChanged(document.getElementById('green-val'), fmt(state.greenLine));
+    if (green != null) {
+      setTextIfChanged(document.getElementById('green-val'), fmt(green));
     }
 
     const sandboxEl = document.getElementById('sandbox-badge');
@@ -84,16 +97,11 @@ const ToolbarController = (() => {
 
   function updateOscHeader(pt) {
     if (!pt) return;
-    const rsxVal = parseFloat(pt.rsx ?? pt.jurik);
-    if (Number.isFinite(rsxVal)) {
-      setTextIfChanged(document.getElementById('jurik-val'), fmt(rsxVal));
-    }
-    if (pt.redLine != null) {
-      setTextIfChanged(document.getElementById('red-val'), fmt(pt.redLine));
-    }
-    if (pt.greenLine != null) {
-      setTextIfChanged(document.getElementById('green-val'), fmt(pt.greenLine));
-    }
+    updateHeaderData({
+      plots: pt.plots,
+      jurik: pt.rsx ?? pt.jurik,
+    });
+    const rsxVal = plotTip(pt.plots, 'line_rsx') ?? parseFloat(pt.rsx ?? pt.jurik);
     if (Number.isFinite(rsxVal)) {
       updateRsxValue(rsxVal, pt.color || RSX_DEFAULT_COLOR);
     }

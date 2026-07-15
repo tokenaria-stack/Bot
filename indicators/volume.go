@@ -43,6 +43,8 @@ var _ CandleIndicator = (*AD)(nil)
 // CumSum is a running total accumulator.
 type CumSum struct {
 	total float64
+
+	snapTotal float64
 }
 
 // NewCumSum creates a cumulative sum accumulator.
@@ -57,6 +59,14 @@ func (c *CumSum) Update(val float64) float64 {
 
 func (c *CumSum) Value() float64 {
 	return c.total
+}
+
+func (c *CumSum) SaveState() {
+	c.snapTotal = c.total
+}
+
+func (c *CumSum) RestoreState() {
+	c.total = c.snapTotal
 }
 
 var _ Indicator = (*CumSum)(nil)

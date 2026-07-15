@@ -6,6 +6,39 @@ import (
 	"trading_bot/indicators"
 )
 
+func TestMACD_SaveRestore_IntraBarRollback(t *testing.T) {
+	t.Parallel()
+
+	m := indicators.NewMACD(12, 26, 9)
+	for i := 0; i < 40; i++ {
+		m.Update(100 + float64(i)*0.5)
+	}
+	m.SaveState()
+
+	wantLine := m.Value()
+	wantSignal := m.Signal()
+	wantHist := m.Histogram()
+
+	m.Update(1e6) // open-bar garbage tick
+	if m.Value() == wantLine && m.Signal() == wantSignal && m.Histogram() == wantHist {
+		t.Fatal("expected garbage Update to mutate MACD cached outputs")
+	}
+
+	m.RestoreState()
+	const eps = 1e-12
+	if abs(m.Value()-wantLine) > eps || abs(m.Signal()-wantSignal) > eps || abs(m.Histogram()-wantHist) > eps {
+		t.Fatalf("RestoreState did not restore cached outputs: got line=%v signal=%v hist=%v want %v %v %v",
+			m.Value(), m.Signal(), m.Histogram(), wantLine, wantSignal, wantHist)
+	}
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func TestRSI_SaveRestore_IntraBarRollback(t *testing.T) {
 	t.Parallel()
 

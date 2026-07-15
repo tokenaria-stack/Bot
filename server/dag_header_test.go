@@ -6,7 +6,9 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/exchange"
+	"trading_bot/server/wire"
 	"trading_bot/strategy"
+	"trading_bot/ui_config"
 )
 
 func TestDagHeaderFromFrame(t *testing.T) {
@@ -15,23 +17,19 @@ func TestDagHeaderFromFrame(t *testing.T) {
 	frame.Set(core.SlotJurikRSX, 55.5)
 	frame.Set(core.SlotJurikSignal, 50.1)
 	frame.Set(core.SlotWozduhFast, 40.0)
-	frame.Set(core.SlotWozduhSlow, 35.0)
 
 	h := dagHeaderFromFrame(frame)
 	if h.Jurik != 55.5 || h.RSX != 55.5 {
 		t.Fatalf("jurik %+v", h)
 	}
-	if h.RSXSignal != 50.1 || h.VolFast != 40 || h.VolSlow != 35 {
-		t.Fatalf("woz/signal %+v", h)
+	if h.RSXSignal != 50.1 {
+		t.Fatalf("signal %+v", h)
 	}
 
 	state := &MarketState{Factors: map[string]strategy.ScoreFactor{"x": {}}}
 	applyDAGHeaderToMarketState(state, h)
 	if state.Jurik != 55.5 {
 		t.Fatalf("state.Jurik=%v", state.Jurik)
-	}
-	if state.RedLine != 0 || state.GreenLine != 0 {
-		t.Fatalf("Red/Green must stay empty without DAG price-RSI slots")
 	}
 }
 
@@ -42,7 +40,11 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 
 	marker := newTestDAGMarker(80)
 	state := &MarketState{Factors: map[string]strategy.ScoreFactor{"legacy": {}}}
-	d := &DashboardServer{}
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := &DashboardServer{projector: wire.NewProjector(reg)}
 	d.enrichFromDAG(state, marker)
 
 	frame := marker.DAGTickFrame()
@@ -64,6 +66,12 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 	}
 	if len(state.Factors) != 0 {
 		t.Fatalf("Factors must be empty, got %v", state.Factors)
+	}
+	if len(state.Plots) == 0 {
+		t.Fatal("expected tip plots from projector")
+	}
+	if _, ok := state.Plots["line_rsx"]; !ok {
+		t.Fatalf("expected line_rsx in plots, got %v", state.Plots)
 	}
 }
 

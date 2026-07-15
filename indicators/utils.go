@@ -33,6 +33,12 @@ type RollingSum struct {
 	count  int
 	sum    float64
 	value  float64
+
+	snapIdx   int
+	snapCount int
+	snapSum   float64
+	snapValue float64
+	snapBuf   []float64
 }
 
 // NewRollingSum creates a rolling sum over a fixed window.
@@ -62,6 +68,26 @@ func (r *RollingSum) Update(val float64) float64 {
 
 func (r *RollingSum) Value() float64 {
 	return r.value
+}
+
+func (r *RollingSum) SaveState() {
+	r.snapIdx = r.idx
+	r.snapCount = r.count
+	r.snapSum = r.sum
+	r.snapValue = r.value
+	if cap(r.snapBuf) < len(r.buf) {
+		r.snapBuf = make([]float64, len(r.buf))
+	}
+	r.snapBuf = r.snapBuf[:len(r.buf)]
+	copy(r.snapBuf, r.buf)
+}
+
+func (r *RollingSum) RestoreState() {
+	r.idx = r.snapIdx
+	r.count = r.snapCount
+	r.sum = r.snapSum
+	r.value = r.snapValue
+	copy(r.buf, r.snapBuf)
 }
 
 // RollingStDev maintains population standard deviation over the last N values.

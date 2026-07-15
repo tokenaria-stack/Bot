@@ -8,13 +8,14 @@ import (
 // UIComponent describes one render binding for Data-Driven Rendering (DDR).
 // Go treats RenderOpts as opaque bytes; the frontend parses LWC-specific options.
 type UIComponent struct {
-	ID         string          `json:"id"`
-	Pane       string          `json:"pane"`
-	Kind       string          `json:"kind"`
-	DataMode   string          `json:"dataMode"`
-	Slot       Slot            `json:"-"`
-	RenderOpts json.RawMessage `json:"renderOptions,omitempty"`
-	HostID     string          `json:"hostId,omitempty"`
+	ID           string          `json:"id"`
+	Pane         string          `json:"pane"`
+	Kind         string          `json:"kind"`
+	DataMode     string          `json:"dataMode"`
+	Slot         Slot            `json:"-"`
+	RenderOpts   json.RawMessage `json:"renderOptions,omitempty"`
+	HostID       string          `json:"hostId,omitempty"`
+	Configurable bool            `json:"configurable,omitempty"`
 }
 
 // UIRegistry holds UI components grouped by pane. Built explicitly via NewUIRegistry.

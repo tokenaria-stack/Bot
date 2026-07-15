@@ -1216,7 +1216,7 @@ async function pollLatestState() {
     if (!shouldRunLivePoll()) return;
     if (warmingUp || !data.candles?.length) return;
 
-    ToolbarController.updateHeaderData({ jurik: data.jurik, redLine: data.redLine, greenLine: data.greenLine });
+    ToolbarController.updateHeaderData({ jurik: data.jurik, plots: data.plots });
 
     const candles = toCandles(data.candles);
     const latest = candles[candles.length - 1];
@@ -1691,7 +1691,7 @@ function _processLiveTickCore(d) {
   if (tickTf !== currentTf.toLowerCase()) return;
 
   if (isLiveTf()) {
-    ToolbarController.updateHeaderData({ jurik: d.jurik, redLine: d.redLine, greenLine: d.greenLine });
+    ToolbarController.updateHeaderData({ jurik: d.jurik, plots: d.plots });
     if (d.isClosed && d.volatilityRegime) {
       ToolbarController.updateHeaderData({ volatilityRegime: d.volatilityRegime });
     }

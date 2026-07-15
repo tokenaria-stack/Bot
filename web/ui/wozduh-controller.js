@@ -79,22 +79,8 @@ const WozduhController = (() => {
       const context = oscContextFromWrap(wrap);
       const menu = getSettingsMenu(wrap);
       if (!menu) return;
-      const prefs = loadPrefsForContext(context) || CONFIG.defaultWozduhPrefs();
-      applyPrefsToMenu(menu, prefs);
-      savePrefs(context, prefs);
-      if (typeof SettingsRenderer !== 'undefined' && context === 'live' && window.DDRFactory?.cutoverActive) {
-        SettingsRenderer.applyWozduhPrefs(context, prefs);
-      } else {
-        ChartAdapter.applyWozduhVisibility(context);
-      }
-    });
 
-    document.querySelectorAll('.osc-wrap').forEach((wrap) => {
-      const context = oscContextFromWrap(wrap);
       const toggle = wrap.querySelector('.wozduh-settings-toggle');
-      const menu = getSettingsMenu(wrap);
-      if (!menu) return;
-
       toggle?.addEventListener('click', (e) => {
         e.stopPropagation();
         if (typeof hideRsxSettingsMenus === 'function') hideRsxSettingsMenus();
@@ -108,15 +94,24 @@ const WozduhController = (() => {
       menu.addEventListener('mousedown', (e) => e.stopPropagation());
       menu.addEventListener('click', (e) => e.stopPropagation());
 
+      // Live DDR: SettingsRenderer owns checkbox DOM + visibility (manifest-driven).
+      if (typeof SettingsRenderer !== 'undefined' && context === 'live') {
+        if (window.DDRFactory?.manifest) {
+          SettingsRenderer.mountFromManifest(window.DDRFactory.manifest);
+        }
+        return;
+      }
+
+      // Backtest / legacy adapter path — static HTML checkboxes.
+      const prefs = loadPrefsForContext(context) || CONFIG.defaultWozduhPrefs();
+      applyPrefsToMenu(menu, prefs);
+      savePrefs(context, prefs);
+      ChartAdapter.applyWozduhVisibility(context);
       menu.querySelectorAll('.wozduh-chk').forEach((el) => {
         el.addEventListener('change', () => {
-          const prefs = readPrefsFromMenu(menu);
-          savePrefs(context, prefs);
-          if (typeof SettingsRenderer !== 'undefined' && context === 'live' && window.DDRFactory?.cutoverActive) {
-            SettingsRenderer.applyWozduhPrefs(context, prefs);
-          } else {
-            ChartAdapter.applyWozduhVisibility(context, prefs);
-          }
+          const next = readPrefsFromMenu(menu);
+          savePrefs(context, next);
+          ChartAdapter.applyWozduhVisibility(context, next);
         });
       });
     });
