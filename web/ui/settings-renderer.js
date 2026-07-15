@@ -121,6 +121,13 @@ const SettingsRenderer = (() => {
   function rebuildMenu(menu, components, prefs) {
     if (!menu) return;
     menu.replaceChildren();
+
+    const handle = document.createElement('div');
+    handle.className = 'indicator-settings-menu__drag-handle';
+    handle.title = 'Drag to move';
+    handle.textContent = '⋮⋮⋮ Woz Settings';
+    menu.appendChild(handle);
+
     for (const c of components) {
       const label = document.createElement('label');
       label.className = 'menu-row';
@@ -141,6 +148,25 @@ const SettingsRenderer = (() => {
       label.appendChild(input);
       label.appendChild(document.createTextNode(` ${labelFor(c)}`));
       menu.appendChild(label);
+    }
+
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'risk-save-btn';
+    ok.textContent = 'Ok';
+    ok.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.hidden = true;
+    });
+    menu.appendChild(ok);
+
+    // Allow re-bind after replaceChildren wiped prior handle listeners.
+    menu._dragBound = false;
+    if (typeof FloatingMenu !== 'undefined') {
+      FloatingMenu.initDrag(menu);
+    } else if (typeof initFloatingMenuDrag === 'function') {
+      initFloatingMenuDrag(menu);
     }
   }
 

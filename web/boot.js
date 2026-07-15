@@ -209,8 +209,12 @@
       getBacktestInterval: () => window.backtestTf,
       abortLiveStateFetch: noop,
       disarmLiveHistoryScroll,
-      openFloatingMenu: noop,
-      initFloatingMenuDrag: noop,
+      openFloatingMenu: (menu, anchor) => {
+        if (window.FloatingMenu?.open) return window.FloatingMenu.open(menu, anchor);
+      },
+      initFloatingMenuDrag: (menu) => {
+        if (window.FloatingMenu?.initDrag) return window.FloatingMenu.initDrag(menu);
+      },
       buildFinalBacktestPayload: () => window.currentBacktestPayload || {},
       getActiveUiContext: () => 'live',
       shouldPaintLiveChart: () => TabsController?.isLiveTabActive?.() !== false,
