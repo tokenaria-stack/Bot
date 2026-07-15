@@ -362,10 +362,11 @@ func validOHLC(open, high, low, closePrice float64) bool {
 	return true
 }
 
-// BroadcastChartTick pushes an atomic chart frame: OHLCV + DAG plots + DAG header tip (Shot 9B/9J).
+// RouteChartTick delivers an atomic chart frame (OHLCV + DAG plots + header tip) to
+// clients subscribed to this timeframe only (Core 4.2 Timeframe-pure Transport).
 // Contract: every live tick carries plots when the Analyst DAG frame is available — never price-only.
 // Header Jurik/Wozduh come from DAG slots only — never FalconSnapshot.
-func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
+func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {
 		return
@@ -399,17 +400,22 @@ func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Can
 		Factors:     map[string]strategy.ScoreFactor{},
 	}
 	applyDAGHeaderToTick(&payload, hdr)
-	d.broadcast(wsEnvelope{Type: "tick", Data: payload})
+	d.routeTick(timeframe, wsEnvelope{Type: "tick", Data: payload})
 }
 
-// BroadcastTick is deprecated (Shot 9J) — forwards to BroadcastChartTick (DAG header only).
+// BroadcastChartTick is deprecated — use RouteChartTick (Core 4.2).
+func (d *DashboardServer) BroadcastChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
+	d.RouteChartTick(timeframe, candle, isClosed, dagFrame)
+}
+
+// BroadcastTick is deprecated (Shot 9J) — forwards to RouteChartTick (DAG header only).
 func (d *DashboardServer) BroadcastTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
-	d.BroadcastChartTick(timeframe, candle, isClosed, dagFrame)
+	d.RouteChartTick(timeframe, candle, isClosed, dagFrame)
 }
 
-// BroadcastPriceBar is deprecated (Shot 9B) — forwards to BroadcastChartTick so legacy callers stay atomic.
+// BroadcastPriceBar is deprecated (Shot 9B) — forwards to RouteChartTick so legacy callers stay atomic.
 func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Candle) {
-	d.BroadcastChartTick(timeframe, candle, false, nil)
+	d.RouteChartTick(timeframe, candle, false, nil)
 }
 
 // risingEdgeDivAnnotations emits a wire marker only when closed-bar DivState changes.
@@ -549,19 +555,47 @@ func (d *DashboardServer) broadcast(msg wsEnvelope) {
 		log.Printf("[Dashboard] broadcast marshal: %v", err)
 		return
 	}
+	d.writeToClients(payload, nil)
+}
 
+// routeTick delivers a chart tick only to clients whose subscribed TF matches (Transport purity).
+// Case-sensitive: Binance "1m" (minute) ≠ "1M" (month) — never fold case.
+func (d *DashboardServer) routeTick(timeframe string, msg wsEnvelope) {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[Dashboard] routeTick marshal: %v", err)
+		return
+	}
+	want := strings.TrimSpace(timeframe)
+	if want == "" {
+		return
+	}
+	d.writeToClients(payload, func(client *WSClient) bool {
+		tf := strings.TrimSpace(d.clientTF[client])
+		return tf == want
+	})
+}
+
+// writeToClients sends raw WS payload to all clients, or only those matching accept (when non-nil).
+func (d *DashboardServer) writeToClients(payload []byte, accept func(*WSClient) bool) {
 	d.clientsMu.Lock()
-	snapshot := make([]*WSClient, 0, len(d.clients))
+	type dest struct {
+		client *WSClient
+	}
+	snapshot := make([]dest, 0, len(d.clients))
 	for client := range d.clients {
-		snapshot = append(snapshot, client)
+		if accept != nil && !accept(client) {
+			continue
+		}
+		snapshot = append(snapshot, dest{client: client})
 	}
 	d.clientsMu.Unlock()
 
 	var dead []*WSClient
-	for _, client := range snapshot {
-		if err := client.WriteMessage(websocket.TextMessage, payload); err != nil {
-			_ = client.Close()
-			dead = append(dead, client)
+	for _, item := range snapshot {
+		if err := item.client.WriteMessage(websocket.TextMessage, payload); err != nil {
+			_ = item.client.Close()
+			dead = append(dead, item.client)
 		}
 	}
 
@@ -1738,7 +1772,7 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 	}
 
 	// Shot 9H: /api/state is a lightweight metadata container.
-	// Charts come from columnar REST + BroadcastChartTick — never Falcon export / Candles+Oscillators.
+	// Charts come from columnar REST + RouteChartTick — never Falcon export / Candles+Oscillators.
 	state := &MarketState{
 		Status:           "ready",
 		Symbol:           d.symbol,

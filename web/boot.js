@@ -54,14 +54,16 @@
   const LIVE_TICK_BUFFER_MAX = 5000;
   /** @type {object[]} */
   let pendingLiveTicks = [];
-  let tickBufferActive = false;
-  let tickBufferTf = '';
-  let tickBufferEpoch = 0;
+	let tickBufferActive = false;
+	let tickBufferTf = '';
+	let tickBufferEpoch = 0;
+	/** Core 4.2 tip-handoff diagnostic (temporary): history tip vs first accepted live tick. */
+	let handoffDiag = null;
 
   function beginLiveTickBuffer() {
     pendingLiveTicks = [];
     tickBufferActive = true;
-    tickBufferTf = String(window.currentTf || '').toLowerCase();
+    tickBufferTf = String(window.currentTf || '');
     tickBufferEpoch = window.projectionEpoch;
   }
 
@@ -79,10 +81,9 @@
    */
   function bufferLiveTick(tick) {
     if (!tickBufferActive || !tick) return false;
-    const wantTf = String(window.currentTf || tickBufferTf || '').toLowerCase();
-    const tickTf = String(
-      tick.timeframe || backendTradingTimeframe || wantTf || '',
-    ).toLowerCase();
+    // Case-sensitive: "1m" ≠ "1M".
+    const wantTf = String(window.currentTf || tickBufferTf || '');
+    const tickTf = String(tick.timeframe || backendTradingTimeframe || wantTf || '');
     if (tickBufferEpoch !== window.projectionEpoch) {
       return true; // destroy stale-epoch tick
     }
@@ -474,6 +475,17 @@
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
     const appendResult = liveColumnarStore.appendTick(tick);
     if (!appendResult?.candle) return false;
+    if (handoffDiag?.waiting) {
+      const tip = Number(handoffDiag.historyTipOpen);
+      const first = Number(tick?.time);
+      console.log('[TransportDiag] tip handoff', {
+        historyTipOpen: tip,
+        firstAcceptedTick: first,
+        deltaSec: Number.isFinite(tip) && Number.isFinite(first) ? first - tip : null,
+        timeframe: tick?.timeframe || window.currentTf,
+      });
+      handoffDiag.waiting = false;
+    }
     if (options.silent) return true;
     liveRenderScheduler.markDirty({
       mode: 'delta',
@@ -492,7 +504,7 @@
     tickBufferActive = false;
     const pending = pendingLiveTicks;
     pendingLiveTicks = [];
-    const wantTf = String(window.currentTf || tickBufferTf || '').toLowerCase();
+    const wantTf = String(window.currentTf || tickBufferTf || '');
     const epoch = tickBufferEpoch;
     tickBufferTf = '';
     tickBufferEpoch = 0;
@@ -500,9 +512,7 @@
     for (let i = 0; i < pending.length; i++) {
       if (!isCurrentEpoch(epoch)) break;
       const tick = pending[i];
-      const tickTf = String(
-        tick?.timeframe || backendTradingTimeframe || wantTf || '',
-      ).toLowerCase();
+      const tickTf = String(tick?.timeframe || backendTradingTimeframe || wantTf || '');
       if (tickTf && wantTf && tickTf !== wantTf) continue;
       // Silent: store only — caller issues one full paint after handoff.
       pushLiveTickDelta(tick, { silent: true });
@@ -510,14 +520,16 @@
   }
 
   function handleLiveTick(d) {
+    // Core 4.2 Bouncer: case-sensitive TF assert ("1m" ≠ "1M") before buffer / queueTick / store.
+    const wantTf = String(window.currentTf || '');
+    const gotTf = String(d?.timeframe || '');
+    if (!d || !gotTf || !wantTf || gotTf !== wantTf) return;
     const epoch = window.projectionEpoch;
     // Shot 10B: absorb ticks during monolith load (never write store until flush).
     if (bufferLiveTick(d)) return;
     if (!isCurrentEpoch(epoch)) return;
     if (liveHydrationOrchestrator?.queueTick(d)) return;
     if (!isCurrentEpoch(epoch)) return;
-    const tickTf = (d.timeframe || backendTradingTimeframe || window.currentTf || '15m').toLowerCase();
-    if (tickTf !== window.currentTf.toLowerCase()) return;
     if (!ChartAdapter.isInitialized('live')) return;
     if (typeof chartTime === 'function' && chartTime(d.time) == null) return;
     if (!isCurrentEpoch(epoch)) return;
@@ -543,7 +555,7 @@
 
     // Shot 10B: absorb WS ticks until monolith + replay.
     // WarmingUp retries must keep the buffer (do not drop ticks from the wait window).
-    const wantTf = String(window.currentTf || '').toLowerCase();
+    const wantTf = String(window.currentTf || '');
     if (tickBufferActive && tickBufferTf === wantTf) {
       tickBufferEpoch = window.projectionEpoch;
     } else {
@@ -591,6 +603,14 @@
 
       // Shot 11C Atomic Swap: mutate store + ensure DDR hosts offline, then ONE full paint.
       liveColumnarStore.replaceMonolith(columnar);
+      const histTimes = Array.isArray(columnar.times) ? columnar.times : [];
+      const historyTipOpen = histTimes.length ? Number(histTimes[histTimes.length - 1]) : null;
+      handoffDiag = { historyTipOpen, waiting: true };
+      console.log('[TransportDiag] history loaded', {
+        historyTipOpen,
+        timeframe: window.currentTf,
+        bars: histTimes.length,
+      });
       flushLiveTickBuffer();
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());

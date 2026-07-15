@@ -1202,7 +1202,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 						// }
 					}
 					// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
-					// Chart WS delivery no longer goes through onTelemetry (see SetOnKlineBar / BroadcastChartTick).
+					// Chart WS delivery no longer goes through onTelemetry (see SetOnKlineBar / RouteChartTick).
 					// m.mu.RLock()
 					// telemetryCB := m.onTelemetry
 					// tickCB := m.onTick

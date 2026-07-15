@@ -166,7 +166,7 @@ func main() {
 	master.StartSQLiteArchiveCatchUpLoop(ctx)
 	master.SeedClosedBarTelemetry()
 
-	// Shot 9B: all chart TFs equal — atomic OHLCV+plots via BroadcastChartTick.
+	// Shot 9B + Core 4.2: every TF computes Projection; Transport routes only to subscribed clients.
 	// Legacy SetOnTelemetry (Falcon/ScoreMatrix dashboard spam) removed.
 	// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
 	master.SetOnKlineBar(func(tf string, k exchange.Kline, isClosed bool) {
@@ -174,7 +174,7 @@ func main() {
 		if analyst == nil {
 			return
 		}
-		dashboard.BroadcastChartTick(
+		dashboard.RouteChartTick(
 			tf,
 			domain.CandleFromKline(k),
 			isClosed,

@@ -34,7 +34,8 @@ const WS = {
   },
 
   subscribe(tf, resolvedTf) {
-    const subTf = String(resolvedTf ?? tf ?? '').toLowerCase();
+    // Case-sensitive: "1m" (minute) ≠ "1M" (month).
+    const subTf = String(resolvedTf ?? tf ?? '');
     if (!subTf) return;
     WS._subscribedTf = subTf;
     WS._sendSubscribe(subTf);
@@ -91,7 +92,8 @@ const WS = {
     }
 
     if (msg.type === 'tick' && msg.data) {
-      const tickTf = String(msg.data.timeframe || WS._subscribedTf || '').toLowerCase();
+      // Case-sensitive TF gate (defense-in-depth; server routeTick is SSOT).
+      const tickTf = String(msg.data.timeframe || '');
       if (WS._subscribedTf && tickTf && tickTf !== WS._subscribedTf) return;
       WS._callbacks?.onTick?.(msg.data);
       return;
