@@ -214,33 +214,27 @@ class ChartCompositor {
   }
 
   /**
-   * Cold boot camera: barSpacing 6 on all panes + last ~150 bars (no fitContent).
+   * Cold boot camera (Core 4.10): layout-independent applyOptions only.
+   * setVisibleLogicalRange (and fitContent before it, Shot 5.5x) both need a real
+   * container width to compute per-bar pixel spacing — on cold boot the DOM host can
+   * still be 0×0 when this runs, which collapses LWC's internal scale to NaN.
+   * barSpacing + rightOffset:0 need no width at all: LWC just pins bar N (the last one)
+   * to the right edge and paints backwards, so the chart renders correctly the instant
+   * the container actually gets laid out (no "Auto Scale" click required).
    */
   _commitFreshCamera() {
     const spacing = (typeof ViewportManager !== 'undefined'
       && Number.isFinite(ViewportManager.HEALTHY_BAR_SPACING))
       ? ViewportManager.HEALTHY_BAR_SPACING
       : 6;
-    const visible = (typeof ViewportManager !== 'undefined'
-      && Number.isFinite(ViewportManager.HEALTHY_VISIBLE_BARS))
-      ? ViewportManager.HEALTHY_VISIBLE_BARS
-      : 150;
 
     ['price', 'wozduh', 'rsx'].forEach((pane) => {
       const chart = typeof ChartAdapter !== 'undefined'
         ? ChartAdapter.getChart('live', pane)
         : null;
-      chart?.timeScale()?.applyOptions({ barSpacing: spacing });
+      // Layout-safe initialization: independent of DOM width.
+      chart?.timeScale()?.applyOptions({ barSpacing: spacing, rightOffset: 0 });
     });
-
-    const n = typeof this._store?.barCount === 'function' ? this._store.barCount() : 0;
-    if (n > 0 && typeof ChartAdapter.setVisibleLogicalRange === 'function') {
-      const from = Math.max(0, n - visible);
-      ChartAdapter.setVisibleLogicalRange('live', { from, to: n }, { animate: false });
-      return;
-    }
-
-    ChartAdapter.getChart('live', 'price')?.timeScale()?.scrollToPosition(0, false);
   }
 
   /**
