@@ -96,6 +96,10 @@ type Marker struct {
 	rsxPriceLines        []float64
 	bulkReplayMode       bool
 	dag                  *core.DAGRunner
+	// lastCommittedOpenTime is the OpenTime of the most recently Save-committed bar
+	// (streaming engines + DAG). Guards UpdateKlineTick's cross-bar handoff against
+	// double-committing a bar already closed via isClosed==true (Jeweler Protocol: no double IIR pass).
+	lastCommittedOpenTime int64
 }
 
 // NewMarker loads the initial candle history into a protected store.
@@ -238,6 +242,9 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 	if len(a.klines) == 0 {
 		a.klines = append(a.klines, k)
 		a.evalTick(k, 0, isClosed)
+		if isClosed {
+			a.lastCommittedOpenTime = k.OpenTime
+		}
 		return
 	}
 
@@ -247,12 +254,19 @@ func (a *Marker) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 	if k.OpenTime == last.OpenTime {
 		a.klines[lastIdx] = k
 		a.evalTick(k, lastIdx, isClosed)
+		if isClosed {
+			a.lastCommittedOpenTime = k.OpenTime
+		}
 		return
 	}
 
 	if k.OpenTime > last.OpenTime {
-		// Commit the previous bar into streaming snapshots before opening a new one.
-		a.evalTick(last, lastIdx, true)
+		// Commit the previous bar into streaming snapshots before opening a new one —
+		// unless it was already committed via isClosed==true (avoid double IIR pass).
+		if last.OpenTime != a.lastCommittedOpenTime {
+			a.evalTick(last, lastIdx, true)
+			a.lastCommittedOpenTime = last.OpenTime
+		}
 		a.klines = append(a.klines, k)
 		a.evalTick(k, len(a.klines)-1, isClosed)
 		a.alignAllDataBusToKlinesLocked()

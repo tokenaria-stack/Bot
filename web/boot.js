@@ -209,6 +209,26 @@
     }
   }
 
+  /**
+   * Core 4.9: honest TF → ms parser, used only when no TimeNormalizer/global getIntervalMs
+   * exists yet. Mirrors TimeNormalizer.getIntervalMs so the shim never lies to gap detection.
+   */
+  function parseTfIntervalMs(tf) {
+    const m = /^(\d+)([a-zA-Z])$/.exec(String(tf || '').trim());
+    if (!m) return 60000;
+    const val = Number(m[1]);
+    if (!Number.isFinite(val) || val <= 0) return 60000;
+    switch (m[2]) {
+      case 's': return val * 1000;
+      case 'm': return val * 60000;
+      case 'h': return val * 3600000;
+      case 'd': return val * 86400000;
+      case 'w': return val * 604800000;
+      case 'M': return val * 2592000000; // 30-day month (case-sensitive: "M" ≠ "m")
+      default: return 60000;
+    }
+  }
+
   function installGlobalShims() {
     const fns = {
       loadDashboard,
@@ -253,7 +273,7 @@
       applySeriesData: noop,
       beginDataUpdate,
       endDataUpdate,
-      getIntervalMs: typeof getIntervalMs === 'function' ? getIntervalMs : () => 60000,
+      getIntervalMs: typeof getIntervalMs === 'function' ? getIntervalMs : parseTfIntervalMs,
       isLiveTf: () => true,
       getLiveStoreTf: () => window.currentTf,
     };

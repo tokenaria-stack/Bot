@@ -65,13 +65,17 @@ func (a *Marker) resetStreamingEngines() {
 	a.Annotations = nil
 	a.clearDataBusLocked()
 	a.initDAGShadowLocked()
+	a.lastCommittedOpenTime = 0
 }
 
+// warmupStreaming replays closed bars once each; the tail bar is marked committed so the
+// first live tick's cross-bar handoff (UpdateKlineTick) does not re-commit it.
 func (a *Marker) warmupStreaming(klines []exchange.Kline) {
 	a.resetStreamingEngines()
 	for i, k := range klines {
 		a.evaluateTickLocked(k, i, true)
 	}
+	a.markTailCommittedLocked(klines)
 }
 
 func (a *Marker) replayStreamingLocked() {
@@ -80,8 +84,17 @@ func (a *Marker) replayStreamingLocked() {
 	for i, k := range klines {
 		a.evaluateTickLocked(k, i, true)
 	}
+	a.markTailCommittedLocked(klines)
 	a.alignAllDataBusToKlinesLocked()
 	a.clampDataBusToKlinesLocked()
+}
+
+// markTailCommittedLocked pins lastCommittedOpenTime to the tail bar of a closed-bar replay.
+func (a *Marker) markTailCommittedLocked(klines []exchange.Kline) {
+	if len(klines) == 0 {
+		return
+	}
+	a.lastCommittedOpenTime = klines[len(klines)-1].OpenTime
 }
 
 // layer2StreamingSnapshot holds Marker-level Layer 2 state between closed bars.
