@@ -13,6 +13,22 @@ class ColumnarStore {
     this._annotationMap = new Map();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
+    /** @type {number} TF bar duration (sec); 0 = gap detection disabled. */
+    this._intervalSec = 0;
+  }
+
+  /** Core 4.5: bind current TF interval so appendTick can detect chronology gaps. */
+  setTfInterval(seconds) {
+    const s = Number(seconds);
+    this._intervalSec = Number.isFinite(s) && s > 0 ? s : 0;
+  }
+
+  /** Same sec/ms normalization as appendTick (chartTime), safe under Node tests. */
+  static _normTimeSec(raw) {
+    if (typeof chartTime === 'function') return chartTime(raw);
+    const t = Number(raw);
+    if (!Number.isFinite(t)) return null;
+    return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
   }
 
   static _toMs(timeLike) {
@@ -53,7 +69,11 @@ class ColumnarStore {
 
   replaceMonolith(columnarJson) {
     const data = columnarJson && typeof columnarJson === 'object' ? columnarJson : {};
-    const times = Array.isArray(data.times) ? data.times.slice() : [];
+    // Core 4.5: normalize sec/ms exactly like appendTick — history and ticks share one time axis.
+    // map (not filter): keeps index alignment with candle columns; invariantOk stays honest.
+    const times = Array.isArray(data.times)
+      ? data.times.map((t) => ColumnarStore._normTimeSec(t))
+      : [];
     const src = data.candles && typeof data.candles === 'object' ? data.candles : {};
     this._times = times;
     this._candles = {
@@ -237,6 +257,14 @@ class ColumnarStore {
     if (lastTime != null && time < lastTime) return null;
 
     const isNewBar = lastTime == null || time > lastTime;
+
+    // Core 4.5 Self-Healing: a forward jump beyond 1.5 intervals is a chronology gap.
+    // The store never glues over holes — it reports the gap; composition root decides how to heal.
+    if (isNewBar && this._intervalSec > 0 && lastTime != null
+      && (time - lastTime) > this._intervalSec * 1.5) {
+      return { gapDetected: true, lastTime, tickTime: time };
+    }
+
     const plots = tick.plots && typeof tick.plots === 'object' ? tick.plots : null;
     const absent = ColumnarStore.plotAbsent();
 

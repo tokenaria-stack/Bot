@@ -59,6 +59,19 @@
 	let tickBufferEpoch = 0;
 	/** Core 4.2 tip-handoff diagnostic (temporary): history tip vs first accepted live tick. */
 	let handoffDiag = null;
+	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
+	let lastGapHealAt = 0;
+	const GAP_HEAL_COOLDOWN_MS = 10000;
+
+  /** Core 4.5: bind current TF bar duration to the store so appendTick can detect gaps. */
+  function syncStoreTfInterval() {
+    if (!liveColumnarStore?.setTfInterval) return;
+    const fn = typeof getIntervalMs === 'function'
+      ? getIntervalMs
+      : (typeof TimeNormalizer !== 'undefined' ? TimeNormalizer.getIntervalMs : null);
+    const ms = fn ? Number(fn(window.currentTf)) : 0;
+    liveColumnarStore.setTfInterval(Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0);
+  }
 
   function beginLiveTickBuffer() {
     pendingLiveTicks = [];
@@ -355,6 +368,7 @@
    */
   function prepareLiveTfHandoff() {
     bumpProjectionEpoch();
+    syncStoreTfInterval();
     abortLiveTickBuffer();
     beginLiveTickBuffer();
     liveHydrationOrchestrator?.reset();
@@ -474,6 +488,20 @@
   function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
     const appendResult = liveColumnarStore.appendTick(tick);
+    if (appendResult?.gapDetected) {
+      console.warn('[Self-Healing] Time gap detected, reloading history...', {
+        lastTime: appendResult.lastTime,
+        tickTime: appendResult.tickTime,
+        timeframe: tick?.timeframe || window.currentTf,
+      });
+      const now = Date.now();
+      // Throttle: replay of buffered gap ticks (flush runs while loading) must not re-trigger.
+      if (!window.__isDashboardLoading && now - lastGapHealAt > GAP_HEAL_COOLDOWN_MS) {
+        lastGapHealAt = now;
+        loadDashboard();
+      }
+      return false;
+    }
     if (!appendResult?.candle) return false;
     if (handoffDiag?.waiting) {
       const tip = Number(handoffDiag.historyTipOpen);
@@ -542,6 +570,13 @@
       onTick: handleLiveTick,
       onMarker: noop,
       onOpen: () => wsSubscribeTf(window.currentTf),
+      // Core 4.5 Self-Healing: socket was down → offline window is a guaranteed data hole.
+      // Absorb incoming ticks, refetch the monolith, replay buffer on top (same path as boot).
+      onReconnect: () => {
+        console.warn('[Self-Healing] WS reconnected, reloading history to fill the offline gap...');
+        beginLiveTickBuffer();
+        loadDashboard();
+      },
     });
   }
 
@@ -552,6 +587,9 @@
       setTimeout(() => loadDashboard(options), 500);
       return;
     }
+
+    // Core 4.5: bind TF interval before any tick can reach the store (gap detection axis).
+    syncStoreTfInterval();
 
     // Shot 10B: absorb WS ticks until monolith + replay.
     // WarmingUp retries must keep the buffer (do not drop ticks from the wait window).
