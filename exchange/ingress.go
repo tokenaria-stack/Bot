@@ -4,8 +4,20 @@ package exchange
 // rules live. Consumers never decide "who wins" — they declare Authority and
 // the pipeline decides. Kline itself stays authority-free (ledger is Edge-only).
 //
-// Contract: only CLOSED canonical bars enter this layer. Forming ticks
-// (Binance k.x == false) are Marker telemetry and must bypass ingress.
+// ── BAR SOURCE SEAM (Core 5.0 Phase D) ──────────────────────────────────────
+// Contract for ANY producer feeding this pipeline (the "socket"; implementations
+// are the "power plants" and are built only when a consumer exists):
+//
+//  1. Only CLOSED canonical bars (exchange.Kline) enter Merge/Validate.
+//     How a bar was aggregated — time window, tick count, volume — is a private
+//     detail of its producer. The pipeline, Marker, DAG and frontend never know.
+//  2. Forming ticks (Binance k.x == false) BYPASS ingress entirely: they are
+//     intra-bar Marker telemetry (snapshot/restore, Core 4.8), not candles.
+//  3. Time bars come from exchange klines (Binance = TV canon). Locally
+//     aggregated bars (future TickBarBuilder, debt #44) publish here with their
+//     own Authority tier and have NO REST recovery: a tick gap is an honest gap.
+//
+// Current sole producer: Binance klines (WS x=true + REST closed ranges).
 
 import (
 	"fmt"

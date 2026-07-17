@@ -37,7 +37,6 @@ const (
 	maxBacktestChunkLimit   = 50000
 	maxBacktestBars         = 100000
 	historyFetchLimit       = 1000
-	orderFlowWarmupBars     = 0
 	binanceMaxKlinesLimit   = 1000
 	defaultStaticDir        = "web"
 )
@@ -73,7 +72,6 @@ func (c *WSClient) Close() error {
 type DashboardServer struct {
 	analysts         map[string]*strategy.Marker
 	rest             *exchange.BinanceExchange
-	orderFlow        *domain.OrderFlowStore
 	symbol           string
 	staticDir        string
 	upgrader         websocket.Upgrader
@@ -117,7 +115,6 @@ type MarketState struct {
 	Factors          map[string]strategy.ScoreFactor        `json:"factors"`
 	BrainStatus      string                                 `json:"brainStatus"`
 	AIStatus         string                                 `json:"aiStatus"`
-	TickBufferLen    int                                    `json:"tickBufferLen,omitempty"`
 	Candles          []ChartCandle                          `json:"candles"`
 	Oscillators      []ChartOscillator                      `json:"oscillators"`
 	FibZones         []ChartFibZone                         `json:"fibZones"`
@@ -262,7 +259,6 @@ func NewDashboardServer(
 	analysts map[string]*strategy.Marker,
 	rest *exchange.BinanceExchange,
 	symbol string,
-	orderFlow *domain.OrderFlowStore,
 	signalAnalyst *strategy.Analyst,
 	htfProvider *exchange.HTFProvider,
 	paperTrading bool,
@@ -280,7 +276,6 @@ func NewDashboardServer(
 	return &DashboardServer{
 		analysts:         analysts,
 		rest:             rest,
-		orderFlow:        orderFlow,
 		symbol:           exchange.NormalizeFuturesSymbol(symbol),
 		staticDir:        defaultStaticDir,
 		clients:          make(map[*WSClient]bool),
@@ -1499,23 +1494,6 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	columnar := r.URL.Query().Get("format") == "columnar"
 	slotIDs := parseSlotsParam(r.URL.Query().Get("slots"))
 
-	if IsOrderFlowTimeframe(spec) {
-		if err := requestCtxErr(r.Context()); err != nil {
-			return
-		}
-		fetchLimit := candleLimit
-		klines := d.loadOrderFlowKlines(spec, endTimeSec, fetchLimit)
-		resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
-			r.Context(), klines, orderFlowWarmupBars, spec.BinanceInterval, rsxSettings,
-		)
-		resp.HasMore = len(klines) >= historyFetchLimit
-		if err := requestCtxErr(r.Context()); err != nil {
-			return
-		}
-		writeJSON(w, resp)
-		return
-	}
-
 	if columnar {
 		d.writeColumnarHistory(w, r, spec, endTimeMs, endTimeSec, rsxSettings, candleLimit, slotIDs)
 		return
@@ -1786,10 +1764,6 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 		Oscillators:      []ChartOscillator{},
 		Factors:          map[string]strategy.ScoreFactor{},
 	}
-	if IsOrderFlowTimeframe(spec) && d.orderFlow != nil && d.orderFlow.Ticks != nil {
-		state.TickBufferLen = d.orderFlow.Ticks.Len()
-	}
-
 	if !tailPoll && candleLimit > stateTailPollLimit {
 		if err := requestCtxErr(ctx); err != nil {
 			return nil, err
@@ -1859,13 +1833,6 @@ func (d *DashboardServer) loadLiveKlinesFromRAM(spec TimeframeSpec, limit int) [
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
 	}
-	if IsOrderFlowTimeframe(spec) {
-		want := limit + orderFlowWarmupBars
-		if want > strategy.LiveKlineRAMCap {
-			want = strategy.LiveKlineRAMCap
-		}
-		return d.loadOrderFlowKlines(spec, 0, want)
-	}
 	want := limit + strategy.IndicatorWarmupBars
 	if want > strategy.LiveKlineRAMCap {
 		want = strategy.LiveKlineRAMCap
@@ -1885,9 +1852,6 @@ func (d *DashboardServer) loadKlines(ctx context.Context, spec TimeframeSpec, li
 	}
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
-	}
-	if IsOrderFlowTimeframe(spec) {
-		return d.loadOrderFlowKlines(spec, 0, limit)
 	}
 	if spec.Kind == TFRAMOnly {
 		want := limit + strategy.IndicatorWarmupBars
@@ -2068,9 +2032,15 @@ func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
 	return nil
 }
 
-func (d *DashboardServer) loadOrderFlowKlines(spec TimeframeSpec, endTimeSec int64, maxCandles int) []exchange.Kline {
-	// Order Flow amputated (debt #44) — restore with strategy settings; no micro-candle synthesis.
-	return nil
+// setClientTimeframe records the resolved timeframe a WS client is subscribed to.
+func (d *DashboardServer) setClientTimeframe(client *WSClient, tf string) {
+	spec, err := ResolveTimeframe(tf)
+	if err != nil {
+		return
+	}
+	d.clientsMu.Lock()
+	d.clientTF[client] = spec.ID
+	d.clientsMu.Unlock()
 }
 
 func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {

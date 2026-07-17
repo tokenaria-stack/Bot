@@ -82,14 +82,11 @@ func main() {
 		log.Println("[Init] ChartOnly: ScoreMatrix not loaded (trading stack gated)")
 	}
 
-	// Order Flow amputated (debt #44): no aggTrade ring (was DefaultTickBufferCap=100k).
-	// Re-enable with strategy settings later — pass domain.NewOrderFlowStore() + WS sink.
-	var orderFlow *domain.OrderFlowStore
-
 	// ── Boot FSM Phase 0: Connecting ──────────────────────────────────────────
 	// WS goes up FIRST. Live ticks buffer inside BootController while history
 	// loads — REST recovery can never again be "the truth" over missed WS bars.
-	wsClient := exchange.NewWsClient(symbol, orderFlow)
+	// Order Flow sink is nil (debt #44): aggTrade ring returns with TickBarBuilder.
+	wsClient := exchange.NewWsClient(symbol, nil)
 	boot := strategy.NewBootController(wsClient.OutCh)
 	boot.Begin(ctx)
 	go func() {
@@ -149,7 +146,7 @@ func main() {
 	)
 
 	dashboard := server.NewDashboardServer(
-		analysts, restClient, symbol, orderFlow, signalAnalyst, htfProvider,
+		analysts, restClient, symbol, signalAnalyst, htfProvider,
 		cfg.ReadOnly, cfg.SandboxMode, tradingTF,
 	)
 	dashboard.BindMaster(master)
@@ -209,7 +206,6 @@ func main() {
 
 	go func() {
 		log.Println("[Main] Starting Dashboard server on :8080...")
-		dashboard.StartMicroBroadcast(ctx)
 		if err := dashboard.Start(":8080"); err != nil {
 			log.Printf("[Main] Dashboard server stopped: %v", err)
 		}

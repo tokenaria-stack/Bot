@@ -2,7 +2,8 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Снэпшот MEMORY (июль 2026):** **Core 5.0 Data Plane SSOT (Phases A–D) ✅** поверх **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Core 5.0:** Ingress SSOT (`exchange/ingress.go`: Authority Estimated/Settled/Final, typed rejects, метрики, единый `MergeKlineSeries` — долг #19 закрыт); Grace 5s + монотонный UPSERT (MAX/MIN) + WAL-checkpoint; Boot FSM (`strategy/boot_controller.go`: WS first → buffer → load → reconcile → live); micro-candles контур выкорчеван (bar source seam задокументирован в ingress.go).  
 > Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
 > Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick`/`RouteChartTick` (DAG, strict per-TF routing, case-sensitive `1m`≠`1M`). TF camera = Sticky Live Edge / Microscope router.  
 > Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
@@ -146,6 +147,32 @@
 - **TF-интервал — SSOT только `TimeNormalizer.getIntervalMs`.** Любой fallback/шим обязан быть честным парсером, не константой (прецедент 4.9).
 
 **Файлы:** `web/columnar-store.js`, `web/boot.js`, `web/ws.js`, `web/chart-compositor.js`, `strategy/analyst.go`, `strategy/layer2.go`, `server/webserver.go` (`RouteChartTick`/`routeTick`), `server/golden_audit_test.go`, `strategy/continuity_test.go`.
+
+### Core 5.0 — Data Plane SSOT (Phases A–D) — ✅
+
+**Цель:** одна свеча = один жизненный цикл = одна каноническая версия. Триггер: Golden Audit (volume drift SQLite 21.257 vs Binance 48.47) + гонка boot (REST recovery до WS connect) + долг #19 (3 копии merge).
+
+| Phase | Содержание | Статус |
+|-------|------------|--------|
+| **A. Ingress SSOT** | `exchange/ingress.go`: `Authority` (Estimated 0 / Settled 1 / Final 2 = WS x=true), правило merge (выше — целиком; ниже — discard+метрика; равные — High=MAX/Low=MIN/Volume=MAX/Close=incoming), `Validate` (typed `RejectReason`: invalid_time/invalid_range/negative_volume/future_bar; reject, никаких тихих правок), `IngressMetrics` (атомики), Edge-ledger `openTime→Authority` (FIFO 4096, вне ledger = Settled, НЕ в SQLite, НЕ в Kline). Удалены оба дубля `mergeKlinesByOpenTime` (strategy/kline_merge.go целиком + server/webserver.go) — все 4 вызова на `exchange.MergeKlineSeries` (RAM live = Final, REST/SQLite = Settled) | ✅ долг #19 закрыт |
+| **B. Boundary Policies + WAL** | `data.KlineSettleGraceMs=5000` в `CapKlineEndToLastClosed` (REST никогда не запрашивает бар моложе 5s после закрытия — root cause volume drift); монотонный UPSERT `high=MAX, low=MIN, volume=MAX` (firewall, не бизнес-логика); `PRAGMA wal_autocheckpoint=1000` + `data.CheckpointWAL()` (`wal_checkpoint(TRUNCATE)`) каждые 5 мин из воркера PersistenceQueue — WAL 178MB утечка диска устранена | ✅ |
+| **C. Boot FSM** | `strategy/boot_controller.go`: Phase 0 Connecting (WS первым, тики в буфер cap 4096, Marker не тронут) → Phase 1 Loading (SQLite+REST через Ingress) → Phase 2 Reconciling (буфер реплеится по порядку через `MasterGeneral.routeTick` — единый канонический путь тика, вынесен из StartDataFeed) → Phase 3 Live (StartDataFeed + gap-fill/catch-up лупы ПОСЛЕ выхода в Live). Чистка main.go: `agentBootLog`/hardcode debug-путь удалены | ✅ |
+| **D. Bar Source Seam + Purge** | Контракт шва задокументирован в `exchange/ingress.go` (см. канон ниже). Выкорчеваны: `server/micro_candles.go`, `server/micro_broadcast.go`, `IsOrderFlowTimeframe`/`loadOrderFlowKlines`/`orderFlowWarmupBars`/`TickBufferLen`/`d.orderFlow` из webserver.go, `StartMicroBroadcast` из main.go. Тиковые TF в меню (`timeframes.go`) остаются как «розетка» — вернут данные с TickBarBuilder | ✅ |
+
+**Канон (новые инварианты Core 5.0):**
+- **Источник данных приоритетнее значения данных.** Merge решает по Authority, не по полям. WS-финал (x=true) никогда не проигрывает REST. Полевая эвристика (MAX/MIN) — только при равном доверии.
+- **Bar Source Seam:** в ingress-pipeline входят ТОЛЬКО закрытые канонические бары (`exchange.Kline`); способ агрегации (время/тики/объём) — приватная деталь продюсера. Forming-тики (x=false) обходят pipeline (телеметрия Marker, Core 4.8). Time-бары = клайны биржи (канон TV), никакой самосборки из трейдов.
+- **Boot: WS первым.** REST recovery никогда больше не «истина» поверх пропущенных WS-баров. Один канонический путь тика — `MasterGeneral.routeTick` (live и boot-replay).
+- **SQLite firewall ≠ лечение.** MAX/MIN в UPSERT — последний рубеж; корень (Grace) — на границе REST.
+
+**Контракт будущего `TickBarBuilder` (НЕ реализован — ждёт воскрешения aggTrade, долг #44):**
+- Источник: существующее кольцо `domain.TickBuffer` (RAM-only, фиксированный cap, тики никогда не персистятся).
+- Билдер держит ТОЛЬКО текущий строящийся бар (инкрементально: count/OHLCV) — не историю свечей (старый micro_candles пересинтезировал всё кольцо на каждый запрос — за это и выкорчеван).
+- Готовый закрытый бар → `exchange.Kline` → Ingress pipeline (Merge/Validate) → дальше система его не отличает от time-бара.
+- Свой уровень авторитета (например, `AuthorityAggregated`): для локальных баров НЕТ REST-recovery — дыра в тиках это честная дыра.
+- Зависимость: подписка `@aggTrade` в `exchange/ws.go` (закомментирована, долг #44) + `OrderFlowStore` sink.
+
+**Файлы:** `exchange/ingress.go`, `data/history_db.go`, `data/persistence_queue.go`, `strategy/boot_controller.go`, `strategy/master.go` (`routeTick`), `main.go`, `strategy/ram_history.go`, `strategy/analyst.go`, `server/history_provider.go`, `server/webserver.go`.
 
 ### Project Renaissance (база Phase 0)
 
@@ -292,6 +319,9 @@ Annotations
 
 ## 5. Архитектурная прямота (No Shotgun Surgery)
 Данные должны течь от источника к потребителю по кратчайшему пути. Мы не плодим промежуточные структуры-ведра (подобные удаленному `Report`) для банального копирования полей. Мы поддерживаем чистоту терминологии: никаких устаревших названий (вроде `Scalp`), если модуль универсален. Если легаси-код мешает — мы выкорчевываем его, а не строим обходные пути.
+
+## 6. Розетки, а не электростанции (Sockets, not Power Plants)
+Архитектура продумывается на шаг вперёд: проектируем розетки (интерфейсы, контракты, политики — Bar Source Seam в `exchange/ingress.go`, `IngressPolicy`, Authority), но не строим электростанции (реализации без реального потребителя). Спекулятивные FSM состояний свечи, Revision/Version-поля, per-exchange settlement registry, Renko/Kagi/Volume-билдеры без консьюмера — запрещены. Когда потребитель появляется, реализация вставляется в готовую розетку, не трогая ядро (пример: контракт `TickBarBuilder` в Core 5.0 Phase D).
 
 **ДИРЕКТИВА АССИСТЕНТУ:** Перед написанием любого кода или изменением архитектуры сверяйся с "Протоколом ювелира". Работай как хирург: локализуй проблему, спроектируй чистое решение на уровне ядра, сохрани изоляцию сигналов.
 
