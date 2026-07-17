@@ -2,13 +2,16 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Снэпшот MEMORY (июль 2026):** **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
 > Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
-> Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick` (DAG). TF camera = Sticky Live Edge / Microscope router.  
+> Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick`/`RouteChartTick` (DAG, strict per-TF routing, case-sensitive `1m`≠`1M`). TF camera = Sticky Live Edge / Microscope router.  
 > Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
+> **ColumnarStore Self-Healing (4.5):** `_intervalSec` + chronology gap-detect (`appendTick` → `{gapDetected}` вместо тихой склейки); WS `onReconnect` → `loadDashboard()`.  
+> **Marker double-commit fixed (4.8):** `lastCommittedOpenTime` guard в `UpdateKlineTick` — вероятный root cause RSX tip-spike (#67), warmup depth был ложной гипотезой (диагностика: `strategy/continuity_test.go`).  
+> **Cold boot camera (4.10):** `_commitFreshCamera` — только layout-independent `applyOptions({barSpacing, rightOffset:0})`, без `setVisibleLogicalRange`/`fitContent` (оба ломаются на контейнере 0×0).  
 > Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.  
 > **TF mechanics CLOSED.** **Wozduh = DAG bus only** (Falcon Evaluate gated). **Legend = chrome only** (no per-tick HTML metrics). Floating menus = `position:fixed` viewport.  
-> **NEXT math:** **#67 IIR Tip SSOT**. Затем #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`.
+> **NEXT:** живое подтверждение, что RSX spike на History/Live стыке исчез после 4.8 (если нет — открыть #67 заново). Затем #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`.
 
 ---
 
@@ -120,6 +123,29 @@
 - **Stage 6 ScoreNodes (#76)** — later; keep `strategy/falcon.go`
 - `ENGINE_MODE=live` re-enable when trading stack reconfigured
 - Great Purge Stages 1–5 + TV Floating UI — ✅ (see Core 4.0 table above)
+
+### Core 4.4–4.10 — Continuity Audit Chain (RSX tip-spike + WS gaps) — ✅
+
+**Триггер:** дыры на графике от тиковых свечей + мутация (шип) RSX на стыке History/Live, отличная от TV. Расследование шло слоями сверху вниз (transport → frontend store → backend Marker), каждый слой диагностировался тестом/трейсером **до** правки кода.
+
+| Shot | Содержание | Статус |
+|------|------------|--------|
+| **4.3 Golden Audit** | `server/golden_audit_test.go`: SQLite vs Binance REST для одного закрытого бара — OHLC+RSX идентичны бит-в-бит; **volume отличался** (не влияет на RSX) | ✅ backend data plane стерилен |
+| **4.4 Frontend Continuity Audit** | Диагностика (без правок): `ColumnarStore.appendTick` не проверял разрыв хронологии; `boot.js` `initLiveWebSocket` не слушал `onClose`/`onReconnect` | ✅ найдено |
+| **4.5 Self-Healing** | `ColumnarStore.setTfInterval` + gap-check в `appendTick` (`(time-lastTime) > intervalSec*1.5` → `{gapDetected}`, ничего не пушит); `replaceMonolith` нормализует `times` через `chartTime`; `boot.js`: `syncStoreTfInterval` перед всеми тик-путями, `onReconnect` → `beginLiveTickBuffer()+loadDashboard()`, `pushLiveTickDelta` реагирует на `gapDetected` → `loadDashboard()` (throttle 10s + `__isDashboardLoading` guard против шторма) | ✅ |
+| **4.6 Tracer Bullet** | 4 временных `console.log` (WS Receive → Store Append → Store Saved → LWC Update) — доказали, что JS-конвейер стерилен: искажённое `line_rsx` приходит **уже неверным по WS**. Логи удалены после диагностики | ✅ diagnostic only |
+| **4.7 Marker State Audit** | Диагностика (без правок) `core/runner.go`/`strategy/analyst.go`: Restore→Update→Save протокол корректен (нет накопления ошибки IIR); найден **двойной коммит** — `UpdateKlineTick` при переходе на новый бар безусловно повторно коммитил уже закрытый (`isClosed=true`) предыдущий бар → каждый бар проходил через DAG **дважды** | ✅ root cause found |
+| **4.8 Marker Double-Commit Fix** | `strategy/analyst.go`: поле `Marker.lastCommittedOpenTime`; страховочный коммит в `UpdateKlineTick` теперь только если `last.OpenTime != lastCommittedOpenTime`; `strategy/layer2.go`: `markTailCommittedLocked` после `warmupStreaming`/`replayStreamingLocked`; сброс в `resetStreamingEngines` | ✅ вероятный fix #67 |
+| **4.9 TF Interval Parser Fix** | `boot.js` `installGlobalShims` шимил `window.getIntervalMs = () => 60000` для **любого** TF (перебивал честный `TimeNormalizer.getIntervalMs`) → на TF>1m gap-check (4.5) ложно срабатывал на каждый штатный новый бар → reload-шторм. Fix: честный regex-парсер `parseTfIntervalMs` как fallback | ✅ |
+| **4.10 Cold Boot Camera Fix** | `chart-compositor.js` `_commitFreshCamera`: `setVisibleLogicalRange`/`fitContent` делят на ширину DOM-контейнера — на cold boot контейнер ещё `0×0` → NaN-коллапс LWC до ручного Auto Scale. Fix: только `timeScale().applyOptions({barSpacing, rightOffset:0})` — layout-independent | ✅ |
+
+**Канон (новые инварианты):**
+- **ColumnarStore не клеит дыры молча.** Разрыв хронологии — сигнал (`gapDetected`), не самостоятельное решение; лечит composition root (`loadDashboard`), не Store (никакого `loadDashboard` внутри `columnar-store.js`).
+- **UpdateKlineTick — один коммит на бар.** `lastCommittedOpenTime` — единственный источник правды о том, что бар уже прошёл Save; страховочный коммит на границе баров — только если официальный `isClosed=true` был пропущен (обрыв сети), не рутинный путь.
+- **Cold boot camera — только width-independent API.** `setVisibleLogicalRange`/`fitContent` запрещены до первого реального layout; см. debt #80 (тот же риск в `ViewportManager.restore`, не тронут в 4.10).
+- **TF-интервал — SSOT только `TimeNormalizer.getIntervalMs`.** Любой fallback/шим обязан быть честным парсером, не константой (прецедент 4.9).
+
+**Файлы:** `web/columnar-store.js`, `web/boot.js`, `web/ws.js`, `web/chart-compositor.js`, `strategy/analyst.go`, `strategy/layer2.go`, `server/webserver.go` (`RouteChartTick`/`routeTick`), `server/golden_audit_test.go`, `strategy/continuity_test.go`.
 
 ### Project Renaissance (база Phase 0)
 
@@ -1142,7 +1168,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **64** | **Navigators full ReplayDAGKlines each request** — CPU on `navigators=1` | `dag_navigator_series.go` | 🟡 later: live HistoryBus tail |
 | **65** | ~~**Toolbar/header MarketState Falcon**~~ — DAG tip/plots; Falcon line fields stripped (Core 4.0 Stage 5); no per-tick legend HTML metrics | `server/webserver.go`, `legend-renderer.js`, `toolbar-controller.js` | ✅ 9J + Great Purge Stage 5. Residual: optional `ToolbarController.updateHeaderData` hook |
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
-| **67** | **IIR Tip SSOT (critical)** — History `ReplayDAGKlines` warm depth ≫ live `AnalystBootKlineLimit=400` → tip cliff vs TV after 11A XOR. Fix: same warmup continuum / tip plots from live DAG closed bars, not orphan Replay | `live_kline.go`, `columnar_history.go`, `dag_shadow.go` | 🔴 NEXT math |
+| **67** | **IIR Tip SSOT** — RSX spike on History/Live boundary. Warmup-depth hypothesis (400 vs 3000) **disproved** (`continuity_test.go`: bit-identical). Real root cause found + fixed in 4.8: `Marker.UpdateKlineTick` double-committed each closed bar into DAG (Restore→Update→Save ×2) | `strategy/analyst.go` (`lastCommittedOpenTime`), `strategy/layer2.go` | 🟡 fix landed Core 4.8 — **pending live confirm** (re-open if spike persists) |
 | **68** | **Osc fixed scale bounds** — RSX/Wozduh manifests lack TV-like `[-5,105]` / `autoscaleInfoProvider`; scale depends on data extremes | `ui_config/rsx_layout.go`, `wozduh_layout.go`, DDR RenderOpts | 🟡 after #67 |
 | **69** | **MemoryBudget / WindowPolicy** — ColumnarStore can grow unbounded on left-scroll; paint window 15k separate. **Deferred** — prune-right island interfered with microscope; revisit after #67 | `columnar-store.js`, `config.js` | ⏸ deferred |
 | **70** | **ScaleController only binds price** — osc slave `right` scales not in `applyAll`; rely on setData + sentinel. Optional: register rsx/wozduh or re-arm after DDR hydrate | `scale-controller.js`, `chart-core.js`, `chart-compositor.js` | 🟢 residual |
@@ -1152,6 +1178,12 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **74** | ~~**Wozduh Falcon→DAG bus**~~ — slots + WozduhNode + golden parity; Falcon Evaluate gated; tip via plots | `core/slots.go`, `core/nodes/wozduh.go`, `ui_config/wozduh_layout.go`, `strategy/falcon.go` (keep) | ✅ Core 4.0 Stages 1–5 |
 | **75** | ~~**TV Floating UI**~~ — fixed-up menus, eye hide `.lwc-host`, drag, outside close | `web/ui/floating-menu.js`, `legend-renderer.js`, `settings-renderer.js`, `boot.js`, `style.css` | ✅ Core 4.0 TV UI |
 | **76** | **Stage 6 ScoreNodes** — migrate Score/Falcon decision graph into DAG nodes; **do not delete** `strategy/falcon.go` until then | `core/nodes/`, `strategy/falcon.go`, `scoring.go` | 🔜 after #67 |
+| **77** | ~~**WS dirty routing / TF case-sensitivity**~~ — server sent all TFs to all clients (`clientTF` unused); `.toLowerCase()` on both sides merged `1m`↔`1M` | `server/webserver.go` (`RouteChartTick`/`routeTick`), `web/boot.js`, `web/ws.js` | ✅ Core 4.4 audit + fix |
+| **78** | ~~**Frontend chronology gap / no reconnect reconciliation**~~ — `appendTick` glued any forward time jump as one new bar (visual hole); `initLiveWebSocket` had no `onClose`/`onReconnect` | `web/columnar-store.js`, `web/boot.js` | ✅ Core 4.5 Self-Healing |
+| **79** | **Self-Healing camera jump** — `loadDashboard()` triggered by gap-heal/reconnect always repaints `viewport:'fresh'`, resets user zoom/scroll. `viewportAnchor` restore path exists but not wired to the self-heal call | `web/boot.js` (`pushLiveTickDelta`, `initLiveWebSocket.onReconnect`) | 🟢 UX polish, not correctness |
+| **80** | **`ViewportManager.restore` same 0×0 width risk as #81** — uses `setVisibleLogicalRange` for TF-anchor restore; only `_commitFreshCamera` (cold boot) was hardened in Core 4.10 | `web/ui/viewport-manager.js` | 🟡 same class as fixed bug; not reproduced yet |
+| **81** | ~~**Cold boot camera NaN-collapse**~~ — `setVisibleLogicalRange`/`fitContent` divide by DOM container width; 0×0 on cold boot collapsed LWC scale until manual Auto Scale | `web/chart-compositor.js` (`_commitFreshCamera`) | ✅ Core 4.10 |
+| **82** | **`prependMonolith` times not normalized via `chartTime`** — asymmetry: `replaceMonolith`/`appendTick` normalize sec/ms (Core 4.5), left-scroll prepend path does not (latent, not triggered — server always sends seconds) | `web/columnar-store.js` (`prependMonolith`) | 🟢 latent parity gap |
 
 ### [🔜 OPEN DEBTS — приоритет]
 
@@ -1219,7 +1251,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
 | DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js`, `web/chart-compositor.js`, `web/render-scheduler.js` |
 | Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
-| Frontend core | `web/boot.js` (epoch + Atomic + tick buffer), `web/chart-core.js`, `web/render-scheduler.js`, `web/series-factory.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js` |
+| Frontend core | `web/boot.js` (epoch + Atomic + tick buffer + Self-Healing reconnect), `web/columnar-store.js` (SSOT store + gap-detect `_intervalSec`), `web/chart-core.js`, `web/render-scheduler.js`, `web/series-factory.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js`, `web/ws.js` (case-sensitive TF gate) |
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
 | Docs | `MEMORY.md` (this file), `.cursor/rules/jeweler-protocol.mdc` |
@@ -1232,4 +1264,4 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, **ChartOnly** delivery by default. `ENGINE_MODE=live` включает ScoreMatrix + `Master.Run`. `make ab-test` — CLI A/B backtest.
 
-**Следующий шаг (TF CLOSED + Great Purge Stages 1–5 + TV UI ✅):** **#67 IIR Tip SSOT** — выровнять live Analyst warmup с history Replay (убрать tip cliff vs TV). Затем #68 osc fixed bounds, #69 MemoryBudget. Later: **#76 Stage 6 ScoreNodes** (keep `falcon.go` until then). Trading — только `ENGINE_MODE=live`.
+**Следующий шаг (TF CLOSED + Great Purge Stages 1–5 + TV UI ✅ + Core 4.4–4.10 Continuity Chain ✅):** живое подтверждение, что RSX tip-spike исчез после double-commit fix (#67 / Core 4.8) — если нет, **re-open #67** и копать дальше (кандидат: остаточная asymmetry warmup continuum). Затем #68 osc fixed bounds, #69 MemoryBudget, #80 `ViewportManager.restore` 0×0 risk. Later: **#76 Stage 6 ScoreNodes** (keep `falcon.go` until then). Trading — только `ENGINE_MODE=live`.
