@@ -1,13 +1,31 @@
+# Secrets / local config
 .env
-history.db
-history.db-*
-history.db
+config/matrix.json
+
+# SQLite archives (any location, incl. test artifacts)
 *.db
-*.sql
-backups/
-trading_bot
 *.db-wal
 *.db-shm
-config/matrix.json
-.cursor/mcp.json
-.cursor/debug-*.log
+history.db*
+*.sql
+
+# Backups / data caches
+backups/
+data/exchange_limits_cache.json
+server/data/
+server/config/
+server/server/
+
+# Compiled binaries / test artifacts
+trading_bot
+*.test
+*.exe
+*.out
+
+# Agent / IDE local state (rules and mcp example stay tracked)
+.cursor/*
+!.cursor/rules/
+!.cursor/mcp.json.example
+
+# OS junk
+.DS_Store
