@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
@@ -17,7 +16,6 @@ import (
 	"trading_bot/exchange"
 	"trading_bot/server"
 	"trading_bot/strategy"
-	// "trading_bot/vector_db" // Раскомментируем, когда будем подключать Qdrant
 )
 
 const historyKlinesLimit = 1000
@@ -84,8 +82,24 @@ func main() {
 		log.Println("[Init] ChartOnly: ScoreMatrix not loaded (trading stack gated)")
 	}
 
-	log.Println("[Init] Order Flow buffers ready (100k ticks, 1k liquidations)")
+	// Order Flow amputated (debt #44): no aggTrade ring (was DefaultTickBufferCap=100k).
+	// Re-enable with strategy settings later — pass domain.NewOrderFlowStore() + WS sink.
+	var orderFlow *domain.OrderFlowStore
 
+	// ── Boot FSM Phase 0: Connecting ──────────────────────────────────────────
+	// WS goes up FIRST. Live ticks buffer inside BootController while history
+	// loads — REST recovery can never again be "the truth" over missed WS bars.
+	wsClient := exchange.NewWsClient(symbol, orderFlow)
+	boot := strategy.NewBootController(wsClient.OutCh)
+	boot.Begin(ctx)
+	go func() {
+		if err := wsClient.Start(ctx); err != nil {
+			log.Fatalf("[Main] Failed to start WS: %v", err)
+		}
+	}()
+
+	// ── Boot FSM Phase 1: Loading ─────────────────────────────────────────────
+	boot.MarkLoading()
 	chaosCfg := strategy.ChaosConfig{
 		AOFastPeriod: 5,
 		AOSlowPeriod: 34,
@@ -120,27 +134,12 @@ func main() {
 			analysts[tf] = m
 			bootMu.Unlock()
 
-			elapsed := time.Since(tfStart)
-			log.Printf("[Init] Analyst [%s] loaded %d klines from %s (%.2fs)", tf, len(history), source, elapsed.Seconds())
-			// #region agent log
-			agentBootLog("main.go:boot", "tf boot complete", "boot", map[string]any{
-				"tf": tf, "source": source, "klines": len(history), "ms": elapsed.Milliseconds(),
-			})
-			// #endregion
+			log.Printf("[Init] Analyst [%s] loaded %d klines from %s (%.2fs)",
+				tf, len(history), source, time.Since(tfStart).Seconds())
 		}(tf)
 	}
 	bootWG.Wait()
-	bootElapsed := time.Since(bootStart)
-	log.Printf("[Init] All analysts ready in %.2fs (parallel)", bootElapsed.Seconds())
-	// #region agent log
-	agentBootLog("main.go:boot", "parallel boot complete", "boot", map[string]any{
-		"totalMs": bootElapsed.Milliseconds(), "cpus": runtime.NumCPU(), "tfs": len(timeframes),
-	})
-	// #endregion
-
-	// Order Flow amputated (debt #44): no aggTrade ring (was DefaultTickBufferCap=100k).
-	// Re-enable with strategy settings later — pass domain.NewOrderFlowStore() + WS sink.
-	var orderFlow *domain.OrderFlowStore
+	log.Printf("[Init] All analysts ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
 	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
 	htfProvider := exchange.NewHTFProvider()
@@ -161,13 +160,7 @@ func main() {
 	persistQ.Start(ctx)
 	master.SetPersistenceQueue(persistQ)
 
-	master.StartKlineGapFillLoop(ctx)
-	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Analyst touch).
-	master.StartSQLiteArchiveCatchUpLoop(ctx)
-	master.SeedClosedBarTelemetry()
-
 	// Shot 9B + Core 4.2: every TF computes Projection; Transport routes only to subscribed clients.
-	// Legacy SetOnTelemetry (Falcon/ScoreMatrix dashboard spam) removed.
 	// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
 	master.SetOnKlineBar(func(tf string, k exchange.Kline, isClosed bool) {
 		analyst := analysts[tf]
@@ -201,22 +194,24 @@ func main() {
 
 	master.RecoverState()
 
-	wsClient := exchange.NewWsClient(symbol, orderFlow)
+	// ── Boot FSM Phase 2: Reconciling ─────────────────────────────────────────
+	// Buffered WS ticks replay through the canonical routing path; live bars
+	// finalize on top of REST history (WS never loses to a REST snapshot).
+	boot.Reconcile(master)
 
+	// ── Boot FSM Phase 3: Live ────────────────────────────────────────────────
+	boot.GoLive()
 	master.StartDataFeed(ctx, wsClient.OutCh)
+	master.StartKlineGapFillLoop(ctx)
+	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Analyst touch).
+	master.StartSQLiteArchiveCatchUpLoop(ctx)
+	master.SeedClosedBarTelemetry()
 
 	go func() {
 		log.Println("[Main] Starting Dashboard server on :8080...")
 		dashboard.StartMicroBroadcast(ctx)
 		if err := dashboard.Start(":8080"); err != nil {
 			log.Printf("[Main] Dashboard server stopped: %v", err)
-		}
-	}()
-
-	go func() {
-		log.Println("[Main] Starting WebSocket connection...")
-		if err := wsClient.Start(ctx); err != nil {
-			log.Fatalf("[Main] Failed to start WS: %v", err)
 		}
 	}()
 
@@ -237,29 +232,6 @@ func main() {
 	cancel()
 	time.Sleep(1 * time.Second)
 	log.Println("=== Bot gracefully stopped ===")
-}
-
-const agentDebugLogPath = "/Users/ilmaru/trading_bot/.cursor/debug-39f875.log"
-
-func agentBootLog(location, message, hypothesisID string, data map[string]any) {
-	payload := map[string]any{
-		"sessionId":    "39f875",
-		"timestamp":    time.Now().UnixMilli(),
-		"location":     location,
-		"message":      message,
-		"hypothesisId": hypothesisID,
-		"data":         data,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	f, err := os.OpenFile(agentDebugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	_, _ = f.Write(append(b, '\n'))
-	_ = f.Close()
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

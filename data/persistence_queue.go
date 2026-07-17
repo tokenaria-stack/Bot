@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync/atomic"
+	"time"
 )
 
 const defaultPersistenceQueueCap = 4096
@@ -79,14 +80,24 @@ func (q *PersistenceQueue) AppendClosedBars(ctx context.Context, symbol, interva
 	return nil
 }
 
+// walCheckpointInterval paces forced WAL truncation from the sole writer:
+// between flushBatch calls no write transaction is open, so TRUNCATE can succeed.
+const walCheckpointInterval = 5 * time.Minute
+
 func (q *PersistenceQueue) worker(ctx context.Context) {
 	log.Printf("[PersistenceQueue] worker started (cap=%d)", cap(q.ch))
+	walTicker := time.NewTicker(walCheckpointInterval)
+	defer walTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			q.drainRemaining()
 			log.Printf("[PersistenceQueue] worker stopped dropped=%d", q.Dropped.Load())
 			return
+		case <-walTicker.C:
+			if err := CheckpointWAL(); err != nil {
+				log.Printf("[PersistenceQueue] WAL checkpoint: %v", err)
+			}
 		case job := <-q.ch:
 			q.flushBatch(collectPersistBatch(q.ch, job))
 		}

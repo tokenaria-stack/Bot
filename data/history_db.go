@@ -84,6 +84,9 @@ func InitDB() error {
 		`PRAGMA synchronous=NORMAL`,
 		// Serialize writers under load (REST catch-up + PersistenceQueue) without failing busy.
 		`PRAGMA busy_timeout=5000`,
+		// Cap WAL growth: passive checkpoint every ~1000 pages. Long-lived catch-up
+		// readers can still starve it — PersistenceQueue calls CheckpointWAL(TRUNCATE).
+		`PRAGMA wal_autocheckpoint=1000`,
 	} {
 		if _, dbErr = db.Exec(pragma); dbErr != nil {
 			return fmt.Errorf("%s: %w", pragma, dbErr)
@@ -220,16 +223,20 @@ func SaveKlines(symbol, interval string, klines []Candle) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Monotonic firewall (Core 5.0 Phase B): exchange totals for a closed bar only
+	// grow on honest re-reads. A stale/under-indexed REST snapshot can never shrink
+	// volume or narrow the high/low range already archived. Open/Close stay
+	// last-write (fresher read wins) — source priority is enforced upstream (Ingress).
 	stmt, err := tx.Prepare(`
 INSERT INTO historical_klines
     (symbol, interval, open_time, open, high, low, close, volume, close_time)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
     open=excluded.open,
-    high=excluded.high,
-    low=excluded.low,
+    high=MAX(historical_klines.high, excluded.high),
+    low=MIN(historical_klines.low, excluded.low),
     close=excluded.close,
-    volume=excluded.volume,
+    volume=MAX(historical_klines.volume, excluded.volume),
     close_time=excluded.close_time`)
 	if err != nil {
 		return fmt.Errorf("prepare upsert: %w", err)
@@ -438,14 +445,21 @@ func intervalDurationMs(interval string) (int64, error) {
 	}
 }
 
+// KlineSettleGraceMs is the exchange settlement window: a bar that closed less
+// than this many ms ago is treated as NOT yet closed for REST purposes. Binance
+// REST kline snapshots lag the actual interval close; fetching inside this window
+// returns under-indexed volume/extremes (root cause of the SQLite volume drift).
+const KlineSettleGraceMs int64 = 5000
+
 // CapKlineEndToLastClosed clamps endTimeMs to now and to the open time of the last fully
-// closed candle for interval. Prevents REST gap-fill from requesting in-progress bars.
+// closed AND settled candle for interval. Prevents REST gap-fill from requesting
+// in-progress bars or bars still inside the exchange settlement window.
 func CapKlineEndToLastClosed(endTimeMs int64, interval string) (int64, error) {
 	stepMs, err := IntervalDurationMs(interval)
 	if err != nil {
 		return endTimeMs, err
 	}
-	nowMs := time.Now().UnixMilli()
+	nowMs := time.Now().UnixMilli() - KlineSettleGraceMs
 	if endTimeMs > nowMs {
 		endTimeMs = nowMs
 	}
@@ -465,4 +479,22 @@ func CapKlineEndToLastClosed(endTimeMs int64, interval string) (int64, error) {
 
 func normalizeSymbol(symbol string) string {
 	return strings.ToUpper(strings.TrimSpace(symbol))
+}
+
+// CheckpointWAL forces a wal_checkpoint(TRUNCATE) to reclaim disk held by the
+// WAL file. Passive autocheckpoints are starved by long-lived catch-up readers,
+// letting history.db-wal grow unbounded for the whole process uptime.
+// Called periodically from the PersistenceQueue worker (sole production writer).
+func CheckpointWAL() error {
+	if err := InitDB(); err != nil {
+		return err
+	}
+	var busy, logFrames, checkpointed int
+	if err := db.QueryRow(`PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+		return fmt.Errorf("wal_checkpoint(TRUNCATE): %w", err)
+	}
+	if busy != 0 {
+		log.Printf("[WAL] checkpoint blocked by readers (frames=%d checkpointed=%d) — will retry next tick", logFrames, checkpointed)
+	}
+	return nil
 }

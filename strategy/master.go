@@ -1150,6 +1150,36 @@ func (m *MasterGeneral) managePosition() {
 	m.mu.Unlock()
 }
 
+// routeTick is the single canonical delivery path for one WS tick (live or
+// replayed from the boot buffer): Marker update → chart callback → indicators.
+// One candle = one lifecycle: BootController reconcile uses exactly this path.
+func (m *MasterGeneral) routeTick(tick exchange.WsTick) {
+	m.mu.RLock()
+	analyst, exists := m.analysts[tick.Timeframe]
+	m.mu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	analyst.UpdateKlineTick(tick.Kline, tick.IsClosed)
+
+	m.mu.RLock()
+	klineCB := m.onKlineBar
+	m.mu.RUnlock()
+	if klineCB != nil {
+		// Shot 9B: every TF gets atomic chart delivery (OHLCV + plots).
+		klineCB(tick.Timeframe, tick.Kline, tick.IsClosed)
+	}
+
+	if tick.IsClosed {
+		analyst.UpdateIndicators()
+	}
+
+	// TODO: Debt — legacy scalper triggers (MTF refresh, TickLiveCh, onTelemetry)
+	// stay frozen here until ScoreMatrix/Falcon are re-enabled in later phases.
+}
+
 // StartDataFeed runs a background listener that routes WebSocket ticks to analysts
 // and generates state-machine triggers on closed candles.
 func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchange.WsTick) {
@@ -1165,56 +1195,7 @@ func (m *MasterGeneral) StartDataFeed(ctx context.Context, wsOutCh <-chan exchan
 					log.Println("[Master] Data feed channel closed.")
 					return
 				}
-
-				m.mu.RLock()
-				analyst, exists := m.analysts[tick.Timeframe]
-				workTF := m.timeframe
-				m.mu.RUnlock()
-
-				if !exists {
-					continue
-				}
-
-				analyst.UpdateKlineTick(tick.Kline, tick.IsClosed)
-
-				m.mu.RLock()
-				klineCB := m.onKlineBar
-				m.mu.RUnlock()
-				if klineCB != nil {
-					// Shot 9B: every TF gets atomic chart delivery (OHLCV + plots).
-					klineCB(tick.Timeframe, tick.Kline, tick.IsClosed)
-				}
-
-				if tick.IsClosed {
-					analyst.UpdateIndicators()
-				}
-
-				if tick.Timeframe == workTF {
-					if tick.IsClosed {
-						// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
-						// Legacy scalper path frozen: no MTF score refresh, no TickLiveCh trading trigger.
-						// m.ensureMTFTrackerReady(analyst)
-						// m.syncMTFState(analyst)
-						// m.refreshClosedBarTelemetry(tick.Timeframe, analyst)
-						// select {
-						// case m.TickLiveCh <- struct{}{}:
-						// default:
-						// }
-					}
-					// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
-					// Chart WS delivery no longer goes through onTelemetry (see SetOnKlineBar / RouteChartTick).
-					// m.mu.RLock()
-					// telemetryCB := m.onTelemetry
-					// tickCB := m.onTick
-					// m.mu.RUnlock()
-					// if telemetryCB != nil {
-					// 	falcon := analyst.FalconSnapshot()
-					// 	decision := m.ScoreDecisionForTelemetry(analyst)
-					// 	telemetryCB(tick, falcon, decision)
-					// } else if tick.IsClosed && tickCB != nil {
-					// 	...
-					// }
-				}
+				m.routeTick(tick)
 			}
 		}
 	}()

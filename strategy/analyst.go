@@ -213,7 +213,9 @@ func (a *Marker) JurikRSXColor() string {
 func (a *Marker) LoadHistoricalKlines(klines []exchange.Kline) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	merged := mergeKlinesByOpenTime(klines, a.klines)
+	// Ingress SSOT: RAM live bars are WS-confirmed (Final) — REST backfill (Settled)
+	// can add missing bars but never overwrite what the live feed already finalized.
+	merged := exchange.MergeKlineSeries(klines, a.klines, exchange.AuthoritySettled, exchange.AuthorityFinal)
 	if len(merged) > LiveKlineRAMCap {
 		merged = merged[len(merged)-LiveKlineRAMCap:]
 	}

@@ -1895,7 +1895,7 @@ func (d *DashboardServer) loadKlines(ctx context.Context, spec TimeframeSpec, li
 	}
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
 		klines := d.loadRESTKlinesFromStore(ctx, spec, endTimeMs, limit, d.isHistoricalKlineEnd(endTimeMs, spec.BinanceInterval))
-		klines = mergeKlinesByOpenTime(klines, d.analystKlines(spec))
+		klines = exchange.MergeKlineSeries(klines, d.analystKlines(spec), exchange.AuthoritySettled, exchange.AuthorityFinal)
 		if len(klines) > 0 {
 			return klines
 		}
@@ -2055,28 +2055,6 @@ func dataCandlesToKlines(rows []data.Candle) []exchange.Kline {
 			Volume:    c.Volume,
 		})
 	}
-	return out
-}
-
-func mergeKlinesByOpenTime(primary, live []exchange.Kline) []exchange.Kline {
-	if len(live) == 0 {
-		return primary
-	}
-	if len(primary) == 0 {
-		return live
-	}
-	merged := make(map[int64]exchange.Kline, len(primary)+len(live))
-	for _, k := range primary {
-		merged[k.OpenTime] = exchange.NormalizeKline(k)
-	}
-	for _, k := range live {
-		merged[k.OpenTime] = exchange.NormalizeKline(k)
-	}
-	out := make([]exchange.Kline, 0, len(merged))
-	for _, k := range merged {
-		out = append(out, k)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].OpenTime < out[j].OpenTime })
 	return out
 }
 

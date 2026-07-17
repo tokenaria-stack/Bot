@@ -44,8 +44,9 @@ func LoadRAMHistory(rest *exchange.BinanceExchange, symbol, interval string, max
 	if len(db) == 0 {
 		return restKlines
 	}
-	// Overlay: REST wins on duplicate open_time (exchange is source of truth for OHLCV).
-	return mergeKlinesByOpenTime(db, restKlines)
+	// Ingress SSOT (Core 5.0): both sides are settled closed bars — equal authority
+	// merge keeps REST Close (fresher read) while Volume/High/Low never degrade.
+	return exchange.MergeKlineSeries(db, restKlines, exchange.AuthoritySettled, exchange.AuthoritySettled)
 }
 
 // LoadRAMHistoryFromDB reads up to maxBars klines from SQLite once (startup / hydrate only).

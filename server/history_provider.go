@@ -70,7 +70,7 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	ramKlines := d.analystKlinesTail(spec, wantBars)
 	ramKlines = filterKlinesUntilOpenMs(ramKlines, endTimeMs)
 
-	merged := mergeKlinesByOpenTime(dbKlines, ramKlines)
+	merged := exchange.MergeKlineSeries(dbKlines, ramKlines, exchange.AuthoritySettled, exchange.AuthorityFinal)
 	if len(merged) == 0 {
 		return HistoryWindow{}, false
 	}

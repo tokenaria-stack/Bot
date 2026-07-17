@@ -42,7 +42,10 @@ func TestMergeHistoryWindow_RAMFillsSQLiteGap(t *testing.T) {
 		{OpenTime: base + 3*step, Open: 4, High: 4, Low: 4, Close: 4, Volume: 40},
 	}
 	end := base + 3*step
-	merged := mergeKlinesByOpenTime(db, filterKlinesUntilOpenMs(ram, end))
+	merged := exchange.MergeKlineSeries(
+		db, filterKlinesUntilOpenMs(ram, end),
+		exchange.AuthoritySettled, exchange.AuthorityFinal,
+	)
 	if len(merged) != 4 {
 		t.Fatalf("merged len = %d want 4 (no sync gap)", len(merged))
 	}
