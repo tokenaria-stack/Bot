@@ -2,8 +2,8 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 5.0 Data Plane SSOT (Phases A–D) ✅** поверх **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
-> **Core 5.0:** Ingress SSOT (`exchange/ingress.go`: Authority Estimated/Settled/Final, typed rejects, метрики, единый `MergeKlineSeries` — долг #19 закрыт); Grace 5s + монотонный UPSERT (MAX/MIN) + WAL-checkpoint; Boot FSM (`strategy/boot_controller.go`: WS first → buffer → load → reconcile → live); micro-candles контур выкорчеван (bar source seam задокументирован в ingress.go).  
+> **Снэпшот MEMORY (июль 2026):** **Core 5.0 Data Plane SSOT (Phases A–E ✅, Phase F Inventory ✅ — purge согласовывается)** поверх **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Core 5.0:** Ingress SSOT (`exchange/ingress.go`: Authority Estimated/Settled/Final, typed rejects, метрики, единый `MergeKlineSeries` — долг #19 закрыт); Grace 5s + монотонный UPSERT (MAX/MIN) + WAL-checkpoint; Boot FSM (`strategy/boot_controller.go`: WS first → buffer → load → reconcile → live); micro-candles контур выкорчеван (bar source seam задокументирован в ingress.go); repo cleanup + `cmd/repair_volumes` healer (Phase E); расстрельный список стратегий (Phase F, см. таблицу Core 5.0).  
 > Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
 > Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick`/`RouteChartTick` (DAG, strict per-TF routing, case-sensitive `1m`≠`1M`). TF camera = Sticky Live Edge / Microscope router.  
 > Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
@@ -12,7 +12,7 @@
 > **Cold boot camera (4.10):** `_commitFreshCamera` — только layout-independent `applyOptions({barSpacing, rightOffset:0})`, без `setVisibleLogicalRange`/`fitContent` (оба ломаются на контейнере 0×0).  
 > Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.  
 > **TF mechanics CLOSED.** **Wozduh = DAG bus only** (Falcon Evaluate gated). **Legend = chrome only** (no per-tick HTML metrics). Floating menus = `position:fixed` viewport.  
-> **NEXT:** живое подтверждение, что RSX spike на History/Live стыке исчез после 4.8 (если нет — открыть #67 заново). Затем #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`.
+> **NEXT:** Phase F purge по согласованному расстрельному списку (см. Core 5.0; открытый вопрос — маркеры L/LL/S/SS на графике). Затем: запуск `cmd/repair_volumes` (при остановленном боте), живое подтверждение RSX spike fix (4.8, иначе re-open #67), #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`. Протокол ювелира дополнен п.6 «Розетки, а не электростанции» (`.cursor/rules/jeweler-protocol.mdc`).
 
 ---
 
@@ -148,7 +148,7 @@
 
 **Файлы:** `web/columnar-store.js`, `web/boot.js`, `web/ws.js`, `web/chart-compositor.js`, `strategy/analyst.go`, `strategy/layer2.go`, `server/webserver.go` (`RouteChartTick`/`routeTick`), `server/golden_audit_test.go`, `strategy/continuity_test.go`.
 
-### Core 5.0 — Data Plane SSOT (Phases A–D) — ✅
+### Core 5.0 — Data Plane SSOT (Phases A–F) — A–E ✅, F в работе
 
 **Цель:** одна свеча = один жизненный цикл = одна каноническая версия. Триггер: Golden Audit (volume drift SQLite 21.257 vs Binance 48.47) + гонка boot (REST recovery до WS connect) + долг #19 (3 копии merge).
 
@@ -158,6 +158,14 @@
 | **B. Boundary Policies + WAL** | `data.KlineSettleGraceMs=5000` в `CapKlineEndToLastClosed` (REST никогда не запрашивает бар моложе 5s после закрытия — root cause volume drift); монотонный UPSERT `high=MAX, low=MIN, volume=MAX` (firewall, не бизнес-логика); `PRAGMA wal_autocheckpoint=1000` + `data.CheckpointWAL()` (`wal_checkpoint(TRUNCATE)`) каждые 5 мин из воркера PersistenceQueue — WAL 178MB утечка диска устранена | ✅ |
 | **C. Boot FSM** | `strategy/boot_controller.go`: Phase 0 Connecting (WS первым, тики в буфер cap 4096, Marker не тронут) → Phase 1 Loading (SQLite+REST через Ingress) → Phase 2 Reconciling (буфер реплеится по порядку через `MasterGeneral.routeTick` — единый канонический путь тика, вынесен из StartDataFeed) → Phase 3 Live (StartDataFeed + gap-fill/catch-up лупы ПОСЛЕ выхода в Live). Чистка main.go: `agentBootLog`/hardcode debug-путь удалены | ✅ |
 | **D. Bar Source Seam + Purge** | Контракт шва задокументирован в `exchange/ingress.go` (см. канон ниже). Выкорчеваны: `server/micro_candles.go`, `server/micro_broadcast.go`, `IsOrderFlowTimeframe`/`loadOrderFlowKlines`/`orderFlowWarmupBars`/`TickBufferLen`/`d.orderFlow` из webserver.go, `StartMicroBroadcast` из main.go. Тиковые TF в меню (`timeframes.go`) остаются как «розетка» — вернут данные с TickBarBuilder | ✅ |
+| **E. Data Repair + Repo Cleanup** | `cmd/repair_volumes/main.go` — healer застрявших объёмов: REST re-fetch (7d, 1m/3m/5m/15m) → `SaveKlines` (монотонный UPSERT сам поднимает volume) → `CheckpointWAL`. Repo: удалены `backups/` (38MB dump), `server/history.db*`, `server/data/`, бинарники `trading_bot`/`strategy.test` (51MB), tracked-артефакты `server/config/matrix.json`, `server/server/`, `.DS_Store`. `.gitignore` переписан (`.cursor/*` с негациями `!rules/`, `!mcp.json.example`) | ✅ (healer создан, НЕ запускался — запускать при остановленном боте) |
+| **F. Legacy Strategies Purge** | Инвентаризация ✅ (см. расстрельный список ниже). Массовое удаление — ждёт согласования | 🔄 |
+
+**Phase F — расстрельный список (инвентаризация 18.07.2026, согласовывается):**
+- **Ядро (не трогать):** `analyst.go`, `layer2.go`, `boot_controller.go`, `mtf_tracker.go`, `kline_gap.go`, `sqlite_catchup.go`, `ram_history.go`, `live_kline.go`, `marker_databus.go`, `marker_trim.go`, `dag_shadow.go`, `dag_navigator_series.go`, `chart_*.go`, `rsx_chart/ssot/settings/pipeline.go`, `navigator_defaults.go`, `engine_mode.go`, `backtest_loader.go`, `backtest_request.go`, `streaming_replay_accum.go`, `falcon.go` (математика, хранить до Stage 6 #76), `volatility.go`. Пакеты `core/`, `core/nodes/`, `indicators/`, `domain/`, `execution/`, `exchange/`, `data/` — чистые.
+- **Под нож (файлы целиком):** `scoring.go`, `scoring_matrix.go`, `thresholds.go`, `chief.go` (pass-through заглушка), `risk.go` (pass-through veto), `position_fractal.go`, `position_stop.go`, `rsx_signal_memory.go`, `backtest_ab.go`, `backtest_entry_audit.go`, `config/matrix.json`.
+- **Под нож (хирургия внутри файлов):** trade-FSM из `master.go` (`tryForEntry`, `manage*Position`, `manageReversal`, `open/close/reverse*Position`, `evaluateScoreDecision`, `calculateTargetQuantity`, `handleLiveTick`, `TickLiveCh`, paper-balance); ветка `EnableTrading` из `streaming_replay.go` (runner остаётся = пустой бэктест-механизм); эндпоинты `/api/settings/{thresholds,matrix,risk}` + хендлеры + тесты из `server/webserver.go`; загрузка матрицы из `main.go`; `cmd/backtest/main.go` (A/B CLI).
+- **Решения по «сомнительным»:** `score_types.go` — типы (`ScoreFactor`/`ScoreDecision`) оставить (канон п.2 протокола + контракт `MarketState.Factors`), реализацию ScoreEngine удалить; `geometry_tracker.go`/`trendline_navigator.go` — оставить (индикаторная геометрия для UI); `risk_settings.go` — под нож вместе с эндпоинтом; `execution/` — пакет оставить (розетка исполнения), вызовы убрать; `vector_db/` — пакет оставить (долг #8 решается отдельно), Qdrant-хвосты из scoring уйдут вместе с ним; гейт `EngineAllowsStrategies` — оставить (розетка новых стратегий), мёртвые ветки убрать. Маркеры L/LL/S/SS на графике — ждёт решения пользователя.
 
 **Канон (новые инварианты Core 5.0):**
 - **Источник данных приоритетнее значения данных.** Merge решает по Authority, не по полям. WS-финал (x=true) никогда не проигрывает REST. Полевая эвристика (MAX/MIN) — только при равном доверии.
@@ -172,7 +180,9 @@
 - Свой уровень авторитета (например, `AuthorityAggregated`): для локальных баров НЕТ REST-recovery — дыра в тиках это честная дыра.
 - Зависимость: подписка `@aggTrade` в `exchange/ws.go` (закомментирована, долг #44) + `OrderFlowStore` sink.
 
-**Файлы:** `exchange/ingress.go`, `data/history_db.go`, `data/persistence_queue.go`, `strategy/boot_controller.go`, `strategy/master.go` (`routeTick`), `main.go`, `strategy/ram_history.go`, `strategy/analyst.go`, `server/history_provider.go`, `server/webserver.go`.
+**Файлы:** `exchange/ingress.go`, `data/history_db.go`, `data/persistence_queue.go`, `strategy/boot_controller.go`, `strategy/master.go` (`routeTick`), `main.go`, `strategy/ram_history.go`, `strategy/analyst.go`, `server/history_provider.go`, `server/webserver.go`, `cmd/repair_volumes/main.go`, `.gitignore`.
+
+**Цель после Phase F:** стерильные ядра — БД, live, фронтенд, бэктест (только механика быстрых тестов) — и никакого грязного старого кода. Новые стратегии пишутся ПОСЛЕ Глобальной Чистки на канон `ScoreDecision`/`Factors` (типы сохранены).
 
 ### Project Renaissance (база Phase 0)
 
