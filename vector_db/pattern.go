@@ -39,8 +39,8 @@ const (
 	regimeClimax    = "CLIMAX"
 )
 
-// ReportSnapshot is a strategy.Report projection used for vector embeddings.
-// Defined here to avoid an import cycle with strategy.
+// ReportSnapshot is a market-state projection used for vector embeddings.
+// Defined here to avoid an import cycle with package market.
 type ReportSnapshot struct {
 	JurikValue      float64
 	DivergenceScore int

@@ -310,18 +310,9 @@ function mapRSXData(osc) {
 }
 
 function rsxMarkerStyle(marker) {
+  // Phase F: RSX L/LL/S/SS trading labels purged — no special styling.
   if (typeof ChartTheme !== 'undefined' && ChartTheme.rsxMarkerStyle) {
     return ChartTheme.rsxMarkerStyle(marker);
-  }
-  const m = String(marker || '').toUpperCase();
-  if (m === 'S' || m === 'SS') {
-    return { position: 'aboveBar', color: '#b71c1c', shape: 'circle', size: 1 };
-  }
-  if (m === 'L' || m === 'LL') {
-    return { position: 'belowBar', color: '#004d40', shape: 'circle', size: 1 };
-  }
-  if (m === 'P') {
-    return { position: 'belowBar', color: '#1565c0', shape: 'circle', size: 1 };
   }
   return { position: 'belowBar', color: '#2962ff', shape: 'circle', size: 1 };
 }
@@ -337,18 +328,15 @@ function annotationToNativeMarker(ann) {
   const time = chartTime(rawTime);
   if (time == null || !Number.isFinite(time)) return null;
   const label = String(ann?.label ?? ann?.Label ?? ann?.text ?? '').toUpperCase();
-  const style = rsxMarkerStyle(label);
-  const useRsxStyle = ['S', 'SS', 'L', 'LL', 'P'].includes(label);
+  // Phase F: drop legacy RSX trading labels (navigator HH/LL use a separate path).
+  if (['S', 'SS', 'L', 'LL', 'P'].includes(label)) return null;
   return {
     time: Number(time),
-    position: useRsxStyle ? style.position : (ann?.position || 'belowBar'),
-    color: useRsxStyle ? style.color : (
-      (typeof ChartTheme !== 'undefined')
-        ? ChartTheme.resolve(ann?.color, ChartTheme.bull)
-        : (ann?.color || '#26a69a')
-    ),
-    shape: useRsxStyle ? style.shape : (ann?.shape || 'circle'),
-    size: useRsxStyle ? (style.size ?? 1) : undefined,
+    position: ann?.position || 'belowBar',
+    color: (typeof ChartTheme !== 'undefined')
+      ? ChartTheme.resolve(ann?.color, ChartTheme.bull)
+      : (ann?.color || '#26a69a'),
+    shape: ann?.shape || 'circle',
     text: label,
     _rawTime: rawTime,
   };

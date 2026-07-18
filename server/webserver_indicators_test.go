@@ -7,12 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 func TestHandleIndicatorSettings(t *testing.T) {
-	strategy.ResetRSXSettings()
-	t.Cleanup(strategy.ResetRSXSettings)
+	market.ResetRSXSettings()
+	t.Cleanup(market.ResetRSXSettings)
 
 	d := &DashboardServer{}
 
@@ -22,7 +22,7 @@ func TestHandleIndicatorSettings(t *testing.T) {
 		t.Fatalf("GET status = %d", rec.Code)
 	}
 
-	body, _ := json.Marshal(strategy.RSXSettings{
+	body, _ := json.Marshal(market.RSXSettings{
 		Length:       21,
 		DivLookback:  120,
 		SignalLength: 14,
@@ -37,14 +37,14 @@ func TestHandleIndicatorSettings(t *testing.T) {
 		t.Fatalf("POST status = %d", rec.Code)
 	}
 
-	var applied strategy.RSXSettings
+	var applied market.RSXSettings
 	if err := json.Unmarshal(rec.Body.Bytes(), &applied); err != nil {
 		t.Fatal(err)
 	}
 	if applied.Length != 21 || applied.DivLookback != 120 || applied.SignalLength != 14 {
 		t.Fatalf("applied = %+v", applied)
 	}
-	cur := strategy.GetRSXSettings()
+	cur := market.GetRSXSettings()
 	if cur.Length != 21 || cur.DivLookback != 120 || cur.SignalLength != 14 {
 		t.Fatalf("globals not updated: %+v", cur)
 	}
@@ -61,43 +61,11 @@ func TestHandleHistoryChunk_BadRequest(t *testing.T) {
 	}
 }
 
-func TestHandleRiskSettings(t *testing.T) {
-	d := &DashboardServer{}
-
-	rec := httptest.NewRecorder()
-	d.handleRiskSettings(rec, httptest.NewRequest(http.MethodGet, "/api/settings/risk", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET status = %d", rec.Code)
-	}
-
-	body, _ := json.Marshal(strategy.RiskSettings{
-		RiskPerTrade:  2.0,
-		MaxDrawdown:   8.0,
-		Leverage:      5,
-		StopLossType:  "fractal_atr",
-		ATRMultiplier: 2.0,
-	})
-	rec = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/risk", bytes.NewReader(body))
-	d.handleRiskSettings(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST status = %d", rec.Code)
-	}
-
-	var applied strategy.RiskSettings
-	if err := json.Unmarshal(rec.Body.Bytes(), &applied); err != nil {
-		t.Fatal(err)
-	}
-	if applied.RiskPerTrade != 2.0 || applied.ATRMultiplier != 2.0 || applied.StopLossType != "fractal_atr" {
-		t.Fatalf("applied = %+v", applied)
-	}
-}
-
 func TestParseRSXLookbackUsesGlobalSettings(t *testing.T) {
-	strategy.ResetRSXSettings()
-	t.Cleanup(strategy.ResetRSXSettings)
+	market.ResetRSXSettings()
+	t.Cleanup(market.ResetRSXSettings)
 
-	strategy.ApplyRSXSettings(strategy.RSXSettings{
+	market.ApplyRSXSettings(market.RSXSettings{
 		DivLookback:  55,
 		SignalLength: 9,
 	})

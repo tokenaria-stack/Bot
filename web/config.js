@@ -29,13 +29,8 @@ const SCORING_MATRIX_DEFAULTS = {
   useWozduhSpike: false,
 };
 
-const SCORING_MATRIX_LABELS = [
-  { key: 'useRSX', label: 'RSX L / S markers (+35/+45)' },
-  { key: 'useWozduhCross', label: 'Wozduh vol cross lime/red (+35)' },
-  { key: 'useWozduhSpike', label: 'Wozduh volume spike (+15)' },
-  { key: 'useTrendlines', label: 'Trendlines breakout signals' },
-  { key: 'useJurikTrend', label: 'Jurik tailwind (+15/+20)' },
-];
+// Phase F: scoring matrix UI purged — labels retained only as inert constants if referenced.
+const SCORING_MATRIX_LABELS = [];
 
 const LS_NAV_SETTINGS_PREFIX = 'dashboard_nav_settings_';
 const LS_NAV_SETTINGS_LIVE_PREFIX = 'dashboard_nav_settings_live_';
@@ -83,13 +78,8 @@ function defaultNavigatorPaneSettings(pane = 'price') {
 }
 
 function defaultRiskSettings() {
-  return {
-    risk_per_trade: 1,
-    max_drawdown: 5,
-    leverage: 10,
-    stop_loss_type: 'fractal_atr',
-    atr_multiplier: 1.5,
-  };
+  // Phase F socket — risk settings purged with trading FSM.
+  return null;
 }
 
 const TF_DISPLAY = {
@@ -199,9 +189,8 @@ function ensureChartLibraryStyles() {
   seriesDefaults: {
     priceLineVisible: false,
     lastValueVisible: false,
-    crosshairMarkerVisible: false,
-    crosshairMarkerRadius: 0,
-    crosshairMarkerBorderWidth: 0,
+    crosshairMarkerRadius: 1,
+    crosshairMarkerBorderWidth: 1,
     crosshairMarkerBorderColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshairMarkerBorder : '#90ee90',
   },
   candle: {
@@ -360,8 +349,8 @@ function ensureChartLibraryStyles() {
 
   SHARED_CROSSHAIR = {
     mode: LC.CrosshairMode.Normal,
-    vertLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dotted },
-    horzLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dotted },
+    vertLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
+    horzLine: { width: 1, color: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshair : '#555', style: LC.LineStyle.Dashed },
   };
 
   return true;
@@ -377,8 +366,7 @@ const SHARED_TIME_SCALE = {
   borderColor: TV.border,
   timeVisible: true,
   secondsVisible: false,
-  // Floor stops fitContent / zoom from crushing bars into accordion hairlines.
-  minBarSpacing: 0.1,
+  minBarSpacing: 0.001,
   fixLeftEdge: false,
   fixRightEdge: false,
 };

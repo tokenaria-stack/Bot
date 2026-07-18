@@ -14,8 +14,8 @@ import (
 	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server"
-	"trading_bot/strategy"
 )
 
 const historyKlinesLimit = 1000
@@ -26,7 +26,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	analysts := make(map[string]*strategy.Marker)
+	frames := make(map[string]*market.Frame)
 	timeframes := []string{"1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"}
 
 	cfg, err := config.LoadConfig()
@@ -64,22 +64,12 @@ func main() {
 	if cfg.ReadOnly {
 		log.Println("[Init] Read-only mode: no API keys — public klines/websocket only (trading disabled)")
 	}
-	strategy.SetSandboxMode(cfg.SandboxMode)
 
-	engineMode := strategy.NormalizeEngineMode(cfg.EngineMode)
-	strategy.SetEngineMode(engineMode)
+	engineMode := market.NormalizeEngineMode(cfg.EngineMode)
+	market.SetEngineMode(engineMode)
 	log.Printf("[Init] EngineMode=%s (ENGINE_MODE)", engineMode)
-
-	if strategy.EngineAllowsStrategies() {
-		loadedMatrix, err := strategy.LoadMatrixConfig(strategy.MatrixConfigPath)
-		if err != nil {
-			log.Printf("[Init] Failed to load scoring matrix from %s: %v — using defaults", strategy.MatrixConfigPath, err)
-			loadedMatrix = strategy.DefaultScoringMatrix()
-		}
-		strategy.SetScoringMatrix(loadedMatrix)
-		log.Printf("[Init] Loaded Scoring Matrix configuration from %s", strategy.MatrixConfigPath)
-	} else {
-		log.Println("[Init] ChartOnly: ScoreMatrix not loaded (trading stack gated)")
+	if !market.EngineAllowsStrategies() {
+		log.Println("[Init] ChartOnly: strategy stack gated (ScoreEngine socket empty until Phase G+)")
 	}
 
 	// ── Boot FSM Phase 0: Connecting ──────────────────────────────────────────
@@ -87,7 +77,7 @@ func main() {
 	// loads — REST recovery can never again be "the truth" over missed WS bars.
 	// Order Flow sink is nil (debt #44): aggTrade ring returns with TickBarBuilder.
 	wsClient := exchange.NewWsClient(symbol, nil)
-	boot := strategy.NewBootController(wsClient.OutCh)
+	boot := market.NewBootController(wsClient.OutCh)
 	boot.Begin(ctx)
 	go func() {
 		if err := wsClient.Start(ctx); err != nil {
@@ -97,13 +87,13 @@ func main() {
 
 	// ── Boot FSM Phase 1: Loading ─────────────────────────────────────────────
 	boot.MarkLoading()
-	chaosCfg := strategy.ChaosConfig{
+	chaosCfg := market.ChaosConfig{
 		AOFastPeriod: 5,
 		AOSlowPeriod: 34,
 	}
 
 	bootStart := time.Now()
-	log.Printf("[Init] Parallel analyst boot: %d timeframes (%d CPUs, SQLite WAL)", len(timeframes), runtime.NumCPU())
+	log.Printf("[Init] Parallel Frame boot: %d timeframes (%d CPUs, SQLite WAL)", len(timeframes), runtime.NumCPU())
 	var bootWG sync.WaitGroup
 	var bootMu sync.Mutex
 	for _, tf := range timeframes {
@@ -112,45 +102,44 @@ func main() {
 			defer bootWG.Done()
 			tfStart := time.Now()
 
-			history := strategy.LoadRAMHistory(restClient, symbol, tf, strategy.AnalystBootKlineLimit)
+			history := market.LoadRAMHistory(restClient, symbol, tf, market.FrameBootKlineLimit)
 			source := "sqlite"
 			if len(history) == 0 {
 				candles, err := restClient.GetKlines(symbol, tf, historyKlinesLimit)
 				if err != nil {
-					log.Printf("[Init] Analyst [%s] failed to load history: %v", tf, err)
+					log.Printf("[Init] Frame [%s] failed to load history: %v", tf, err)
 				} else {
 					history = candlesToKlines(candles)
 				}
 				source = "rest"
 			}
 
-			m := strategy.NewMarker(history, nil, tf, "btc_patterns", chaosCfg)
+			m := market.NewFrame(history, tf, chaosCfg)
 			m.UpdateIndicators()
 
 			bootMu.Lock()
-			analysts[tf] = m
+			frames[tf] = m
 			bootMu.Unlock()
 
-			log.Printf("[Init] Analyst [%s] loaded %d klines from %s (%.2fs)",
+			log.Printf("[Init] Frame [%s] loaded %d klines from %s (%.2fs)",
 				tf, len(history), source, time.Since(tfStart).Seconds())
 		}(tf)
 	}
 	bootWG.Wait()
-	log.Printf("[Init] All analysts ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
+	log.Printf("[Init] All frames ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
-	signalAnalyst := strategy.NewAnalyst(cfg.SandboxMode)
 	htfProvider := exchange.NewHTFProvider()
-	master := strategy.NewMasterGeneral(
-		analysts, signalAnalyst, restClient, htfProvider, nil,
+	master := market.NewRuntime(
+		frames, restClient, htfProvider,
 		cfg.ReadOnly, cfg.SandboxMode, symbol, tradingTF,
 	)
 
 	dashboard := server.NewDashboardServer(
-		analysts, restClient, symbol, signalAnalyst, htfProvider,
+		frames, restClient, symbol, htfProvider,
 		cfg.ReadOnly, cfg.SandboxMode, tradingTF,
 	)
 	dashboard.BindMaster(master)
-	master.SetNavigatorPanes(strategy.DefaultLiveNavigatorPanes())
+	master.SetNavigatorPanes(market.DefaultLiveNavigatorPanes())
 
 	// Shot 9C/9E: sole SQLite writer — bind before gap-fill / tip catch-up.
 	persistQ := data.NewPersistenceQueue(4096)
@@ -158,17 +147,16 @@ func main() {
 	master.SetPersistenceQueue(persistQ)
 
 	// Shot 9B + Core 4.2: every TF computes Projection; Transport routes only to subscribed clients.
-	// TODO: Debt - Re-enable and configure ScoreMatrix/Falcon/Divergence in later phases.
 	master.SetOnKlineBar(func(tf string, k exchange.Kline, isClosed bool) {
-		analyst := analysts[tf]
-		if analyst == nil {
+		frame := frames[tf]
+		if frame == nil {
 			return
 		}
 		dashboard.RouteChartTick(
 			tf,
 			domain.CandleFromKline(k),
 			isClosed,
-			analyst.DAGTickFrame(),
+			frame.DAGTickFrame(),
 		)
 		if isClosed {
 			persistQ.Enqueue(symbol, tf, data.Candle{
@@ -182,14 +170,6 @@ func main() {
 			})
 		}
 	})
-	master.SetOnTrade(func(event strategy.TradeEvent) {
-		dashboard.BroadcastMarker(event.Side, event.Price, event.BarTime, event.Reason, event.Kind)
-	})
-	master.SetOnClosedTrade(func(trade domain.ClosedTrade, isVirtual bool) {
-		dashboard.RecordClosedTrade(trade, isVirtual)
-	})
-
-	master.RecoverState()
 
 	// ── Boot FSM Phase 2: Reconciling ─────────────────────────────────────────
 	// Buffered WS ticks replay through the canonical routing path; live bars
@@ -200,7 +180,7 @@ func main() {
 	boot.GoLive()
 	master.StartDataFeed(ctx, wsClient.OutCh)
 	master.StartKlineGapFillLoop(ctx)
-	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Analyst touch).
+	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Frame touch).
 	master.StartSQLiteArchiveCatchUpLoop(ctx)
 	master.SeedClosedBarTelemetry()
 
@@ -211,13 +191,13 @@ func main() {
 		}
 	}()
 
-	if strategy.EngineAllowsStrategies() {
+	if market.EngineAllowsStrategies() {
 		go func() {
-			log.Println("[Main] Starting MasterGeneral Event Loop (Live)...")
+			log.Println("[Main] Starting Runtime Event Loop (Live)...")
 			master.Run(ctx)
 		}()
 	} else {
-		log.Println("[Main] ChartOnly: MasterGeneral.Run not started")
+		log.Println("[Main] ChartOnly: Runtime.Run not started")
 	}
 
 	quit := make(chan os.Signal, 1)

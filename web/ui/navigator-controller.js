@@ -387,7 +387,7 @@ const NavigatorController = (() => {
       const finalPayload = buildFinalBacktestPayload();
       console.log(`[UI] Ok clicked for ${safePane}. Payload injected:`, finalPayload.settings.navigators[safePane]);
       console.log('[UI] Full navigators:', finalPayload.settings.navigators);
-      console.log('[UI] Matrix:', finalPayload.settings.matrix);
+      console.log('[UI] Backtest navigators:', finalPayload.settings?.navigators);
       return finalPayload;
     }
 

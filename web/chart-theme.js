@@ -197,30 +197,10 @@ const ChartTheme = {
   },
 
   rsxMarkerStyle(marker) {
+    // Phase F: RSX L/LL/S/SS trading labels purged from chart surface.
     const m = String(marker || '').toUpperCase();
-    if (m === 'S' || m === 'SS') {
-      return {
-        position: 'aboveBar',
-        color: ChartTheme.rsxShort,
-        shape: 'circle',
-        size: 1,
-      };
-    }
-    if (m === 'L' || m === 'LL') {
-      return {
-        position: 'belowBar',
-        color: ChartTheme.rsxLong,
-        shape: 'circle',
-        size: 1,
-      };
-    }
-    if (m === 'P') {
-      return {
-        position: 'belowBar',
-        color: ChartTheme.rsxPivot,
-        shape: 'circle',
-        size: 1,
-      };
+    if (['S', 'SS', 'L', 'LL', 'P'].includes(m)) {
+      return null;
     }
     return {
       position: 'belowBar',

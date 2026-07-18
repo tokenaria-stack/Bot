@@ -133,8 +133,13 @@ class ColumnarStore {
 
   static _propsFromWireAnnotation(ann, ms) {
     const text = String(ann?.text ?? ann?.label ?? ann?.Label ?? '').trim();
+    const label = text.substring(0, 2).toUpperCase();
+    // Phase F: do not store purged RSX trading labels.
+    if (['S', 'SS', 'L', 'LL', 'P'].includes(label)) {
+      return null;
+    }
     const props = { timeMs: ms };
-    if (text) props.rsxLabel = text.substring(0, 2).toUpperCase();
+    if (text) props.rsxLabel = label;
     if (ann?.pane) props.pane = ann.pane;
     if (ann?.color) props.color = ann.color;
     if (ann?.position) props.position = ann.position;
@@ -152,9 +157,7 @@ class ColumnarStore {
     if (tick.volumeSpikeDown || tick.VolumeSpikeDown) props.spikeDown = true;
     const volCross = tick.volCrossMarker ?? tick.VolCrossMarker;
     if (volCross) props.volCross = volCross;
-    if (tick.marker) {
-      props.rsxLabel = String(tick.marker).trim().substring(0, 2).toUpperCase();
-    }
+    // Phase F: tick.marker L/LL/S/SS no longer published to the chart store.
     return Object.keys(props).length ? props : null;
   }
 

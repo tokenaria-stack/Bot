@@ -66,19 +66,21 @@ for _, price := range prices {
 ## Layer roadmap
 
 ```
-Layer 1  indicators/     ✅ Pipeline Baseline (streaming math, no talib)
-Layer 2  strategy/       🔜 Context analytics — Elliott, ZigZag wiring, streaming ChiefAnalyst
-Layer 3  strategy/       🔜 Falcon strategy — strategy/falcon.go on top of Layer 2 reports
-         master.go       ✅ FSM + execution (current production path)
+indicators/     ✅ Streaming math (no talib)
+market/         ✅ Frame + Runtime + streaming/snapshot (data plane — "what is happening?")
+decision/       🔜 ScoreDecision/ScoreFactor contracts; future strategies ("what to do?")
+execution/      ✅ Position sizing sockets
+strategy/       🏷 doc.go beacon only (Phase F purged legacy)
 ```
 
-| Layer | Status | Next step |
-|-------|--------|-----------|
-| **1 — Indicators** | ✅ Ready | Consumed by analyst via `*Values` today; migrate to live `Update` instances in Layer 2 |
-| **2 — Context / Elliott** | 🔜 | Wire `ZigZag`, `CalcRetracements`, streaming RSI/MACD into `ChiefAnalyst`; Elliott wave context |
-| **3 — Falcon** | 🔜 | Create `strategy/falcon.go`: entry/exit rules on Layer 2 context + `MasterGeneral` FSM |
+| Package | Status | Role |
+|---------|--------|------|
+| **indicators** | ✅ | Streaming math; consumed by `market.Frame` |
+| **market** | ✅ | `Frame` / `Runtime` / Boot / MTF / chart replay |
+| **decision** | 🔜 sockets | Contracts only until #76 ScoreNodes + new strategies |
+| **strategy** | placeholder | No active code — see `decision/` |
 
-**Current integration:** `strategy/analyst.go` uses batch wrappers (`RSIValues`, `MACDValues`, `ATRValues`, `AOValuesFromKlines`) for `GenerateMarketReport()`. This is compatible with Layer 1 and safe for production; Layer 2 replaces batch replay with persistent streaming state per timeframe.
+**Import DAG:** `exchange → market → decision → execution` (one-way).
 
 ---
 
@@ -96,17 +98,17 @@ go run .
 ```
 trading_bot/
 ├── README.md              # This file — Pipeline Baseline
-├── MEMORY.md              # Full architecture & FSM rules
+├── MEMORY.md              # Full architecture (Core 5.0 Phases A–G)
 ├── main.go
 ├── config/
-├── exchange/              # Binance Futures fapi + fstream
+├── exchange/              # Transport + ingress (Bar Source Seam)
+├── market/                # Frame, Runtime, streaming/snapshot, falcon bus
+├── decision/              # ScoreDecision / ScoreFactor contracts
 ├── execution/             # Position sizing
-├── indicators/            # Layer 1 — streaming math
-├── vector_db/             # Qdrant pattern memory
-└── strategy/
-    ├── analyst.go         # ChiefAnalyst (Layer 2 consumer)
-    ├── master.go          # MasterGeneral FSM
-    └── risk.go            # Signal validation profiles
+├── indicators/            # Streaming math
+├── vector_db/             # Qdrant pattern memory (socket)
+├── server/                # HTTP/WS projection
+└── strategy/              # doc.go beacon only
 ```
 
 ## Verification (baseline)

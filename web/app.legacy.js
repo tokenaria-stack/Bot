@@ -76,19 +76,18 @@ function buildFinalBacktestPayload(overrides = {}) {
     ? window.currentBacktestPayload.settings
     : {};
 
-  const matrix = StrategyController.getMatrixPayload('backtest');
   const navigators = NavigatorController.getNavigatorPayload('backtest');
-  const risk = getRiskSettingsFromUI();
 
   const settings = {
     ...prevSettings,
-    risk,
-    matrix,
     navigators,
-    ...StrategyController.getThresholdsPayload('backtest'),
     rsxSettings: getRSXSettingsFromUI('backtest'),
     wozduhSettings: getWozduhSettingsFromUI('backtest'),
   };
+  delete settings.matrix;
+  delete settings.risk;
+  delete settings.longThreshold;
+  delete settings.shortThreshold;
 
   const form = BacktestController.getFormValues();
   const finalPayload = {
@@ -126,19 +125,13 @@ function buildBacktestSettingsPayload() {
     return payload.settings;
   } catch (err) {
     console.error('buildBacktestSettingsPayload failed:', err);
-    const matrix = StrategyController.getMatrixPayload('backtest');
     try {
       return {
-        matrix,
         navigators: NavigatorController.getNavigatorPayload('backtest'),
-        risk: getRiskSettingsFromUI(),
-        ...StrategyController.getThresholdsPayload('backtest'),
       };
     } catch {
       return {
-        matrix,
-        risk: getRiskSettingsFromUI(),
-        navigators: NavigatorController.getNavigatorPayload('backtest'),
+        navigators: {},
       };
     }
   }

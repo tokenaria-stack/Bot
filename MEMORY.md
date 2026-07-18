@@ -2,17 +2,17 @@
 
 **Перед написанием новых модулей ВСЕГДА перечитывай этот файл.**
 
-> **Снэпшот MEMORY (июль 2026):** **Core 5.0 Data Plane SSOT (Phases A–E ✅, Phase F Inventory ✅ — purge согласовывается)** поверх **Core 4.10 Self-Healing + Marker Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
-> **Core 5.0:** Ingress SSOT (`exchange/ingress.go`: Authority Estimated/Settled/Final, typed rejects, метрики, единый `MergeKlineSeries` — долг #19 закрыт); Grace 5s + монотонный UPSERT (MAX/MIN) + WAL-checkpoint; Boot FSM (`strategy/boot_controller.go`: WS first → buffer → load → reconcile → live); micro-candles контур выкорчеван (bar source seam задокументирован в ingress.go); repo cleanup + `cmd/repair_volumes` healer (Phase E); расстрельный список стратегий (Phase F, см. таблицу Core 5.0).  
+> **Снэпшот MEMORY (июль 2026):** **Core 5.0 Data Plane SSOT (Phases A–G ✅)** поверх **Core 4.10 Self-Healing + Frame Double-Commit Fix ✅** поверх **Core 4.0 Great Purge (Stages 1–5 + TV Floating UI) ✅** поверх **Core 3.5 Projection (11A–11E) + Core 3.0 FE (10A–10B) + Data Foundation (9A–9J).**  
+> **Core 5.0:** Ingress SSOT (`exchange/ingress.go`); Grace 5s + монотонный UPSERT + WAL-checkpoint; Boot FSM; micro-candles purge; `cmd/repair_volumes` healer; **Phase F Legacy Strategies Purge ✅**; **Phase G Rebrand ✅** — словарь `market.Frame` / `market.Runtime` / `streaming`+`snapshot`; пакеты `market/` (state) + `decision/` (contracts) + `strategy/` = doc.go beacon; DAG `exchange → market → decision → execution`.  
 > Инвариант: **State → Projection → Transport**. Tip Ownership (History closed XOR Live forming). Discard axis = `window.projectionEpoch`.  
 > Charts = columnar REST (closed-only tip strip) + `BroadcastChartTick`/`RouteChartTick` (DAG, strict per-TF routing, case-sensitive `1m`≠`1M`). TF camera = Sticky Live Edge / Microscope router.  
 > Scale = `ScaleController` SSOT (`chart_scale_prefs_v2`, default Auto ON) + re-arm after `setData`.  
 > **ColumnarStore Self-Healing (4.5):** `_intervalSec` + chronology gap-detect (`appendTick` → `{gapDetected}` вместо тихой склейки); WS `onReconnect` → `loadDashboard()`.  
-> **Marker double-commit fixed (4.8):** `lastCommittedOpenTime` guard в `UpdateKlineTick` — вероятный root cause RSX tip-spike (#67), warmup depth был ложной гипотезой (диагностика: `strategy/continuity_test.go`).  
+> **Frame double-commit fixed (4.8):** `lastCommittedOpenTime` guard в `UpdateKlineTick` — вероятный root cause RSX tip-spike (#67), warmup depth был ложной гипотезой (диагностика: `market/continuity_test.go`).  
 > **Cold boot camera (4.10):** `_commitFreshCamera` — только layout-independent `applyOptions({barSpacing, rightOffset:0})`, без `setVisibleLogicalRange`/`fitContent` (оба ломаются на контейнере 0×0).  
-> Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live`.  
+> Default `ENGINE_MODE=ChartOnly`. Delivery path без Falcon. Trading — только `ENGINE_MODE=live` (после новых стратегий).  
 > **TF mechanics CLOSED.** **Wozduh = DAG bus only** (Falcon Evaluate gated). **Legend = chrome only** (no per-tick HTML metrics). Floating menus = `position:fixed` viewport.  
-> **NEXT:** Phase F purge по согласованному расстрельному списку (см. Core 5.0; открытый вопрос — маркеры L/LL/S/SS на графике). Затем: запуск `cmd/repair_volumes` (при остановленном боте), живое подтверждение RSX spike fix (4.8, иначе re-open #67), #68 osc bounds, #69 MemoryBudget. Stage 6 ScoreNodes later — **не удалять** `strategy/falcon.go`. Протокол ювелира дополнен п.6 «Розетки, а не электростанции» (`.cursor/rules/jeweler-protocol.mdc`).
+> **NEXT:** **#76 ScoreNodes** (не удалять `market/falcon.go`); **#67 Live Confirm** RSX tip-spike после 4.8. Затем #68/#69. Ops `cmd/repair_volumes` при остановленном боте.
 
 ---
 
@@ -121,7 +121,7 @@
 - Osc fixed scale bounds in manifest (#68)
 - MemoryBudget (#69) — deferred (prune-right interfered; revisit after #67)
 - Order Flow (#44) — **amputated** until strategy settings  
-- **Stage 6 ScoreNodes (#76)** — later; keep `strategy/falcon.go`
+- **Stage 6 ScoreNodes (#76)** — later; keep `market/falcon.go`
 - `ENGINE_MODE=live` re-enable when trading stack reconfigured
 - Great Purge Stages 1–5 + TV Floating UI — ✅ (see Core 4.0 table above)
 
@@ -148,7 +148,7 @@
 
 **Файлы:** `web/columnar-store.js`, `web/boot.js`, `web/ws.js`, `web/chart-compositor.js`, `strategy/analyst.go`, `strategy/layer2.go`, `server/webserver.go` (`RouteChartTick`/`routeTick`), `server/golden_audit_test.go`, `strategy/continuity_test.go`.
 
-### Core 5.0 — Data Plane SSOT (Phases A–F) — A–E ✅, F в работе
+### Core 5.0 — Data Plane SSOT (Phases A–G) — ✅ CLOSED
 
 **Цель:** одна свеча = один жизненный цикл = одна каноническая версия. Триггер: Golden Audit (volume drift SQLite 21.257 vs Binance 48.47) + гонка boot (REST recovery до WS connect) + долг #19 (3 копии merge).
 
@@ -159,18 +159,32 @@
 | **C. Boot FSM** | `strategy/boot_controller.go`: Phase 0 Connecting (WS первым, тики в буфер cap 4096, Marker не тронут) → Phase 1 Loading (SQLite+REST через Ingress) → Phase 2 Reconciling (буфер реплеится по порядку через `MasterGeneral.routeTick` — единый канонический путь тика, вынесен из StartDataFeed) → Phase 3 Live (StartDataFeed + gap-fill/catch-up лупы ПОСЛЕ выхода в Live). Чистка main.go: `agentBootLog`/hardcode debug-путь удалены | ✅ |
 | **D. Bar Source Seam + Purge** | Контракт шва задокументирован в `exchange/ingress.go` (см. канон ниже). Выкорчеваны: `server/micro_candles.go`, `server/micro_broadcast.go`, `IsOrderFlowTimeframe`/`loadOrderFlowKlines`/`orderFlowWarmupBars`/`TickBufferLen`/`d.orderFlow` из webserver.go, `StartMicroBroadcast` из main.go. Тиковые TF в меню (`timeframes.go`) остаются как «розетка» — вернут данные с TickBarBuilder | ✅ |
 | **E. Data Repair + Repo Cleanup** | `cmd/repair_volumes/main.go` — healer застрявших объёмов: REST re-fetch (7d, 1m/3m/5m/15m) → `SaveKlines` (монотонный UPSERT сам поднимает volume) → `CheckpointWAL`. Repo: удалены `backups/` (38MB dump), `server/history.db*`, `server/data/`, бинарники `trading_bot`/`strategy.test` (51MB), tracked-артефакты `server/config/matrix.json`, `server/server/`, `.DS_Store`. `.gitignore` переписан (`.cursor/*` с негациями `!rules/`, `!mcp.json.example`) | ✅ (healer создан, НЕ запускался — запускать при остановленном боте) |
-| **F. Legacy Strategies Purge** | Инвентаризация ✅ (см. расстрельный список ниже). Массовое удаление — ждёт согласования | 🔄 |
+| **F. Legacy Strategies Purge** | Удалены ScoreEngine/matrix/thresholds/chief/risk/position_*/rsx_signal_memory/backtest_ab/entry_audit/`cmd/backtest`; trade-FSM из `master.go` + `EnableTrading` из streaming_replay; settings `/api/settings/{matrix,thresholds,risk}`; Qdrant-хвосты из `analyst.go`; wire/FE delivery L/LL/S/SS off (`AnnotationFromDivState` no-op). Оставлены: `score_types.go`, `falcon.go`, `execution/`, `vector_db/`, navigator HH/LL, `EngineAllowsStrategies`. Verify: `go build ./...` + `go vet ./...` ✅ | ✅ |
 
-**Phase F — расстрельный список (инвентаризация 18.07.2026, согласовывается):**
-- **Ядро (не трогать):** `analyst.go`, `layer2.go`, `boot_controller.go`, `mtf_tracker.go`, `kline_gap.go`, `sqlite_catchup.go`, `ram_history.go`, `live_kline.go`, `marker_databus.go`, `marker_trim.go`, `dag_shadow.go`, `dag_navigator_series.go`, `chart_*.go`, `rsx_chart/ssot/settings/pipeline.go`, `navigator_defaults.go`, `engine_mode.go`, `backtest_loader.go`, `backtest_request.go`, `streaming_replay_accum.go`, `falcon.go` (математика, хранить до Stage 6 #76), `volatility.go`. Пакеты `core/`, `core/nodes/`, `indicators/`, `domain/`, `execution/`, `exchange/`, `data/` — чистые.
-- **Под нож (файлы целиком):** `scoring.go`, `scoring_matrix.go`, `thresholds.go`, `chief.go` (pass-through заглушка), `risk.go` (pass-through veto), `position_fractal.go`, `position_stop.go`, `rsx_signal_memory.go`, `backtest_ab.go`, `backtest_entry_audit.go`, `config/matrix.json`.
-- **Под нож (хирургия внутри файлов):** trade-FSM из `master.go` (`tryForEntry`, `manage*Position`, `manageReversal`, `open/close/reverse*Position`, `evaluateScoreDecision`, `calculateTargetQuantity`, `handleLiveTick`, `TickLiveCh`, paper-balance); ветка `EnableTrading` из `streaming_replay.go` (runner остаётся = пустой бэктест-механизм); эндпоинты `/api/settings/{thresholds,matrix,risk}` + хендлеры + тесты из `server/webserver.go`; загрузка матрицы из `main.go`; `cmd/backtest/main.go` (A/B CLI).
-- **Решения по «сомнительным»:** `score_types.go` — типы (`ScoreFactor`/`ScoreDecision`) оставить (канон п.2 протокола + контракт `MarketState.Factors`), реализацию ScoreEngine удалить; `geometry_tracker.go`/`trendline_navigator.go` — оставить (индикаторная геометрия для UI); `risk_settings.go` — под нож вместе с эндпоинтом; `execution/` — пакет оставить (розетка исполнения), вызовы убрать; `vector_db/` — пакет оставить (долг #8 решается отдельно), Qdrant-хвосты из scoring уйдут вместе с ним; гейт `EngineAllowsStrategies` — оставить (розетка новых стратегий), мёртвые ветки убрать. Маркеры L/LL/S/SS на графике — ждёт решения пользователя.
+**Phase F — итог (выполнено 18.07.2026):**
+- **Ядро сохранено:** data-plane Frame/streaming+snapshot/Boot/MTF/DAG/chart RSX colors, `falcon.go` (#76), `score_types` sockets, navigator HH/LL geometry.
+- **Удалено:** legacy scoring + trade FSM + risk_settings + A/B backtest CLI + matrix/threshold/risk APIs + FE chrome; chart surface L/LL/S/SS (math `indicators/divergence_rsx` + `SlotDivState` остаются, wire/UI не публикуют).
+
+**Phase G — Rebrand (G1–G4 ✅, выполнено 19.07.2026):**
+- **G1 Vocabulary ✅:** `Marker`→`Frame`, `MasterGeneral`→`Runtime`, `layer2.go`→`streaming.go`+`snapshot.go`; идентификаторы Analyst / MasterGeneral / Layer2 вычищены из Go-кода (JSON-тег `json:"marker"` и chart-label поле `Marker string` сохранены для FE).
+- **G2 Package Move ✅:** data-plane → `market/`; contracts → `decision/`; `strategy/` = `doc.go` beacon only.
+- **G3 Docs ✅:** `MEMORY.md` + `market/doc.go` + `decision/doc.go` + `strategy/doc.go`.
+- **G4 Audit ✅:** lexical + DAG `exchange → market → decision → execution` (`decision`↛`market`, `market`↛`server`, `exchange`↛`market`/`decision`).
+
+**Словарь Core 5.0 (канон):**
+| Было | Стало | Пакет | Роль |
+|------|-------|-------|------|
+| `Marker` | `Frame` | `market` | Per-TF streaming state («что происходит») |
+| `MasterGeneral` | `Runtime` | `market` | Data runtime / tick routing |
+| `layer2.go` | `streaming.go` + `snapshot.go` | `market` | O(1) Snapshot/Restore intra-bar |
+| `score_types` | `ScoreDecision` / `ScoreFactor` | `decision` | Контракты («что делать») |
+| `strategy/` (код) | beacon `doc.go` | `strategy` | Исторический placeholder |
 
 **Канон (новые инварианты Core 5.0):**
 - **Источник данных приоритетнее значения данных.** Merge решает по Authority, не по полям. WS-финал (x=true) никогда не проигрывает REST. Полевая эвристика (MAX/MIN) — только при равном доверии.
-- **Bar Source Seam:** в ingress-pipeline входят ТОЛЬКО закрытые канонические бары (`exchange.Kline`); способ агрегации (время/тики/объём) — приватная деталь продюсера. Forming-тики (x=false) обходят pipeline (телеметрия Marker, Core 4.8). Time-бары = клайны биржи (канон TV), никакой самосборки из трейдов.
-- **Boot: WS первым.** REST recovery никогда больше не «истина» поверх пропущенных WS-баров. Один канонический путь тика — `MasterGeneral.routeTick` (live и boot-replay).
+- **Bar Source Seam:** в ingress-pipeline входят ТОЛЬКО закрытые канонические бары (`exchange.Kline`); способ агрегации (время/тики/объём) — приватная деталь продюсера. Forming-тики (x=false) обходят pipeline (телеметрия Frame, Core 4.8). Time-бары = клайны биржи (канон TV), никакой самосборки из трейдов.
+- **Boot: WS первым.** REST recovery никогда больше не «истина» поверх пропущенных WS-баров. Один канонический путь тика — `Runtime.routeTick` (live и boot-replay).
+- **Import DAG:** `exchange → market → decision → execution`. `market` отвечает «что происходит»; `decision` — «что делать» (без импорта `market`).
 - **SQLite firewall ≠ лечение.** MAX/MIN в UPSERT — последний рубеж; корень (Grace) — на границе REST.
 
 **Контракт будущего `TickBarBuilder` (НЕ реализован — ждёт воскрешения aggTrade, долг #44):**
@@ -180,9 +194,9 @@
 - Свой уровень авторитета (например, `AuthorityAggregated`): для локальных баров НЕТ REST-recovery — дыра в тиках это честная дыра.
 - Зависимость: подписка `@aggTrade` в `exchange/ws.go` (закомментирована, долг #44) + `OrderFlowStore` sink.
 
-**Файлы:** `exchange/ingress.go`, `data/history_db.go`, `data/persistence_queue.go`, `strategy/boot_controller.go`, `strategy/master.go` (`routeTick`), `main.go`, `strategy/ram_history.go`, `strategy/analyst.go`, `server/history_provider.go`, `server/webserver.go`, `cmd/repair_volumes/main.go`, `.gitignore`.
+**Файлы:** `exchange/ingress.go`, `data/history_db.go`, `data/persistence_queue.go`, `market/boot_controller.go`, `market/runtime.go` (`routeTick`), `main.go`, `market/ram_history.go`, `market/frame.go`, `market/streaming.go`, `market/snapshot.go`, `decision/score_types.go`, `strategy/doc.go`, `server/history_provider.go`, `server/webserver.go`, `cmd/repair_volumes/main.go`, `.gitignore`.
 
-**Цель после Phase F:** стерильные ядра — БД, live, фронтенд, бэктест (только механика быстрых тестов) — и никакого грязного старого кода. Новые стратегии пишутся ПОСЛЕ Глобальной Чистки на канон `ScoreDecision`/`Factors` (типы сохранены).
+**После Phase F+G:** стерильные ядра — БД, live, фронтенд, бэктест (chart replay only); legacy strategy code вычищен; границы пакетов зафиксированы. Новые стратегии — в `decision/` на канон `ScoreDecision`/`Factors`.
 
 ### Project Renaissance (база Phase 0)
 
@@ -339,20 +353,20 @@ Annotations
 
 ## Архитектура Принятия Решений (Score Module)
 
-Проект использует прямой пайплайн данных: `Marker` → `ScoreEngine.Calculate()` → `ScoreDecision`.
+Канон после Phase F+G: `Frame` (market state) → будущий `ScoreEngine.Calculate()` → `ScoreDecision` (`decision/`). Legacy scoring implementation purged; types remain as sockets.
 
 - Отсутствуют структуры-посредники (никаких `Report`).
 - Данные не суммируются преждевременно. Каждый индикатор формирует свой изолированный `ScoreFactor` (`BUY` / `SELL` / `WAIT`) внутри карты `ScoreDecision.Factors`.
 - Модули должны строго соответствовать **Протоколу ювелира**.
+- **Import rule:** `decision` не импортирует `market` (контракты чистые).
 
 | Компонент | Файл | Роль |
 |-----------|------|------|
-| `ScoreEngine.Calculate(marker, matrix)` | `strategy/scoring.go` | Читает `Marker` напрямую |
-| `ScoreDecision` | `strategy/score_types.go` | `LongScore`, `ShortScore`, `Factors`, `Action`, `LotMod`, `StopDist` |
-| `ScoringMatrix` | `strategy/scoring_matrix.go` | UI-тогглы факторов |
-| `CalculateScoreGlobal(marker)` | `strategy/scoring.go` | Live: matrix из `config/matrix.json` |
-| MTF scoring | `scoreMTFFactors` + `scoreHTFOscillatorFactors` | `UseTrendlines` → `marker.MTFStates()`; `UseHTFOscillators` → `RSX_{tf}`, `Wozduh_{tf}` |
-| Qdrant | `Marker.VectorSnapshot()` | `vector_db.ReportSnapshot` (не `strategy.Report`) |
+| `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Контракты решения; `ScoreEngine` — пустая розетка |
+| `Frame` | `market/frame.go` | State («что происходит») |
+| `Runtime` | `market/runtime.go` | Tick routing / data plane |
+| Falcon (bus) | `market/falcon.go` | Keep until #76 ScoreNodes |
+| Qdrant socket | `vector_db/` | Pattern memory; no live strategy consumer |
 
 **Поток (live / backtest):**
 ```
@@ -373,21 +387,21 @@ UpdateKlineTick → ScoreEngine.Calculate → RawAction/FinalAction (same initia
 
 ---
 
-## Ядро: Marker и Layer Pipeline
+## Ядро: Frame и Streaming Pipeline
 
-`Marker` (`strategy/analyst.go`, `layer2.go`) — единый **streaming-state** на символ/ТФ. Все индикаторы пишут в него; `ScoreEngine` читает через accessors (`FalconSnapshot`, `VolatilityStateSnapshot`, `MTFStates`, …).
+`Frame` (`market/frame.go`, `streaming.go`, `snapshot.go`) — единый **streaming-state** на символ/ТФ («что происходит»). Индикаторы пишут в него; будущий ScoreEngine (`decision/`) читает через accessors (`FalconSnapshot`, `VolatilityStateSnapshot`, `MTFStates`, …). `Runtime` (`market/runtime.go`) маршрутизирует тики.
 
 **Поток на каждом тике (`UpdateKlineTick`):**
 ```
 Binance WS kline
-  → Marker.UpdateKlineTick(k, isClosed)
+  → Frame.UpdateKlineTick(k, isClosed)
   → evaluateTickLocked(k, barIndex, isClosed)
-       1. restoreLayer2StreamingState()     // O(1) rollback открытого бара
-       2. FalconEngine.Evaluate             // Layer 1
+       1. restoreStreamingState()           // O(1) rollback открытого бара
+       2. FalconEngine.Evaluate             // gated in ChartOnly
        3. VolatilityEngine, orangeRsi, ad, ao, stoch, ZigZag
        4. divEngine (micro-tick + macro snapshot на swing)
        5. rsxMarkers, geometry, fib zones
-       6. saveLayer2StreamingState()       // только if isClosed
+       6. saveStreamingState()              // только if isClosed
 ```
 
 | Слой | Модуль | Выход (смысл) |
@@ -595,13 +609,13 @@ trySync: hasBaseLayer ∧ container>0 → ensureBacktestChart → applyFullData 
 | **SQLite `history.db`** | `data/history_db.go` | Локальный кэш klines; gap-fill при live/backtest |
 | **Continuous Contract** | `exchange/continuous_contract.go` | Диапазон до 2017: spot (`BTCUSDT_SPOT`) + futures (`BTCUSDT`) склеиваются по `BinanceFuturesGenesisMs` |
 | **HTFProvider cache** | `exchange/htf_provider.go` | In-memory klines per `symbol_interval`; `PinKlines`, `ClearCache`, `GetCandlesStrictlyBefore` |
-| **Binance feed** | `exchange/ws_client.go`, `main.go` | Futures klines → `MasterGeneral` → per-TF `Marker` map |
+| **Binance feed** | `exchange/ws_client.go`, `main.go` | Futures klines → `Runtime` → per-TF `Frame` map |
 
-### Исполнение (`MasterGeneral`, `strategy/master.go`)
+### Исполнение (`Runtime`, `market/runtime.go`)
 
-**FSM:** `IDLE` ↔ `IN_POSITION`. **Один рабочий TF** (`cfg.Timeframe`, env `TRADING_TIMEFRAME`). Оценка на close рабочей свечи (`TickLiveCh` → `handleLiveTick`). Recovery через private API при старте.
+**ChartOnly default:** trade FSM purged in Phase F. Data plane (`routeTick`, Boot, MTF, chart broadcast) живёт в `Runtime`. Trading — только после новых стратегий в `decision/` + `ENGINE_MODE=live`.
 
-**Sizing SSOT:** `execution.CalculateTargetQuantity(balance, riskPct, entry, stop, lotMod, maxLev)` + `GetRiskSettings()`. Paper/Live/Backtest единый путь.
+**Sizing SSOT (сокет):** `execution.CalculateTargetQuantity(...)` — остаётся; legacy risk_settings purged.
 
 **Warmup gate:** `handleLiveTick` и `ApplyExecutionVetoes` блокируют scoring/entry до `HasMinBars(50)`. Reversal заблокирован; **SL на бирже работает**. Комментарий в `manageReversal`.
 
@@ -1070,7 +1084,7 @@ targetFrom = targetTo - windowSize
 - **Shot 6A:** `buildPanes(hostMap, panes)` routes by `component.hostId` (not pane id). Host map: `{ rsx, wozduh }`. Backend: `core.UIComponent.HostID` + `ui_config/*_layout.go`.
 
 ### Core 4.0 — Great Purge (Wozduh bus + TV chrome) ✅
-**Инвариант:** Wozduh math живёт в `WozduhNode` → `SlotWozduh*`; UI читает только DDR plots/manifest. `strategy/falcon.go` **не удалять** до Stage 6 ScoreNodes (#76).
+**Инвариант:** Wozduh math живёт в `WozduhNode` → `SlotWozduh*`; UI читает только DDR plots/manifest. `market/falcon.go` **не удалять** до Stage 6 ScoreNodes (#76).
 
 | Кусок | Канон |
 |-------|-------|
@@ -1208,7 +1222,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **64** | **Navigators full ReplayDAGKlines each request** — CPU on `navigators=1` | `dag_navigator_series.go` | 🟡 later: live HistoryBus tail |
 | **65** | ~~**Toolbar/header MarketState Falcon**~~ — DAG tip/plots; Falcon line fields stripped (Core 4.0 Stage 5); no per-tick legend HTML metrics | `server/webserver.go`, `legend-renderer.js`, `toolbar-controller.js` | ✅ 9J + Great Purge Stage 5. Residual: optional `ToolbarController.updateHeaderData` hook |
 | **66** | **HTFProvider / signalAnalyst alloc in ChartOnly** — idle objects | `main.go` | 🟢 optional skip |
-| **67** | **IIR Tip SSOT** — RSX spike on History/Live boundary. Warmup-depth hypothesis (400 vs 3000) **disproved** (`continuity_test.go`: bit-identical). Real root cause found + fixed in 4.8: `Marker.UpdateKlineTick` double-committed each closed bar into DAG (Restore→Update→Save ×2) | `strategy/analyst.go` (`lastCommittedOpenTime`), `strategy/layer2.go` | 🟡 fix landed Core 4.8 — **pending live confirm** (re-open if spike persists) |
+| **67** | **IIR Tip SSOT** — RSX spike on History/Live boundary. Warmup-depth hypothesis (400 vs 3000) **disproved** (`continuity_test.go`: bit-identical). Real root cause found + fixed in 4.8: `Frame.UpdateKlineTick` double-committed each closed bar into DAG (Restore→Update→Save ×2) | `market/frame.go` (`lastCommittedOpenTime`), `market/streaming.go` / `snapshot.go` | 🟡 fix landed Core 4.8 — **pending live confirm** (re-open if spike persists) |
 | **68** | **Osc fixed scale bounds** — RSX/Wozduh manifests lack TV-like `[-5,105]` / `autoscaleInfoProvider`; scale depends on data extremes | `ui_config/rsx_layout.go`, `wozduh_layout.go`, DDR RenderOpts | 🟡 after #67 |
 | **69** | **MemoryBudget / WindowPolicy** — ColumnarStore can grow unbounded on left-scroll; paint window 15k separate. **Deferred** — prune-right island interfered with microscope; revisit after #67 | `columnar-store.js`, `config.js` | ⏸ deferred |
 | **70** | **ScaleController only binds price** — osc slave `right` scales not in `applyAll`; rely on setData + sentinel. Optional: register rsx/wozduh or re-arm after DDR hydrate | `scale-controller.js`, `chart-core.js`, `chart-compositor.js` | 🟢 residual |
@@ -1217,7 +1231,7 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **73** | ~~**Y-axis squash / sentinel live tick**~~ | `series-factory.js`, `chart-core.js`, `scale-controller.js` | ✅ 11D-HOTFIX |
 | **74** | ~~**Wozduh Falcon→DAG bus**~~ — slots + WozduhNode + golden parity; Falcon Evaluate gated; tip via plots | `core/slots.go`, `core/nodes/wozduh.go`, `ui_config/wozduh_layout.go`, `strategy/falcon.go` (keep) | ✅ Core 4.0 Stages 1–5 |
 | **75** | ~~**TV Floating UI**~~ — fixed-up menus, eye hide `.lwc-host`, drag, outside close | `web/ui/floating-menu.js`, `legend-renderer.js`, `settings-renderer.js`, `boot.js`, `style.css` | ✅ Core 4.0 TV UI |
-| **76** | **Stage 6 ScoreNodes** — migrate Score/Falcon decision graph into DAG nodes; **do not delete** `strategy/falcon.go` until then | `core/nodes/`, `strategy/falcon.go`, `scoring.go` | 🔜 after #67 |
+| **76** | **Stage 6 ScoreNodes** — migrate Score/Falcon decision graph into DAG nodes; **do not delete** `market/falcon.go` until then | `core/nodes/`, `market/falcon.go`, `decision/score_types.go` | 🔜 after #67 |
 | **77** | ~~**WS dirty routing / TF case-sensitivity**~~ — server sent all TFs to all clients (`clientTF` unused); `.toLowerCase()` on both sides merged `1m`↔`1M` | `server/webserver.go` (`RouteChartTick`/`routeTick`), `web/boot.js`, `web/ws.js` | ✅ Core 4.4 audit + fix |
 | **78** | ~~**Frontend chronology gap / no reconnect reconciliation**~~ — `appendTick` glued any forward time jump as one new bar (visual hole); `initLiveWebSocket` had no `onClose`/`onReconnect` | `web/columnar-store.js`, `web/boot.js` | ✅ Core 4.5 Self-Healing |
 | **79** | **Self-Healing camera jump** — `loadDashboard()` triggered by gap-heal/reconnect always repaints `viewport:'fresh'`, resets user zoom/scroll. `viewportAnchor` restore path exists but not wired to the self-heal call | `web/boot.js` (`pushLiveTickDelta`, `initLiveWebSocket.onReconnect`) | 🟢 UX polish, not correctness |
@@ -1264,11 +1278,11 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 | **32** | **Overlay navigators in intent** | `backtest-pipeline.js` | 🟡 |
 | **33** | **`coversRange` not wired to `needsBaseReload`** | `backtest-pipeline.js`, `store.js` | 🟡 |
 | **34** | **`runBacktest(autoSwitchTab)` dead param** | legacy | 🟢 |
-| **35** | **DAG → TradeManager wiring (PAUSED)** — ChartOnly default; re-enable only with `ENGINE_MODE=live` | `strategy/master.go`, `core/runner.go` | ⏸ shadow DAG; Live gated |
-| **36** | **TradeIntent wire contract** | `strategy/score_types.go`, WS/API | ⏸ |
-| **37** | **Execution gate `isClosed` only** | `strategy/master.go` | ⏸ TickLiveCh frozen in ChartOnly |
-| **38** | **Risk/settings SSOT parity** | UI matrix vs DAG weights | ⏸ |
-| **39** | **ChiefAnalyst bus snapshot path** | `strategy/chief.go`, `master.ProcessTick` | ⏸ |
+| **35** | **DAG → TradeManager wiring (PAUSED)** — ChartOnly default; re-enable only with `ENGINE_MODE=live` | `market/runtime.go`, `core/runner.go` | ⏸ shadow DAG; Live gated |
+| **36** | **TradeIntent wire contract** | `decision/score_types.go`, WS/API | ⏸ |
+| **37** | **Execution gate `isClosed` only** | `market/runtime.go` | ⏸ TickLiveCh frozen in ChartOnly |
+| **38** | **Risk/settings SSOT parity** | UI matrix vs DAG weights | ⏸ purged matrix in Phase F — revisit with new strategies |
+| **39** | **~~ChiefAnalyst bus~~** | — | ❌ Phase F purge; do not revive name Analyst |
 
 ---
 
@@ -1276,21 +1290,24 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 | Область | Пути |
 |---------|------|
-| Score | `strategy/score_types.go`, `scoring.go`, `scoring_matrix.go`, `thresholds.go`, `risk.go` |
-| Marker / Layer2 | `strategy/analyst.go`, `layer2.go`, `volatility.go`, `kline_merge.go`, `engine_mode.go` |
-| MTF | `strategy/mtf_tracker.go`, `navigator_defaults.go`, `trendline_navigator.go`, `exchange/htf_provider.go` |
-| Execution / Sizing | `execution/risk.go`, `strategy/risk_settings.go` |
-| Live / Modes | `strategy/master.go`, `main.go`, `config/config.go` (`ENGINE_MODE`) |
-| Ingestion / Archive | `exchange/klines.go` (`FetchClosedRange`), `data/persistence_queue.go`, `data/sqlite_tip.go`, `data/history_db.go`, `strategy/sqlite_catchup.go`, `strategy/kline_gap.go`, `strategy/ram_history.go` |
+| Decision contracts | `decision/score_types.go`, `decision/doc.go` |
+| Frame / streaming | `market/frame.go`, `streaming.go`, `snapshot.go`, `volatility.go`, `engine_mode.go` |
+| Runtime / Boot | `market/runtime.go`, `boot_controller.go`, `ram_history.go`, `live_kline.go` |
+| MTF | `market/mtf_tracker.go`, `navigator_defaults.go`, `trendline_navigator.go`, `exchange/htf_provider.go` |
+| Execution / Sizing | `execution/` |
+| Live / Modes | `market/runtime.go`, `main.go`, `config/config.go` (`ENGINE_MODE`) |
+| Ingestion / Archive | `exchange/klines.go` (`FetchClosedRange`), `data/persistence_queue.go`, `data/sqlite_tip.go`, `data/history_db.go`, `market/sqlite_catchup.go`, `market/kline_gap.go` |
 | History delivery | `server/history_provider.go`, `server/columnar_history.go`, `server/wire/` (`annotation.go`, `projector.go`) |
-| Navigators (DAG) | `strategy/dag_navigator_series.go`, `strategy/dag_shadow.go` |
+| Navigators (DAG) | `market/dag_navigator_series.go`, `market/dag_shadow.go` |
 | Annotations (DAG→UI) | `core/nodes/divergence.go`, `server/wire/annotation.go`, `ui_config/rsx_layout.go` (`ann_rsx_div`) |
-| Backtest | `strategy/backtest.go`, `strategy/backtest_ab.go`, `strategy/backtest_loader.go`, `cmd/backtest/` |
+| Backtest (chart replay) | `market/backtest.go`, `market/backtest_loader.go` |
 | Stats / Trades | `domain/trade_history.go`, `server/backtest_run.go`, `server/stats_test.go` |
-| API / WS | `server/webserver.go`, `server/chart_cache.go` (legacy JSON history only), `server/micro_broadcast.go` |
-| Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `strategy/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
+| API / WS | `server/webserver.go`, `server/chart_cache.go` (legacy JSON history only) |
+| Core 2.0 DAG | `core/runner.go`, `core/nodes/`, `core/history.go`, `core/manifest.go`, `market/dag_shadow.go`, `server/wire/history.go`, `ui_config/` |
+| Falcon (keep #76) | `market/falcon.go` |
+| Strategy placeholder | `strategy/doc.go` only |
 | DDR Frontend | `web/series-factory.js`, `web/hydration-orchestrator.js`, `web/chart-compositor.js`, `web/render-scheduler.js` |
-| Live klines | `strategy/live_kline.go`, `strategy/rsx_pipeline.go`, `strategy/streaming_replay.go`, `strategy/streaming_replay_accum.go` |
+| Live klines / replay | `market/live_kline.go`, `market/rsx_pipeline.go`, `market/streaming_replay.go`, `market/streaming_replay_accum.go` |
 | Frontend core | `web/boot.js` (epoch + Atomic + tick buffer + Self-Healing reconnect), `web/columnar-store.js` (SSOT store + gap-detect `_intervalSec`), `web/chart-core.js`, `web/render-scheduler.js`, `web/series-factory.js`, `web/time-normalizer.js`, `web/mappers.js`, `web/api.js`, `web/ws.js` (case-sensitive TF gate) |
 | Frontend legacy | `web/app.legacy.js`, `web/adapter.legacy.js` (quarantined) |
 | Config | `.env` / `ENGINE_MODE`, `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys |
@@ -1304,4 +1321,4 @@ subscribeVisibleLogicalRangeChange → scheduleHistoryLoad (debounce)
 
 **Запуск:** `go run .` — dashboard `:8080`, WS Binance futures, **ChartOnly** delivery by default. `ENGINE_MODE=live` включает ScoreMatrix + `Master.Run`. `make ab-test` — CLI A/B backtest.
 
-**Следующий шаг (TF CLOSED + Great Purge Stages 1–5 + TV UI ✅ + Core 4.4–4.10 Continuity Chain ✅):** живое подтверждение, что RSX tip-spike исчез после double-commit fix (#67 / Core 4.8) — если нет, **re-open #67** и копать дальше (кандидат: остаточная asymmetry warmup continuum). Затем #68 osc fixed bounds, #69 MemoryBudget, #80 `ViewportManager.restore` 0×0 risk. Later: **#76 Stage 6 ScoreNodes** (keep `falcon.go` until then). Trading — только `ENGINE_MODE=live`.
+**Следующий шаг (Core 5.0 Phases A–G ✅):** **#76 ScoreNodes** + **#67 Live Confirm** (RSX tip-spike после double-commit fix 4.8 — если spike остаётся, re-open #67). Затем #68 osc fixed bounds, #69 MemoryBudget, #80 `ViewportManager.restore` 0×0 risk. Trading — только `ENGINE_MODE=live` (после новых стратегий в `decision/`).

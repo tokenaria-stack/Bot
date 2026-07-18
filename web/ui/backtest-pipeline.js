@@ -172,8 +172,8 @@ const BacktestPipeline = (() => {
         };
       }
 
-      if (!payload.settings?.matrix || !payload.settings?.navigators) {
-        throw new Error('Backtest payload missing matrix or navigators in settings');
+      if (!payload.settings?.navigators) {
+        throw new Error('Backtest payload missing navigators in settings');
       }
 
       let result;

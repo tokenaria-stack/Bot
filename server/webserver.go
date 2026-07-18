@@ -21,10 +21,11 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/data"
+	"trading_bot/decision"
 	"trading_bot/domain"
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 	"trading_bot/ui_config"
 )
 
@@ -70,7 +71,7 @@ func (c *WSClient) Close() error {
 
 // DashboardServer serves the trading dashboard UI and market state API.
 type DashboardServer struct {
-	analysts         map[string]*strategy.Marker
+	frames           map[string]*market.Frame
 	rest             *exchange.BinanceExchange
 	symbol           string
 	staticDir        string
@@ -84,11 +85,10 @@ type DashboardServer struct {
 	paperTrading     bool
 	sandboxMode      bool
 	tradingTimeframe string
-	signalAnalyst    *strategy.Analyst
 	htfProvider      *exchange.HTFProvider
 	liveNavMu        sync.RWMutex
-	liveNavigators   map[string]strategy.NavigatorUISettings
-	master           *strategy.MasterGeneral
+	liveNavigators   map[string]market.NavigatorUISettings
+	master           *market.Runtime
 	backtestRuns     *backtestRunManager
 	uiRegistry       *core.UIRegistry
 	projector        *wire.Projector
@@ -99,32 +99,32 @@ type DashboardServer struct {
 
 // MarketState is the JSON payload for GET /api/state.
 type MarketState struct {
-	Status           string                                 `json:"status,omitempty"`
-	Symbol           string                                 `json:"symbol"`
-	Timeframe        string                                 `json:"timeframe"`
-	TradingTimeframe string                                 `json:"tradingTimeframe"`
-	UpdatedAt        int64                                  `json:"updatedAt"`
-	VolatilityRegime string                                 `json:"volatilityRegime"`
-	Jurik            float64                                `json:"jurik"`
-	LongScore        int                                    `json:"longScore"`
-	ShortScore       int                                    `json:"shortScore"`
-	RawAction        string                                 `json:"rawAction,omitempty"`
-	FinalAction      string                                 `json:"finalAction,omitempty"`
-	IsVetoed         bool                                   `json:"isVetoed,omitempty"`
-	VetoReason       string                                 `json:"vetoReason,omitempty"`
-	Factors          map[string]strategy.ScoreFactor        `json:"factors"`
-	BrainStatus      string                                 `json:"brainStatus"`
-	AIStatus         string                                 `json:"aiStatus"`
-	Candles          []ChartCandle                          `json:"candles"`
-	Oscillators      []ChartOscillator                      `json:"oscillators"`
-	FibZones         []ChartFibZone                         `json:"fibZones"`
-	Trades           []ChartTrade                           `json:"trades,omitempty"`
-	MasterState      string                                 `json:"masterState,omitempty"`
-	PaperTrading     bool                                   `json:"paperTrading,omitempty"`
-	SandboxMode      bool                                   `json:"sandboxMode,omitempty"`
-	HasMore          bool                                   `json:"hasMore,omitempty"`
-	Navigators       map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
-	Annotations      []strategy.ChartAnnotation             `json:"annotations,omitempty"`
+	Status           string                               `json:"status,omitempty"`
+	Symbol           string                               `json:"symbol"`
+	Timeframe        string                               `json:"timeframe"`
+	TradingTimeframe string                               `json:"tradingTimeframe"`
+	UpdatedAt        int64                                `json:"updatedAt"`
+	VolatilityRegime string                               `json:"volatilityRegime"`
+	Jurik            float64                              `json:"jurik"`
+	LongScore        int                                  `json:"longScore"`
+	ShortScore       int                                  `json:"shortScore"`
+	RawAction        string                               `json:"rawAction,omitempty"`
+	FinalAction      string                               `json:"finalAction,omitempty"`
+	IsVetoed         bool                                 `json:"isVetoed,omitempty"`
+	VetoReason       string                               `json:"vetoReason,omitempty"`
+	Factors          map[string]decision.ScoreFactor      `json:"factors"`
+	BrainStatus      string                               `json:"brainStatus"`
+	AIStatus         string                               `json:"aiStatus"`
+	Candles          []ChartCandle                        `json:"candles"`
+	Oscillators      []ChartOscillator                    `json:"oscillators"`
+	FibZones         []ChartFibZone                       `json:"fibZones"`
+	Trades           []ChartTrade                         `json:"trades,omitempty"`
+	RuntimeState     string                               `json:"masterState,omitempty"`
+	PaperTrading     bool                                 `json:"paperTrading,omitempty"`
+	SandboxMode      bool                                 `json:"sandboxMode,omitempty"`
+	HasMore          bool                                 `json:"hasMore,omitempty"`
+	Navigators       map[string]market.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations      []market.ChartAnnotation             `json:"annotations,omitempty"`
 	// Tip slot→wire map (component ids). Header/toolbar reads plots — never Falcon line fields.
 	Plots map[string]float64 `json:"plots,omitempty"`
 }
@@ -218,7 +218,7 @@ type tickPayload struct {
 	FinalAction      string                          `json:"finalAction,omitempty"`
 	IsVetoed         bool                            `json:"isVetoed,omitempty"`
 	VetoReason       string                          `json:"vetoReason,omitempty"`
-	Factors          map[string]strategy.ScoreFactor `json:"factors,omitempty"`
+	Factors          map[string]decision.ScoreFactor `json:"factors,omitempty"`
 	BrainStatus      string                          `json:"brainStatus,omitempty"`
 	AIStatus         string                          `json:"aiStatus,omitempty"`
 	IsClosed         bool                            `json:"isClosed,omitempty"`
@@ -238,28 +238,27 @@ type markerPayload struct {
 }
 
 type historyChunkResponse struct {
-	ChartData   []ChartPoint               `json:"chartData"`
-	HasMore     bool                       `json:"hasMore"`
-	Annotations []strategy.ChartAnnotation `json:"annotations,omitempty"`
+	ChartData   []ChartPoint             `json:"chartData"`
+	HasMore     bool                     `json:"hasMore"`
+	Annotations []market.ChartAnnotation `json:"annotations,omitempty"`
 }
 
 type historyResponse struct {
-	Status      string                                 `json:"status"`
-	Timeframe   string                                 `json:"timeframe"`
-	Candles     []ChartCandle                          `json:"candles"`
-	Oscillators []ChartOscillator                      `json:"oscillators"`
-	Trades      []ChartTrade                           `json:"trades,omitempty"`
-	HasMore     bool                                   `json:"hasMore"`
-	Navigators  map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
-	Annotations []strategy.ChartAnnotation             `json:"annotations,omitempty"`
+	Status      string                               `json:"status"`
+	Timeframe   string                               `json:"timeframe"`
+	Candles     []ChartCandle                        `json:"candles"`
+	Oscillators []ChartOscillator                    `json:"oscillators"`
+	Trades      []ChartTrade                         `json:"trades,omitempty"`
+	HasMore     bool                                 `json:"hasMore"`
+	Navigators  map[string]market.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations []market.ChartAnnotation             `json:"annotations,omitempty"`
 }
 
-// NewDashboardServer creates a dashboard server bound to Marker instances.
+// NewDashboardServer creates a dashboard server bound to Frame instances.
 func NewDashboardServer(
-	analysts map[string]*strategy.Marker,
+	frames map[string]*market.Frame,
 	rest *exchange.BinanceExchange,
 	symbol string,
-	signalAnalyst *strategy.Analyst,
 	htfProvider *exchange.HTFProvider,
 	paperTrading bool,
 	sandboxMode bool,
@@ -274,7 +273,7 @@ func NewDashboardServer(
 		uiReg = core.NewUIRegistry()
 	}
 	return &DashboardServer{
-		analysts:         analysts,
+		frames:           frames,
 		rest:             rest,
 		symbol:           exchange.NormalizeFuturesSymbol(symbol),
 		staticDir:        defaultStaticDir,
@@ -285,7 +284,6 @@ func NewDashboardServer(
 		paperTrading:     paperTrading,
 		sandboxMode:      sandboxMode,
 		tradingTimeframe: tradingTimeframe,
-		signalAnalyst:    signalAnalyst,
 		htfProvider:      htfProvider,
 		liveNavigators:   defaultLiveNavigatorPanes(),
 		uiRegistry:       uiReg,
@@ -304,10 +302,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/state", withGzip(d.handleState))
 	mux.HandleFunc("/api/history", withGzip(d.handleHistory))
 	mux.HandleFunc("/api/history/chunk", withGzip(d.handleHistoryChunk))
-	mux.HandleFunc("/api/settings/thresholds", withGzip(d.handleThresholds))
-	mux.HandleFunc("/api/settings/matrix", withGzip(d.handleScoringMatrix))
 	mux.HandleFunc("/api/settings/indicators", withGzip(d.handleIndicatorSettings))
-	mux.HandleFunc("/api/settings/risk", withGzip(d.handleRiskSettings))
 	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
 	mux.HandleFunc("/api/ui/manifest", withGzip(d.handleUIManifest))
 	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
@@ -359,7 +354,7 @@ func validOHLC(open, high, low, closePrice float64) bool {
 
 // RouteChartTick delivers an atomic chart frame (OHLCV + DAG plots + header tip) to
 // clients subscribed to this timeframe only (Core 4.2 Timeframe-pure Transport).
-// Contract: every live tick carries plots when the Analyst DAG frame is available — never price-only.
+// Contract: every live tick carries plots when the Frame DAG frame is available — never price-only.
 // Header Jurik/Wozduh come from DAG slots only — never FalconSnapshot.
 func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
 	chart, ok := ChartCandleFromDomain(candle)
@@ -370,7 +365,7 @@ func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle,
 		timeframe = d.tradingTimeframe
 	}
 	if dagFrame == nil {
-		if a := d.analystForTimeframe(timeframe); a != nil {
+		if a := d.frameForTimeframe(timeframe); a != nil {
 			dagFrame = a.DAGTickFrame()
 		}
 	}
@@ -392,7 +387,7 @@ func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle,
 		Plots:       plots,
 		Marker:      marker,
 		Annotations: anns,
-		Factors:     map[string]strategy.ScoreFactor{},
+		Factors:     map[string]decision.ScoreFactor{},
 	}
 	applyDAGHeaderToTick(&payload, hdr)
 	d.routeTick(timeframe, wsEnvelope{Type: "tick", Data: payload})
@@ -490,7 +485,7 @@ func (d *DashboardServer) sessionTradesForChart() []ChartTrade {
 	if len(trades) == 0 {
 		return nil
 	}
-	if d.master == nil || d.master.State() == strategy.StateInPosition {
+	if d.master == nil || d.master.State() == market.StateInPosition {
 		return trades
 	}
 	out := trades
@@ -614,7 +609,7 @@ func parseRSXLookback(r *http.Request) int {
 			}
 		}
 	}
-	return strategy.GetRSXSettings().DivLookback
+	return market.GetRSXSettings().DivLookback
 }
 
 func hasRSXQueryOverrides(q url.Values) bool {
@@ -630,13 +625,13 @@ func hasRSXQueryOverrides(q url.Values) bool {
 	return false
 }
 
-func parseRSXSettingsFromRequest(r *http.Request) strategy.RSXSettings {
-	base := strategy.GetRSXSettings()
+func parseRSXSettingsFromRequest(r *http.Request) market.RSXSettings {
+	base := market.GetRSXSettings()
 	if r == nil || !hasRSXQueryOverrides(r.URL.Query()) {
 		return base
 	}
 	q := r.URL.Query()
-	patch := strategy.RSXSettings{}
+	patch := market.RSXSettings{}
 	if v := q.Get("rsx_length"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			patch.Length = n
@@ -663,7 +658,7 @@ func parseRSXSettingsFromRequest(r *http.Request) strategy.RSXSettings {
 			patch.PivotRadius = n
 		}
 	}
-	out := strategy.NormalizeRSXSettings(mergeRSXSettingsFromPatch(base, patch))
+	out := market.NormalizeRSXSettings(mergeRSXSettingsFromPatch(base, patch))
 	if v := q.Get("min_price_delta_ratio"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			out.MinPriceDeltaRatio = f
@@ -677,7 +672,7 @@ func parseRSXSettingsFromRequest(r *http.Request) strategy.RSXSettings {
 	return out
 }
 
-func mergeRSXSettingsFromPatch(base, patch strategy.RSXSettings) strategy.RSXSettings {
+func mergeRSXSettingsFromPatch(base, patch market.RSXSettings) market.RSXSettings {
 	out := base
 	if patch.Length > 0 {
 		out.Length = patch.Length
@@ -795,72 +790,19 @@ func (d *DashboardServer) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type thresholdsRequest struct {
-	Long  int `json:"long"`
-	Short int `json:"short"`
-}
-
-type thresholdsResponse struct {
-	Long  int `json:"long"`
-	Short int `json:"short"`
-}
-
-func (d *DashboardServer) handleThresholds(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req thresholdsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
-	}
-
-	strategy.SetScoreThresholds(req.Long, req.Short)
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(thresholdsResponse{
-		Long:  strategy.LongScoreThreshold(),
-		Short: strategy.ShortScoreThreshold(),
-	})
-}
-
-func (d *DashboardServer) handleScoringMatrix(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req strategy.ScoringMatrix
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
-	}
-
-	strategy.SetScoringMatrix(req)
-
-	if err := strategy.SaveMatrixConfig(req, strategy.MatrixConfigPath); err != nil {
-		log.Printf("[API] Failed to save scoring matrix to %s: %v", strategy.MatrixConfigPath, err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(strategy.GetScoringMatrix())
-}
-
 func (d *DashboardServer) handleIndicatorSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(strategy.GetRSXSettings())
+		_ = json.NewEncoder(w).Encode(market.GetRSXSettings())
 		return
 	case http.MethodPost:
-		var req strategy.RSXSettings
+		var req market.RSXSettings
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		applied := strategy.ApplyRSXSettings(req)
+		applied := market.ApplyRSXSettings(req)
 		d.applyRSXSettingsToAnalysts()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(applied)
@@ -870,37 +812,16 @@ func (d *DashboardServer) handleIndicatorSettings(w http.ResponseWriter, r *http
 	}
 }
 
-func (d *DashboardServer) handleRiskSettings(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(strategy.GetRiskSettings())
-		return
-	case http.MethodPost:
-		var req strategy.RiskSettings
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
-			return
-		}
-		strategy.UpdateRiskSettings(req)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(strategy.GetRiskSettings())
-		return
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
 type navigatorSettingsRequest struct {
-	Navigators map[string]strategy.NavigatorUISettings `json:"navigators"`
+	Navigators map[string]market.NavigatorUISettings `json:"navigators"`
 }
 
-func defaultLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
-	return strategy.DefaultLiveNavigatorPanes()
+func defaultLiveNavigatorPanes() map[string]market.NavigatorUISettings {
+	return market.DefaultLiveNavigatorPanes()
 }
 
 // BindMaster wires live execution for navigator-driven MTF updates.
-func (d *DashboardServer) BindMaster(m *strategy.MasterGeneral) {
+func (d *DashboardServer) BindMaster(m *market.Runtime) {
 	d.master = m
 	d.syncMasterNavigatorPanes()
 }
@@ -912,27 +833,27 @@ func (d *DashboardServer) syncMasterNavigatorPanes() {
 	d.master.SetNavigatorPanes(d.getLiveNavigatorPanes())
 }
 
-func (d *DashboardServer) getLiveNavigatorPanes() map[string]strategy.NavigatorUISettings {
+func (d *DashboardServer) getLiveNavigatorPanes() map[string]market.NavigatorUISettings {
 	d.liveNavMu.RLock()
 	defer d.liveNavMu.RUnlock()
 	if len(d.liveNavigators) == 0 {
 		return defaultLiveNavigatorPanes()
 	}
-	out := make(map[string]strategy.NavigatorUISettings, len(d.liveNavigators))
+	out := make(map[string]market.NavigatorUISettings, len(d.liveNavigators))
 	for k, v := range d.liveNavigators {
 		out[k] = v
 	}
 	return out
 }
 
-func (d *DashboardServer) setLiveNavigatorPanes(panes map[string]strategy.NavigatorUISettings) {
+func (d *DashboardServer) setLiveNavigatorPanes(panes map[string]market.NavigatorUISettings) {
 	d.liveNavMu.Lock()
 	defer d.liveNavMu.Unlock()
 	if len(panes) == 0 {
 		d.liveNavigators = defaultLiveNavigatorPanes()
 		return
 	}
-	d.liveNavigators = make(map[string]strategy.NavigatorUISettings, len(panes))
+	d.liveNavigators = make(map[string]market.NavigatorUISettings, len(panes))
 	for k, v := range panes {
 		d.liveNavigators[k] = v
 	}
@@ -949,10 +870,10 @@ func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		panes := strategy.ResolveBacktestNavigators(
-			&strategy.BacktestRunSettings{Navigators: req.Navigators},
+		panes := market.ResolveBacktestNavigators(
+			&market.BacktestRunSettings{Navigators: req.Navigators},
 			req.Navigators,
-			strategy.NavigatorUISettings{},
+			market.NavigatorUISettings{},
 		)
 		d.setLiveNavigatorPanes(panes)
 		d.syncMasterNavigatorPanes()
@@ -977,25 +898,25 @@ func (d *DashboardServer) handleUIManifest(w http.ResponseWriter, r *http.Reques
 }
 
 func (d *DashboardServer) applyRSXSettingsToAnalysts() {
-	settings := strategy.GetRSXSettings()
-	for _, analyst := range d.analysts {
-		if analyst != nil {
-			analyst.UpdateRSXScanConfig(settings)
+	settings := market.GetRSXSettings()
+	for _, frame := range d.frames {
+		if frame != nil {
+			frame.UpdateRSXScanConfig(settings)
 		}
 	}
 }
 
 // BacktestRequest is the JSON payload for POST /api/backtest/run.
 type BacktestRequest struct {
-	Symbol     string                                  `json:"symbol"`
-	Interval   string                                  `json:"interval"`
-	StartDate  string                                  `json:"startDate"`
-	EndDate    string                                  `json:"endDate"`
-	Settings   *strategy.BacktestRunSettings           `json:"settings"`
-	Navigator  strategy.NavigatorUISettings            `json:"navigator,omitempty"`
-	Navigators map[string]strategy.NavigatorUISettings `json:"navigators,omitempty"`
-	MtfOptions map[string]bool                         `json:"mtfOptions,omitempty"`
-	SimOnly    bool                                    `json:"simOnly"`
+	Symbol     string                                `json:"symbol"`
+	Interval   string                                `json:"interval"`
+	StartDate  string                                `json:"startDate"`
+	EndDate    string                                `json:"endDate"`
+	Settings   *market.BacktestRunSettings           `json:"settings"`
+	Navigator  market.NavigatorUISettings            `json:"navigator,omitempty"`
+	Navigators map[string]market.NavigatorUISettings `json:"navigators,omitempty"`
+	MtfOptions map[string]bool                       `json:"mtfOptions,omitempty"`
+	SimOnly    bool                                  `json:"simOnly"`
 }
 
 // ChartPoint is one candle with full indicator values for the backtest chart.
@@ -1037,7 +958,7 @@ type ChartPoint struct {
 	FinalAction     string                          `json:"finalAction,omitempty"`
 	IsVetoed        bool                            `json:"isVetoed,omitempty"`
 	VetoReason      string                          `json:"vetoReason,omitempty"`
-	Factors         map[string]strategy.ScoreFactor `json:"factors,omitempty"`
+	Factors         map[string]decision.ScoreFactor `json:"factors,omitempty"`
 }
 
 // SimPoint is a slim chart point (indicators only, no OHLC) for simOnly backtest responses.
@@ -1082,21 +1003,21 @@ type EquityPoint struct {
 
 // BacktestResult is returned after a backtest run completes.
 type BacktestResult struct {
-	TotalTrades    int                                    `json:"totalTrades"`
-	WinRate        float64                                `json:"winRate"`
-	NetProfit      float64                                `json:"netProfit"`
-	ProfitFactor   float64                                `json:"profitFactor"`
-	MaxDrawdown    float64                                `json:"maxDrawdown"`
-	RecoveryFactor float64                                `json:"recoveryFactor"`
-	Cancelled      bool                                   `json:"cancelled,omitempty"`
-	Trades         []BacktestTrade                        `json:"trades"`
-	EquityCurve    []EquityPoint                          `json:"equityCurve"`
-	ChartData      []ChartPoint                           `json:"chartData"`
-	SimData        []SimPoint                             `json:"simData,omitempty"`
-	NavigatorData  strategy.NavigatorResultDTO            `json:"navigatorData"`
-	NavigatorPrice strategy.NavigatorResultDTO            `json:"navigatorPrice"` // legacy alias for navigatorData
-	Navigators     map[string]strategy.NavigatorResultDTO `json:"navigators,omitempty"`
-	Annotations    []strategy.ChartAnnotation             `json:"annotations,omitempty"`
+	TotalTrades    int                                  `json:"totalTrades"`
+	WinRate        float64                              `json:"winRate"`
+	NetProfit      float64                              `json:"netProfit"`
+	ProfitFactor   float64                              `json:"profitFactor"`
+	MaxDrawdown    float64                              `json:"maxDrawdown"`
+	RecoveryFactor float64                              `json:"recoveryFactor"`
+	Cancelled      bool                                 `json:"cancelled,omitempty"`
+	Trades         []BacktestTrade                      `json:"trades"`
+	EquityCurve    []EquityPoint                        `json:"equityCurve"`
+	ChartData      []ChartPoint                         `json:"chartData"`
+	SimData        []SimPoint                           `json:"simData,omitempty"`
+	NavigatorData  market.NavigatorResultDTO            `json:"navigatorData"`
+	NavigatorPrice market.NavigatorResultDTO            `json:"navigatorPrice"` // legacy alias for navigatorData
+	Navigators     map[string]market.NavigatorResultDTO `json:"navigators,omitempty"`
+	Annotations    []market.ChartAnnotation             `json:"annotations,omitempty"`
 }
 
 func truncateLogBody(b []byte, max int) string {
@@ -1164,7 +1085,7 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	startMs, endMs, err := strategy.ParseBacktestDateRange(req.StartDate, req.EndDate)
+	startMs, endMs, err := market.ParseBacktestDateRange(req.StartDate, req.EndDate)
 	if err != nil {
 		log.Printf("[Backtest] bad date range start=%q end=%q: %v", req.StartDate, req.EndDate, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1205,9 +1126,9 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	minBars := strategy.BacktestMinBars()
+	minBars := market.BacktestMinBars()
 	for padAttempt := 0; len(candles) < minBars && padAttempt < 4; padAttempt++ {
-		paddedStart, ok := strategy.PadBacktestStartMs(spec.BinanceInterval, effectiveStartMs, endMs, len(candles))
+		paddedStart, ok := market.PadBacktestStartMs(spec.BinanceInterval, effectiveStartMs, endMs, len(candles))
 		if !ok {
 			break
 		}
@@ -1238,27 +1159,17 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"), req.StartDate, len(candles))
 	}
 
-	matrixSnapshot := strategy.ResolveBacktestMatrix(req.Settings)
-	matrix := &matrixSnapshot
-	navigators := strategy.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
-	strategy.ApplyMtfOptionsToNavigators(navigators, req.MtfOptions)
-	strategy.EnsureBacktestNavigatorsForMatrix(navigators, matrixSnapshot)
+	navigators := market.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
+	market.ApplyMtfOptionsToNavigators(navigators, req.MtfOptions)
 
-	if req.Settings != nil && req.Settings.Risk != nil {
-		strategy.UpdateRiskSettings(*req.Settings.Risk)
-	}
-
-	log.Printf("[Backtest] parsed settings: RSX=%v WozduhCross=%v Trendlines=%v entrySources=%v navigatorPanes=%d",
-		matrix.UseRSX, matrix.UseWozduhCross, matrix.UseTrendlines,
-		strategy.ScoringMatrixEntrySourcesEnabledFor(*matrix), len(navigators))
+	log.Printf("[Backtest] parsed settings: navigatorPanes=%d (chart replay, trading purged)", len(navigators))
 	for pane, ui := range navigators {
 		log.Printf("[Backtest] navigator[%s] enabled=%v source=%s useLong=%v longLen=%d",
 			pane, ui.Enabled, ui.Source, ui.UseLong, ui.LongLen)
 	}
 
-	longTh, shortTh := strategy.ResolveBacktestThresholds(req.Settings)
-	rsxSettings, hasRSX := strategy.ResolveBacktestRSXSettings(req.Settings)
-	var rsxCfg *strategy.RSXSettings
+	rsxSettings, hasRSX := market.ResolveBacktestRSXSettings(req.Settings)
+	var rsxCfg *market.RSXSettings
 	if hasRSX {
 		rsxCfg = &rsxSettings
 	}
@@ -1266,7 +1177,6 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	if req.Settings != nil && len(req.Settings.WozduhSettings) > 0 {
 		wozduhPrefs = req.Settings.WozduhSettings
 	}
-	log.Printf("[Backtest] thresholds: long=%d short=%d", longTh, shortTh)
 	if hasRSX {
 		log.Printf("[Backtest] RSX settings: length=%d lookback=%d pivot_radius=%d method=%s source=%s",
 			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.DivMethod, rsxSettings.Source)
@@ -1290,18 +1200,12 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 	ctx, endRun := d.backtestRuns.begin(r.Context())
 	defer endRun()
 
-	engine := strategy.NewBacktestEngine(strategy.BacktestConfig{
+	engine := market.NewBacktestEngine(market.BacktestConfig{
 		Symbol:         symbol,
 		Interval:       spec.BinanceInterval,
-		EntryAnalyst:   d.signalAnalyst,
-		FeeRate:        strategy.DefaultScalpFeeRate,
-		SlippagePct:    strategy.ResolveBacktestSlippage(req.Settings),
-		Matrix:         matrix,
 		Navigator:      req.Navigator,
 		Navigators:     navigators,
 		HTF:            d.htfProvider,
-		LongThreshold:  longTh,
-		ShortThreshold: shortTh,
 		RSXSettings:    rsxCfg,
 		WozduhPrefs:    wozduhPrefs,
 		SimOnly:        simOnly,
@@ -1348,7 +1252,7 @@ func (d *DashboardServer) handleBacktestStop(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, map[string]any{"stopped": stopped})
 }
 
-func backtestResultFromStrategy(run *strategy.BacktestRunResult) BacktestResult {
+func backtestResultFromStrategy(run *market.BacktestRunResult) BacktestResult {
 	if run == nil {
 		return BacktestResult{}
 	}
@@ -1517,7 +1421,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		klines := win.Klines
-		trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+		trimBars := historyWarmupTrim(len(klines), candleLimit, market.IndicatorWarmupBars)
 		resp.Candles, resp.Oscillators, resp.Annotations = d.buildHistoryChartSeriesTrimmed(
 			r.Context(), klines, trimBars, spec.ID, rsxSettings,
 		)
@@ -1547,7 +1451,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	}
 	klines := win.Klines
 
-	trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+	trimBars := historyWarmupTrim(len(klines), candleLimit, market.IndicatorWarmupBars)
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
@@ -1646,7 +1550,7 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fetchStartMs := fetchEndMs - intervalMs*int64(limit+strategy.IndicatorWarmupBars)
+	fetchStartMs := fetchEndMs - intervalMs*int64(limit+market.IndicatorWarmupBars)
 	if fetchStartMs < 0 {
 		fetchStartMs = 0
 	}
@@ -1655,14 +1559,14 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
 
 	if err := data.InitDB(); err == nil {
-		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs, limit+strategy.IndicatorWarmupBars)
+		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs, limit+market.IndicatorWarmupBars)
 		if loadErr == nil && len(candles) > 0 {
 			klines := candlesToKlines(candles)
-			wantBars := limit + strategy.IndicatorWarmupBars
+			wantBars := limit + market.IndicatorWarmupBars
 			if wantBars > 0 && len(klines) > wantBars {
 				klines = klines[len(klines)-wantBars:]
 			}
-			trim := historyWarmupTrim(len(klines), limit, strategy.IndicatorWarmupBars)
+			trim := historyWarmupTrim(len(klines), limit, market.IndicatorWarmupBars)
 			if err := requestCtxErr(r.Context()); err != nil {
 				return
 			}
@@ -1762,7 +1666,7 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 		SandboxMode:      d.sandboxMode,
 		Candles:          []ChartCandle{},
 		Oscillators:      []ChartOscillator{},
-		Factors:          map[string]strategy.ScoreFactor{},
+		Factors:          map[string]decision.ScoreFactor{},
 	}
 	if !tailPoll && candleLimit > stateTailPollLimit {
 		if err := requestCtxErr(ctx); err != nil {
@@ -1770,22 +1674,22 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 		}
 		klines := d.loadLiveKlinesFromRAM(spec, candleLimit)
 		if len(klines) > 0 {
-			trimBars := historyWarmupTrim(len(klines), candleLimit, strategy.IndicatorWarmupBars)
+			trimBars := historyWarmupTrim(len(klines), candleLimit, market.IndicatorWarmupBars)
 			binanceInterval := spec.BinanceInterval
 			if spec.Kind == TFRAMOnly {
 				binanceInterval = spec.ID
 			}
-			rsxVals, wozVals := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+			rsxVals, wozVals := market.ExtractDAGNavigatorSeries(klines, market.GetRSXSettings())
 			state.Navigators = buildNavigatorsFromSeries(
 				ctx, d.symbol, klines, rsxVals, wozVals, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 			)
 		}
 	}
 
-	if analyst, ok := d.analysts[spec.ID]; ok {
-		d.enrichFromDAG(state, analyst)
-	} else if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
-		d.enrichFromDAG(state, analyst)
+	if frame, ok := d.frames[spec.ID]; ok {
+		d.enrichFromDAG(state, frame)
+	} else if frame, ok := d.frames[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+		d.enrichFromDAG(state, frame)
 	}
 	return state, nil
 }
@@ -1801,13 +1705,13 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 	if len(klines) == 0 {
 		return nil, errWarmingUp
 	}
-	trimBars := historyWarmupTrim(len(klines), displayLimit, strategy.IndicatorWarmupBars)
+	trimBars := historyWarmupTrim(len(klines), displayLimit, market.IndicatorWarmupBars)
 	binanceInterval := spec.BinanceInterval
 	if spec.Kind == TFRAMOnly {
 		binanceInterval = spec.ID
 	}
 
-	rsxVals, wozVals := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+	rsxVals, wozVals := market.ExtractDAGNavigatorSeries(klines, market.GetRSXSettings())
 	if len(rsxVals) == 0 {
 		return nil, errWarmingUp
 	}
@@ -1822,7 +1726,7 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 		UpdatedAt:        time.Now().Unix(),
 		Candles:          []ChartCandle{},
 		Oscillators:      []ChartOscillator{},
-		Factors:          map[string]strategy.ScoreFactor{},
+		Factors:          map[string]decision.ScoreFactor{},
 		Navigators: buildNavigatorsFromSeries(
 			ctx, d.symbol, klines, rsxVals, wozVals, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 		),
@@ -1833,15 +1737,15 @@ func (d *DashboardServer) loadLiveKlinesFromRAM(spec TimeframeSpec, limit int) [
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
 	}
-	want := limit + strategy.IndicatorWarmupBars
-	if want > strategy.LiveKlineRAMCap {
-		want = strategy.LiveKlineRAMCap
+	want := limit + market.IndicatorWarmupBars
+	if want > market.LiveKlineRAMCap {
+		want = market.LiveKlineRAMCap
 	}
-	if analyst, ok := d.analysts[spec.ID]; ok {
-		return analyst.GetKlinesTail(want)
+	if frame, ok := d.frames[spec.ID]; ok {
+		return frame.GetKlinesTail(want)
 	}
-	if analyst, ok := d.analysts[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
-		return analyst.GetKlinesTail(want)
+	if frame, ok := d.frames[spec.BinanceInterval]; ok && spec.Kind == TFBinanceREST {
+		return frame.GetKlinesTail(want)
 	}
 	return nil
 }
@@ -1854,37 +1758,37 @@ func (d *DashboardServer) loadKlines(ctx context.Context, spec TimeframeSpec, li
 		limit = defaultStateCandleLimit
 	}
 	if spec.Kind == TFRAMOnly {
-		want := limit + strategy.IndicatorWarmupBars
+		want := limit + market.IndicatorWarmupBars
 		return d.ramKlines(spec.ID, want)
 	}
 	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
 		klines := d.loadRESTKlinesFromStore(ctx, spec, endTimeMs, limit, d.isHistoricalKlineEnd(endTimeMs, spec.BinanceInterval))
-		klines = exchange.MergeKlineSeries(klines, d.analystKlines(spec), exchange.AuthoritySettled, exchange.AuthorityFinal)
+		klines = exchange.MergeKlineSeries(klines, d.frameKlines(spec), exchange.AuthoritySettled, exchange.AuthorityFinal)
 		if len(klines) > 0 {
 			return klines
 		}
 	}
-	return d.analystKlines(spec)
+	return d.frameKlines(spec)
 }
 
-func (d *DashboardServer) analystKlines(spec TimeframeSpec) []exchange.Kline {
-	if a := d.analystForTimeframe(spec.ID); a != nil {
+func (d *DashboardServer) frameKlines(spec TimeframeSpec) []exchange.Kline {
+	if a := d.frameForTimeframe(spec.ID); a != nil {
 		return a.GetKlines()
 	}
 	if spec.BinanceInterval != "" {
-		if a := d.analystForTimeframe(spec.BinanceInterval); a != nil {
+		if a := d.frameForTimeframe(spec.BinanceInterval); a != nil {
 			return a.GetKlines()
 		}
 	}
 	return nil
 }
 
-// analystForTimeframe returns the live Marker for a chart/trading timeframe id (thread-safe reads via Marker APIs).
-func (d *DashboardServer) analystForTimeframe(tf string) *strategy.Marker {
+// frameForTimeframe returns the live Frame for a chart/trading timeframe id (thread-safe reads via Frame APIs).
+func (d *DashboardServer) frameForTimeframe(tf string) *market.Frame {
 	if d == nil || tf == "" {
 		return nil
 	}
-	if a, ok := d.analysts[tf]; ok {
+	if a, ok := d.frames[tf]; ok {
 		return a
 	}
 	return nil
@@ -1907,7 +1811,7 @@ func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec Time
 		return nil
 	}
 
-	wantBars := limit + strategy.IndicatorWarmupBars
+	wantBars := limit + market.IndicatorWarmupBars
 	startTimeMs := endTimeMs - intervalMs*int64(wantBars)
 	if startTimeMs < 0 {
 		startTimeMs = 0
@@ -1996,7 +1900,7 @@ func (d *DashboardServer) liveHistoryHasMore(symbol, interval string, klines []e
 	if err != nil {
 		return false
 	}
-	wantBars := candleLimit + strategy.IndicatorWarmupBars
+	wantBars := candleLimit + market.IndicatorWarmupBars
 	if len(klines) >= wantBars {
 		startTimeMs := endTimeMs - intervalMs*int64(wantBars)
 		if startTimeMs > 0 {
@@ -2023,11 +1927,11 @@ func dataCandlesToKlines(rows []data.Candle) []exchange.Kline {
 }
 
 func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
-	if analyst, ok := d.analysts[tfID]; ok {
+	if frame, ok := d.frames[tfID]; ok {
 		if maxBars <= 0 {
 			maxBars = defaultStateCandleLimit
 		}
-		return analyst.GetKlinesTail(maxBars)
+		return frame.GetKlinesTail(maxBars)
 	}
 	return nil
 }
@@ -2061,39 +1965,29 @@ func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {
 	return klines
 }
 
-func (d *DashboardServer) enrichFromDAG(state *MarketState, analyst *strategy.Marker) {
-	if state == nil || analyst == nil {
+func (d *DashboardServer) enrichFromDAG(state *MarketState, tf *market.Frame) {
+	if state == nil || tf == nil {
 		return
 	}
-	frame := analyst.DAGTickFrame()
-	hdr := dagHeaderFromFrame(frame)
+	dagFrame := tf.DAGTickFrame()
+	hdr := dagHeaderFromFrame(dagFrame)
 	applyDAGHeaderToMarketState(state, hdr)
-	if frame != nil && d.projector != nil {
-		state.Plots = d.projector.BuildTickJSON(frame)
+	if dagFrame != nil && d.projector != nil {
+		state.Plots = d.projector.BuildTickJSON(dagFrame)
 	}
 
-	// ChartOnly (and Live UI): no ScoreEngine / Veto / Fib / Layer2 regime for header.
-	// Optional tip: SlotTotalScore → LongScore only when strategies are enabled.
+	// Phase F: ScoreEngine / Veto / Fib / streaming regime purged — JSON sockets stay zeroed.
+	state.LongScore = 0
 	state.ShortScore = 0
 	state.RawAction = ""
 	state.FinalAction = ""
 	state.IsVetoed = false
 	state.VetoReason = ""
-	state.Factors = map[string]strategy.ScoreFactor{}
+	state.Factors = map[string]decision.ScoreFactor{}
 	state.BrainStatus = ""
 	state.AIStatus = ""
 	state.FibZones = nil
 	state.VolatilityRegime = ""
-
-	if !strategy.EngineAllowsStrategies() {
-		state.LongScore = 0
-		return
-	}
-	if frame != nil {
-		if total := frame.Get(core.SlotTotalScore); jsonSafeDivState(total) {
-			state.LongScore = int(math.Round(total))
-		}
-	}
 }
 
 // dagHeader holds Jurik tip aliases from DAG (Wozduh lines live only in plots).
@@ -2143,11 +2037,11 @@ func applyDAGHeaderToTick(p *tickPayload, h dagHeader) {
 	p.AIStatus = ""
 	p.VolatilityRegime = ""
 	if p.Factors == nil {
-		p.Factors = map[string]strategy.ScoreFactor{}
+		p.Factors = map[string]decision.ScoreFactor{}
 	}
 }
 
-func trimAnnotations(annotations []strategy.ChartAnnotation, trim int, klines []exchange.Kline) []strategy.ChartAnnotation {
+func trimAnnotations(annotations []market.ChartAnnotation, trim int, klines []exchange.Kline) []market.ChartAnnotation {
 	if trim <= 0 || len(annotations) == 0 {
 		return annotations
 	}
@@ -2160,7 +2054,7 @@ func trimAnnotations(annotations []strategy.ChartAnnotation, trim int, klines []
 		return sorted[i].OpenTime < sorted[j].OpenTime
 	})
 	minTime := exchange.ChartTimeSec(sorted[trim].OpenTime)
-	out := make([]strategy.ChartAnnotation, 0, len(annotations))
+	out := make([]market.ChartAnnotation, 0, len(annotations))
 	for _, ann := range annotations {
 		if ann.Time >= minTime {
 			out = append(out, ann)
@@ -2209,9 +2103,9 @@ func buildNavigatorsFromSeries(
 	rsxVals, wozVals []float64,
 	trimBars int,
 	interval string,
-	panes map[string]strategy.NavigatorUISettings,
+	panes map[string]market.NavigatorUISettings,
 	htf *exchange.HTFProvider,
-) map[string]strategy.NavigatorResultDTO {
+) map[string]market.NavigatorResultDTO {
 	if err := requestCtxErr(ctx); err != nil {
 		return nil
 	}
@@ -2245,7 +2139,7 @@ func buildNavigatorsFromSeries(
 	navRSX = navRSX[len(navRSX)-n:]
 	navWoz = navWoz[len(navWoz)-n:]
 
-	return strategy.BuildAllNavigators(panes, symbol, navKlines, navRSX, navWoz, interval, htf)
+	return market.BuildAllNavigators(panes, symbol, navKlines, navRSX, navWoz, interval, htf)
 }
 
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {

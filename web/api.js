@@ -273,50 +273,6 @@ const API = {
     return resp.json().catch(() => ({}));
   },
 
-  async fetchRiskSettings() {
-    const resp = await fetch('/api/settings/risk');
-    if (!resp.ok) {
-      throw new Error(`risk settings GET failed (${resp.status})`);
-    }
-    return resp.json();
-  },
-
-  async postRiskSettings(payload) {
-    const resp = await fetch('/api/settings/risk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      throw new Error(`risk settings POST failed (${resp.status})`);
-    }
-    return resp.json();
-  },
-
-  async postThresholds(thresholds) {
-    const resp = await fetch('/api/settings/thresholds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(thresholds),
-    });
-    if (!resp.ok) {
-      throw new Error(`thresholds POST failed (${resp.status})`);
-    }
-    return resp;
-  },
-
-  async postMatrix(matrix) {
-    const resp = await fetch('/api/settings/matrix', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(matrix),
-    });
-    if (!resp.ok) {
-      throw new Error(`matrix POST failed (${resp.status})`);
-    }
-    return resp;
-  },
-
   async fetchStats(mode) {
     const resp = await fetch(`/api/stats?mode=${encodeURIComponent(mode)}`);
     if (!resp.ok) {

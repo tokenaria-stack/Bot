@@ -5,7 +5,7 @@ import (
 	"trading_bot/indicators"
 )
 
-// Wozduh Pine periods — must stay bit-identical to strategy/falcon.go defaults.
+// Wozduh Pine periods — must stay bit-identical to market/falcon.go defaults.
 const (
 	wozduhChannelPeriod = 24
 	wozduhChannelPhi    = 1.6185

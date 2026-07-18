@@ -117,8 +117,11 @@ class ChartDataStore {
 
   _propsFromServerAnnotation(a, ms) {
     const text = String(a?.text ?? a?.label ?? a?.Label ?? '').trim();
+    const label = text.substring(0, 2).toUpperCase();
+    // Phase F: drop purged RSX trading labels.
+    if (['S', 'SS', 'L', 'LL', 'P'].includes(label)) return null;
     const props = { timeMs: ms };
-    if (text) props.rsxLabel = text.substring(0, 2).toUpperCase();
+    if (text) props.rsxLabel = label;
     if (a?.pane) props.pane = a.pane;
     if (a?.color) props.color = a.color;
     if (a?.position) props.position = a.position;
@@ -132,9 +135,7 @@ class ChartDataStore {
     if (snapped.volumeSpikeUp) props.spikeUp = true;
     if (snapped.volumeSpikeDown) props.spikeDown = true;
     if (snapped.volCrossMarker) props.volCross = snapped.volCrossMarker;
-    if (snapped.marker) {
-      props.rsxLabel = String(snapped.marker).trim().substring(0, 2).toUpperCase();
-    }
+    // Phase F: snapped.marker L/LL/S/SS not stored.
     return Object.keys(props).length ? props : null;
   }
 

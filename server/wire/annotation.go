@@ -10,8 +10,8 @@ import (
 // JSON shape matches the historical ChartAnnotation wire contract.
 type Annotation struct {
 	Time     int64  `json:"time"`
-	Pane     string `json:"pane"`     // "price", "rsx", "wozduh"
-	Label    string `json:"label"`    // "L", "S", "SS", "LL", …
+	Pane     string `json:"pane"`  // "price", "rsx", "wozduh"
+	Label    string `json:"label"` // "L", "S", "SS", "LL", …
 	Color    string `json:"color"`
 	Position string `json:"position"` // "aboveBar", "belowBar", "inBar"
 	Shape    string `json:"shape"`    // "arrowUp", "arrowDown", "circle"
@@ -46,24 +46,13 @@ func AnnotationStyleFromLabel(label string) (color, position, shape string) {
 	}
 }
 
-// AnnotationFromDivState builds one wire marker from a DivState slot value and bar time.
+// AnnotationFromDivState is a Phase F no-op: SlotDivState math remains in the DAG,
+// but L/LL/S/SS labels are not published to the chart wire until a new strategy surface exists.
 func AnnotationFromDivState(timeSec int64, state float64, pane string) (Annotation, bool) {
-	label := DivStateLabel(state)
-	if label == "" {
-		return Annotation{}, false
-	}
-	if pane == "" {
-		pane = "rsx"
-	}
-	color, position, shape := AnnotationStyleFromLabel(label)
-	return Annotation{
-		Time:     timeSec,
-		Pane:     pane,
-		Label:    label,
-		Color:    color,
-		Position: position,
-		Shape:    shape,
-	}, true
+	_ = timeSec
+	_ = state
+	_ = pane
+	return Annotation{}, false
 }
 
 func divStateActive(state float64) bool {

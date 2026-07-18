@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 func TestBacktestRequest_UnmarshalSettingsBlock(t *testing.T) {
@@ -14,11 +14,6 @@ func TestBacktestRequest_UnmarshalSettingsBlock(t *testing.T) {
 		"startDate": "2025-01-01",
 		"endDate": "2025-06-01",
 		"settings": {
-			"matrix": {
-				"useRSX": true,
-				"useTrendlines": true,
-				"useWozduhCross": true
-			},
 			"navigators": {
 				"price": {
 					"enabled": true,
@@ -41,19 +36,12 @@ func TestBacktestRequest_UnmarshalSettingsBlock(t *testing.T) {
 	if req.Settings == nil {
 		t.Fatal("settings is nil")
 	}
-	if !req.Settings.Matrix.UseRSX || !req.Settings.Matrix.UseTrendlines {
-		t.Fatalf("matrix not decoded: %+v", req.Settings.Matrix)
-	}
 	price := req.Settings.Navigators["price"]
 	if !price.Enabled || price.LongLen != 60 {
 		t.Fatalf("price navigator not decoded: %+v", price)
 	}
 
-	matrix := strategy.ResolveBacktestMatrix(req.Settings)
-	if !strategy.ScoringMatrixEntrySourcesEnabledFor(matrix) {
-		t.Fatalf("entry sources disabled after resolve: %+v", matrix)
-	}
-	navs := strategy.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
+	navs := market.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
 	if len(navs) != 1 || !navs["price"].Enabled {
 		t.Fatalf("navigators after resolve: %+v", navs)
 	}

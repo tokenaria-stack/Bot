@@ -7,25 +7,20 @@ import (
 	"trading_bot/ui_config"
 )
 
-func TestAnnotationFromDivState(t *testing.T) {
+func TestAnnotationFromDivState_PhaseFPurged(t *testing.T) {
 	t.Parallel()
-	ann, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx")
-	if !ok {
-		t.Fatal("expected bullish annotation")
+	if _, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx"); ok {
+		t.Fatal("Phase F: DivState must not emit chart markers")
 	}
-	if ann.Label != "L" || ann.Shape != "arrowUp" || ann.Position != "belowBar" {
-		t.Fatalf("got %+v", ann)
-	}
-	ann, ok = AnnotationFromDivState(1700000000, core.DivStateS, "rsx")
-	if !ok || ann.Label != "S" || ann.Shape != "arrowDown" {
-		t.Fatalf("bearish: ok=%v %+v", ok, ann)
+	if _, ok := AnnotationFromDivState(1700000000, core.DivStateS, "rsx"); ok {
+		t.Fatal("Phase F: DivState must not emit chart markers")
 	}
 	if _, ok := AnnotationFromDivState(1, core.DivStateNone, "rsx"); ok {
 		t.Fatal("None must not emit")
 	}
 }
 
-func TestBuildHistoryAnnotations_risingEdge(t *testing.T) {
+func TestBuildHistoryAnnotations_PhaseFEmpty(t *testing.T) {
 	t.Parallel()
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
@@ -34,14 +29,11 @@ func TestBuildHistoryAnnotations_risingEdge(t *testing.T) {
 	p := NewProjector(reg)
 
 	hist := core.NewHistoryBus(8)
-	// Oldest → newest push order: None, None, L, L, None, S
 	states := []float64{
 		core.DivStateNone,
-		core.DivStateNone,
 		core.DivStateL,
-		core.DivStateL,
-		core.DivStateNone,
 		core.DivStateS,
+		core.DivStateLL,
 	}
 	for _, st := range states {
 		frame := &core.TickFrame{}
@@ -49,20 +41,14 @@ func TestBuildHistoryAnnotations_risingEdge(t *testing.T) {
 		hist.PushFrame(frame)
 		hist.Advance()
 	}
-	times := []int64{100, 200, 300, 400, 500, 600}
+	times := []int64{100, 200, 300, 400}
 	anns := p.BuildHistoryAnnotations(hist, times)
-	if len(anns) != 2 {
-		t.Fatalf("len=%d want 2 (rising edges only), got %+v", len(anns), anns)
-	}
-	if anns[0].Time != 300 || anns[0].Label != "L" {
-		t.Fatalf("first %+v", anns[0])
-	}
-	if anns[1].Time != 600 || anns[1].Label != "S" {
-		t.Fatalf("second %+v", anns[1])
+	if len(anns) != 0 {
+		t.Fatalf("Phase F: want 0 annotations, got %+v", anns)
 	}
 }
 
-func TestBuildTickAnnotation(t *testing.T) {
+func TestBuildTickAnnotation_PhaseFEmpty(t *testing.T) {
 	t.Parallel()
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
@@ -71,8 +57,14 @@ func TestBuildTickAnnotation(t *testing.T) {
 	p := NewProjector(reg)
 	frame := &core.TickFrame{}
 	frame.Set(core.SlotDivState, core.DivStateLL)
-	ann, ok := p.BuildTickAnnotation(frame, 42)
-	if !ok || ann.Label != "LL" || ann.Time != 42 {
-		t.Fatalf("ok=%v %+v", ok, ann)
+	if _, ok := p.BuildTickAnnotation(frame, 42); ok {
+		t.Fatal("Phase F: tick annotation must not emit")
+	}
+}
+
+func TestDivStateLabel_StillMapsEnums(t *testing.T) {
+	t.Parallel()
+	if DivStateLabel(core.DivStateL) != "L" || DivStateLabel(core.DivStateSS) != "SS" {
+		t.Fatalf("label map broken: L=%q SS=%q", DivStateLabel(core.DivStateL), DivStateLabel(core.DivStateSS))
 	}
 }
