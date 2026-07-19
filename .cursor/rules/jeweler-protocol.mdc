@@ -1,38 +1,186 @@
 ---
-description: ПРОТОКОЛ ЮВЕЛИРА (P0) — фундаментальные инженерные правила проекта
+description: Jeweler Protocol (P0) — immutable engineering rules for this project
 alwaysApply: true
 ---
 
-# ПРОТОКОЛ ЮВЕЛИРА (THE JEWELER'S PROTOCOL) — P0
+# Jeweler Protocol (P0)
 
-Любой код, рефакторинг и архитектурное предложение **обязаны** соответствовать этим принципам.
+This protocol is the project constitution. Any code, refactor, or architecture proposal
+MUST follow these rules. File name keeps the brand; body uses plain engineering English.
 
-## 1. Никакой изоленты (Root Cause Resolution)
+## Philosophy
 
-Не маскируй баги бэкенда костылями на фронтенде. Математика индикаторов ломается — правь движок в ядре. Визуальные хаки для скрытия алгоритмических ошибок запрещены.
+- Correctness over convenience
+- Architecture over hacks
+- Streaming over batch on the live path
+- Determinism over heuristics
+- One source of truth per concern
+- Minimal abstractions (sockets before implementations)
 
-## 2. Изоляция и телеметрия (No Premature Summing)
+## Import DAG (MUST)
 
-Каждый торговый фактор изолирован и тестируем отдельно. Паттерн: `ScoreDecision` → `map[string]ScoreFactor` — каждый индикатор отвечает только за свой голос.
+```
+exchange → market → decision → execution
+```
 
-## 3. Иммунитет к мутациям (Snapshot & Rollback)
+- `market` answers "what is happening?"
+- `decision` answers "what to do?" and MUST NOT import `market`
+- `exchange` MUST NOT import `market` or `decision`
+- `strategy/` is a legacy beacon (`doc.go` only) — NEVER put new code there
 
-Go-ядро иммунно к отравлению intra-bar тиками. Все stateful-индикаторы (RSI, Wozduh, дивергенции, streaming engines) — O(1) Snapshot/Restore. Открытая свеча не накапливает и не портит исторический контекст.
+## Score canon
 
-## 4. Абсолютная честность времени (Zero Look-Ahead Bias)
+`ScoreEngine.Calculate(frame, …)` → `ScoreDecision` (`decision/score_types.go`).
+See `docs/ARCHITECTURE.md`.
 
-На бэктесте запрещено заглядывание в будущее. MTF только через step-function (Boundary Tracker). Старший ТФ виден лишь если `close_time <= current_tick`.
+---
 
-## 5. Архитектурная прямота (No Shotgun Surgery)
+## Rule 1 — No Duct Tape (Root Cause Resolution)
 
-Данные по кратчайшему пути от источника к потребителю. Без промежуточных ведер (удалённый `Report`). Без устаревшей терминологии (`Scalp` для универсальных модулей). Легаси выкорчёвывается, не обходится.
+We do not mask backend bugs with frontend workarounds.
 
-## 6. Розетки, а не электростанции (Sockets, not Power Plants)
+If indicator math misbehaves on live market data, we go down to the Go core and fix
+the engine. Visual hacks that hide algorithmic errors are strictly forbidden.
 
-Архитектура продумывается на шаг вперёд: проектируем розетки (интерфейсы, контракты, политики — например Bar Source Seam в `exchange/ingress.go`), но не строим электростанции (реализации без реального потребителя). Спекулятивные FSM, Revision-поля, per-exchange registry и билдеры «на будущее» запрещены до появления консьюмера.
+Examples of violations: clamping a wrong RSX tip in JS; faking volume in the chart
+store; skipping a bad tick in the UI while the Frame state stays poisoned.
 
-## Директива
+**MUST:** fix the root cause in the owning layer (ingress, Frame, indicator, DAG).
+**NEVER:** paper over engine errors in `web/` or `server/` presentation code.
 
-Перед кодом сверяйся с протоколом. Работай как хирург: локализуй проблему, чистое решение в ядре, изоляция сигналов.
+---
 
-**Канон Score:** `ScoreEngine.Calculate(frame, …)` → `ScoreDecision` (`decision/score_types.go`; см. `MEMORY.md` Core 5.0 Phase G). Import DAG: `exchange → market → decision → execution`.
+## Rule 2 — Isolation and Telemetry (No Premature Summing)
+
+We do not blend signals into an opaque aggregate before they can be tested or shown.
+
+Every trading factor or signal MUST stay mathematically isolated so it can be unit-tested
+and rendered on the UI on its own. Use the pattern:
+
+`ScoreDecision` → `map[string]ScoreFactor`
+
+Each indicator owns only its own voice (`BUY` / `SELL` / `WAIT`). Summing, vetoes, and
+lot modifiers happen later, as explicit steps — never by mutating factor payloads early.
+
+**MUST:** keep factors separable end-to-end (engine → wire → UI).
+**NEVER:** collapse multiple indicators into one unexplained number without a named factor.
+
+---
+
+## Rule 3 — Mutation Immunity (Snapshot and Rollback)
+
+The Go core MUST be immune to poisoning by intra-bar ticks.
+
+All stateful indicators used on the open bar (RSI, Wozduh, divergence buffers, streaming
+engines inside `market.Frame`) MUST implement O(1) Snapshot / Restore. Data from the
+forming candle MUST NOT accumulate into and corrupt closed-bar historical context.
+
+Canonical tick pattern inside Frame:
+
+1. `restoreStreamingState()` — roll back to last closed snapshot
+2. evaluate on the current tick (including forming bar)
+3. `saveStreamingState()` — only when the bar is closed
+
+Intentional exceptions (repaint-by-design), such as ZigZag geometry on the open bar,
+MUST be documented and MUST NOT silently gain Snapshot without an architectural decision.
+
+**MUST:** Snapshot / Restore for every stateful live-path engine that feeds history.
+**NEVER:** let forming-bar ticks permanently mutate closed-bar state.
+
+---
+
+## Rule 4 — Time Honesty (Zero Look-Ahead Bias)
+
+Backtests MUST NOT look into the future.
+
+Multi-timeframe (MTF) analysis MUST use a step-function / boundary tracker. A higher
+timeframe candle is visible only if its `close_time <= current_tick_time`.
+
+This applies to scoring MTF, HTF oscillators, and any navigator math used for decisions.
+UI-only overlays that intentionally show a prettier final picture MUST NOT be mixed into
+the walk-forward scoring path.
+
+**MUST:** enforce `GetCandlesStrictlyBefore` (or equivalent) on decision MTF.
+**NEVER:** read a higher-TF bar that has not closed relative to the current tick.
+
+---
+
+## Rule 5 — Architectural Straight Lines (No Shotgun Surgery)
+
+Data MUST flow from source to consumer on the shortest honest path.
+
+Do not invent intermediate bucket DTOs that only copy fields (the deleted `Report` pattern).
+Keep terminology clean: no obsolete names for universal modules. If legacy code blocks
+the path, remove it — do not build bypasses around it.
+
+**MUST:** one clear owner per concern (ingress merge, persistence, projection, paint).
+**NEVER:** duplicate merge / validate / project logic "just for this endpoint".
+
+---
+
+## Rule 6 — Sockets, Not Power Plants
+
+Design one step ahead: ship sockets (interfaces, contracts, policies) — not unused power plants.
+
+Examples of good sockets: Bar Source Seam in `exchange/ingress.go`, `Authority`,
+`IngressPolicy`, empty `ScoreDecision` types in `decision/`.
+
+Forbidden until a real consumer exists: speculative candle FSMs, Revision/Version fields
+"for later", per-exchange settlement registries, Renko/Kagi/Volume builders with no caller.
+
+When a consumer appears, implement inside the existing socket without rewriting the core.
+Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second pipeline.
+
+**MUST:** every new abstraction have a consumer in the same change (or be a documented debt).
+**NEVER:** build implementations "for the future" with no caller.
+
+---
+
+## Architectural Invariants (NEVER break)
+
+1. Exactly one ingress pipeline for closed canonical bars.
+2. Exactly one merge implementation (`exchange` Ingress / `MergeKlineSeries`).
+3. Historical (closed) bars are immutable facts; repair goes through Authority + Grace, not silent edits.
+4. Indicator math owns its own streaming state (no global indicator variables).
+5. No frontend compensation for engine bugs.
+6. Authority exists only inside ingress merge policy.
+7. Boot FSM owns startup order (WS first → load → reconcile → live).
+8. `decision` never mutates `market` state.
+9. `execution` never analyzes the market; it only sizes / places.
+10. Projection (`server` / `web`) never recomputes indicator math; it packs slots → wire → paint.
+
+---
+
+## Anti-Patterns (NEVER)
+
+- NEVER modify `strategy/` except the beacon `doc.go`.
+- NEVER import `market` into `decision`.
+- NEVER import `market` / `decision` into `exchange`.
+- NEVER import `server` into `market`.
+- NEVER use `go-talib` or external TA libraries; math is streaming-first in `indicators/`.
+- NEVER put indicator state in package-level globals; state lives on `market.Frame`.
+- NEVER bypass Ingress for closed bars (no side doors into RAM/SQLite).
+- NEVER duplicate merge / validate / UPSERT business rules outside their SSOT.
+- NEVER write batch-only indicator paths for live ticks (`*Values` wrappers are history/tests only).
+- NEVER create speculative UI controls without a backend consumer (and vice versa).
+- NEVER introduce cyclic package imports.
+- NEVER create a second data pipeline "temporary" beside Ingress / `Runtime.routeTick`.
+
+---
+
+## Banned vocabulary (Go identifiers)
+
+Do NOT revive these as type / var / method names:
+
+`Marker` (type), `MasterGeneral`, `Layer2`, `Analyst`, `ChiefAnalyst`
+
+Allowed: FE chart label field `Marker string` with `json:"marker"` (wire contract only).
+
+Canonical names: `Frame`, `Runtime`, `streaming` / `snapshot`, `ScoreDecision`, `ScoreFactor`.
+
+---
+
+## Directive
+
+Before writing code: read this protocol, then `docs/ARCHITECTURE.md` for current structure.
+Work like a surgeon: localize the problem, fix it in the owning layer, keep signals isolated.
