@@ -8,6 +8,17 @@ alwaysApply: true
 This protocol is the project constitution. Any code, refactor, or architecture proposal
 MUST follow these rules. File name keeps the brand; body uses plain engineering English.
 
+## Project identity
+
+Institutional streaming-first market analysis engine.
+
+- NOT a TradingView clone
+- NOT a retail signal bot
+- NOT an indicator collection dump
+
+Primary goal: **deterministic market state** (`market.Frame` / `Runtime`).  
+Trading decisions are secondary and live only behind `decision/` + `ENGINE_MODE=live`.
+
 ## Philosophy
 
 - Correctness over convenience
@@ -16,6 +27,7 @@ MUST follow these rules. File name keeps the brand; body uses plain engineering 
 - Determinism over heuristics
 - One source of truth per concern
 - Minimal abstractions (sockets before implementations)
+- Delete > deprecate > rebrand in place
 
 ## Import DAG (MUST)
 
@@ -161,10 +173,32 @@ Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second p
 - NEVER put indicator state in package-level globals; state lives on `market.Frame`.
 - NEVER bypass Ingress for closed bars (no side doors into RAM/SQLite).
 - NEVER duplicate merge / validate / UPSERT business rules outside their SSOT.
+- NEVER duplicate indicator math across packages.
+- NEVER add DTO copies that only rename or re-pack the same fields.
+- NEVER store derived state as a second source of truth (recompute or pack from SSOT).
+- NEVER mix transport concerns with business / indicator logic.
 - NEVER write batch-only indicator paths for live ticks (`*Values` wrappers are history/tests only).
 - NEVER create speculative UI controls without a backend consumer (and vice versa).
 - NEVER introduce cyclic package imports.
 - NEVER create a second data pipeline "temporary" beside Ingress / `Runtime.routeTick`.
+- NEVER mutate closed bars in place; repair via Authority + Grace + ops tools.
+
+---
+
+## When NOT to refactor
+
+Do **not** refactor because of prettier names, personal taste, hypothetical future needs,
+or "architectural beauty" alone.
+
+Refactor **only** when the change:
+
+- removes real duplication, or
+- eliminates a bug class, or
+- simplifies the dependency graph, or
+- improves correctness / determinism, or
+- yields measurable hot-path performance
+
+Otherwise: leave working code alone and ship the smallest honest fix.
 
 ---
 

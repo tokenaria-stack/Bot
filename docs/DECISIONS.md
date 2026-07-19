@@ -3,7 +3,7 @@
 **SSOT for:** why key choices exist.  
 Keep this lean. Add a record only when a decision will be re-argued later.
 
-Format per entry: Context → Decision → Rejected → Consequences.
+Format per entry: Context → Decision → Rejected (with Reason) → Consequences.
 
 ---
 
@@ -13,7 +13,10 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** Ingress `Authority` levels (Estimated / Settled / Final). Higher Authority replaces wholly; equal Authority uses field heuristics (High/Low/Volume MAX, Close = incoming).
 
-**Rejected:** Per-bar Revision counters; speculative candle-state FSMs; per-exchange settlement registries without consumers.
+**Rejected:**
+- Per-bar Revision counters — **Reason:** shotgun surgery; trust belongs in merge policy, not on every Kline field.
+- Speculative candle-state FSMs — **Reason:** overengineering without a consumer (Rule 6).
+- Per-exchange settlement registries — **Reason:** power plant; no second exchange consumer yet.
 
 **Consequences:** One merge SSOT in `exchange/ingress.go`. Debt #19 closed. New bar producers must declare Authority, not fork merge logic.
 
@@ -25,7 +28,9 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** Only closed canonical `exchange.Kline` values enter the Ingress pipeline. How a producer aggregates (time / ticks / volume) is private. Forming ticks bypass Ingress.
 
-**Rejected:** Re-synthesizing full rings on every request (old micro_candles). Silent hole-filling in the ledger.
+**Rejected:**
+- Re-synthesizing full rings on every request (old micro_candles) — **Reason:** expensive, non-canonical, hid holes.
+- Silent hole-filling in the ledger — **Reason:** violates time honesty; a gap must stay a gap.
 
 **Consequences:** Future `TickBarBuilder` (#44) plugs into the seam; tick TF menu entries remain sockets until then.
 
@@ -37,7 +42,9 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** Boot FSM Connecting → Loading → Reconciling → Live. Buffer WS ticks first; one tick path `Runtime.routeTick` for live and replay.
 
-**Rejected:** REST-as-truth during boot; separate boot tick path in `main`.
+**Rejected:**
+- REST-as-truth during boot — **Reason:** REST lag loses to live WS Final Authority.
+- Separate boot tick path in `main` — **Reason:** second pipeline; drift and missed invariants.
 
 **Consequences:** Gap-fill/catch-up loops start only after Live.
 
@@ -49,7 +56,9 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `execution/`, `falcon.go`, `vector_db/`). Default `ENGINE_MODE=ChartOnly`.
 
-**Rejected:** Rebranding legacy modules in place; keeping stub engines "just in case".
+**Rejected:**
+- Rebranding legacy modules in place — **Reason:** keeps lie-names and dead paths; Delete > Deprecate.
+- Keeping stub engines "just in case" — **Reason:** false sockets; no consumer, high confusion cost.
 
 **Consequences:** New strategies must be written against contracts in `decision/`, not revived `strategy/` implementations.
 
@@ -61,7 +70,9 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** `Frame` + `Runtime` in `market/`; contracts in `decision/`; `strategy/` = `doc.go` beacon. Import DAG `exchange → market → decision → execution`.
 
-**Rejected:** Keeping types in `strategy/` with new names only; allowing `decision → market` imports.
+**Rejected:**
+- Keeping types in `strategy/` with new names only — **Reason:** package boundary still wrong; museum code invites revival.
+- Allowing `decision → market` imports — **Reason:** breaks one-way DAG; contracts must stay pure.
 
 **Consequences:** FE may keep `json:"marker"` label field; Go type `Marker` is banned.
 
@@ -73,18 +84,23 @@ Format per entry: Context → Decision → Rejected → Consequences.
 
 **Decision:** O(1) Snapshot/Restore around open-bar evaluation; save only on close. Double-commit guard via `lastCommittedOpenTime` (Core 4.8).
 
-**Rejected:** Frontend tip clamping; deeper warmup-only fixes after continuity tests disproved depth asymmetry.
+**Rejected:**
+- Frontend tip clamping — **Reason:** duct tape; hides engine poison (Rule 1).
+- Warmup-depth-only fixes after continuity tests — **Reason:** disproved; wrong root cause class.
 
 **Consequences:** #67 awaits live confirm. ZigZag/geometry may remain repaint-by-design if documented.
 
 ---
 
-## ADR-007 — Documentation split (Core 6.0)
+## ADR-007 — Documentation split (Core 6.0 / 6.1)
 
 **Context:** `MEMORY.md` mixed constitution, architecture, changelog, and debts → attention dilution and token waste.
 
-**Decision:** Always-on = Protocol + Role. On-demand = Architecture / Open Debts / History / Decisions. Controlled English. `MEMORY.md` becomes an index.
+**Decision:** Always-on = Protocol + Role. On-demand = Architecture / Open Debts / History / Decisions. Controlled English. `MEMORY.md` is an index; README is the landing page. Core 6.1 adds checklist, identity, when-not-refactor — inside existing SSOT files only.
 
-**Rejected:** Eight overlapping docs; keeping full Protocol duplicated inside MEMORY; loading History on every task.
+**Rejected:**
+- Eight overlapping docs (Principles/Glossary/Checklist as separate volumes) — **Reason:** docs power plant; duplicates Protocol/Architecture.
+- Keeping full Protocol duplicated inside MEMORY — **Reason:** two sources of truth.
+- Loading History on every task — **Reason:** attention dilution.
 
 **Consequences:** Update the owning SSOT file only; do not copy facts across docs.

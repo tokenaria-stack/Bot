@@ -3,7 +3,7 @@
 **SSOT for:** how the system works **today**.  
 **Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
 
-**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0 Documentation Cleanup.
+**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Documentation OS.
 
 **Default mode:** `ENGINE_MODE=ChartOnly`. Trading stack re-enters only with new `decision/` strategies + `ENGINE_MODE=live`.
 

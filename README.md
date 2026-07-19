@@ -1,21 +1,25 @@
 # Trading Bot
 
-Enterprise multi-timeframe crypto trading bot for **Binance USDⓈ-M Futures**.
+Institutional **streaming-first** market analysis engine for **Binance USDⓈ-M Futures**.
 
-Go data plane + DAG indicators + DDR Lightweight Charts frontend.  
-Default: `ENGINE_MODE=ChartOnly` (charts / data plane only).
+- NOT a TradingView clone
+- NOT a retail signal bot
+- NOT an indicator dump
 
-## Documentation (SSOT map)
+Primary goal: deterministic market state (`market.Frame` / `Runtime`).  
+Go data plane + DAG indicators + DDR Lightweight Charts.  
+Default: `ENGINE_MODE=ChartOnly`.
 
-| Document | Purpose | When to read |
-|----------|---------|--------------|
-| [`.cursor/rules/jeweler-protocol.mdc`](.cursor/rules/jeweler-protocol.mdc) | Engineering laws | Always (Cursor always-on) |
-| [`.cursor/rules/senior-quant-architect.mdc`](.cursor/rules/senior-quant-architect.mdc) | Engineer role | Always (Cursor always-on) |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Current system | Before new modules |
-| [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) | Backlog / NEXT | Before planning work |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Completed phases | On request / regressions |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why decisions were made | On request |
-| [`MEMORY.md`](MEMORY.md) | Index only | Pointers |
+## Read order
+
+1. Protocol — [`.cursor/rules/jeweler-protocol.mdc`](.cursor/rules/jeweler-protocol.mdc) *(always-on)*
+2. Role — [`.cursor/rules/senior-quant-architect.mdc`](.cursor/rules/senior-quant-architect.mdc) *(always-on)*
+3. Architecture — [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+4. Open debts — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)
+5. Decisions — [`docs/DECISIONS.md`](docs/DECISIONS.md) *(on request)*
+6. History — [`docs/HISTORY.md`](docs/HISTORY.md) *(on request)*
+
+[`MEMORY.md`](MEMORY.md) is a short index alias — prefer this README as the entry point.
 
 ## Quick start
 
@@ -44,13 +48,8 @@ vector_db/    Qdrant socket
 
 **Import DAG:** `exchange → market → decision → execution`
 
-## Indicators baseline
-
-Streaming-first (`Indicator` / `CandleIndicator`), O(1) memory, no `go-talib`.  
-Details: `indicators/` + `docs/ARCHITECTURE.md`.
-
 ## Status
 
-- **Core 5.0** data plane (Phases A–G) ✅  
-- **Core 6.0** documentation cleanup ✅  
-- **NEXT:** #76 ScoreNodes, #67 Live Confirm — see `docs/OPEN_DEBTS.md`
+- **Core 5.0** data plane (Phases A–G) ✅
+- **Core 6.0 / 6.1** documentation OS ✅
+- **NEXT:** #76 ScoreNodes, #67 Live Confirm — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)

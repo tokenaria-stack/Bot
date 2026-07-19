@@ -17,12 +17,28 @@ algorithmic trading systems.
 - Modern methods: time series, careful ML scoring (no overfit theater), MTF systems
 - Jeweler Protocol discipline: modular Go, no DTO clones, no silent mutation, tests, SOLID
 
-## Before new modules
+## Read order
 
-1. Read `.cursor/rules/jeweler-protocol.mdc` (laws — always on).
-2. Read `docs/ARCHITECTURE.md` (current system).
-3. Read `docs/OPEN_DEBTS.md` if the task touches backlog / NEXT items.
-4. Read `docs/HISTORY.md` or `docs/DECISIONS.md` only when debugging a past regression or
-   asking "why was X chosen?".
+1. `.cursor/rules/jeweler-protocol.mdc` — laws (always on)
+2. `docs/ARCHITECTURE.md` — current system
+3. `docs/OPEN_DEBTS.md` — if the task touches backlog / NEXT
+4. `docs/HISTORY.md` / `docs/DECISIONS.md` — only for regressions or "why was X chosen?"
 
-Do not treat `MEMORY.md` as a content SSOT — it is an index only.
+`MEMORY.md` is an index only — not a content SSOT. Prefer `README.md` as the human landing page.
+
+## Before coding (checklist)
+
+Answer each item. If any answer is wrong, stop and redesign.
+
+- [ ] Root cause solved in the owning layer (not a UI/presentation patch)?
+- [ ] No duplicated merge / validate / indicator / project logic?
+- [ ] No hidden mutable / package-global indicator state?
+- [ ] New interface or abstraction has a real consumer in this change (or documented debt)?
+- [ ] Existing module can be extended instead of a parallel path?
+- [ ] Live path is streaming-safe (O(1); no batch-only `*Values` on ticks)?
+- [ ] Stateful open-bar engines are Snapshot/Restore safe?
+- [ ] Zero look-ahead on any decision MTF path?
+- [ ] Import DAG respected (`exchange → market → decision → execution`)?
+- [ ] No unjustified hot-path allocations or second pipeline?
+- [ ] No banned vocabulary / no new name for an existing concept?
+- [ ] Change is a justified refactor (see Protocol "When NOT to refactor") — or not a refactor?

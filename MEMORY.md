@@ -1,29 +1,26 @@
 # MEMORY — Documentation Index
 
-**This file is an index only (Core 6.0).** It is not an architecture or rules SSOT.
+**Index only (Core 6.1).** Not an architecture or rules SSOT.  
+Prefer [`README.md`](README.md) as the entry point.
 
-Before new modules, read in this order:
+## Read order
 
-1. `.cursor/rules/jeweler-protocol.mdc` — engineering laws (always-on)
-2. `.cursor/rules/senior-quant-architect.mdc` — role (always-on)
+1. `.cursor/rules/jeweler-protocol.mdc` — laws (always-on)
+2. `.cursor/rules/senior-quant-architect.mdc` — role + before-coding checklist (always-on)
 3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
 4. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
 
-On request only:
-
-- [`docs/HISTORY.md`](docs/HISTORY.md) — completed phases
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — why key choices were made
-- [`README.md`](README.md) — landing / build
+On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/HISTORY.md).
 
 ## Snapshot
 
 | Item | Value |
 |------|-------|
 | Data plane | Core 5.0 Phases A–G ✅ |
-| Docs | Core 6.0 Documentation Cleanup ✅ |
+| Docs | Core 6.0 + **6.1 polish** ✅ |
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
 | NEXT | **#76 ScoreNodes**, **#67 Live Confirm** |
 
-Do not duplicate Protocol, Architecture, or Debts here. Update the owning SSOT file instead.
+Update the owning SSOT file — do not duplicate content here.

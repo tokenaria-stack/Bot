@@ -8,11 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## Core 6.0 — Documentation Cleanup (Jul 2026) ✅
+## Core 6.0 / 6.1 — Documentation OS (Jul 2026) ✅
 
 - Split knowledge SSOT: Protocol / Role (always-on) vs Architecture / Debts / History / Decisions.
-- Controlled English rewrite.
-- `MEMORY.md` reduced to index.
+- Controlled English rewrite; `MEMORY.md` → index; README = landing.
+- **6.1 polish (no new files):** Project identity, When NOT to refactor, harder Anti-patterns,
+  Role before-coding checklist, ADR Rejected+Reason, README read order.
 
 ---
 
