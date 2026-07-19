@@ -62,6 +62,9 @@
 	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
+	/** Debt #69A: throttle return-to-live hydrate after history-window prune. */
+	let lastReturnToLiveAt = 0;
+	const RETURN_TO_LIVE_COOLDOWN_MS = 2000;
 
   /** Core 4.5: bind current TF bar duration to the store so appendTick can detect gaps. */
   function syncStoreTfInterval() {
@@ -232,6 +235,7 @@
   function installGlobalShims() {
     const fns = {
       loadDashboard,
+      reloadDashboard,
       clearChartData,
       prepareLiveTfHandoff,
       wsSubscribeTf,
@@ -505,10 +509,43 @@
     liveHydrationOrchestrator?.schedulePrepend(range);
   }
 
+  /** Debt #69A: if history-window tip was pruned, pinning right must hydrate from server — not scroll empty space. */
+  function maybeReturnToLiveFromHistory(range) {
+    if (!liveColumnarStore || liveColumnarStore.windowMode !== 'history') return;
+    if (window.__isDashboardLoading || liveColumnarStore.isSealed?.()) return;
+    const barCount = liveColumnarStore.barCount?.() ?? 0;
+    if (!range || barCount <= 0) return;
+    const slack = 2;
+    const atRight = range.to >= (barCount - 1 - slack);
+    if (!atRight) return;
+    const now = Date.now();
+    if (now - lastReturnToLiveAt < RETURN_TO_LIVE_COOLDOWN_MS) return;
+    lastReturnToLiveAt = now;
+    console.info('[MemoryBudget] Return to live from history window — loadDashboard()');
+    loadDashboard();
+  }
+
+  /**
+   * Debt #69A emergency restore: HTF server cache + FE store clear + canonical hydrate.
+   * Not a memory manager — user-facing "Reload Dashboard".
+   */
+  async function reloadDashboard() {
+    try {
+      await fetch('/api/cache/clear', { method: 'POST' });
+    } catch (err) {
+      console.warn('[Reload Dashboard] HTF cache clear failed:', err);
+    }
+    liveColumnarStore?.clear?.();
+    await loadDashboard();
+  }
+
   function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
+    // Debt #69A: history display window must not ingest live ticks (avoids gap-heal yank-to-live).
+    if (liveColumnarStore.windowMode === 'history') return false;
     const appendResult = liveColumnarStore.appendTick(tick);
     if (appendResult?.gapDetected) {
+      if (liveColumnarStore.windowMode === 'history') return false;
       console.warn('[Self-Healing] Time gap detected, reloading history...', {
         lastTime: appendResult.lastTime,
         tickTime: appendResult.tickTime,
@@ -745,6 +782,7 @@
       const priceChart = ChartAdapter.getChart('live', 'price');
       priceChart?.timeScale()?.subscribeVisibleLogicalRangeChange((range) => {
         scheduleHistoryLoad(range);
+        maybeReturnToLiveFromHistory(range);
       });
 
       safeInit('UI wozduh', () => WozduhController.init());

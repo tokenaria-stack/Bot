@@ -160,6 +160,12 @@ Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second p
 8. `decision` never mutates `market` state.
 9. `execution` never analyzes the market; it only sizes / places.
 10. Projection (`server` / `web`) never recomputes indicator math; it packs slots → wire → paint.
+11. Frontend never owns history. It owns only a bounded viewport window over a server-owned
+    time series. Enforce explicit bar budgets on writes; durable history stays on the server.
+    Frontend state is disposable; server time-series is canonical. Memory limits constrain
+    visualization windows, never market history.
+12. Viewport state (scroll / zoom / camera / microscope) must never mutate market data series
+    (OHLC / plots). Market data may move the viewport (e.g. Live Edge follow); never the reverse.
 
 ---
 

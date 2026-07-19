@@ -167,16 +167,27 @@ const ToolbarController = (() => {
     }
 
     document.getElementById('btn-clear-cache')?.addEventListener('click', async () => {
-      if (!confirm('Очистить кэш базы данных и памяти на сервере?')) return;
+      if (!confirm('Reload dashboard? This clears the server HTF cache and re-hydrates the live chart.')) return;
       try {
+        if (typeof window.reloadDashboard === 'function') {
+          await window.reloadDashboard();
+          return;
+        }
+        // Fallback if boot shim not ready
         const resp = await fetch('/api/cache/clear', { method: 'POST' });
-        if (resp.ok) {
-          alert('Кэш успешно очищен!');
+        if (!resp.ok) {
+          alert('HTF cache clear failed: ' + await resp.text());
+          return;
+        }
+        window.liveColumnarStore?.clear?.();
+        if (typeof window.loadDashboard === 'function') {
+          await window.loadDashboard();
         } else {
-          alert('Ошибка очистки: ' + await resp.text());
+          alert('Dashboard reloaded (HTF only).');
         }
       } catch (err) {
-        console.error('Ошибка:', err);
+        console.error('Reload Dashboard failed:', err);
+        alert('Reload failed: ' + (err?.message || String(err)));
       }
     });
   }

@@ -3,7 +3,7 @@
 **SSOT for:** how the system works **today**.  
 **Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
 
-**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Documentation OS.
+**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Docs + **Debt #69A FE Memory Budget**.
 
 **Default mode:** `ENGINE_MODE=ChartOnly`. Trading stack re-enters only with new `decision/` strategies + `ENGINE_MODE=live`.
 
@@ -19,8 +19,11 @@
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |
-| `MEMORY.md` | Index only — no content duplication |
+| `MEMORY.md` | Index only — no content duplication (never rebuild as encyclopedia) |
 | `README.md` | Landing: what / build / links |
+
+Memory-update routing (user: «сохрани в памяти» / «update MEMORY»): see Role
+`.cursor/rules/senior-quant-architect.mdc` → section **When user says "save / update memory"**.
 
 ---
 
@@ -68,6 +71,8 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
 | `Tip Ownership` | History REST = closed only; forming tip = WS only |
+| `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
+| `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 
 ### Banned names (Go identifiers)
 
@@ -91,6 +96,24 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 3. **Boot: WS first.** REST recovery must not overwrite missed WS bars. One tick path: `Runtime.routeTick` (live + boot replay).
 4. **SQLite firewall ≠ cure.** Monotonic UPSERT (`high=MAX`, `low=MIN`, `volume=MAX`) is last line of defense; root fix is REST Grace (`KlineSettleGraceMs=5000`).
 5. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip.
+6. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+
+---
+
+## Frontend display window (Debt #69A)
+
+**Ownership:** Server owns history; browser owns only an active viewport window.
+
+| Piece | Behavior |
+|-------|----------|
+| Budget | `STORE_BUDGET_TARGET=12000`, `STORE_BUDGET_HARD_CAP=16000` ([`web/config.js`](../web/config.js)) |
+| Atomic prune | `_pruneToCount` slices times + candles.* + all plots + annotations together |
+| `appendTick` | `_enforceBudget(FROM_OLDEST)` |
+| `prependMonolith` | `_enforceBudget(FROM_NEWEST)` → may set `windowMode='history'` |
+| `windowMode` | `live` — WS may append; `history` — WS/gap must not feed store or auto-`loadDashboard` |
+| Return to live | Pin right edge while `history` → `loadDashboard()` (server tip) |
+| Paint | `extractWindow` is still tip-tail (15k). **Future 69D:** if store is mid-history, paint must follow viewport |
+| Reload Dashboard | HTF clear + `store.clear()` + `loadDashboard()` (emergency, not memory manager) |
 
 ---
 

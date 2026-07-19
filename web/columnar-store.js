@@ -1,8 +1,25 @@
 /**
  * ColumnarStore — SSOT for live columnar history (Core 3.0).
  * Mirrors server wire JSON; annotations indexed by snapped ms for O(1) marker patches.
+ *
+ * Debt #69A: bounded display cache (not a historical DB). Server owns durable history.
  */
 class ColumnarStore {
+  static get BUDGET_TARGET() {
+    return (typeof STORE_BUDGET_TARGET !== 'undefined' && Number.isFinite(STORE_BUDGET_TARGET))
+      ? STORE_BUDGET_TARGET
+      : 12000;
+  }
+
+  static get BUDGET_HARD_CAP() {
+    return (typeof STORE_BUDGET_HARD_CAP !== 'undefined' && Number.isFinite(STORE_BUDGET_HARD_CAP))
+      ? STORE_BUDGET_HARD_CAP
+      : 16000;
+  }
+
+  static get PRUNE_FROM_OLDEST() { return 'oldest'; }
+  static get PRUNE_FROM_NEWEST() { return 'newest'; }
+
   constructor() {
     this._times = [];
     this._candles = { open: [], high: [], low: [], close: [], volume: [] };
@@ -15,6 +32,13 @@ class ColumnarStore {
     this._sealed = false;
     /** @type {number} TF bar duration (sec); 0 = gap detection disabled. */
     this._intervalSec = 0;
+    /**
+     * Display-window mode (Debt #69A).
+     * 'live' — store tip tracks the market; WS may appendTick.
+     * 'history' — user exploring past (e.g. after FROM_NEWEST prune); WS must not feed store.
+     * @type {'live'|'history'}
+     */
+    this.windowMode = 'live';
   }
 
   /** Core 4.5: bind current TF interval so appendTick can detect chronology gaps. */
@@ -53,6 +77,7 @@ class ColumnarStore {
     this._annotationMap.clear();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
+    this.windowMode = 'live';
   }
 
   seal() {
@@ -96,6 +121,8 @@ class ColumnarStore {
       warmupDropped: Number(data.warmupDropped) || 0,
       added: Number(data.added) || times.length,
     };
+    this.windowMode = 'live';
+    this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST);
   }
 
   /**
@@ -239,6 +266,80 @@ class ColumnarStore {
     return this._times.length > 0 ? Number(this._times[this._times.length - 1]) : null;
   }
 
+  /** Computed window bounds (Debt #69A) — no duplicated mutable start/end fields. */
+  windowStartSec() {
+    return this.firstTimeSec();
+  }
+
+  windowEndSec() {
+    return this.lastTimeSec();
+  }
+
+  isLiveWindow() {
+    return this.windowMode !== 'history';
+  }
+
+  /**
+   * Atomic bar-window prune (Debt #69A). Same [start, end) for times, candles.*, every plot, annotations.
+   * @param {number} keepCount
+   * @param {'oldest'|'newest'} direction
+   */
+  _pruneToCount(keepCount, direction) {
+    const n = this._times.length;
+    const keep = Math.max(0, Math.floor(Number(keepCount)) || 0);
+    if (n <= keep) return;
+    const drop = n - keep;
+    let start;
+    let end;
+    if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+      start = 0;
+      end = keep;
+    } else {
+      start = drop;
+      end = n;
+    }
+
+    this._times = this._times.slice(start, end);
+    this._candles = {
+      open: this._candles.open.slice(start, end),
+      high: this._candles.high.slice(start, end),
+      low: this._candles.low.slice(start, end),
+      close: this._candles.close.slice(start, end),
+      volume: this._candles.volume.slice(start, end),
+    };
+    const nextPlots = {};
+    for (const [id, col] of Object.entries(this._plots)) {
+      nextPlots[id] = Array.isArray(col) ? col.slice(start, end) : [];
+    }
+    this._plots = nextPlots;
+
+    if (this._times.length === 0) {
+      this._annotations = [];
+      this._annotationMap.clear();
+    } else {
+      const t0 = Number(this._times[0]);
+      const t1 = Number(this._times[this._times.length - 1]);
+      this._annotations = this._annotations.filter((ann) => {
+        const t = Number(ann?.time ?? ann?.Time);
+        return Number.isFinite(t) && t >= t0 && t <= t1;
+      });
+      this._rebuildAnnotationMapFromArray(this._annotations);
+    }
+
+    if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+      this.windowMode = 'history';
+    }
+    this._meta = { ...this._meta, added: this._times.length };
+  }
+
+  /**
+   * @param {'oldest'|'newest'} direction
+   */
+  _enforceBudget(direction) {
+    if (this._times.length <= ColumnarStore.BUDGET_HARD_CAP) return;
+    this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
+  }
+
   /**
    * Apply live WS tick to tail bar (update) or append new bar.
    * @returns {{ candle: object, isNewBar: boolean, barCount: number, tick: object, delta: object }|null}
@@ -323,6 +424,11 @@ class ColumnarStore {
     if (mergedAnn && ms != null) {
       delta.annotationMs = ms;
       delta.annotation = mergedAnn;
+    }
+
+    if (isNewBar) {
+      this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST);
+      delta.barCount = this._times.length;
     }
 
     return { candle, isNewBar, barCount: this._times.length, tick, delta };
@@ -411,6 +517,8 @@ class ColumnarStore {
       hasMore: data.hasMore === true,
       added: this._times.length,
     };
+
+    this._enforceBudget(ColumnarStore.PRUNE_FROM_NEWEST);
 
     return { added };
   }

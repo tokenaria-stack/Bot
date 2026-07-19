@@ -151,6 +151,9 @@ const MTF_PERIOD_COLORS = (typeof ChartTheme !== 'undefined' && ChartTheme.mtfPe
 /** Fast RAM tail for /api/state; deep history comes from pre-fetch assembly. */
 const LIVE_STATE_CANDLE_LIMIT = 300;
 const HISTORY_CHUNK_LIMIT = 3000;
+/** Debt #69A: live ColumnarStore display-window budget (bars). Paint soft cap stays 15k. */
+const STORE_BUDGET_TARGET = 12000;
+const STORE_BUDGET_HARD_CAP = 16000;
 const MAX_STORE_CAPACITY = 50000;
 const STORE_PRUNE_CHUNK = 5000;
 const LIVE_POLL_CANDLE_LIMIT = 5;
@@ -432,6 +435,7 @@ if (typeof window !== 'undefined') {
   window.CONFIG = {
     TV, SCORING_MATRIX_DEFAULTS, SCORING_MATRIX_LABELS,
     LIVE_STATE_CANDLE_LIMIT, HISTORY_CHUNK_LIMIT, LIVE_POLL_CANDLE_LIMIT,
+    STORE_BUDGET_TARGET, STORE_BUDGET_HARD_CAP,
     MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
     LIVE_HISTORY_SCROLL_THRESHOLD, BACKTEST_HISTORY_CHUNK_LIMIT,
     LIVE_CHART_SELECTORS, BACKTEST_CHART_SELECTORS, PANE_STACK_CONFIG,

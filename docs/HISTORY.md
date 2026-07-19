@@ -15,6 +15,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - **6.1 polish (no new files):** Project identity, When NOT to refactor, harder Anti-patterns,
   Role before-coding checklist, ADR Rejected+Reason, README read order.
 
+## Debt #69A — Frontend Memory Budget (Jul 2026) ✅
+
+- `ColumnarStore` TARGET/HARD_CAP + atomic prune; `windowMode` live/history.
+- WS + gap-heal gated in history mode; return-to-live → `loadDashboard`.
+- Cache button → Reload Dashboard (HTF + FE hydrate).
+- Protocol invariants: FE bounded viewport; viewport never mutates market series.
+- Open: **69C** focal prune, **69D** sliding window + viewport-centered `extractWindow`.
+
 ---
 
 ## Core 5.0 — Data Plane SSOT (Phases A–G) ✅

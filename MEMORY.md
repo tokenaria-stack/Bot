@@ -3,10 +3,13 @@
 **Index only (Core 6.1).** Not an architecture or rules SSOT.  
 Prefer [`README.md`](README.md) as the entry point.
 
+**Agents:** phrases like «сохрани в памяти» / «update MEMORY» mean update the **SSOT map**
+(see Role rule). Do **not** turn this file back into an encyclopedia.
+
 ## Read order
 
 1. `.cursor/rules/jeweler-protocol.mdc` — laws (always-on)
-2. `.cursor/rules/senior-quant-architect.mdc` — role + before-coding checklist (always-on)
+2. `.cursor/rules/senior-quant-architect.mdc` — role + checklist + memory routing (always-on)
 3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
 4. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
 
@@ -17,10 +20,10 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Item | Value |
 |------|-------|
 | Data plane | Core 5.0 Phases A–G ✅ |
-| Docs | Core 6.0 + **6.1 polish** ✅ |
+| Docs | Core 6.0/6.1 + **#69A MemoryBudget** ✅ |
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | **#76 ScoreNodes**, **#67 Live Confirm** |
+| NEXT | **#76 ScoreNodes**, **#67 Live Confirm**, **#69C/D** sliding window |
 
 Update the owning SSOT file — do not duplicate content here.
