@@ -21,7 +21,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - WS + gap-heal gated in history mode; return-to-live → `loadDashboard`.
 - Cache button → Reload Dashboard (HTF + FE hydrate).
 - Protocol invariants: FE bounded viewport; viewport never mutates market series.
-- Open: **69C** focal prune, **69D** sliding window + viewport-centered `extractWindow`.
+
+## Debt #69C — Focal-time prune (Jul 2026) ✅
+
+- `ColumnarStore.pruneDirectionFromFocal` / `resolveBudgetPruneDirection`.
+- `prependMonolith(opts)` uses viewport `centerTimeMs` + `isAtRightEdge` from boot.
+- Drop side farthest from focal; `atLiveEdge` forces FROM_OLDEST.
+- Open: **69D** sliding window + viewport-centered `extractWindow`.
 
 ---
 

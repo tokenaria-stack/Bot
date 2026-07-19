@@ -88,6 +88,53 @@ assert(live.invariantOk(), 'invariant after FROM_NEWEST');
 assert(live.lastTimeSec() < beforePrependLast, 'newest tip pruned away');
 assert(live.firstTimeSec() < firstAfterOldest, 'older history retained on left');
 
+// Debt #69C: focal nearer right → FROM_OLDEST (keep tip)
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+const focalRight = new ColumnarStore();
+fillStore(focalRight, 100);
+const older2 = {
+  times: [],
+  candles: { open: [], high: [], low: [], close: [], volume: [] },
+  plots: { line_rsx: [], line_woz: [] },
+  annotations: [],
+};
+for (let i = 0; i < 50; i++) {
+  const t = 1_700_000_000 - (50 - i) * 60;
+  older2.times.push(t);
+  older2.candles.open.push(1);
+  older2.candles.high.push(1);
+  older2.candles.low.push(1);
+  older2.candles.close.push(1);
+  older2.candles.volume.push(1);
+  older2.plots.line_rsx.push(1);
+  older2.plots.line_woz.push(1);
+}
+const tipBefore = focalRight.lastTimeSec();
+const r = focalRight.prependMonolith(older2, { focalTimeSec: tipBefore, atLiveEdge: false });
+assert(r.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST, 'focal at right → FROM_OLDEST');
+assert(focalRight.windowMode === 'live', 'FROM_OLDEST keeps live window');
+assert(focalRight.lastTimeSec() === tipBefore, 'live tip retained when focal on right');
+assert(focalRight.barCount() === 100, 'still at target');
+assert(focalRight.invariantOk(), 'invariant focal-right prune');
+
+// Debt #69C: atLiveEdge forces FROM_OLDEST
+assert(
+  ColumnarStore.pruneDirectionFromFocal(100, 200, 110, { atLiveEdge: true })
+    === ColumnarStore.PRUNE_FROM_OLDEST,
+  'atLiveEdge forces OLDEST',
+);
+assert(
+  ColumnarStore.pruneDirectionFromFocal(100, 200, 105, {})
+    === ColumnarStore.PRUNE_FROM_NEWEST,
+  'focal near left → NEWEST',
+);
+assert(
+  ColumnarStore.pruneDirectionFromFocal(100, 200, 195, {})
+    === ColumnarStore.PRUNE_FROM_OLDEST,
+  'focal near right → OLDEST',
+);
+
 // appendTick growth prune (live mode)
 const tip = new ColumnarStore();
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });

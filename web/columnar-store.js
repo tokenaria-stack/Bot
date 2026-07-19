@@ -341,6 +341,59 @@ class ColumnarStore {
   }
 
   /**
+   * Debt #69C: pick prune side farthest from the user's focal time.
+   * Drop OLDEST when focal is nearer the right (live) edge; drop NEWEST when nearer the left.
+   *
+   * @param {number|null|undefined} windowStartSec
+   * @param {number|null|undefined} windowEndSec
+   * @param {number|null|undefined} focalTimeSec
+   * @param {{ atLiveEdge?: boolean, defaultDirection?: 'oldest'|'newest' }} [opts]
+   * @returns {'oldest'|'newest'}
+   */
+  static pruneDirectionFromFocal(windowStartSec, windowEndSec, focalTimeSec, opts = {}) {
+    if (opts.atLiveEdge === true) {
+      return ColumnarStore.PRUNE_FROM_OLDEST;
+    }
+    const fallback = opts.defaultDirection === ColumnarStore.PRUNE_FROM_OLDEST
+      ? ColumnarStore.PRUNE_FROM_OLDEST
+      : ColumnarStore.PRUNE_FROM_NEWEST;
+    const start = Number(windowStartSec);
+    const end = Number(windowEndSec);
+    const focal = Number(focalTimeSec);
+    if (![start, end, focal].every(Number.isFinite) || end <= start) {
+      return fallback;
+    }
+    // Clamp focal into window for distance math (off-window scroll still chooses nearest edge).
+    const f = Math.min(end, Math.max(start, focal));
+    const distLeft = f - start;
+    const distRight = end - f;
+    // Farthest side from focal gets dropped.
+    return distLeft <= distRight
+      ? ColumnarStore.PRUNE_FROM_NEWEST
+      : ColumnarStore.PRUNE_FROM_OLDEST;
+  }
+
+  /**
+   * Resolve budget prune direction for the current window + optional viewport focal.
+   * @param {{ focalTimeSec?: number|null, atLiveEdge?: boolean, defaultDirection?: 'oldest'|'newest', pruneDirection?: 'oldest'|'newest' }} [opts]
+   */
+  resolveBudgetPruneDirection(opts = {}) {
+    if (opts.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST
+      || opts.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST) {
+      return opts.pruneDirection;
+    }
+    return ColumnarStore.pruneDirectionFromFocal(
+      this.windowStartSec(),
+      this.windowEndSec(),
+      opts.focalTimeSec,
+      {
+        atLiveEdge: opts.atLiveEdge === true,
+        defaultDirection: opts.defaultDirection,
+      },
+    );
+  }
+
+  /**
    * Apply live WS tick to tail bar (update) or append new bar.
    * @returns {{ candle: object, isNewBar: boolean, barCount: number, tick: object, delta: object }|null}
    */
@@ -434,7 +487,7 @@ class ColumnarStore {
     return { candle, isNewBar, barCount: this._times.length, tick, delta };
   }
 
-  prependMonolith(columnarJson) {
+  prependMonolith(columnarJson, options = {}) {
     const data = columnarJson && typeof columnarJson === 'object' ? columnarJson : {};
     const incomingTimes = Array.isArray(data.times) ? data.times : [];
     if (incomingTimes.length === 0) return { added: 0 };
@@ -518,9 +571,16 @@ class ColumnarStore {
       added: this._times.length,
     };
 
-    this._enforceBudget(ColumnarStore.PRUNE_FROM_NEWEST);
+    // Debt #69C: direction from viewport focal (default NEWEST = safe for left-scroll history).
+    const direction = this.resolveBudgetPruneDirection({
+      focalTimeSec: options.focalTimeSec,
+      atLiveEdge: options.atLiveEdge === true,
+      pruneDirection: options.pruneDirection,
+      defaultDirection: ColumnarStore.PRUNE_FROM_NEWEST,
+    });
+    this._enforceBudget(direction);
 
-    return { added };
+    return { added, pruneDirection: direction, windowMode: this.windowMode };
   }
 
   invariantOk() {

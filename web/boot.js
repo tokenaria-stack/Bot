@@ -482,7 +482,16 @@
       },
       mergeIntoStore: (data) => {
         const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
-        const { added } = liveColumnarStore.prependMonolith(data);
+        const cap = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
+          ? ViewportManager.capture('live')
+          : null;
+        const focalTimeSec = (cap?.centerTimeMs != null && Number.isFinite(cap.centerTimeMs))
+          ? cap.centerTimeMs / 1000
+          : null;
+        const { added } = liveColumnarStore.prependMonolith(data, {
+          focalTimeSec,
+          atLiveEdge: cap?.isAtRightEdge === true,
+        });
         if (added <= 0) return null;
         return { added, viewportRange };
       },

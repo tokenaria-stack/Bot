@@ -73,6 +73,7 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `Tip Ownership` | History REST = closed only; forming tip = WS only |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
+| `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
 
 ### Banned names (Go identifiers)
 
@@ -108,9 +109,9 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 |-------|----------|
 | Budget | `STORE_BUDGET_TARGET=12000`, `STORE_BUDGET_HARD_CAP=16000` ([`web/config.js`](../web/config.js)) |
 | Atomic prune | `_pruneToCount` slices times + candles.* + all plots + annotations together |
-| `appendTick` | `_enforceBudget(FROM_OLDEST)` |
-| `prependMonolith` | `_enforceBudget(FROM_NEWEST)` → may set `windowMode='history'` |
-| `windowMode` | `live` — WS may append; `history` — WS/gap must not feed store or auto-`loadDashboard` |
+| `appendTick` | `_enforceBudget(FROM_OLDEST)` (live tip path only) |
+| `prependMonolith` | `_enforceBudget(pruneDirectionFromFocal(...))` — drop side farthest from viewport center; default NEWEST if no focal |
+| `windowMode` | `live` — WS may append; `history` — set when NEWEST pruned; WS/gap must not feed store or auto-`loadDashboard` |
 | Return to live | Pin right edge while `history` → `loadDashboard()` (server tip) |
 | Paint | `extractWindow` is still tip-tail (15k). **Future 69D:** if store is mid-history, paint must follow viewport |
 | Reload Dashboard | HTF clear + `store.clear()` + `loadDashboard()` (emergency, not memory manager) |
