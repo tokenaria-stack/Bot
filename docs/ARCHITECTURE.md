@@ -191,6 +191,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 
 **Tip Ownership:** REST history = closed bars only (`dropFormingTip`); forming tip = WS only.  
 **Discard axis:** `window.projectionEpoch`.  
+**Time axis labels:** UTC unix data unchanged; LWC `localization` + `tickMarkFormatter` format in browser local TZ ([`web/chart-core.js`](../web/chart-core.js)).  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  
 **Floating menus:** `position:fixed` viewport (`floating-menu.js`).
 

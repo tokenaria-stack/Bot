@@ -1,6 +1,9 @@
 /**
  * chart-core.js — sterile live ChartAdapter facade (Project Renaissance).
  * Contract: 7 public methods only. Price pane owns candles; indicators via DDRFactory.
+ *
+ * Time axis: wire data stays UTC unix seconds. Axis/crosshair labels use the browser
+ * local timezone (display only — never shift stored timestamps).
  */
 (function () {
   'use strict';
@@ -10,11 +13,79 @@
   let _live = null;
   let _liveUpdating = false;
 
+  /** @type {null|{ locale: string, timeFormatter: Function, dateFormatter: Function, tickMarkFormatter: Function }} */
+  let _timeFormatBundle = null;
+
   function hostSize(el, fw, fh) {
     return {
       width: Math.max(el?.clientWidth || 0, fw),
       height: Math.max(el?.clientHeight || 0, fh),
     };
+  }
+
+  /**
+   * Display-only: UTCTimestamp / BusinessDay → Date for Intl formatting.
+   * Does not mutate series data; timestamps in ColumnarStore remain UTC.
+   */
+  function unixChartTimeToDate(time) {
+    if (typeof time === 'object' && time !== null && 'year' in time) {
+      return new Date(Date.UTC(time.year, time.month - 1, time.day));
+    }
+    const sec = Number(time);
+    if (!Number.isFinite(sec)) return new Date(NaN);
+    return new Date(sec * 1000);
+  }
+
+  /**
+   * Ported from adapter.legacy chartTimeFormatBundle, with cached Intl instances.
+   * LWC default tick marks use UTC components; we format in the browser local TZ.
+   */
+  function chartTimeFormatBundle() {
+    if (_timeFormatBundle) return _timeFormatBundle;
+
+    const locale = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+    const timeZone = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : undefined;
+
+    const dtfOpts = timeZone ? { timeZone } : {};
+    const dtfTime = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      ...dtfOpts,
+    });
+    const dtfDate = new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      ...dtfOpts,
+    });
+
+    const formatTime = (time) => dtfTime.format(unixChartTimeToDate(time));
+    const formatDate = (time) => dtfDate.format(unixChartTimeToDate(time));
+
+    const tickMarkFormatter = (time, tickMarkType) => {
+      if (typeof LightweightCharts !== 'undefined'
+        && tickMarkType === LightweightCharts.TickMarkType.Time) {
+        return formatTime(time);
+      }
+      return formatDate(time);
+    };
+
+    _timeFormatBundle = {
+      locale,
+      timeFormatter: formatTime,
+      dateFormatter: formatDate,
+      tickMarkFormatter,
+    };
+    return _timeFormatBundle;
+  }
+
+  function chartLocalizationOptions() {
+    const { locale, timeFormatter, dateFormatter } = chartTimeFormatBundle();
+    return { locale, timeFormatter, dateFormatter };
   }
 
   function layoutOptions() {
@@ -71,14 +142,18 @@
 
   function unifiedTimeScaleOptions(showAxisLabels) {
     const base = timeScaleOptions();
+    const { tickMarkFormatter } = chartTimeFormatBundle();
     const opts = {
       ...base,
       timeVisible: showAxisLabels,
       secondsVisible: false,
     };
     // Keep axis/grid geometry; hide tick labels on slave panes only.
+    // Price pane: local-TZ formatter (LWC default is UTC components → 8h skew in UTC+8).
     if (!showAxisLabels) {
       opts.tickMarkFormatter = () => '';
+    } else {
+      opts.tickMarkFormatter = tickMarkFormatter;
     }
     return opts;
   }
@@ -87,6 +162,7 @@
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
+      localization: chartLocalizationOptions(),
       grid: gridOptions(),
       crosshair: crosshairOptions(),
       timeScale: unifiedTimeScaleOptions(showAxisLabels),
@@ -119,6 +195,7 @@
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
+      localization: chartLocalizationOptions(),
       grid: gridOptions(false),
       crosshair: {
         ...crosshairOptions(),
