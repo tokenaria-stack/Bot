@@ -115,6 +115,10 @@ the walk-forward scoring path.
 **MUST:** enforce `GetCandlesStrictlyBefore` (or equivalent) on decision MTF.
 **NEVER:** read a higher-TF bar that has not closed relative to the current tick.
 
+Canonical market state is defined by **continuity**, not by connectivity:
+WS reconnect ≠ timeline publishable. Publish live ticks only after missing closed
+bars are reconciled into `Frame` (DAG replay). Archive tip alone is not sufficient.
+
 ---
 
 ## Rule 5 — Architectural Straight Lines (No Shotgun Surgery)

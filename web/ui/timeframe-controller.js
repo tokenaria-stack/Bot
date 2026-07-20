@@ -155,9 +155,12 @@ const TimeframeController = (() => {
       window.projectionEpoch = (Number(window.projectionEpoch) || 0) + 1;
       if (ChartAdapter.isInitialized('live') && typeof ViewportManager !== 'undefined') {
         const captured = ViewportManager.capture('live');
-        viewportAnchor = typeof ViewportManager.cameraIntentForTfSwitch === 'function'
-          ? ViewportManager.cameraIntentForTfSwitch(captured, prevTf, resolved)
-          : captured;
+        // Null capture / null intent → fresh camera (never synthetic restore on blank/poison scale).
+        if (captured) {
+          viewportAnchor = typeof ViewportManager.cameraIntentForTfSwitch === 'function'
+            ? ViewportManager.cameraIntentForTfSwitch(captured, prevTf, resolved)
+            : captured;
+        }
       }
     }
 

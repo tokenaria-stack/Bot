@@ -104,3 +104,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Loading History on every task — **Reason:** attention dilution.
 
 **Consequences:** Update the owning SSOT file only; do not copy facts across docs.
+
+---
+
+## ADR-008 — Timeline Publish Gate (not HealingManager)
+
+**Context:** After Binance WS offline, FE Self-Healing reloaded GetWindow before missing closed bars were in `Frame`. Backend gap threshold `> 2×interval` false-negatived a 1-bar hole; `publishable` fired too early. Chart painted (and F5 kept) a hole.
+
+**Decision:** Thin mid-session publish gate on `Runtime` — not an FSM/Manager.
+`WS Connected ≠ History Reconciled ≠ Timeline Publishable`. On reconnect: forced REST tip fetch for all chart TFs → contiguous@1bar (`ΔOpen > 1×interval`) → flush pending → broadcast `timeline_publishable`. FE buffers until that signal (P1 status poll deferred).
+
+**Rejected:**
+- `HealingManager` / ReconnectFSM / RecoveryCoordinator — **Reason:** sockets, not power plants (Rule 6); BootController already covers cold start.
+- FE REST merge of klines — **Reason:** frontend ≠ history SSOT (Rule 1).
+- `loadDashboard` on every gap/reconnect hoping archive is full — **Reason:** symptom fix; GetWindow was still gappy.
+
+**Consequences:** Debt #81 closed. Gap-branch of #67 addressed by heal+replay; continuous-session Live Confirm (#67) remains open. P1/P2 (status poll, GetWindow degraded) deferred.
+

@@ -29,6 +29,19 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - Drop side farthest from focal; `atLiveEdge` forces FROM_OLDEST.
 - Open: **69D** sliding window + viewport-centered `extractWindow`.
 
+## Debt #80 — ViewportManager.restore 0×0 (Jul 2026) ✅
+
+- Root: `setVisibleLogicalRange` on 0×0 host → LWC NaN barSpacing → blank chart (Core 4.10 class).
+- Fix: layout guard + fresh `applyOptions` fallback + ResizeObserver deferred restore;
+  ChartAdapter no-op; TF switch with null capture → fresh (no synthetic restore).
+
+## Debt #81 — Timeline Publish Gate (Jul 2026) ✅
+
+- Invariant: WS Connected ≠ History Reconciled ≠ Timeline Publishable.
+- Phases A–D: exchange reconnect hooks; Runtime pending + gate; WS `timeline_*`; FE await.
+- P0: gap threshold `> 1×interval`; forced REST on `ReconcileTimeline`; publishable only if fetch OK + contiguous.
+- Manual: offline→online chart contiguous (Buffering ≈ forced multi-TF REST). P1/P2 deferred.
+
 ---
 
 ## Core 5.0 — Data Plane SSOT (Phases A–G) ✅

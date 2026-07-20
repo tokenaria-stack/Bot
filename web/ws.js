@@ -1,5 +1,5 @@
 /**
- * WebSocket transport — routes ticks/markers to callbacks, no Store/DOM.
+ * WebSocket transport — routes ticks/markers/timeline signals to callbacks, no Store/DOM.
  */
 const WS = {
   _socket: null,
@@ -101,6 +101,16 @@ const WS = {
 
     if (msg.type === 'marker' && msg.data) {
       WS._callbacks?.onMarker?.(msg.data);
+      return;
+    }
+
+    // Timeline publish gate (Phase C/D): server owns heal; FE waits then reloads.
+    if (msg.type === 'timeline_healing') {
+      WS._callbacks?.onTimelineHealing?.(msg.data ?? msg);
+      return;
+    }
+    if (msg.type === 'timeline_publishable') {
+      WS._callbacks?.onTimelinePublishable?.(msg.data ?? msg);
     }
   },
 };

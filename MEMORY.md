@@ -20,10 +20,10 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Item | Value |
 |------|-------|
 | Data plane | Core 5.0 Phases A–G ✅ |
-| Docs | Core 6.0/6.1 + **#69A/69C MemoryBudget** ✅ |
+| Docs | Core 6.0/6.1 + **#69A/69C** + **#80/#81 Timeline Publish Gate** ✅ |
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | **#76 ScoreNodes**, **#67 Live Confirm**, **#69D** sliding window |
+| NEXT | **#76 ScoreNodes**, **#67 continuous Live Confirm**, **#69D** sliding window |
 
 Update the owning SSOT file — do not duplicate content here.

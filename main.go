@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -141,6 +142,24 @@ func main() {
 	dashboard.BindMaster(master)
 	master.SetNavigatorPanes(market.DefaultLiveNavigatorPanes())
 
+	// Timeline publish gate sockets (Phase C): healing/publishable → browser WS.
+	// midSession gate: ignore transport signals until GoLive + StartDataFeed.
+	var timelineMidSession atomic.Bool
+	master.SetOnTimelineHealing(dashboard.BroadcastTimelineHealing)
+	master.SetOnTimelinePublishable(dashboard.BroadcastTimelinePublishable)
+	wsClient.SetOnDisconnect(func() {
+		if !timelineMidSession.Load() {
+			return
+		}
+		master.OnBinanceDisconnect()
+	})
+	wsClient.SetOnReconnect(func() {
+		if !timelineMidSession.Load() {
+			return
+		}
+		master.OnBinanceReconnect(ctx)
+	})
+
 	// Shot 9C/9E: sole SQLite writer — bind before gap-fill / tip catch-up.
 	persistQ := data.NewPersistenceQueue(4096)
 	persistQ.Start(ctx)
@@ -183,6 +202,8 @@ func main() {
 	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Frame touch).
 	master.StartSQLiteArchiveCatchUpLoop(ctx)
 	master.SeedClosedBarTelemetry()
+	// Arm mid-session timeline hooks only after live feed is up (first Dial already done).
+	timelineMidSession.Store(true)
 
 	go func() {
 		log.Println("[Main] Starting Dashboard server on :8080...")

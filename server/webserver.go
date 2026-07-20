@@ -548,6 +548,30 @@ func (d *DashboardServer) broadcast(msg wsEnvelope) {
 	d.writeToClients(payload, nil)
 }
 
+// BroadcastTimelineHealing notifies all browsers that the canonical timeline is
+// unpublishable (Binance disconnect / ingest gap). FE shows buffering and waits.
+func (d *DashboardServer) BroadcastTimelineHealing() {
+	if d == nil {
+		return
+	}
+	d.broadcast(wsEnvelope{
+		Type: "timeline_healing",
+		Data: map[string]string{"status": "healing"},
+	})
+}
+
+// BroadcastTimelinePublishable notifies all browsers that ReconcileTimeline finished
+// and a contiguous Frame is ready — FE should atomic-reload the chart once.
+func (d *DashboardServer) BroadcastTimelinePublishable() {
+	if d == nil {
+		return
+	}
+	d.broadcast(wsEnvelope{
+		Type: "timeline_publishable",
+		Data: map[string]string{"status": "ready"},
+	})
+}
+
 // routeTick delivers a chart tick only to clients whose subscribed TF matches (Transport purity).
 // Case-sensitive: Binance "1m" (minute) ≠ "1M" (month) — never fold case.
 func (d *DashboardServer) routeTick(timeframe string, msg wsEnvelope) {

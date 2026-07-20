@@ -62,6 +62,12 @@
 	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
+	/** Phase D: wait for server timeline_publishable before loadDashboard. */
+	let awaitingTimelinePublishable = false;
+	let timelineHealSafetyTimer = null;
+	/** Browser↔bot reconnect may not imply Binance heal — shorter safety. */
+	const TIMELINE_HEAL_SAFETY_MS = 75000;
+	const TIMELINE_HEAL_BROWSER_SAFETY_MS = 8000;
 	/** Debt #69A: throttle return-to-live hydrate after history-window prune. */
 	let lastReturnToLiveAt = 0;
 	const RETURN_TO_LIVE_COOLDOWN_MS = 2000;
@@ -361,9 +367,48 @@
   }
 
   function updateBufferingOverlay() {
-    if (typeof ToolbarController !== 'undefined') {
-      ToolbarController.setBuffering(false);
+    if (typeof ToolbarController === 'undefined') return;
+    // Keep overlay while awaiting server heal (do not clear on loadDashboard finally).
+    ToolbarController.setBuffering(!!awaitingTimelinePublishable || !!window.__isDashboardLoading);
+  }
+
+  /**
+   * Phase D: gap / healing → buffer + overlay; do NOT loadDashboard until publishable.
+   * @param {string} reason
+   * @param {{ safetyMs?: number }} [opts]
+   */
+  function beginAwaitTimelineHeal(reason, opts = {}) {
+    const safetyMs = Number.isFinite(opts.safetyMs) ? opts.safetyMs : TIMELINE_HEAL_SAFETY_MS;
+    beginLiveTickBuffer();
+    awaitingTimelinePublishable = true;
+    if (typeof ToolbarController !== 'undefined') ToolbarController.setBuffering(true);
+    console.warn('[Self-Healing] awaiting timeline_publishable...', { reason, safetyMs });
+    if (timelineHealSafetyTimer) clearTimeout(timelineHealSafetyTimer);
+    timelineHealSafetyTimer = setTimeout(() => {
+      timelineHealSafetyTimer = null;
+      if (!awaitingTimelinePublishable) return;
+      console.warn('[Self-Healing] timeline_publishable timeout — degraded loadDashboard', { reason });
+      awaitingTimelinePublishable = false;
+      loadDashboard();
+    }, safetyMs);
+  }
+
+  function onTimelineHealingFromServer() {
+    beginAwaitTimelineHeal('server timeline_healing');
+  }
+
+  function onTimelinePublishableFromServer() {
+    if (timelineHealSafetyTimer) {
+      clearTimeout(timelineHealSafetyTimer);
+      timelineHealSafetyTimer = null;
     }
+    if (!awaitingTimelinePublishable) {
+      // Late/orphan ready: still refresh once so FE matches healed Frame.
+      console.warn('[Self-Healing] timeline_publishable (not awaiting) — refreshing chart');
+    }
+    awaitingTimelinePublishable = false;
+    if (window.__isDashboardLoading) return;
+    loadDashboard();
   }
 
   function wsSubscribeTf(tf) {
@@ -555,16 +600,16 @@
     const appendResult = liveColumnarStore.appendTick(tick);
     if (appendResult?.gapDetected) {
       if (liveColumnarStore.windowMode === 'history') return false;
-      console.warn('[Self-Healing] Time gap detected, reloading history...', {
+      console.warn('[Self-Healing] Time gap detected — waiting for server heal', {
         lastTime: appendResult.lastTime,
         tickTime: appendResult.tickTime,
         timeframe: tick?.timeframe || window.currentTf,
       });
       const now = Date.now();
-      // Throttle: replay of buffered gap ticks (flush runs while loading) must not re-trigger.
+      // Throttle: do not storm beginAwait; backend ingest gap / reconnect drives heal.
       if (!window.__isDashboardLoading && now - lastGapHealAt > GAP_HEAL_COOLDOWN_MS) {
         lastGapHealAt = now;
-        loadDashboard();
+        beginAwaitTimelineHeal('fe gapDetected');
       }
       return false;
     }
@@ -636,12 +681,12 @@
       onTick: handleLiveTick,
       onMarker: noop,
       onOpen: () => wsSubscribeTf(window.currentTf),
-      // Core 4.5 Self-Healing: socket was down → offline window is a guaranteed data hole.
-      // Absorb incoming ticks, refetch the monolith, replay buffer on top (same path as boot).
+      onTimelineHealing: onTimelineHealingFromServer,
+      onTimelinePublishable: onTimelinePublishableFromServer,
+      // Browser↔bot reconnect ≠ Binance heal. Buffer + short safety; publishable wins if both drop.
       onReconnect: () => {
-        console.warn('[Self-Healing] WS reconnected, reloading history to fill the offline gap...');
-        beginLiveTickBuffer();
-        loadDashboard();
+        console.warn('[Self-Healing] browser WS reconnected — awaiting timeline / short safety');
+        beginAwaitTimelineHeal('browser ws reconnect', { safetyMs: TIMELINE_HEAL_BROWSER_SAFETY_MS });
       },
     });
   }

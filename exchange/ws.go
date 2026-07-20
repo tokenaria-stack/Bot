@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -58,12 +59,25 @@ type wsForceOrderEvent struct {
 }
 
 // WsClient manages a Binance WebSocket connection.
+//
+// Lifecycle signals (Timeline Reconcile / Phase A):
+//   - OnReconnect — after a successful Dial (including the first connect).
+//     Transport recovered ≠ timeline publishable; Runtime owns reconcile.
+//   - OnDisconnect — when an established session ends (read error / shutdown),
+//     before the reconnect backoff sleep. Not fired on dial failure (no session).
+//
+// Set hooks via SetOnDisconnect / SetOnReconnect before Start (or under the
+// same mutex contract: setters are safe; callbacks must not re-enter setters).
 type WsClient struct {
 	symbol    string
 	OutCh     chan WsTick
 	orderFlow OrderFlowSink
 
 	aggTradeCount atomic.Uint64
+
+	hookMu       sync.Mutex
+	onDisconnect func()
+	onReconnect  func()
 }
 
 // NewWsClient creates a WebSocket client for the given symbol.
@@ -72,6 +86,38 @@ func NewWsClient(symbol string, orderFlow OrderFlowSink) *WsClient {
 		symbol:    strings.ToLower(NormalizeFuturesSymbol(symbol)),
 		OutCh:     make(chan WsTick, 1000),
 		orderFlow: orderFlow,
+	}
+}
+
+// SetOnDisconnect registers a hook for established-session loss.
+func (c *WsClient) SetOnDisconnect(fn func()) {
+	c.hookMu.Lock()
+	c.onDisconnect = fn
+	c.hookMu.Unlock()
+}
+
+// SetOnReconnect registers a hook for successful Dial (first connect or re-dial).
+func (c *WsClient) SetOnReconnect(fn func()) {
+	c.hookMu.Lock()
+	c.onReconnect = fn
+	c.hookMu.Unlock()
+}
+
+func (c *WsClient) fireDisconnect() {
+	c.hookMu.Lock()
+	fn := c.onDisconnect
+	c.hookMu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+func (c *WsClient) fireReconnect() {
+	c.hookMu.Lock()
+	fn := c.onReconnect
+	c.hookMu.Unlock()
+	if fn != nil {
+		fn()
 	}
 }
 
@@ -129,9 +175,15 @@ func (c *WsClient) connectAndListen(ctx context.Context) error {
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
+		// Dial failure: no session was established — do not fire OnDisconnect.
 		return fmt.Errorf("websocket dial: %w", err)
 	}
 	defer conn.Close()
+
+	// Transport recovered (or first connect). Runtime may still need Timeline Reconcile
+	// before ticks are publishable — WS Connected ≠ Timeline Publishable.
+	c.fireReconnect()
+	defer c.fireDisconnect()
 
 	var msgCount int
 	for {

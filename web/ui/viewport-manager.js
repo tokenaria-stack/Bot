@@ -1,6 +1,10 @@
 /**
  * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 / Shot 11D).
  * tipVisible ≠ pinnedRight. Live-edge preserves visibleBars + rightOffset; never carries barSpacing.
+ *
+ * Debt #80: never call setVisibleLogicalRange while the price host is 0×0 — LWC collapses
+ * barSpacing to NaN (blank chart). Same class as Core 4.10 cold-boot: fall back to
+ * width-independent applyOptions, then defer restore until layout exists.
  */
 (function initViewportManager(global) {
   /** Comfortable candle width — SSOT for cold boot + live-edge / poison recovery. */
@@ -13,6 +17,18 @@
   const HEALTHY_VISIBLE_BARS = 150;
   /** Logical slack: tip in frame does not alone mean pinned to right. */
   const RIGHT_EDGE_SLACK = 1.5;
+
+  function priceHostId(context) {
+    return context === 'backtest' ? 'bt-price-chart' : 'price-chart';
+  }
+
+  /** True when LWC can safely compute pixel↔logical mapping. */
+  function hostHasLayout(context) {
+    const el = typeof document !== 'undefined'
+      ? document.getElementById(priceHostId(context))
+      : null;
+    return !!(el && el.clientWidth > 0 && el.clientHeight > 0);
+  }
 
   function storeForContext(context) {
     if (context === 'backtest') {
@@ -74,10 +90,59 @@
     });
   }
 
+  /** Core 4.10 twin: layout-safe pin to live edge (no setVisibleLogicalRange). */
+  function applyFreshCameraFallback(context) {
+    if (typeof ChartAdapter === 'undefined') return;
+    ['price', 'wozduh', 'rsx'].forEach((pane) => {
+      ChartAdapter.getChart(context, pane)?.timeScale()?.applyOptions({
+        barSpacing: HEALTHY_BAR_SPACING,
+        rightOffset: 0,
+      });
+    });
+  }
+
   function _paneScrollToRight(context) {
     ['price', 'wozduh', 'rsx'].forEach((pane) => {
       ChartAdapter.getChart(context, pane)?.timeScale()?.scrollToPosition(0, false);
     });
+  }
+
+  /**
+   * When host is 0×0, paint via fresh fallback and restore once layout exists.
+   * One observer per host — avoids restore storms.
+   */
+  function scheduleDeferredRestore(context, anchor, store) {
+    if (typeof document === 'undefined') return;
+    const host = document.getElementById(priceHostId(context));
+    if (!host) return;
+
+    const run = () => {
+      if (!hostHasLayout(context)) return false;
+      if (host._vmDeferredRestoreRo) {
+        host._vmDeferredRestoreRo.disconnect();
+        host._vmDeferredRestoreRo = null;
+      }
+      ViewportManager.restore(context, anchor, store);
+      return true;
+    };
+
+    if (run()) return;
+
+    if (typeof ResizeObserver !== 'undefined') {
+      if (host._vmDeferredRestoreRo) return;
+      const ro = new ResizeObserver(() => {
+        run();
+      });
+      host._vmDeferredRestoreRo = ro;
+      ro.observe(host);
+      return;
+    }
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { run(); });
+      });
+    }
   }
 
   /**
@@ -93,17 +158,23 @@
   /**
    * Shot 11D-FIX: Decision Router for TF-switch camera.
    * Priority: Sticky Live Edge → Microscope (zoom IN in history) → Live Edge (zoom OUT).
+   * Returns null when capture failed — caller must use fresh camera (not synthetic restore).
    * @param {object|null} captured from capture()
    * @param {string} fromTf
    * @param {string} toTf
    */
   function cameraIntentForTfSwitch(captured, fromTf, toTf) {
-    const centerTimeMs = captured?.centerTimeMs != null ? captured.centerTimeMs : Date.now();
-    const visibleBars = captured?.visibleBars || HEALTHY_VISIBLE_BARS;
-    const rightOffset = captured?.rightOffset || 0;
+    // No reliable camera → caller should use fresh (null anchor), not a synthetic restore.
+    if (!captured || captured.centerTimeMs == null) {
+      return null;
+    }
+
+    const centerTimeMs = captured.centerTimeMs;
+    const visibleBars = captured.visibleBars || HEALTHY_VISIBLE_BARS;
+    const rightOffset = captured.rightOffset || 0;
 
     // Priority 1 — Sticky Live Edge: tip-pinned user stays on live market regardless of zoom.
-    if (captured?.isAtRightEdge === true) {
+    if (captured.isAtRightEdge === true) {
       return { centerTimeMs, isAtRightEdge: true, visibleBars, rightOffset };
     }
 
@@ -114,13 +185,13 @@
     const zoomIn = Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs < fromMs;
 
     // Priority 2 — Microscope: zoom IN while viewing historical (non-edge) window.
-    if (zoomIn && captured?.centerTimeMs != null) {
-      let visibleBars = Number(captured.visibleBars) || HEALTHY_VISIBLE_BARS;
-      if (visibleBars > MAX_HEALTHY_VISIBLE_BARS) visibleBars = MAX_HEALTHY_VISIBLE_BARS;
-      if (visibleBars < 50) visibleBars = 50;
+    if (zoomIn) {
+      let bars = Number(captured.visibleBars) || HEALTHY_VISIBLE_BARS;
+      if (bars > MAX_HEALTHY_VISIBLE_BARS) bars = MAX_HEALTHY_VISIBLE_BARS;
+      if (bars < 50) bars = 50;
       return {
-        centerTimeMs: captured.centerTimeMs,
-        visibleBars,
+        centerTimeMs,
+        visibleBars: bars,
         isAtRightEdge: false,
         barSpacing: HEALTHY_BAR_SPACING,
       };
@@ -135,6 +206,7 @@
     HEALTHY_VISIBLE_BARS,
     isPoisonCameraState,
     cameraIntentForTfSwitch,
+    hostHasLayout,
 
     capture(context) {
       const range = typeof ChartAdapter !== 'undefined'
@@ -188,6 +260,13 @@
 
       const mainChart = ChartAdapter.getChart(context, 'price');
       if (!mainChart?.timeScale) return;
+
+      // Debt #80: 0×0 host → never setVisibleLogicalRange (NaN scale / blank chart).
+      if (!hostHasLayout(context)) {
+        applyFreshCameraFallback(context);
+        scheduleDeferredRestore(context, anchor, targetStore);
+        return;
+      }
 
       // Live Edge: healthy barSpacing (no density carry) + preserved visibleBars / rightOffset.
       if (anchor.isAtRightEdge) {

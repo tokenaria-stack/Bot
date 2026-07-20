@@ -567,6 +567,11 @@
 
     setVisibleLogicalRange(context, range, options = {}) {
       if (context !== 'live' || !_live || !isFiniteLogicalRange(range)) return;
+      // Debt #80: 0×0 host → LWC NaN scale (blank chart). Caller must use fresh camera.
+      const host = typeof document !== 'undefined'
+        ? document.getElementById('price-chart')
+        : null;
+      if (host && (host.clientWidth <= 0 || host.clientHeight <= 0)) return;
       _live._syncingTimeScale = true;
       try {
         const charts = [_live.charts.price, _live.charts.wozduh, _live.charts.rsx];

@@ -3,7 +3,7 @@
 **SSOT for:** how the system works **today**.  
 **Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
 
-**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Docs + **Debt #69A FE Memory Budget**.
+**Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Docs + **Debt #69A FE Memory Budget** + **Debt #81 Timeline Publish Gate**.
 
 **Default mode:** `ENGINE_MODE=ChartOnly`. Trading stack re-enters only with new `decision/` strategies + `ENGINE_MODE=live`.
 
@@ -96,8 +96,9 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 2. **Bar Source Seam.** Closed canonical bars only in Ingress. Forming ticks (`x=false`) bypass Ingress (Frame telemetry / Core 4.8 path). Time bars = exchange klines (TradingView canon) — no trade-synthesized time bars in ledger.
 3. **Boot: WS first.** REST recovery must not overwrite missed WS bars. One tick path: `Runtime.routeTick` (live + boot replay).
 4. **SQLite firewall ≠ cure.** Monotonic UPSERT (`high=MAX`, `low=MIN`, `volume=MAX`) is last line of defense; root fix is REST Grace (`KlineSettleGraceMs=5000`).
-5. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip.
+5. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
 6. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+7. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session: unpublish → forced REST tip fetch → contiguous@1bar → flush pending → `timeline_publishable`. FE awaits server; does not invent hole fills.
 
 ---
 
@@ -145,6 +146,21 @@ Binance WS kline
 | 1 Loading | SQLite + REST through Ingress |
 | 2 Reconciling | Replay buffer in order via `Runtime.routeTick` |
 | 3 Live | `StartDataFeed` + gap-fill / catch-up loops |
+
+### Mid-session Timeline Reconcile (Debt #81)
+
+Not a second Boot FSM. Thin publish gate on `Runtime`:
+
+```
+Binance disconnect → unpublishable + timeline_healing
+Binance reconnect  → ReconcileTimeline (forced FetchClosedRange all chart TFs)
+                   → framesTimelineHealthy (ΔOpen > 1×interval = hole)
+                   → flush pending → publishable + timeline_publishable
+FE: gap/healing → buffering; timeline_publishable → atomic loadDashboard
+```
+
+Key files: `exchange/ws.go` (OnDisconnect/OnReconnect), `market/runtime.go` + `kline_gap.go`,
+`server/webserver.go` broadcast, `web/ws.js` + `boot.js`.
 
 ---
 
@@ -200,7 +216,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 1. Only `ChartAdapter` talks to Lightweight Charts.
 2. Paint reads Store through a window (`extractWindow`), not raw full store.
 3. `RenderScheduler` is the only paint initiator.
-4. Cold boot camera uses width-independent APIs only (`applyOptions` barSpacing/rightOffset) — no `setVisibleLogicalRange`/`fitContent` on 0×0 containers.
+4. Cold boot camera uses width-independent APIs only (`applyOptions` barSpacing/rightOffset) — no `setVisibleLogicalRange`/`fitContent` on 0×0 containers. **Debt #80:** `ViewportManager.restore` uses the same rule (fresh fallback + deferred restore when host has layout).
 
 ---
 
@@ -222,6 +238,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Ingress | `exchange/ingress.go`, `exchange/klines.go` |
 | Frame / streaming | `market/frame.go`, `streaming.go`, `snapshot.go` |
 | Runtime / Boot | `market/runtime.go`, `boot_controller.go` |
+| Timeline publish gate | `market/kline_gap.go`, `exchange/ws.go` hooks, `web/boot.js` + `ws.js` |
 | Decision | `decision/score_types.go` |
 | DAG | `core/runner.go`, `core/nodes/`, `market/dag_shadow.go` |
 | Falcon | `market/falcon.go` |

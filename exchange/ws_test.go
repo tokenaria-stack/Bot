@@ -2,8 +2,27 @@ package exchange
 
 import (
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 )
+
+func TestWsClientLifecycleCallbacks(t *testing.T) {
+	c := NewWsClient("BTCUSDT", nil)
+	var reconnects, disconnects atomic.Int32
+	c.SetOnReconnect(func() { reconnects.Add(1) })
+	c.SetOnDisconnect(func() { disconnects.Add(1) })
+
+	c.fireReconnect()
+	c.fireDisconnect()
+	if reconnects.Load() != 1 || disconnects.Load() != 1 {
+		t.Fatalf("got reconnects=%d disconnects=%d want 1/1", reconnects.Load(), disconnects.Load())
+	}
+
+	// Nil hooks are no-ops (safe before wiring).
+	c2 := NewWsClient("ETHUSDT", nil)
+	c2.fireReconnect()
+	c2.fireDisconnect()
+}
 
 func TestHandleAggTradePayload(t *testing.T) {
 	raw := []byte(`{

@@ -200,6 +200,7 @@ class ChartCompositor {
   /**
    * Anchor present (TF) → ViewportManager.restore (sanitized barSpacing).
    * Fresh / cold boot → healthy defaults (never fitContent).
+   * Debt #80: restore itself refuses setVisibleLogicalRange on 0×0 hosts.
    * @param {{ anchor?: object, viewport?: string }} intent
    */
   _commitFullCamera(intent) {
