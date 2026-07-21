@@ -134,5 +134,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Bumping `FrameBootKlineLimit` / DAGInit depth — **Reason:** WarmupTrap disproved (Δ≈0).
 - Separate Cap only for columnar, leave JSON history on Now — **Reason:** second boundary; SSOT violation repeats.
 
-**Consequences:** RSX Tip SSOT is a *consequence* of Closed-bar Boundary SSOT, not a separate engine bug. Continuous-session Live Confirm (forming tip vs TV) may still be open under #67.
+**Consequences:** RSX Tip SSOT is a *consequence* of Closed-bar Boundary SSOT, not a separate engine bug. Viewport forming tip → ADR-010.
+
+---
+
+## ADR-010 — Viewport Forming Tip (TradingView Model 2)
+
+**Context:** Engine math (Replay ≡ Live on same OHLC) and Cap boundary (ADR-009) are proven. F5 tip “hook” remained because History REST painted Cap-closed only while the first WS tick appended the next open (`deltaSec=60`). TradingView’s visible series tip equals `currentOpen` (forming bar) — Tip Ownership Model 2, not RSX smoothing.
+
+**Decision:** Keep **History** Cap-closed only (`dropFormingTip` + `ReplayDAGKlines`). **Viewport projection** may attach Frame’s current forming bar + `BuildTickJSON` live Cur plots after closed Replay (`projectViewportFormingTip`). Only on the live Cap edge; deep-history windows unchanged. First WS tick **overwrites** the same open time.
+
+**Rejected:**
+- FE morph / interpolation — **Reason:** duct tape (Rule 1).
+- Feeding forming bars into `ReplayDAGKlines` — **Reason:** poisons closed History SSOT.
+- ViewportBuilder Manager / new subsystem — **Reason:** power plant (Rule 6); one projection function on the existing columnar path.
+- REST “becomes live” — **Reason:** projection combines two canonical sources (closed window + Frame snapshot); History stays pure.
+
+**Consequences:** Tip Ownership = History closed XOR Replay; Viewport = History projection + optional current. Debt #67 product branch closed for F5 continuity; #68 scale bounds next.
 

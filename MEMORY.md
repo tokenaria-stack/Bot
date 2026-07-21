@@ -24,6 +24,6 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | **#76 ScoreNodes**, **#67 continuous Live Confirm**, **#69D** sliding window |
+| NEXT | **#76 ScoreNodes**, **#68 Osc scale**, **#69D** sliding window |
 
 Update the owning SSOT file — do not duplicate content here.

@@ -70,7 +70,7 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `Projector` | Slot → wire packer for live plots + columnar history |
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
-| `Tip Ownership` | History REST = closed only; forming tip = WS only |
+| `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
@@ -205,7 +205,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Camera | Sticky Live Edge / Microscope (`viewport-manager.js`) — TF mechanics CLOSED |
 | Scale | `ScaleController` SSOT (`chart_scale_prefs_v2`, Auto ON default) |
 
-**Tip Ownership:** REST history = closed bars only (`dropFormingTip`); forming tip = WS only.  
+**Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE).  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged; LWC `localization` + `tickMarkFormatter` format in browser local TZ ([`web/chart-core.js`](../web/chart-core.js)).  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  
@@ -258,4 +258,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — primary: **#76 ScoreNodes**, **#67 Closed-bar Boundary / Live Confirm**.
+**NEXT:** see `docs/OPEN_DEBTS.md` — primary: **#76 ScoreNodes**, **#68 Osc scale**, **#69D**.

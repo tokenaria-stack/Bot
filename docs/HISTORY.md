@@ -35,13 +35,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - Fix: layout guard + fresh `applyOptions` fallback + ResizeObserver deferred restore;
   ChartAdapter no-op; TF switch with null capture → fresh (no synthetic restore).
 
-## Debt #67 — Closed-bar Boundary SSOT (Jul 2026) 🟡 partial
+## Debt #67 — Closed-bar Boundary + Viewport Tip (Jul 2026) ✅
 
 - Falsified: Warmup 400vs3000, Replay≡Frame math, Snapshot/commit, live continuation.
 - Proven: `GetWindow(Now)` tip ≠ Cap/Frame tip during `KlineSettleGraceMs` → ΔRSX 0.8–2.7.
 - Fix (ADR-009): `GetWindow` → `resolveClosedBarBoundary` = `CapKlineEndToLastClosed`.
 - Verify: Cap-aligned OHLCV+RSX bit-identical; `TestClosedBoundarySSOT` locks the invariant.
-- Open: continuous-session forming tip vs TradingView (Live Confirm).
+- **ADR-010:** Viewport seeds Frame forming tip after closed Replay (TV Model 2); F5 OVERWRITE.
+- Open: none for tip product branch; #68 scale bounds next.
 
 ## Debt #81 — Timeline Publish Gate (Jul 2026) ✅
 

@@ -86,7 +86,8 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		return columnarHistoryResponse{}, false
 	}
 
-	// Shot 11A: strip forming tip before replay + display. Live owns the open bar via WS.
+	// Shot 11A / ADR-010: strip forming tip before Replay (History stays closed-only).
+	// Viewport may re-attach Frame's forming tip after projection (TV Model 2).
 	klines = dropFormingTip(klines, time.Now().UnixMilli())
 	if len(klines) == 0 {
 		return columnarHistoryResponse{}, false
@@ -135,7 +136,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		return columnarHistoryResponse{}, false
 	}
 
-	return columnarHistoryResponse{
+	resp := columnarHistoryResponse{
 		Format:        "columnar",
 		Status:        "ready",
 		Timeframe:     timeframe,
@@ -147,7 +148,13 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		Annotations:   annotations,
 		Sentinel:      sentinel,
 		HasMore:       hasMore,
-	}, true
+	}
+	// ADR-010: Viewport = closed projection + optional Frame forming tip (never Replay'd).
+	d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
+	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
+		return columnarHistoryResponse{}, false
+	}
+	return resp, true
 }
 
 // filterAnnotationsByDisplayTimes keeps markers whose time is an exact member of display times.
