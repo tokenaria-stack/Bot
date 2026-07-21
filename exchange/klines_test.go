@@ -2,14 +2,25 @@ package exchange
 
 import (
 	"testing"
+	"time"
 )
 
 func TestAlignKlineRangeMs(t *testing.T) {
 	t.Parallel()
 	step := int64(15 * 60 * 1000)
-	start, end := alignKlineRangeMs(1_700_000_001_234, 1_700_000_901_234, step)
+	start, end := alignKlineRangeMs(1_700_000_001_234, 1_700_000_901_234, "15m")
 	if start%step != 0 || end%step != 0 {
 		t.Fatalf("unaligned: start=%d end=%d step=%d", start, end, step)
+	}
+}
+
+func TestAlignOpenTimeMs_WeekMonday(t *testing.T) {
+	t.Parallel()
+	wed := time.Date(2026, 7, 22, 15, 0, 0, 0, time.UTC).UnixMilli()
+	got := alignOpenTimeMs(wed, "1w")
+	want := time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC).UnixMilli()
+	if got != want {
+		t.Fatalf("align 1w=%d want Monday %d", got, want)
 	}
 }
 

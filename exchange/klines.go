@@ -83,10 +83,7 @@ func (b *BinanceExchange) GetKlinesBefore(symbol, interval string, limit int, en
 		Interval(interval).
 		Limit(limit)
 	if endTimeMs > 0 {
-		stepMs, err := data.IntervalDurationMs(interval)
-		if err == nil && stepMs > 0 {
-			endTimeMs = alignOpenTimeMs(endTimeMs, stepMs)
-		}
+		endTimeMs = alignOpenTimeMs(endTimeMs, interval)
 		svc = svc.EndTime(endTimeMs)
 	}
 
@@ -127,13 +124,9 @@ func (b *BinanceExchange) FetchClosedRange(symbol, interval string, fromMs, toMs
 	if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
 		toMs = capped
 	}
-	stepMs, err := data.IntervalDurationMs(interval)
-	if err != nil {
-		return nil, err
-	}
-	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, stepMs)
+	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, interval)
 	if fromMs < BinanceFuturesGenesisMs {
-		fromMs = alignOpenTimeMs(BinanceFuturesGenesisMs, stepMs)
+		fromMs = alignOpenTimeMs(BinanceFuturesGenesisMs, interval)
 	}
 	if fromMs > toMs {
 		return nil, nil
@@ -170,13 +163,9 @@ func (b *BinanceExchange) FetchClosedRangePages(symbol, interval string, fromMs,
 	if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
 		toMs = capped
 	}
-	stepMs, err := data.IntervalDurationMs(interval)
-	if err != nil {
-		return nil, err
-	}
-	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, stepMs)
+	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, interval)
 	if fromMs < BinanceFuturesGenesisMs {
-		fromMs = alignOpenTimeMs(BinanceFuturesGenesisMs, stepMs)
+		fromMs = alignOpenTimeMs(BinanceFuturesGenesisMs, interval)
 	}
 	if fromMs > toMs {
 		return nil, nil
@@ -207,19 +196,18 @@ func (b *BinanceExchange) FetchClosedRangePages(symbol, interval string, fromMs,
 	return dedupeCandlesByOpenTime(all), nil
 }
 
-func alignOpenTimeMs(t, stepMs int64) int64 {
-	if stepMs <= 0 {
+// alignOpenTimeMs floors t to the bar open for interval (ADR-011 CurrentBarOpen).
+func alignOpenTimeMs(t int64, interval string) int64 {
+	open, err := data.CurrentBarOpen(t, interval)
+	if err != nil {
 		return t
 	}
-	return (t / stepMs) * stepMs
+	return open
 }
 
 // alignKlineRangeMs floors start/end to candle open boundaries for REST API requests.
-func alignKlineRangeMs(startMs, endMs, stepMs int64) (int64, int64) {
-	if stepMs <= 0 {
-		return startMs, endMs
-	}
-	return alignOpenTimeMs(startMs, stepMs), alignOpenTimeMs(endMs, stepMs)
+func alignKlineRangeMs(startMs, endMs int64, interval string) (int64, int64) {
+	return alignOpenTimeMs(startMs, interval), alignOpenTimeMs(endMs, interval)
 }
 
 // CandlesToData converts exchange candles to data.Candle for PersistenceQueue / SQLite.

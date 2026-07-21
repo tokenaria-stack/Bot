@@ -454,20 +454,26 @@ const KlineSettleGraceMs int64 = 5000
 // CapKlineEndToLastClosed clamps endTimeMs to now and to the open time of the last fully
 // closed AND settled candle for interval. Prevents REST gap-fill from requesting
 // in-progress bars or bars still inside the exchange settlement window.
+//
+// Last-closed open = PreviousBarOpen(CurrentBarOpen(settledNow)) — ADR-011 boundary
+// model (fixed duration floor for 1m…1d; Monday/month for 1w/1M). Never (now/step)*step
+// for calendar intervals.
 func CapKlineEndToLastClosed(endTimeMs int64, interval string) (int64, error) {
-	stepMs, err := IntervalDurationMs(interval)
-	if err != nil {
+	if _, _, err := boundaryKind(interval); err != nil {
 		return endTimeMs, err
 	}
 	nowMs := time.Now().UnixMilli() - KlineSettleGraceMs
 	if endTimeMs > nowMs {
 		endTimeMs = nowMs
 	}
-	if stepMs <= 0 {
-		return endTimeMs, nil
+	currentOpen, err := CurrentBarOpen(nowMs, interval)
+	if err != nil {
+		return endTimeMs, err
 	}
-	currentOpen := (nowMs / stepMs) * stepMs
-	lastClosedOpen := currentOpen - stepMs
+	lastClosedOpen, err := PreviousBarOpen(currentOpen, interval)
+	if err != nil {
+		return endTimeMs, err
+	}
 	if lastClosedOpen < 0 {
 		lastClosedOpen = 0
 	}

@@ -21,10 +21,16 @@ func TestCapKlineEndToLastClosed_ClampsFutureToLastClosedOpen(t *testing.T) {
 	t.Parallel()
 	stepMs := int64(4 * 60 * 60 * 1000)
 	nowMs := time.Now().UnixMilli()
-	// Mirror production formula: settlement grace shifts the wall clock back.
+	// Mirror production formula: settlement grace + Previous(Current) boundary.
 	settledNow := nowMs - KlineSettleGraceMs
-	currentOpen := (settledNow / stepMs) * stepMs
-	want := currentOpen - stepMs
+	currentOpen, err := CurrentBarOpen(settledNow, "4h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := PreviousBarOpen(currentOpen, "4h")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := CapKlineEndToLastClosed(nowMs+stepMs, "4h")
 	if err != nil {

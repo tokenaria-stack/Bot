@@ -19,6 +19,7 @@ Update this file when a debt opens, closes, or changes priority.
 | **69D** | Full sliding viewport window + paint alignment | 🔜 | **RED FLAG:** when Store becomes viewport-centered, `ChartCompositor.extractWindow` (currently tip-tail) MUST become viewport-centered too |
 | **80** | `ViewportManager.restore` 0×0 width risk (`setVisibleLogicalRange`) | ✅ | Guard + fresh `applyOptions` fallback + deferred restore; TF null-capture → fresh; ChartAdapter no-op on 0×0 |
 | **81** | **Timeline Publish Gate** (reconnect heal) | ✅ | Phases A–D + P0: WS hooks, Runtime gate, forced REST@1bar, FE await `timeline_publishable`. P1/P2 (status poll / GetWindow degraded) deferred |
+| **82** | **Calendar bar boundary** (`1w`/`1M` time model) | 🟡 **A1 ✅** | ADR-011 Cap/align/CloseTime via `CurrentBarOpen`/`Prev`/`Next`. Skip still on. **A2:** un-skip + catch-up/reconcile + FE no-snap |
 
 ---
 

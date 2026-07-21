@@ -71,6 +71,7 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
 | `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip |
+| `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
@@ -96,9 +97,10 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 2. **Bar Source Seam.** Closed canonical bars only in Ingress. Forming ticks (`x=false`) bypass Ingress (Frame telemetry / Core 4.8 path). Time bars = exchange klines (TradingView canon) — no trade-synthesized time bars in ledger.
 3. **Boot: WS first.** REST recovery must not overwrite missed WS bars. One tick path: `Runtime.routeTick` (live + boot replay).
 4. **SQLite firewall ≠ cure.** Monotonic UPSERT (`high=MAX`, `low=MIN`, `volume=MAX`) is last line of defense; root fix is REST Grace (`KlineSettleGraceMs=5000`).
-5. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
-6. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
-7. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session: unpublish → forced REST tip fetch → contiguous@1bar → flush pending → `timeline_publishable`. FE awaits server; does not invent hole fills.
+5. **Time Model Rule (ADR-011).** Fixed intervals (`1m`…`1d`) use duration arithmetic. Calendar intervals (`1w`, `1M`) use bar boundaries (Monday / month-start UTC) via `CurrentBarOpen` / `PreviousBarOpen` / `NextBarOpen`. Never use `IntervalDurationMs` for Cap, REST align, next tip, or month gap checks.
+6. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
+7. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+8. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session: unpublish → forced REST tip fetch → contiguous@1bar → flush pending → `timeline_publishable`. FE awaits server; does not invent hole fills.
 
 ---
 

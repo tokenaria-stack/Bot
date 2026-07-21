@@ -176,7 +176,9 @@ func (p *HTFProvider) GetCandlesStrictlyBefore(symbol, interval string, maxTimeS
 	for _, c := range entry.klines {
 		closeTimeMs := c.CloseTime
 		if closeTimeMs <= 0 {
-			if intervalSec > 0 {
+			if ct, err := data.BarCloseTimeMs(c.OpenTime, interval); err == nil {
+				closeTimeMs = ct
+			} else if intervalSec > 0 {
 				closeTimeMs = c.OpenTime + intervalSec*1000
 			} else {
 				closeTimeMs = c.OpenTime

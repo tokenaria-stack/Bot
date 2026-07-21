@@ -152,3 +152,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Consequences:** Tip Ownership = History closed XOR Replay; Viewport = History projection + optional current. Debt #67 product branch closed for F5 continuity; #68 scale bounds next.
 
+---
+
+## ADR-011 — Time Model: Fixed Duration vs Calendar Boundary
+
+**Context:** `CapKlineEndToLastClosed` and REST `alignOpenTimeMs` used `(now/step)*step` for every TF. That matches Binance for fixed intervals (`1m`…`1d`) but is wrong for calendar intervals: Binance `1w` opens Monday 00:00 UTC; `1M` opens on the 1st. Epoch-week floors land on Thursday; `30d` months invent false CloseTimes and gap thresholds. `intervalSkipsKlineGapFill("1w"|"1M")` masked the debt by disabling heal (Phase A2 still pending).
+
+**Decision:** Bar-boundary helpers in `data/` — `CurrentBarOpen`, `PreviousBarOpen`, `NextBarOpen`, `BarCloseTimeMs`. Cap = `PreviousBarOpen(CurrentBarOpen(settledNow))`. REST align floors via `CurrentBarOpen`. Fixed TFs remain step-floor (bit-identical). Calendar TFs use Monday / month-start UTC. No interface polymorphism (Binance-only; three behaviors in one switch).
+
+**Rejected:**
+- Removing `intervalSkipsKlineGapFill` in the same change — **Reason:** Phase A2; would mix boundary math with healing behavior.
+- `BoundaryPolicy` interface / multi-exchange registry — **Reason:** power plant (Rule 6); three behaviors suffice.
+- Reimplementing calendar snap in FE — **Reason:** prefer trusting server opens (A2 FE pass).
+
+**Consequences:** Phase A1 lands the correct time model with skip still on. Phase A2 may un-skip `1w`/`1M` and enable catch-up/reconcile once consumers use `NextBarOpen` for gaps.
+
