@@ -4,14 +4,15 @@ import (
 	"context"
 	"time"
 
+	"trading_bot/data"
 	"trading_bot/exchange"
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 // HistoryWindowQuery is the sole input contract for history delivery (Shot 9A).
 type HistoryWindowQuery struct {
 	Spec        TimeframeSpec
-	EndTimeMs   int64 // Unix ms; 0 → now
+	EndTimeMs   int64 // Unix ms; 0 → now (then Closed-bar Boundary Cap)
 	CandleLimit int   // display bars (warmup added inside GetWindow)
 }
 
@@ -22,9 +23,26 @@ type HistoryWindow struct {
 	HasMore bool
 }
 
+// resolveClosedBarBoundary is the Closed-bar Boundary SSOT (#67 / ADR-009).
+// Any path that asks "what is the last closed bar?" must use CapKlineEndToLastClosed —
+// the same settle-grace law as Frame boot and REST fetch. Wall-clock Now() is not a boundary.
+func resolveClosedBarBoundary(endTimeMs int64, interval string) int64 {
+	if endTimeMs <= 0 {
+		endTimeMs = time.Now().UnixMilli()
+	}
+	if interval == "" {
+		return endTimeMs
+	}
+	if capped, err := data.CapKlineEndToLastClosed(endTimeMs, interval); err == nil {
+		return capped
+	}
+	return endTimeMs
+}
+
 // GetWindow is the unique owner of history delivery for REST chart paths.
-// Temporary seam (P0a): SQLite archive ∪ Analyst RAM (overlay wins), filtered to EndTimeMs.
-// Thread-safety: RAM is read only via Marker.GetKlines / GetKlinesTail (RLock copy).
+// Temporary seam (P0a): SQLite archive ∪ Frame RAM (overlay wins), filtered to EndTimeMs.
+// Live/near-live ends are clipped by resolveClosedBarBoundary (CapKlineEndToLastClosed).
+// Thread-safety: RAM is read only via Frame.GetKlines / GetKlinesTail (RLock copy).
 func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (HistoryWindow, bool) {
 	if d == nil {
 		return HistoryWindow{}, false
@@ -37,15 +55,15 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	if limit <= 0 {
 		limit = defaultStateCandleLimit
 	}
-	warmup := strategy.IndicatorWarmupBars
+	warmup := market.IndicatorWarmupBars
 	wantBars := limit + warmup
 
-	endTimeMs := q.EndTimeMs
-	if endTimeMs <= 0 {
-		endTimeMs = time.Now().UnixMilli()
-	}
-
 	spec := q.Spec
+	interval := spec.BinanceInterval
+	if interval == "" {
+		interval = spec.ID
+	}
+	endTimeMs := resolveClosedBarBoundary(q.EndTimeMs, interval)
 
 	// RAM-only timeframes: working set is already the delivery source.
 	if spec.Kind == TFRAMOnly {
@@ -66,8 +84,8 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 		return HistoryWindow{}, false
 	}
 
-	// Thread-safe copy under Marker RLock — never touch raw a.klines.
-	ramKlines := d.analystKlinesTail(spec, wantBars)
+	// Thread-safe copy under Frame RLock — never touch raw a.klines.
+	ramKlines := d.frameKlinesTail(spec, wantBars)
 	ramKlines = filterKlinesUntilOpenMs(ramKlines, endTimeMs)
 
 	merged := exchange.MergeKlineSeries(dbKlines, ramKlines, exchange.AuthoritySettled, exchange.AuthorityFinal)
@@ -86,20 +104,20 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	return HistoryWindow{Klines: merged, HasMore: hasMore}, true
 }
 
-// analystKlinesTail returns a defensive copy of the live working-set tail (RLock inside Marker).
-func (d *DashboardServer) analystKlinesTail(spec TimeframeSpec, maxBars int) []exchange.Kline {
+// frameKlinesTail returns a defensive copy of the live working-set tail (RLock inside Frame).
+func (d *DashboardServer) frameKlinesTail(spec TimeframeSpec, maxBars int) []exchange.Kline {
 	if d == nil {
 		return nil
 	}
 	if maxBars <= 0 {
-		maxBars = strategy.LiveKlineRAMCap
+		maxBars = market.LiveKlineRAMCap
 	}
-	if analyst, ok := d.analysts[spec.ID]; ok && analyst != nil {
-		return analyst.GetKlinesTail(maxBars)
+	if frame, ok := d.frames[spec.ID]; ok && frame != nil {
+		return frame.GetKlinesTail(maxBars)
 	}
 	if spec.BinanceInterval != "" {
-		if analyst, ok := d.analysts[spec.BinanceInterval]; ok && analyst != nil {
-			return analyst.GetKlinesTail(maxBars)
+		if frame, ok := d.frames[spec.BinanceInterval]; ok && frame != nil {
+			return frame.GetKlinesTail(maxBars)
 		}
 	}
 	return nil

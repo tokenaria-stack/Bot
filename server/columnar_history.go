@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 )
 
 type columnarCandles struct {
@@ -74,7 +74,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	klines []exchange.Kline,
 	candleLimit int,
 	warmupBars int,
-	rsxSettings strategy.RSXSettings,
+	rsxSettings market.RSXSettings,
 	slotIDs []string,
 	hasMore bool,
 	timeframe string,
@@ -107,7 +107,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	}
 
 	// Closed-only stream: ReplayDAGKlines must never see the forming tip.
-	hist := strategy.ReplayDAGKlines(klines, rsxSettings)
+	hist := market.ReplayDAGKlines(klines, rsxSettings)
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)
 	annotations := d.projector.BuildHistoryAnnotations(hist, times)
@@ -203,7 +203,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	r *http.Request,
 	spec TimeframeSpec,
 	endTimeMs, endTimeSec int64,
-	rsxSettings strategy.RSXSettings,
+	rsxSettings market.RSXSettings,
 	candleLimit int,
 	slotIDs []string,
 ) {
@@ -221,7 +221,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		}
 	}
 
-	warmup := strategy.IndicatorWarmupBars
+	warmup := market.IndicatorWarmupBars
 	resolvedEndMs := endTimeMs
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
@@ -259,5 +259,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
+	// Real data-plane probe (#67): last-closed GetWindow vs Frame — log only, no clamp.
+	d.logTipSSOTProbe(r.Context(), spec.ID, candleLimit)
 	writeJSON(w, resp)
 }

@@ -143,18 +143,25 @@ func main() {
 	master.SetNavigatorPanes(market.DefaultLiveNavigatorPanes())
 
 	// Timeline publish gate sockets (Phase C): healing/publishable → browser WS.
-	// midSession gate: ignore transport signals until GoLive + StartDataFeed.
+	// midSession: ignore transport until GoLive. Boot-storm fix: first Dial after
+	// GoLive is transport-up, NOT a disconnect heal — only reconcile after a real drop.
 	var timelineMidSession atomic.Bool
+	var binanceHadDisconnect atomic.Bool
 	master.SetOnTimelineHealing(dashboard.BroadcastTimelineHealing)
 	master.SetOnTimelinePublishable(dashboard.BroadcastTimelinePublishable)
 	wsClient.SetOnDisconnect(func() {
 		if !timelineMidSession.Load() {
 			return
 		}
+		binanceHadDisconnect.Store(true)
 		master.OnBinanceDisconnect()
 	})
 	wsClient.SetOnReconnect(func() {
 		if !timelineMidSession.Load() {
+			return
+		}
+		if !binanceHadDisconnect.Load() {
+			log.Printf("[WS] first live session connected — skip Timeline Reconcile (not a mid-session heal)")
 			return
 		}
 		master.OnBinanceReconnect(ctx)

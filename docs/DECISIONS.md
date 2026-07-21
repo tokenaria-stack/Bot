@@ -88,7 +88,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Frontend tip clamping — **Reason:** duct tape; hides engine poison (Rule 1).
 - Warmup-depth-only fixes after continuity tests — **Reason:** disproved; wrong root cause class.
 
-**Consequences:** #67 awaits live confirm. ZigZag/geometry may remain repaint-by-design if documented.
+**Consequences:** Closed-bar tip identity → ADR-009. ZigZag/geometry may remain repaint-by-design if documented.
 
 ---
 
@@ -119,5 +119,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - FE REST merge of klines — **Reason:** frontend ≠ history SSOT (Rule 1).
 - `loadDashboard` on every gap/reconnect hoping archive is full — **Reason:** symptom fix; GetWindow was still gappy.
 
-**Consequences:** Debt #81 closed. Gap-branch of #67 addressed by heal+replay; continuous-session Live Confirm (#67) remains open. P1/P2 (status poll, GetWindow degraded) deferred.
+**Consequences:** Debt #81 closed. Gap-branch of #67 addressed by heal+replay. Closed-bar Boundary SSOT → ADR-009.
+
+---
+
+## ADR-009 — Closed-bar Boundary SSOT
+
+**Context:** #67 tip cliff (History vs Live RSX Δ ≈ 0.8–2.7) survived Warmup / Replay / Snapshot / Live-continuation falsification. Real data-plane probe proved: `GetWindow(Now)` tip ≠ `GetWindow(CapKlineEnd)` tip; Cap-aligned path was bit-identical on OHLCV+RSX. Root cause was two definitions of "last closed bar."
+
+**Decision:** Canonical last-closed open time is `data.CapKlineEndToLastClosed` (`KlineSettleGraceMs`). `GetWindow` resolves every end through `resolveClosedBarBoundary` — same law as Frame boot and REST fetch. Wall-clock `Now()` is not a closed-bar boundary.
+
+**Rejected:**
+- FE tip clamp / RSX morph — **Reason:** duct tape (Rule 1); math was already correct on identical OHLC.
+- Bumping `FrameBootKlineLimit` / DAGInit depth — **Reason:** WarmupTrap disproved (Δ≈0).
+- Separate Cap only for columnar, leave JSON history on Now — **Reason:** second boundary; SSOT violation repeats.
+
+**Consequences:** RSX Tip SSOT is a *consequence* of Closed-bar Boundary SSOT, not a separate engine bug. Continuous-session Live Confirm (forming tip vs TV) may still be open under #67.
 

@@ -403,8 +403,9 @@
       timelineHealSafetyTimer = null;
     }
     if (!awaitingTimelinePublishable) {
-      // Late/orphan ready: still refresh once so FE matches healed Frame.
-      console.warn('[Self-Healing] timeline_publishable (not awaiting) — refreshing chart');
+      // Boot-storm / orphan ready: do not double loadDashboard (server should not heal on first Dial).
+      console.warn('[Self-Healing] timeline_publishable ignored (not awaiting)');
+      return;
     }
     awaitingTimelinePublishable = false;
     if (window.__isDashboardLoading) return;

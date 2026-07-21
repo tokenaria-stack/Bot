@@ -12,7 +12,7 @@ Update this file when a debt opens, closes, or changes priority.
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
 | **76** | **ScoreNodes** — move Score/Falcon decision graph into DAG nodes | 🔜 | Do **not** delete `market/falcon.go` until done |
-| **67** | **IIR Tip SSOT / Live Confirm** — RSX tip at History/Live boundary | 🟡 | Core 4.8 + **gap-branch closed via #81** (heal → `LoadHistoricalKlines` replay). **Continuous-session Live Confirm** (no disconnect) still open |
+| **67** | **Closed-bar Boundary SSOT** (was: IIR Tip SSOT) — one last-closed law for Frame / History / GetWindow / Replay | 🟡 | **ADR-009:** `GetWindow` → `CapKlineEndToLastClosed`. Data-plane tip mismatch closed. Continuous Live Confirm (forming tip vs TV) may remain |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | 🟡 | After #67 |
 | **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C done** | Bounded store + atomic prune + `windowMode` + WS/gap gates + **focal-time prune (69C)**. **69D** full sliding window + viewport-centered paint 🔜. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |

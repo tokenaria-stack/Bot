@@ -2,7 +2,9 @@ package server
 
 import (
 	"testing"
+	"time"
 
+	"trading_bot/data"
 	"trading_bot/exchange"
 )
 
@@ -72,5 +74,43 @@ func TestFilterKlinesUntilOpenMs_DeepHistoryExcludesLiveTip(t *testing.T) {
 	got := filterKlinesUntilOpenMs(ram, deepEnd)
 	if len(got) != 0 {
 		t.Fatalf("deep-history filter must drop live tip, got %d bars", len(got))
+	}
+}
+
+// TestClosedBoundarySSOT cements ADR-009: Frame / History / GetWindow share one last-closed law.
+// Wall-clock Now() is not a closed-bar boundary — CapKlineEndToLastClosed is.
+func TestClosedBoundarySSOT(t *testing.T) {
+	t.Parallel()
+	const interval = "1m"
+	nowMs := time.Now().UnixMilli()
+
+	capDirect, err := data.CapKlineEndToLastClosed(nowMs, interval)
+	if err != nil {
+		t.Fatalf("CapKlineEndToLastClosed: %v", err)
+	}
+	viaZero := resolveClosedBarBoundary(0, interval)
+	viaNow := resolveClosedBarBoundary(nowMs, interval)
+	viaFuture := resolveClosedBarBoundary(nowMs+60_000, interval)
+
+	if viaZero != capDirect {
+		t.Fatalf("GetWindow(0) boundary %d != Cap %d", viaZero, capDirect)
+	}
+	if viaNow != capDirect {
+		t.Fatalf("GetWindow(Now) boundary %d != Cap %d", viaNow, capDirect)
+	}
+	if viaFuture != capDirect {
+		t.Fatalf("GetWindow(future) boundary %d != Cap %d", viaFuture, capDirect)
+	}
+
+	// Deep history must stay deep — Cap must not pull scroll-left windows to live tip.
+	historical := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC).UnixMilli()
+	viaHist := resolveClosedBarBoundary(historical, interval)
+	if viaHist != historical {
+		t.Fatalf("historical boundary mutated: got %d want %d", viaHist, historical)
+	}
+
+	// Empty interval: no Cap (caller must supply TF); still resolves Now when end<=0.
+	if got := resolveClosedBarBoundary(0, ""); got <= 0 {
+		t.Fatalf("empty-interval Now fallback failed: %d", got)
 	}
 }

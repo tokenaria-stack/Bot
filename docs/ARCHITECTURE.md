@@ -258,4 +258,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — primary: **#76 ScoreNodes**, **#67 Live Confirm**.
+**NEXT:** see `docs/OPEN_DEBTS.md` — primary: **#76 ScoreNodes**, **#67 Closed-bar Boundary / Live Confirm**.
