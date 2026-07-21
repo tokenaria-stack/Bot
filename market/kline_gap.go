@@ -16,36 +16,34 @@ const (
 	timelineReconcileBackoff = time.Second
 )
 
-// intervalSkipsKlineGapFill reports intervals where REST gap-fill is unreliable or unused.
-func intervalSkipsKlineGapFill(interval string) bool {
-	switch interval {
-	case "1M", "1w":
-		return true
-	default:
+// KlineTailNeedsGapFill reports whether the live tip is missing more than one closed bar
+// relative to Cap endMs (boundary steps > 1). Fixed and calendar TFs share one law.
+func KlineTailNeedsGapFill(lastOpenMs, endMs int64, interval string) bool {
+	if lastOpenMs <= 0 || endMs <= 0 || interval == "" {
 		return false
 	}
-}
-
-// KlineTailNeedsGapFill reports whether the live tip is missing at least one closed bar.
-// P0: Δ > 1×interval (was > 2×) — a single skipped 1m bar must not look "healthy".
-func KlineTailNeedsGapFill(lastOpenMs, endMs, intervalMs int64) bool {
-	if lastOpenMs <= 0 || endMs <= 0 || intervalMs <= 0 {
+	steps, err := data.BarStepsBetween(lastOpenMs, endMs, interval)
+	if err != nil {
 		return false
 	}
-	return endMs-lastOpenMs > intervalMs
+	return steps > 1
 }
 
 // KlineSeriesNeedsGapFill reports tail staleness or an internal hole between consecutive bars.
-// P0: any OpenTime jump > 1×interval is a hole (one missing bar ⇒ Δ = 2×interval).
-func KlineSeriesNeedsGapFill(klines []exchange.Kline, endMs, intervalMs int64) bool {
+// Consecutive opens must equal NextBarOpen(prev) — never Δ > duration for calendar TFs.
+func KlineSeriesNeedsGapFill(klines []exchange.Kline, endMs int64, interval string) bool {
 	if len(klines) == 0 {
 		return true
 	}
-	if KlineTailNeedsGapFill(klines[len(klines)-1].OpenTime, endMs, intervalMs) {
+	if KlineTailNeedsGapFill(klines[len(klines)-1].OpenTime, endMs, interval) {
 		return true
 	}
 	for i := 1; i < len(klines); i++ {
-		if klines[i].OpenTime-klines[i-1].OpenTime > intervalMs {
+		expected, err := data.NextBarOpen(klines[i-1].OpenTime, interval)
+		if err != nil {
+			return true
+		}
+		if klines[i].OpenTime != expected {
 			return true
 		}
 	}
@@ -57,18 +55,14 @@ func klineReconcileWindowMs(interval string, maxBars int) (startMs, endMs int64)
 	if capped, err := data.CapKlineEndToLastClosed(endMs, interval); err == nil {
 		endMs = capped
 	}
-	intervalMs, err := data.IntervalDurationMs(interval)
-	if err != nil || intervalMs <= 0 {
-		return 0, endMs
-	}
 	if maxBars <= 0 {
 		maxBars = LiveKlineRAMCap
 	}
-	startMs = endMs - intervalMs*int64(maxBars)
-	if startMs < 0 {
-		startMs = 0
+	start, err := data.RetreatBarOpen(endMs, maxBars, interval)
+	if err != nil || start < 0 {
+		return 0, endMs
 	}
-	return startMs, endMs
+	return start, endMs
 }
 
 // StartKlineGapFillLoop runs an immediate reconcile and periodic RAM gap-fill (Master SSOT).
@@ -167,8 +161,8 @@ func (m *Runtime) ReconcileTimeline(ctx context.Context) {
 	m.notifyTimelinePublishable()
 }
 
-// framesTimelineHealthy reports whether every chart Frame that participates in
-// gap-fill has a continuous closed-bar series through the last closed tip (1-bar resolution).
+// framesTimelineHealthy reports whether every chart Frame has a continuous closed-bar
+// series through the last closed tip (NextBarOpen continuity).
 func (m *Runtime) framesTimelineHealthy() bool {
 	if m == nil {
 		return false
@@ -184,22 +178,15 @@ func (m *Runtime) framesTimelineHealthy() bool {
 	m.mu.RUnlock()
 
 	for i, interval := range intervals {
-		if intervalSkipsKlineGapFill(interval) {
-			continue
-		}
 		frame := frames[i]
 		if frame == nil {
 			return false
-		}
-		intervalMs, err := data.IntervalDurationMs(interval)
-		if err != nil || intervalMs <= 0 {
-			continue
 		}
 		endMs := nowMs
 		if capped, err := data.CapKlineEndToLastClosed(nowMs, interval); err == nil {
 			endMs = capped
 		}
-		if KlineSeriesNeedsGapFill(frame.GetKlines(), endMs, intervalMs) {
+		if KlineSeriesNeedsGapFill(frame.GetKlines(), endMs, interval) {
 			return false
 		}
 	}
@@ -235,10 +222,8 @@ func (m *Runtime) reconcileAllKlineGaps(force bool) error {
 		frame := m.frames[interval]
 		m.mu.RUnlock()
 		if frame == nil {
-			if force && !intervalSkipsKlineGapFill(interval) {
-				if firstErr == nil {
-					firstErr = fmt.Errorf("nil Frame for %s", interval)
-				}
+			if force && firstErr == nil {
+				firstErr = fmt.Errorf("nil Frame for %s", interval)
 			}
 			continue
 		}
@@ -253,17 +238,10 @@ func (m *Runtime) reconcileKlineGap(symbol, interval string, frame *Frame, force
 	if m == nil || m.exchangeClient == nil || frame == nil {
 		return fmt.Errorf("reconcileKlineGap: nil receiver/client/frame")
 	}
-	if intervalSkipsKlineGapFill(interval) {
-		return nil
-	}
 	startMs, endMs := klineReconcileWindowMs(interval, LiveKlineRAMCap)
-	intervalMs, err := data.IntervalDurationMs(interval)
-	if err != nil || intervalMs <= 0 {
-		return fmt.Errorf("interval duration %s: %w", interval, err)
-	}
 	tail := frame.GetKlines()
 	// Periodic path only: healthy Frame skips REST. Forced Timeline Reconcile never skips.
-	if !force && len(tail) > 0 && !KlineSeriesNeedsGapFill(tail, endMs, intervalMs) {
+	if !force && len(tail) > 0 && !KlineSeriesNeedsGapFill(tail, endMs, interval) {
 		return nil
 	}
 

@@ -480,14 +480,10 @@ func (m *Runtime) applyTick(tick exchange.WsTick) {
 	}
 }
 
-// ingestTipGap reports a forward jump of tip OpenTime beyond 1.5 intervals
+// ingestTipGap reports a forward jump of tip OpenTime beyond one expected bar
 // (backend twin of FE columnar-store gapDetected). Same OpenTime = forming update.
 func (m *Runtime) ingestTipGap(tick exchange.WsTick) bool {
 	if m == nil || tick.Kline.OpenTime <= 0 || tick.Timeframe == "" {
-		return false
-	}
-	intervalMs, err := data.IntervalDurationMs(tick.Timeframe)
-	if err != nil || intervalMs <= 0 {
 		return false
 	}
 	m.mu.RLock()
@@ -504,7 +500,12 @@ func (m *Runtime) ingestTipGap(tick exchange.WsTick) bool {
 	if tick.Kline.OpenTime <= lastOpen {
 		return false
 	}
-	return tick.Kline.OpenTime-lastOpen > intervalMs+intervalMs/2
+	steps, err := data.BarStepsBetween(lastOpen, tick.Kline.OpenTime, tick.Timeframe)
+	if err != nil {
+		return false
+	}
+	// >1 step ≡ jump beyond NextBarOpen (was > 1.5× duration for fixed TFs).
+	return steps > 1
 }
 
 func (m *Runtime) enqueuePendingTick(tick exchange.WsTick) {

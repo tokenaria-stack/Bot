@@ -165,5 +165,5 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - `BoundaryPolicy` interface / multi-exchange registry — **Reason:** power plant (Rule 6); three behaviors suffice.
 - Reimplementing calendar snap in FE — **Reason:** prefer trusting server opens (A2 FE pass).
 
-**Consequences:** Phase A1 lands the correct time model with skip still on. Phase A2 may un-skip `1w`/`1M` and enable catch-up/reconcile once consumers use `NextBarOpen` for gaps.
+**Consequences:** Phase A1 lands the correct time model with skip still on. Phase A2 enables calendar-aware healing: catch-up/gap/reconcile use `NextBarOpen` / `BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE calendar snap deferred until runtime proves need. Expected: weekly archive can heal to Cap; Buffering loops driven by stale 1w tip should stop once catch-up runs.
 

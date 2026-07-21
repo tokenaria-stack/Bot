@@ -127,7 +127,7 @@ func TestTimelineHeal_TipMatchesReplayAfterLoadHistorical(t *testing.T) {
 	gappy = append(gappy, full[len(full)-2:]...)
 
 	endMs := full[len(full)-1].OpenTime
-	if !KlineSeriesNeedsGapFill(gappy, endMs, 60_000) {
+	if !KlineSeriesNeedsGapFill(gappy, endMs, "1m") {
 		t.Fatal("precondition: gappy series must need gap fill at 1-bar threshold")
 	}
 

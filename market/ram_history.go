@@ -1,0 +1,75 @@
+package market
+
+import (
+	"log"
+	"time"
+
+	"trading_bot/data"
+	"trading_bot/exchange"
+)
+
+// LoadRAMHistory boots Frame RAM from SQLite, then REST-fills holes via FetchClosedRangePages.
+// Sterile (Shot 9E): never synthesizes bars; never writes SQLite (PersistenceQueue owns disk).
+func LoadRAMHistory(rest *exchange.BinanceExchange, symbol, interval string, maxBars int) []exchange.Kline {
+	if maxBars <= 0 {
+		maxBars = LiveKlineRAMCap
+	}
+	endMs := time.Now().UnixMilli()
+	if capped, err := data.CapKlineEndToLastClosed(endMs, interval); err == nil {
+		endMs = capped
+	}
+	startMs, err := data.RetreatBarOpen(endMs, maxBars, interval)
+	if err != nil {
+		return nil
+	}
+	if startMs < 0 {
+		startMs = 0
+	}
+
+	db := LoadRAMHistoryFromDB(symbol, interval, maxBars)
+	if rest == nil {
+		return db
+	}
+
+	candles, fetchErr := rest.FetchClosedRangePages(symbol, interval, startMs, endMs)
+	if fetchErr != nil {
+		log.Printf("[RAM] FetchClosedRangePages %s %s: %v — SQLite fallback", symbol, interval, fetchErr)
+		return db
+	}
+	if len(candles) == 0 {
+		return db
+	}
+	restKlines := exchange.KlinesFromCandles(candles)
+	if len(db) == 0 {
+		return restKlines
+	}
+	// Ingress SSOT (Core 5.0): both sides are settled closed bars — equal authority
+	// merge keeps REST Close (fresher read) while Volume/High/Low never degrade.
+	return exchange.MergeKlineSeries(db, restKlines, exchange.AuthoritySettled, exchange.AuthoritySettled)
+}
+
+// LoadRAMHistoryFromDB reads up to maxBars klines from SQLite once (startup / hydrate only).
+func LoadRAMHistoryFromDB(symbol, interval string, maxBars int) []exchange.Kline {
+	if maxBars <= 0 {
+		maxBars = LiveKlineRAMCap
+	}
+	if err := data.InitDB(); err != nil {
+		return nil
+	}
+	endMs := time.Now().UnixMilli()
+	if capped, err := data.CapKlineEndToLastClosed(endMs, interval); err == nil {
+		endMs = capped
+	}
+	startMs, err := data.RetreatBarOpen(endMs, maxBars, interval)
+	if err != nil {
+		return nil
+	}
+	if startMs < 0 {
+		startMs = 0
+	}
+	candles, err := exchange.LoadContinuousContractFromDB(symbol, interval, startMs, endMs, 0)
+	if err != nil || len(candles) == 0 {
+		return nil
+	}
+	return exchange.KlinesFromCandles(candles)
+}
