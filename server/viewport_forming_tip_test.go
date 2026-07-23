@@ -14,6 +14,10 @@ import (
 )
 
 func TestProjectViewportFormingTip_OverwriteSameOpen(t *testing.T) {
+	prev := DebugProjCont()
+	SetDebugProjCont(true)
+	t.Cleanup(func() { SetDebugProjCont(prev) })
+
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
 		t.Fatal(err)

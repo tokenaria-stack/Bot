@@ -214,6 +214,9 @@ func floatEqualEps(a, b, eps float64) bool {
 }
 
 func (d *DashboardServer) logTipSSOTProbe(ctx context.Context, tf string, candleLimit int) {
+	if !DebugTipSSOT() {
+		return
+	}
 	res := d.ProbeTipSSOT(ctx, tf, candleLimit)
 	log.Printf("[TipSSOT] tf=%s verdict=%s ohlc_match=%v open_time_match=%v histOT=%d frameOT=%d "+
 		"ΔO=%.8g ΔH=%.8g ΔL=%.8g ΔC=%.8g ΔV=%.8g replayRSX_match=%v histRSX=%.8f frameReplayRSX=%.8f liveRSX=%.8f "+
@@ -227,6 +230,10 @@ func (d *DashboardServer) logTipSSOTProbe(ctx context.Context, tf string, candle
 func (d *DashboardServer) handleDebugTipSSOT(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !DebugTipSSOT() {
+		http.Error(w, "TipSSOT probe disabled (set DEBUG_TIP_SSOT=1)", http.StatusNotFound)
 		return
 	}
 	tf := r.URL.Query().Get("tf")

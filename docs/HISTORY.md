@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Probe dormancy — TipSSOT / ProjCont (Jul 2026)
+
+- After ADR-016, continuous `[TipSSOT]` / `[ProjCont]` runtime logs default **OFF**.
+- Opt-in: `DEBUG_TIP_SSOT=1`, `DEBUG_PROJ_CONT=1`; FE `DEBUG_PROJ_CONT` localStorage / query.
+- Kept always-on: TransportDiag, Self-Healing, MemoryBudget. Regression tests untouched.
+
 ## Phase ADR-016 — Replay Lifecycle Ownership (Jul 2026) ✅
 
 - Frame `replayStreamingLocked` / `warmupStreaming`: split by Cap forming predicate → closed `isClosed=true` + commit → optional forming `isClosed=false` (never commit).

@@ -271,7 +271,21 @@
     return RsxController.getSettings('live');
   }
 
-  /** ADR-015: one-shot first WS after soft settings apply. */
+  /**
+   * Opt-in ADR-015 ProjCont probe (dormant). Enable via:
+   *   localStorage.setItem('DEBUG_PROJ_CONT','1')  or  ?debug_proj_cont=1
+   * Permanent: TransportDiag / Self-Healing / MemoryBudget stay always-on.
+   */
+  function debugProjContEnabled() {
+    try {
+      if (typeof window !== 'undefined' && window.DEBUG_PROJ_CONT === true) return true;
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_PROJ_CONT') === '1') return true;
+      if (typeof location !== 'undefined' && /(?:\?|&)debug_proj_cont=1(?:&|$)/i.test(location.search || '')) return true;
+    } catch (_) { /* ignore */ }
+    return false;
+  }
+
+  /** ADR-015: one-shot first WS after soft settings apply (only when DEBUG_PROJ_CONT). */
   let projContPending = null;
 
   function tipRSXFromPlotMap(plots) {
@@ -287,6 +301,7 @@
   }
 
   function storeTipProbe(label) {
+    if (!debugProjContEnabled()) return null;
     const store = liveColumnarStore;
     if (!store) return null;
     const snap = typeof store.snapshot === 'function' ? store.snapshot() : null;
@@ -303,6 +318,7 @@
   }
 
   function armProjContFirstWS(restDiag) {
+    if (!debugProjContEnabled()) return;
     projContPending = {
       armedAt: Date.now(),
       rest: restDiag,
@@ -314,6 +330,7 @@
     if (!projContPending) return;
     const pending = projContPending;
     projContPending = null;
+    if (!debugProjContEnabled()) return;
     console.log('[ProjCont] ADR015 skipped', {
       reason,
       elapsedMs: Date.now() - pending.armedAt,
@@ -324,7 +341,10 @@
   }
 
   function maybeLogProjContFirstWS(tick) {
-    if (!projContPending) return;
+    if (!projContPending || !debugProjContEnabled()) {
+      projContPending = null;
+      return;
+    }
     const pending = projContPending;
     const wsOpen = Number(tick?.time);
     const wsRSX = tipRSXFromPlotMap(tick?.plots)
@@ -421,7 +441,9 @@
         lastOpenSec: columnar.times[columnar.times.length - 1],
         lastRSX: tipRSXFromPlotMap(columnar.plots),
       };
-      console.log('[ProjCont] REST history', restDiag);
+      if (debugProjContEnabled()) {
+        console.log('[ProjCont] REST history', restDiag);
+      }
       const storeBefore = storeTipProbe('before_applyProjection');
 
       const viewportAnchor = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
@@ -441,26 +463,28 @@
           return;
         }
         completed = true;
-        const storeAfter = storeTipProbe('after_applyProjection');
-        const lostProjection = Number(restDiag.timesLen) > Number(storeAfter?.timesLen);
-        const tipOpenLost = Number(restDiag.lastOpenSec) !== Number(storeAfter?.lastOpen)
-          && restDiag.projectedForming === true;
-        const tipRSXMatch = Number.isFinite(Number(restDiag.lastRSX))
-          && Number.isFinite(Number(storeAfter?.lastRSX))
-          && Math.abs(Number(restDiag.lastRSX) - Number(storeAfter.lastRSX)) < 1e-9;
-        console.log('[ProjCont] soft apply verdict', {
-          lostProjection,
-          tipOpenLost,
-          tipRSXMatch,
-          restTimesLen: restDiag.timesLen,
-          storeTimesLen: storeAfter?.timesLen,
-          restLastOpen: restDiag.lastOpenSec,
-          storeLastOpen: storeAfter?.lastOpen,
-          restLastRSX: restDiag.lastRSX,
-          storeLastRSX: storeAfter?.lastRSX,
-          storeBefore,
-        });
-        armProjContFirstWS(restDiag);
+        if (debugProjContEnabled()) {
+          const storeAfter = storeTipProbe('after_applyProjection');
+          const lostProjection = Number(restDiag.timesLen) > Number(storeAfter?.timesLen);
+          const tipOpenLost = Number(restDiag.lastOpenSec) !== Number(storeAfter?.lastOpen)
+            && restDiag.projectedForming === true;
+          const tipRSXMatch = Number.isFinite(Number(restDiag.lastRSX))
+            && Number.isFinite(Number(storeAfter?.lastRSX))
+            && Math.abs(Number(restDiag.lastRSX) - Number(storeAfter.lastRSX)) < 1e-9;
+          console.log('[ProjCont] soft apply verdict', {
+            lostProjection,
+            tipOpenLost,
+            tipRSXMatch,
+            restTimesLen: restDiag.timesLen,
+            storeTimesLen: storeAfter?.timesLen,
+            restLastOpen: restDiag.lastOpenSec,
+            storeLastOpen: storeAfter?.lastOpen,
+            restLastRSX: restDiag.lastRSX,
+            storeLastRSX: storeAfter?.lastRSX,
+            storeBefore,
+          });
+          armProjContFirstWS(restDiag);
+        }
         // ADR-014: never viewport:fresh — restore prior camera if capture succeeded.
         liveRenderScheduler?.markDirty({
           mode: 'full',

@@ -258,7 +258,9 @@ Corollaries:
 - Soft consumers must preserve the projection returned by the server.
 - The first WS update after a history refresh must be idempotent if market state is unchanged.
 
-**Probe (temporary):** `[ProjCont]` server log + `projCont` JSON field; FE `[ProjCont]` before/after soft apply and on first WS.
+**Probe (opt-in / dormant):** `[TipSSOT]` and `[ProjCont]` runtime spam default OFF.
+Enable with `DEBUG_TIP_SSOT=1` / `DEBUG_PROJ_CONT=1` (server) or `localStorage DEBUG_PROJ_CONT=1` / `?debug_proj_cont=1` (FE).
+Helpers retained for future indicator tip ownership investigations.
 
 **B2.1 fix:** Soft settings path uses `ColumnarStore.applyProjection(snapshot)` (columnar response as ProjectionSnapshot). Atomic times+OHLC+plots. Never `updatePlots` for projected tips. Camera via capture/restore (ADR-014). Regression: `web/projection_apply_test.js`.
 

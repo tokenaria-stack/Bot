@@ -33,7 +33,7 @@ type columnarHistoryResponse struct {
 	Annotations   []wire.Annotation    `json:"annotations"`
 	Sentinel      float64              `json:"sentinel"`
 	HasMore       bool                 `json:"hasMore"`
-	// ProjCont is a temporary ADR-015 probe (safe to ignore in consumers).
+	// ProjCont is an opt-in ADR-015 probe (DEBUG_PROJ_CONT=1). Safe to ignore when absent.
 	ProjCont *projectionContinuityDiag `json:"projCont,omitempty"`
 }
 
@@ -172,8 +172,10 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
 		return columnarHistoryResponse{}, false
 	}
-	resp.ProjCont = d.buildProjectionContinuityDiag(&resp, timeframe, binanceInterval, closedBars, mode)
-	logProjectionContinuity(resp.ProjCont, timeframe)
+	if DebugProjCont() {
+		resp.ProjCont = d.buildProjectionContinuityDiag(&resp, timeframe, binanceInterval, closedBars, mode)
+		logProjectionContinuity(resp.ProjCont, timeframe)
+	}
 	return resp, true
 }
 
@@ -362,7 +364,9 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	// Real data-plane probe (#67): last-closed GetWindow vs Frame — log only, no clamp.
-	d.logTipSSOTProbe(r.Context(), spec.ID, candleLimit)
+	// Opt-in TipSSOT probe (DEBUG_TIP_SSOT=1) — dormant after ADR-016.
+	if DebugTipSSOT() {
+		d.logTipSSOTProbe(r.Context(), spec.ID, candleLimit)
+	}
 	writeJSON(w, resp)
 }
