@@ -17,6 +17,12 @@ const LegendRenderer = (() => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const paneId = String(legendEl.dataset.pane || btn.getAttribute('data-target') || '').trim();
+      if (paneId && window.paneLayout && typeof window.paneLayout.toggle === 'function') {
+        window.paneLayout.toggle(paneId);
+        return;
+      }
+      // Fallback if PaneLayout not ready: host-only hide (does not collapse flex/grid).
       const wrap = legendEl.closest('.chart-wrap');
       const host = wrap?.querySelector('.lwc-host');
       if (!host) return;

@@ -936,11 +936,13 @@
 
     .charts-stack {
       flex: 1;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(120px, 1fr);
       min-height: 0;
       padding: 4px 4px 0;
       gap: 0;
+      align-content: stretch;
     }
 
     .chart-wrap,
@@ -948,7 +950,7 @@
     .osc-wrap,
     .rsx-wrap {
       position: relative;
-      min-height: 72px;
+      min-height: 0;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -956,20 +958,14 @@
 
     #price-wrap,
     #bt-price-wrap {
-      flex: 55 1 0;
       min-height: 120px;
     }
 
     #osc-wrap,
-    #bt-osc-wrap {
-      flex: 22 1 0;
-      min-height: 80px;
-    }
-
+    #bt-osc-wrap,
     #rsx-wrap,
     #bt-rsx-wrap {
-      flex: 23 1 0;
-      min-height: 80px;
+      min-height: 0;
     }
 
     .lwc-host {
@@ -990,6 +986,7 @@
       flex: none !important;
       max-height: none !important;
       resize: none !important;
+      grid-row: unset !important;
     }
 
     .pane-label {
@@ -1035,9 +1032,8 @@
     }
 
     .pane-splitter {
-      flex: 0 0 4px;
-      height: 4px;
       width: 100%;
+      min-height: 0;
       background: rgba(42, 46, 57, 0.55);
       z-index: 10;
       cursor: ns-resize;
@@ -1048,6 +1044,15 @@
 
     .pane-splitter:hover {
       background: #2196F3;
+    }
+
+    body.is-pane-resizing {
+      cursor: ns-resize !important;
+      user-select: none !important;
+    }
+
+    body.is-pane-resizing iframe {
+      pointer-events: none !important;
     }
 
     /* ── Ruler overlay ── */
@@ -1211,6 +1216,11 @@
       </div>
     </div>
 
+    <div class="risk-menu-wrap ind-menu-wrap">
+      <button type="button" class="matrix-btn" id="btn-ind-menu" title="Indicators">Ind</button>
+      <div id="ind-menu" class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="down" hidden></div>
+    </div>
+
     <form class="backtest-inline" id="backtest-controls" onsubmit="return false;">
       <div class="bt-inline">
         <input type="text" id="bt-symbol" value="BTCUSDT" autocomplete="off" title="Symbol" />
@@ -1313,7 +1323,6 @@
         <div id="ruler-shade" class="ruler-shade"></div>
         <div id="ruler-tooltip" class="ruler-tooltip"></div>
       </div>
-      <div class="pane-splitter" data-boundary="price-wozduh" aria-hidden="true"></div>
       <div class="chart-wrap osc-wrap" id="osc-wrap">
         <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
         <div id="wozduh-chart" class="lwc-host"></div>
@@ -1321,7 +1330,6 @@
           <!-- Live: SettingsRenderer mounts checkboxes from DDR manifest (configurable). -->
         </div>
       </div>
-      <div class="pane-splitter" data-boundary="wozduh-rsx" aria-hidden="true"></div>
       <div class="chart-wrap rsx-wrap" id="rsx-wrap">
         <div class="chart-legend" data-pane="rsx" data-context="live"></div>
         <div id="rsx-chart" class="lwc-host"></div>
@@ -1448,7 +1456,6 @@
               <div id="bt-ruler-shade" class="ruler-shade"></div>
               <div id="bt-ruler-tooltip" class="ruler-tooltip"></div>
             </div>
-            <div class="pane-splitter" data-boundary="price-wozduh" aria-hidden="true"></div>
             <div class="chart-wrap osc-wrap" id="bt-osc-wrap">
               <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
               <div id="bt-wozduh-chart" class="lwc-host"></div>
@@ -1465,7 +1472,6 @@
                 <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
               </div>
             </div>
-            <div class="pane-splitter" data-boundary="wozduh-rsx" aria-hidden="true"></div>
             <div class="chart-wrap rsx-wrap" id="bt-rsx-wrap">
               <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
               <div id="bt-rsx-chart" class="lwc-host"></div>
@@ -1776,12 +1782,13 @@
   <script src="/ui/timeframe-controller.js?v=3.4.1" defer></script>
   <script src="/ui/backtest-controller.js?v=3.1.0" defer></script>
   <script src="/ui/rsx-controller.js?v=3.1.0" defer></script>
-  <script src="/ui/floating-menu.js?v=4.0.0" defer></script>
+  <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.0.1" defer></script>
   <script src="/ui/toolbar-controller.js?v=4.0.1" defer></script>
-  <script src="/ui/legend-renderer.js?v=4.0.2" defer></script>
-  <script src="/ui/layout-controller.js?v=3.1.0" defer></script>
+  <script src="/ui/legend-renderer.js?v=4.1.0" defer></script>
+  <script src="/ui/layout-controller.js?v=4.1.0" defer></script>
+  <script src="/ui/pane-layout.js?v=1.1.0" defer></script>
   <!-- <script src="/app.legacy.js?v=3.1.0" defer></script> -->
-  <script src="/boot.js?v=4.13.0-b23" defer></script>
+  <script src="/boot.js?v=4.15.0-b25" defer></script>
 </body>
 </html>

@@ -338,3 +338,27 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Consequences:** Duplicate healing no longer extends wait; publishable exits immediately. Debt **#89**. Module: `web/timeline-recovery.js`. Regression: `web/timeline_recovery_test.js`.
 
+---
+
+## ADR-019 — PaneLayout (Footer Pane Membership)
+
+**Context:** TradingView-style Ind footers need a single owner for which oscillator panes exist, their order, pixel heights, and fullscreen — before CSS Grid / drag / render-pause. Hardcoded Ind checkboxes and flex+static splitters would brick on HostID rename and explode with N footers.
+
+**Decision (Phase 1 foundation):**
+
+- FE `PaneLayout` is SSOT: `visible`, `order`, `footerHeights` (px only), `fullscreenPaneId`.
+- Price is always present and is **not** a HostID; never store a price height (elastic `1fr` reserved for Phase 2 Grid).
+- Init = Manifest HostIDs ∩ versioned `localStorage` (`dashboard_pane_layout`). Drop unknown hosts; append new; clear invalid fullscreen; version mismatch → defaults.
+- Ind menu is dumb UI generated from catalog (no hardcoded RSX/Wozduh). Optional `renderOptions.paneTitle`; else short-id UPPER / Title case.
+- Persist after every mutation. `subscribe` for Ind checkbox sync.
+
+**Deferred (same ADR, later phases):** reorder UI; fullscreen apply; `ChartAdapter.setHostActive` + Store-snapshot resume. HostID→wrap map may move into Manifest when N footers grow (P2 STACKS is fine today).
+
+**Phase 2 (Grid apply):** `LayoutController` builds `grid-template-rows` (`minmax(120px,1fr)` + `4px` gutters + footer px). Dynamic splitters only between visible panes. Ind / legend eye → `PaneLayout.setVisible` / `toggle` → layout apply + LWC resize. Unknown HostIDs without a wrap are skipped (no brick).
+
+**Phase 3 (height drag):** Splitter above footer `hostId` adjusts that footer's px only (drag down → taller). Price stays `1fr`. Mid-drag updates tracks only (no gutter rebuild). Chart resize coalesced to one `requestAnimationFrame`. `PaneLayout.setFooterHeight` persists. Stack budget keeps price ≥ 120px.
+
+**Rejected:** Weighted `fr` footers (squashes price); trusting localStorage without ∩ manifest; Ind HTML hardcodes; deep render pause in Phase 1; server layout FSM; static HTML splitters between fixed neighbors.
+
+**Consequences:** Debt **#90**. Modules: `web/ui/pane-layout.js`, `web/ui/layout-controller.js`. Regressions: `web/pane_layout_test.js`, `web/layout_controller_test.js`. Instance: `window.paneLayout` after DDR mount.
+

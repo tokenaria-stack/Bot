@@ -46,8 +46,14 @@ const FloatingMenu = (() => {
     }, true);
   }
 
+  /** @returns {'up'|'down'} from data-float-direction (default up — gear / bottom-pane). */
+  function floatDirection(menu) {
+    return menu?.dataset?.floatDirection === 'down' ? 'down' : 'up';
+  }
+
   /**
-   * Open menu fixed above the gear (grows upward — avoids bottom clip).
+   * Open menu fixed to viewport. Direction from data-float-direction:
+   * up (default) = above anchor; down = below (command-bar Ind, etc.).
    * @param {HTMLElement} menu
    * @param {HTMLElement} anchorBtn
    */
@@ -61,14 +67,22 @@ const FloatingMenu = (() => {
     });
 
     const rect = anchorBtn.getBoundingClientRect();
+    const dir = floatDirection(menu);
     menu.classList.add('indicator-settings-menu--floating');
     menu.style.position = 'fixed';
     menu.style.right = 'auto';
-    menu.style.top = 'auto';
     menu.style.left = `${Math.max(8, rect.left)}px`;
-    // Grow upward from the gear top edge.
-    menu.style.bottom = `${Math.max(8, window.innerHeight - rect.top)}px`;
     menu.style.zIndex = '20000';
+
+    if (dir === 'down') {
+      menu.style.bottom = 'auto';
+      menu.style.top = `${rect.bottom + 4}px`;
+    } else {
+      // Grow upward from the gear top edge (avoids bottom clip on chart panes).
+      menu.style.top = 'auto';
+      menu.style.bottom = `${Math.max(8, window.innerHeight - rect.top)}px`;
+    }
+
     menu.hidden = false;
 
     // Clamp horizontally if menu overflows the right edge.
@@ -76,6 +90,16 @@ const FloatingMenu = (() => {
     const maxLeft = window.innerWidth - menuW - 8;
     if (rect.left > maxLeft) {
       menu.style.left = `${Math.max(8, maxLeft)}px`;
+    }
+
+    // Clamp vertically when opening downward near the bottom of the viewport.
+    if (dir === 'down') {
+      const menuH = menu.offsetHeight || 120;
+      let top = rect.bottom + 4;
+      if (top + menuH > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - menuH - 8);
+      }
+      menu.style.top = `${top}px`;
     }
 
     initDrag(menu);

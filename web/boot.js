@@ -780,6 +780,15 @@
     if (typeof LegendRenderer !== 'undefined') {
       LegendRenderer.mountFromManifest(window.DDRFactory.manifest);
     }
+    // ADR-019: PaneLayout SSOT + Ind; LayoutController applies CSS Grid from state.
+    if (typeof PaneLayout !== 'undefined') {
+      if (!window.paneLayout) window.paneLayout = PaneLayout.create();
+      window.paneLayout.init({ manifest: window.DDRFactory.manifest });
+      window.paneLayout.mountIndMenu();
+      if (typeof LayoutController !== 'undefined' && LayoutController.attach) {
+        LayoutController.attach(window.paneLayout);
+      }
+    }
     return true;
   }
 

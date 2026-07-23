@@ -149,6 +149,21 @@
   background: #1e53e5;
 }
 
+.ind-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  width: 100%;
+  color: var(--tv-text, #d1d4dc);
+  font-size: 0.72rem;
+}
+
+.ind-menu-empty {
+  color: var(--tv-muted, #787b86);
+  font-size: 0.72rem;
+}
+
 .indicator-settings-menu--dropup {
   min-width: 220px;
 }

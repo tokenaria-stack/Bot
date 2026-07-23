@@ -105,9 +105,10 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 10. **Replay Lifecycle (ADR-016).** Frame runtime replay reproduces live candle lifecycle: closed (`isClosed=true` + commit) then optional forming (`isClosed=false`, never commit). Same Cap forming predicate as History tip strip. History Cap Replay stays closed-only. TipSSOT/ProjCont investigation probes are dormant (`DEBUG_TIP_SSOT` / `DEBUG_PROJ_CONT`); TransportDiag / Self-Healing stay on.
 11. **Timeline Publishability (ADR-017).** Mid-session heal: Cap REST → Exact closed-gap fill (if pending tip jumps) → flush → Frame contiguity check → only then `timeline_publishable`. Never fabricate bars; never flush a tip jump.
 12. **Timeline Recovery UX (ADR-018).** FE `TimelineRecovery` owns LIVE↔HEALING; duplicate healing ignored; sync badge (not full-screen Buffering); watchdog once; `publishable` exits immediately via `onRecovered`.
-13. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
-14. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
-15. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
+13. **PaneLayout (ADR-019).** FE owns footer pane membership (`visible` / `order` / `footerHeights` px / `fullscreenPaneId`). Ind menu from Manifest HostIDs; persist ∩ manifest. Price always on (not a HostID). **LayoutController** applies CSS Grid (`1fr` price + px footers + dynamic gutters) and Phase 3 height drag. Reorder / fullscreen apply / `setHostActive` = later #90 phases.
+14. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
+15. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+16. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
 
 ---
 

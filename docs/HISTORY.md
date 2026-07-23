@@ -8,6 +8,24 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-019 / #90 P3 — Adjustable Pane Heights (Jul 2026) ✅
+
+- Splitter drag → `PaneLayout.setFooterHeight` (px only); price stays `1fr`.
+- Mid-drag: update `grid-template-rows` only (keep pointer capture); resize coalesced to one rAF.
+- Debt **#90** Phase 3. Regressions: `web/pane_layout_test.js`, `web/layout_controller_test.js`.
+
+## Phase ADR-019 / #90 P2 — LayoutController CSS Grid (Jul 2026) ✅
+
+- `LayoutController` applies Grid from `PaneLayout`: price `minmax(120px,1fr)`, footers px, dynamic gutters only between visible panes.
+- Ind + legend eye collapse whole footer; price absorbs space; explicit LWC resize after apply.
+- Debt **#90** Phase 2. Regression: `web/layout_controller_test.js`.
+
+## Phase ADR-019 / #90 P1 — PaneLayout Foundation (Jul 2026) ✅
+
+- FE SSOT: `web/ui/pane-layout.js` — `visible` / `order` / `footerHeights` (px) / `fullscreenPaneId`.
+- Restore = versioned localStorage ∩ Manifest HostIDs; Ind menu generated from catalog (no hardcodes).
+- No Grid / drag / `setHostActive` yet. Debt **#90** Phase 1. Regression: `web/pane_layout_test.js`.
+
 ## Phase ADR-018 — TimelineRecovery UX (Jul 2026) ✅
 
 - FE owner: `web/timeline-recovery.js` (LIVE ↔ HEALING); idempotent `enter`; one-shot 25s watchdog.
