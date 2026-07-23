@@ -27,6 +27,14 @@ func NewSMA(period int) *SMA {
 	}
 }
 
+// Period returns the SMA window size.
+func (s *SMA) Period() int {
+	if s == nil {
+		return 0
+	}
+	return s.period
+}
+
 func (s *SMA) Update(val float64) float64 {
 	if s.count >= s.period {
 		s.sum -= s.buf[s.idx]

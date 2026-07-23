@@ -819,7 +819,10 @@ func (d *DashboardServer) handleIndicatorSettings(w http.ResponseWriter, r *http
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(market.GetRSXSettings())
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"settings":   market.GetRSXSettings(),
+			"generation": market.RSXSettingsGeneration(),
+		})
 		return
 	case http.MethodPost:
 		var req market.RSXSettings
@@ -827,10 +830,19 @@ func (d *DashboardServer) handleIndicatorSettings(w http.ResponseWriter, r *http
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		applied := market.ApplyRSXSettings(req)
-		d.applyRSXSettingsToAnalysts()
+		prev := market.GetRSXSettings()
+		result := market.ApplyRSXSettings(req)
+		replayed := 0
+		if result.Changed {
+			replayed = d.applyRSXSettingsToFrames(prev, result.Settings)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(applied)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"settings":       result.Settings,
+			"generation":     result.Generation,
+			"changed":        result.Changed,
+			"replayedFrames": replayed,
+		})
 		return
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -922,13 +934,16 @@ func (d *DashboardServer) handleUIManifest(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(d.uiRegistry.Manifest())
 }
 
-func (d *DashboardServer) applyRSXSettingsToAnalysts() {
-	settings := market.GetRSXSettings()
+func (d *DashboardServer) applyRSXSettingsToFrames(prev, next market.RSXSettings) int {
+	n := 0
 	for _, frame := range d.frames {
-		if frame != nil {
-			frame.UpdateRSXScanConfig(settings)
+		if frame == nil {
+			continue
 		}
+		frame.UpdateRSXScanConfig(prev, next)
+		n++
 	}
+	return n
 }
 
 // BacktestRequest is the JSON payload for POST /api/backtest/run.

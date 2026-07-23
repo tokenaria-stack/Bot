@@ -187,7 +187,7 @@ const API = {
     return { warmingUp: false, data };
   },
 
-  async fetchColumnarHistory({ tf, endTimeSec, limit = 3000, slots, rsxSettings, symbol }) {
+  async fetchColumnarHistory({ tf, endTimeSec, limit = 3000, slots, rsxSettings, symbol, signal }) {
     const params = new URLSearchParams({
       tf,
       endTime: String(endTimeSec),
@@ -206,7 +206,10 @@ const API = {
       params.set('slots', slots.join(','));
     }
     if (symbol) params.set('symbol', symbol);
-    const resp = await fetch(`/api/history?${params.toString()}`, { cache: 'no-store' });
+    const resp = await fetch(`/api/history?${params.toString()}`, {
+      cache: 'no-store',
+      signal,
+    });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(`columnar history API: ${resp.status}`);
     return data;
@@ -245,20 +248,25 @@ const API = {
     if (!resp.ok) {
       throw new Error(`RSX settings GET failed (${resp.status})`);
     }
-    return resp.json();
+    const data = await resp.json();
+    // ADR-012: { settings, generation } — fall back to bare object for safety.
+    return data?.settings && typeof data.settings === 'object' ? data : { settings: data, generation: 0 };
   },
 
-  async pushRsxSettings(settings) {
+  async pushRsxSettings(settings, signal) {
     const resp = await fetch('/api/settings/indicators', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
+      signal,
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
       throw new Error(`RSX settings POST failed (${resp.status}): ${errText || 'no body'}`);
     }
-    return resp.json();
+    const data = await resp.json();
+    if (data?.settings && typeof data.settings === 'object') return data;
+    return { settings: data, generation: 0, changed: true };
   },
 
   async postNavigatorSettings(navigators) {

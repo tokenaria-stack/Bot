@@ -28,6 +28,14 @@ func (s *RSXSignalLine) Value() float64 {
 	return s.sma.Value()
 }
 
+// Period returns the active SMA window.
+func (s *RSXSignalLine) Period() int {
+	if s == nil || s.sma == nil {
+		return 0
+	}
+	return s.sma.Period()
+}
+
 // Reconfigure replaces the SMA window and clears its buffer.
 func (s *RSXSignalLine) Reconfigure(period int) {
 	if period <= 0 {
@@ -196,6 +204,14 @@ func (j *JurikRSX) Reconfigure(length int) {
 
 func (j *JurikRSX) Value() float64 {
 	return j.value
+}
+
+// Length returns the active Jurik RSX smoothing period.
+func (j *JurikRSX) Length() int {
+	if j == nil {
+		return 0
+	}
+	return j.length
 }
 
 func (j *JurikRSX) SaveState() {

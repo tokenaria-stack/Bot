@@ -418,7 +418,7 @@ function defaultRsxSettings() {
     length: DEFAULT_RSX_LENGTH,
     div_lookback: DEFAULT_RSX_LOOKBACK,
     signal_length: DEFAULT_RSX_SIGNAL_LENGTH,
-    source: 'close',
+    source: 'hlc3',
     pivot_radius: 2,
     div_method: 'tv',
     min_price_delta_ratio: 0,

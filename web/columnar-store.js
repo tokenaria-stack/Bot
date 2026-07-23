@@ -92,10 +92,14 @@ class ColumnarStore {
     return this._sealed;
   }
 
-  replaceMonolith(columnarJson) {
-    const data = columnarJson && typeof columnarJson === 'object' ? columnarJson : {};
-    // Core 4.5: normalize sec/ms exactly like appendTick — history and ticks share one time axis.
-    // map (not filter): keeps index alignment with candle columns; invariantOk stays honest.
+  /**
+   * ADR-015 / B2.1: apply a server ProjectionSnapshot atomically.
+   * Accepts the columnar history response as-is (times + OHLC + plots + annotations).
+   * Never truncates to prior store length. Never fabricates candles.
+   * Server owns projection length; FE only applies.
+   */
+  applyProjection(snapshot) {
+    const data = snapshot && typeof snapshot === 'object' ? snapshot : {};
     const times = Array.isArray(data.times)
       ? data.times.map((t) => ColumnarStore._normTimeSec(t))
       : [];
@@ -111,23 +115,34 @@ class ColumnarStore {
     this._plots = {};
     const plots = data.plots && typeof data.plots === 'object' ? data.plots : {};
     for (const [id, col] of Object.entries(plots)) {
-      this._plots[id] = Array.isArray(col) ? col.slice() : [];
+      if (!Array.isArray(col)) continue;
+      // Full column as projected — never slice to a previous store length (ADR-015).
+      this._plots[id] = col.slice();
     }
     this._annotations = Array.isArray(data.annotations) ? data.annotations.slice() : [];
     this._rebuildAnnotationMapFromArray(this._annotations);
+    const proj = data.projCont && typeof data.projCont === 'object' ? data.projCont : null;
     this._meta = {
       hasMore: data.hasMore === true,
       tf: data.timeframe || '',
       warmupDropped: Number(data.warmupDropped) || 0,
       added: Number(data.added) || times.length,
+      projectedForming: proj ? proj.projectedForming === true : undefined,
+      generation: data.generation != null ? Number(data.generation) : undefined,
     };
     this.windowMode = 'live';
     this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST);
   }
 
+  /** Full history hydrate — same atomic accept as applyProjection (legacy name). */
+  replaceMonolith(columnarJson) {
+    this.applyProjection(columnarJson);
+  }
+
   /**
    * Soft update: replace/add plot columns only. Never mutates _times or _candles.
    * Arrays are padded/truncated to current barCount for invariant safety.
+   * Do NOT use for ADR-010 projected forming tips — use applyProjection (B2.1).
    * @param {Record<string, number[]>} newPlots
    */
   updatePlots(newPlots) {

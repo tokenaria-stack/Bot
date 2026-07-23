@@ -8,6 +8,8 @@ config/matrix.json
 *.db-shm
 history.db*
 *.sql
+rsx_settings.json
+rsx_settings.json.tmp
 
 # Backups / data caches
 backups/

@@ -13,6 +13,97 @@ import (
 	"trading_bot/ui_config"
 )
 
+func TestProjectViewportFormingTip_OverwriteSameOpen(t *testing.T) {
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsx := market.NormalizeRSXSettings(market.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
+	market.ApplyRSXSettings(rsx)
+
+	step := int64(60_000)
+	nowMs := time.Now().UnixMilli()
+	capEnd := resolveClosedBarBoundary(0, "1m")
+	capSec := exchange.ChartTimeSec(capEnd)
+
+	nClosed := 40
+	closed := make([]exchange.Kline, nClosed)
+	for i := 0; i < nClosed; i++ {
+		ot := capEnd - int64(nClosed-1-i)*step
+		closed[i] = exchange.NormalizeKline(exchange.Kline{
+			OpenTime: ot, CloseTime: ot + step - 1,
+			Open: 100 + float64(i), High: 101 + float64(i), Low: 99 + float64(i),
+			Close: 100.5 + float64(i), Volume: 10,
+		})
+	}
+
+	// Cap tip still "forming" on Frame (CloseTime in future) — same open as Cap last-closed.
+	// This is the Cap/Frame race B2.2 OVERWRITE must handle (no append).
+	tip := closed[len(closed)-1]
+	tip.High = tip.High + 3
+	tip.Low = tip.Low - 2
+	tip.Close = tip.Close + 1.5
+	tip.Volume = tip.Volume + 25
+	tip.CloseTime = nowMs + 45_000
+	if !isFormingKline(tip, nowMs) {
+		t.Fatal("test setup: Cap tip must still be forming on Frame")
+	}
+
+	frameKlines := append([]exchange.Kline{}, closed[:len(closed)-1]...)
+	frameKlines = append(frameKlines, tip)
+	frame := market.NewFrame(frameKlines, "1m", market.ChaosConfig{})
+	frame.SetRSXSettings(rsx)
+	frame.ReapplyRSXSettings()
+
+	d := &DashboardServer{
+		frames:    map[string]*market.Frame{"1m": frame},
+		projector: wire.NewProjector(reg),
+		symbol:    "BTCUSDT",
+	}
+
+	// Cap-closed history uses settled OHLC for last bar (pre-live mutation).
+	histClosed := append([]exchange.Kline{}, closed...)
+	resp, ok := d.buildColumnarHistoryPayload(
+		context.Background(),
+		histClosed,
+		30,
+		0,
+		rsx,
+		[]string{"line_rsx", "line_rsx_signal"},
+		false,
+		"1m",
+		"1m",
+	)
+	if !ok {
+		t.Fatal("columnar payload failed")
+	}
+
+	if len(resp.Times) < 2 {
+		t.Fatalf("want Cap tip preserved, got %d bars", len(resp.Times))
+	}
+	n := len(resp.Times)
+	if resp.Times[n-1] != capSec {
+		t.Fatalf("OVERWRITE must keep Cap tip open=%d got=%d", capSec, resp.Times[n-1])
+	}
+	if resp.ProjCont == nil || resp.ProjCont.ProjectionMode != string(viewportProjOverwrite) {
+		t.Fatalf("want projectionMode=overwrite, got %+v", resp.ProjCont)
+	}
+	if resp.Candles.Close[n-1] != tip.Close {
+		t.Fatalf("OVERWRITE OHLC Close=%.4f want Frame tip %.4f", resp.Candles.Close[n-1], tip.Close)
+	}
+
+	liveRSX := frame.DAGTickFrame().Get(core.SlotJurikRSX)
+	plotRSX := resp.Plots["line_rsx"][n-1]
+	if math.Abs(plotRSX-liveRSX) > 1e-9 {
+		t.Fatalf("OVERWRITE tip RSX=%.12f want Frame Cur=%.12f", plotRSX, liveRSX)
+	}
+	if math.Abs(resp.ProjCont.LastRSX-liveRSX) > 1e-9 {
+		t.Fatalf("projCont lastRSX=%.12f want Frame Cur=%.12f", resp.ProjCont.LastRSX, liveRSX)
+	}
+	t.Logf("B2.2 OVERWRITE OK: open=%d bars=%d tipRSX=%.6f ≡ Frame Cur mode=%s",
+		capSec, n, plotRSX, resp.ProjCont.ProjectionMode)
+}
+
 func TestProjectViewportFormingTip_SeedsLiveEdge(t *testing.T) {
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {

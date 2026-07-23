@@ -8,7 +8,32 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## Core 6.0 / 6.1 — Documentation OS (Jul 2026) ✅
+## Phase ADR-016 — Replay Lifecycle Ownership (Jul 2026) ✅
+
+- Frame `replayStreamingLocked` / `warmupStreaming`: split by Cap forming predicate → closed `isClosed=true` + commit → optional forming `isClosed=false` (never commit).
+- Root cause of post-settings tip jump: forming tip was replayed as closed then re-opened by WS (double Jurik).
+- History Cap Replay unchanged (closed-only). Debt **#87**. Regression: `market/replay_lifecycle_test.go`.
+
+## Phase B2.1 — Atomic Projection Apply (Jul 2026) ✅
+
+- Soft RSX settings path: `applyProjection(columnar)` instead of `updatePlots` (Case 2 lost N+1 tip).
+- Camera: capture/restore — never `viewport:fresh` (ADR-014).
+- Regression: `web/projection_apply_test.js`. Debt #86 B2.1.
+
+## Phase B2.2 — Projector OVERWRITE mode (Jul 2026) ✅
+
+- `projectViewportFormingTip`: APPEND (`frameOpen > histLast`) + OVERWRITE (`frameOpen == histLast`, replace tip OHLC/plots from Frame).
+- Completes ADR-010 contract (handoff OVERWRITE was documented, only APPEND implemented).
+- ADR-015 probe: skip on new bar / timeline heal / elapsed > 2s.
+
+---
+
+- **ADR-013:** `ChangeImpact` + `RSXImpactOfChange`; SetRSX* only inside IndicatorReplay path; DivMethod = AnnotationOnly (Jurik untouched).
+- **ADR-014:** settings apply = soft `updatePlots` / `mode: 'indicators'`; never `viewport: 'fresh'`.
+- FE: 200ms debounce, Save/outside flush, AbortController + sync seq, fingerprint skip when synced.
+- Debt **#85** closed. Remaining tip vs TV → forming-bar Model 2 only.
+
+---
 
 - Split knowledge SSOT: Protocol / Role (always-on) vs Architecture / Debts / History / Decisions.
 - Controlled English rewrite; `MEMORY.md` → index; README = landing.

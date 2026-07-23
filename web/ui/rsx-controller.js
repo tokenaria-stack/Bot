@@ -91,7 +91,7 @@ const RsxController = (() => {
       length: clampRsxLength(Number(wrap.querySelector('.rsx-length-input')?.value)),
       div_lookback: clampRsxDivLookback(Number(wrap.querySelector('.rsx-div-lookback-input')?.value)),
       signal_length: clampRsxSignalLength(Number(wrap.querySelector('.rsx-signal-length-input')?.value)),
-      source: source === 'hlc3' ? 'hlc3' : 'close',
+      source: source === 'close' ? 'close' : 'hlc3',
       pivot_radius: clampRsxPivotRadius(Number(wrap.querySelector('.rsx-pivot-radius-input')?.value)),
       div_method: divMethod === 'fractal' ? 'fractal' : 'tv',
       min_price_delta_ratio: readFloatDeltaInput(
@@ -213,6 +213,9 @@ const RsxController = (() => {
     try {
       if (context === 'backtest') {
         syncFromMenu('backtest');
+      } else if (typeof flushRsxSettingsSync === 'function') {
+        // Figma-style: flush pending or no-op if already synced; always close.
+        await flushRsxSettingsSync('live');
       } else if (typeof syncRsxIndicatorSettings === 'function') {
         await syncRsxIndicatorSettings('live');
       } else {
@@ -280,6 +283,7 @@ const RsxController = (() => {
     setSettings,
     applyToMenu,
     syncFromMenu,
+    readSettingsFromMenu,
     persist,
     loadFromStorage,
   };

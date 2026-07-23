@@ -70,7 +70,7 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `Projector` | Slot → wire packer for live plots + columnar history |
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
-| `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip |
+| `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip; Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
@@ -98,9 +98,14 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 3. **Boot: WS first.** REST recovery must not overwrite missed WS bars. One tick path: `Runtime.routeTick` (live + boot replay).
 4. **SQLite firewall ≠ cure.** Monotonic UPSERT (`high=MAX`, `low=MIN`, `volume=MAX`) is last line of defense; root fix is REST Grace (`KlineSettleGraceMs=5000`).
 5. **Time Model Rule (ADR-011).** Fixed intervals (`1m`…`1d`) use duration arithmetic. Calendar intervals (`1w`, `1M`) use bar boundaries (Monday / month-start UTC) via `CurrentBarOpen` / `PreviousBarOpen` / `NextBarOpen`. Never use `IntervalDurationMs` for Cap, REST align, next tip, or month gap checks.
-6. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
-7. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
-8. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session: unpublish → forced REST tip fetch → contiguous@1bar → flush pending → `timeline_publishable`. FE awaits server; does not invent hole fills.
+6. **Indicator Configuration Rule (ADR-012).** Indicator parameters are engine state. Browser menus POST to `/api/settings/indicators`; never own live math config. Autosave on disk. Future: Registry → Config → DAG membership → Runtime → Projection (implement when 2+ indicators need enable/disable).
+7. **Indicator Change Impact (ADR-013).** Classify settings via `ChangeImpact` before mutating runtime. Never `Set*` outside the IndicatorReplay transaction. AnnotationOnly must not touch Falcon/Jurik.
+8. **Viewport Contract (ADR-014).** Indicator settings are projection events — never move camera/zoom/scroll/TF. Soft `applyProjection` + camera restore only.
+9. **Projection Continuity (ADR-015).** Server `projectViewportFormingTip` is the sole projector (APPEND or OVERWRITE). FE applies snapshots atomically; never synthesizes Cur. First WS after soft apply is idempotent when market unchanged.
+10. **Replay Lifecycle (ADR-016).** Frame runtime replay reproduces live candle lifecycle: closed (`isClosed=true` + commit) then optional forming (`isClosed=false`, never commit). Same Cap forming predicate as History tip strip. History Cap Replay stays closed-only.
+11. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
+12. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+13. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session: unpublish → forced REST tip fetch → contiguous@1bar → flush pending → `timeline_publishable`. FE awaits server; does not invent hole fills.
 
 ---
 
@@ -207,7 +212,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Camera | Sticky Live Edge / Microscope (`viewport-manager.js`) — TF mechanics CLOSED |
 | Scale | `ScaleController` SSOT (`chart_scale_prefs_v2`, Auto ON default) |
 
-**Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE).  
+**Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE). Frame runtime replay = closed→forming lifecycle (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged; LWC `localization` + `tickMarkFormatter` format in browser local TZ ([`web/chart-core.js`](../web/chart-core.js)).  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  

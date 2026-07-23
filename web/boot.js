@@ -39,6 +39,15 @@
   let rsxSettingsSyncSeq = 0;
   /** Serializes overlapping syncRsxIndicatorSettings calls (rapid Save). */
   let rsxSettingsSyncTail = Promise.resolve();
+  /** Debounce timer for live menu auto-apply (ADR-014 / B1). */
+  let rsxSettingsSyncTimer = null;
+  const RSX_SETTINGS_DEBOUNCE_MS = 200;
+  /** Fingerprint of last server-applied live settings (Save no-ops when equal). */
+  let rsxLastAppliedFingerprint = '';
+  /** @type {AbortController | null} */
+  let rsxPostAbort = null;
+  /** @type {AbortController | null} */
+  let rsxHistoryAbort = null;
 
   /** Shot 11B: bump ProjectionEpoch (SSOT discard axis). */
   function bumpProjectionEpoch() {
@@ -48,6 +57,23 @@
 
   function isCurrentEpoch(epoch) {
     return epoch === window.projectionEpoch;
+  }
+
+  function rsxSettingsFingerprint(settings) {
+    if (!settings || typeof settings !== 'object') return '';
+    const s = typeof coerceRsxSettingsForAPI === 'function'
+      ? coerceRsxSettingsForAPI(settings)
+      : settings;
+    return JSON.stringify({
+      length: s.length,
+      signal_length: s.signal_length,
+      source: s.source,
+      div_method: s.div_method,
+      pivot_radius: s.pivot_radius,
+      div_lookback: s.div_lookback,
+      min_price_delta_ratio: s.min_price_delta_ratio,
+      min_osc_delta: s.min_osc_delta,
+    });
   }
 
   // ── Shot 10B: Zero-gap live tick handoff while monolith history loads ──
@@ -129,13 +155,79 @@
     return {
       length: 14,
       signal_length: 9,
-      source: 'close',
-      div_method: 'standard',
-      pivot_radius: 5,
-      div_lookback: 60,
-      min_price_delta_ratio: 0.1,
-      min_osc_delta: 0.1,
+      source: 'hlc3',
+      div_method: 'tv',
+      pivot_radius: 2,
+      div_lookback: 90,
+      min_price_delta_ratio: 0,
+      min_osc_delta: 0,
     };
+  }
+
+  async function pushRsxSettingsToServer(settings) {
+    const payload = typeof coerceRsxSettingsForAPI === 'function'
+      ? coerceRsxSettingsForAPI(settings)
+      : settings;
+    if (rsxPostAbort) rsxPostAbort.abort();
+    rsxPostAbort = new AbortController();
+    try {
+      return await API.pushRsxSettings(payload, rsxPostAbort.signal);
+    } catch (err) {
+      if (err?.name === 'AbortError') return null;
+      throw err;
+    }
+  }
+
+  async function fetchRsxIndicatorSettings() {
+    try {
+      const result = await API.fetchRsxSettings();
+      const serverSettings = result.settings || result;
+      if (typeof RsxController === 'undefined') return;
+      const showPivots = RsxController.getSettings('live')?.show_pivots;
+      const applied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
+        { ...serverSettings, show_pivots: showPivots },
+        defaultRsxSettings(),
+      ));
+      // Cache only — server is authoritative (ADR-012).
+      RsxController.persist('live', applied);
+      RsxController.applyToMenu('live', applied);
+      rsxLastAppliedFingerprint = rsxSettingsFingerprint(applied);
+    } catch (err) {
+      console.warn('[Renaissance] fetch RSX settings failed:', err);
+    }
+  }
+
+  /**
+   * Debounced auto-apply (200ms). Save / outside-click call flushRsxSettingsSync.
+   */
+  function scheduleRsxSettingsSync(context = 'live') {
+    if (context !== 'live') return;
+    if (rsxSettingsSyncTimer) clearTimeout(rsxSettingsSyncTimer);
+    rsxSettingsSyncTimer = setTimeout(() => {
+      rsxSettingsSyncTimer = null;
+      void syncRsxIndicatorSettings('live');
+    }, RSX_SETTINGS_DEBOUNCE_MS);
+  }
+
+  /**
+   * Flush pending debounce immediately. Returns false when already synchronized (no POST).
+   */
+  async function flushRsxSettingsSync(context = 'live') {
+    if (context !== 'live') return false;
+    if (rsxSettingsSyncTimer) {
+      clearTimeout(rsxSettingsSyncTimer);
+      rsxSettingsSyncTimer = null;
+    }
+    if (typeof RsxController === 'undefined') return false;
+    const fromMenu = RsxController.readSettingsFromMenu
+      ? RsxController.readSettingsFromMenu('live')
+      : RsxController.syncFromMenu('live');
+    const fp = rsxSettingsFingerprint(fromMenu);
+    if (fp && fp === rsxLastAppliedFingerprint) {
+      return false;
+    }
+    await syncRsxIndicatorSettings('live');
+    return true;
   }
 
   async function syncRsxIndicatorSettings(context = 'live') {
@@ -144,35 +236,163 @@
     }
     if (typeof RsxController === 'undefined') return null;
 
-    const applied = RsxController.syncFromMenu('live');
-    RsxController.persist('live', applied);
+    if (rsxSettingsSyncTimer) {
+      clearTimeout(rsxSettingsSyncTimer);
+      rsxSettingsSyncTimer = null;
+    }
+
+    const fromMenu = RsxController.syncFromMenu('live');
+    const fp = rsxSettingsFingerprint(fromMenu);
+    if (fp && fp === rsxLastAppliedFingerprint) {
+      return RsxController.getSettings('live');
+    }
 
     const seq = ++rsxSettingsSyncSeq;
     rsxSettingsSyncTail = rsxSettingsSyncTail
       .catch(() => {})
-      .then(() => reloadLiveForRsxSettings(seq));
+      .then(async () => {
+        if (seq !== rsxSettingsSyncSeq) return;
+        const result = await pushRsxSettingsToServer(fromMenu);
+        if (seq !== rsxSettingsSyncSeq || result == null) return;
+        const serverSettings = result?.settings || result;
+        const applied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
+          { ...serverSettings, show_pivots: fromMenu.show_pivots },
+          fromMenu,
+        ));
+        RsxController.persist('live', applied);
+        RsxController.applyToMenu('live', applied);
+        rsxLastAppliedFingerprint = rsxSettingsFingerprint(applied);
+        // Soft indicator reload only when engine actually changed (ADR-014: no camera).
+        if (result.changed !== false) {
+          await reloadLiveForRsxSettings(seq);
+        }
+      });
     await rsxSettingsSyncTail;
-    return applied;
+    return RsxController.getSettings('live');
   }
 
+  /** ADR-015: one-shot first WS after soft settings apply. */
+  let projContPending = null;
+
+  function tipRSXFromPlotMap(plots) {
+    if (!plots || typeof plots !== 'object') return null;
+    const raw = plots.line_rsx ?? plots.jurik_rsx;
+    if (Array.isArray(raw)) {
+      if (!raw.length) return null;
+      const v = Number(raw[raw.length - 1]);
+      return Number.isFinite(v) ? v : null;
+    }
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  function storeTipProbe(label) {
+    const store = liveColumnarStore;
+    if (!store) return null;
+    const snap = typeof store.snapshot === 'function' ? store.snapshot() : null;
+    const plots = snap?.plots || store._plots || {};
+    const timesLen = store.barCount?.() ?? store._times?.length ?? 0;
+    const lastOpen = store.lastTimeSec?.() ?? null;
+    const lastRSX = tipRSXFromPlotMap(plots);
+    const plotsLen = Array.isArray(plots.line_rsx)
+      ? plots.line_rsx.length
+      : (Array.isArray(plots.jurik_rsx) ? plots.jurik_rsx.length : 0);
+    const out = { label, timesLen, plotsLen, lastOpen, lastRSX };
+    console.log('[ProjCont] FE store', out);
+    return out;
+  }
+
+  function armProjContFirstWS(restDiag) {
+    projContPending = {
+      armedAt: Date.now(),
+      rest: restDiag,
+      healingAtArm: !!awaitingTimelinePublishable,
+    };
+  }
+
+  function skipProjContADR015(reason, extra) {
+    if (!projContPending) return;
+    const pending = projContPending;
+    projContPending = null;
+    console.log('[ProjCont] ADR015 skipped', {
+      reason,
+      elapsedMs: Date.now() - pending.armedAt,
+      restLastOpen: pending.rest?.lastOpenSec,
+      restProjectionMode: pending.rest?.projectionMode,
+      ...extra,
+    });
+  }
+
+  function maybeLogProjContFirstWS(tick) {
+    if (!projContPending) return;
+    const pending = projContPending;
+    const wsOpen = Number(tick?.time);
+    const wsRSX = tipRSXFromPlotMap(tick?.plots)
+      ?? (Number.isFinite(Number(tick?.plots?.line_rsx)) ? Number(tick.plots.line_rsx) : null);
+    const rest = pending.rest || {};
+    const elapsedMs = Date.now() - pending.armedAt;
+    const ADR015_MAX_MS = 2000;
+    const healing = !!awaitingTimelinePublishable || !!window.__isDashboardLoading;
+    const sameOpen = Number(rest.lastOpenSec) === wsOpen;
+
+    if (healing || pending.healingAtArm) {
+      skipProjContADR015('timeline heal', { wsOpen, wsRSX });
+      return;
+    }
+    if (!sameOpen) {
+      skipProjContADR015('new bar', { wsOpen, restLastOpen: rest.lastOpenSec, wsRSX });
+      return;
+    }
+    if (elapsedMs > ADR015_MAX_MS) {
+      skipProjContADR015('elapsed', { wsOpen, wsRSX, elapsedMs, maxMs: ADR015_MAX_MS });
+      return;
+    }
+
+    projContPending = null;
+    const restRSX = Number(rest.lastRSX);
+    const delta = (Number.isFinite(restRSX) && Number.isFinite(wsRSX)) ? (wsRSX - restRSX) : null;
+    const storeAfter = storeTipProbe('after_first_ws');
+    console.log('[ProjCont] first WS after soft apply', {
+      restTimesLen: rest.timesLen,
+      restProjectedForming: rest.projectedForming,
+      restProjectionMode: rest.projectionMode,
+      restLastOpen: rest.lastOpenSec,
+      restLastRSX: rest.lastRSX,
+      restFrameCurOpen: rest.frameCurOpenSec,
+      restFrameCurRSX: rest.frameCurRSX,
+      wsOpen,
+      wsRSX,
+      openMatch: true,
+      deltaRSX: delta,
+      identical: delta != null && Math.abs(delta) < 1e-9,
+      storeAfter,
+      elapsedMs,
+    });
+  }
+
+  /**
+   * Soft indicator reload (ADR-014 + ADR-015 / B2.1).
+   * Atomic applyProjection(snapshot) — never plots-only updatePlots (lost forming tip).
+   * Camera preserved via ViewportManager capture/restore — never viewport:fresh.
+   */
   async function reloadLiveForRsxSettings(seq) {
     if (seq !== rsxSettingsSyncSeq) return;
     if (!liveColumnarStore || !ChartAdapter.isInitialized('live')) return;
 
     window.__isSettingsUpdating = true;
-    const epoch = bumpProjectionEpoch();
-    beginLiveTickBuffer();
-    wsSubscribeTf(window.currentTf);
     let completed = false;
     try {
       if (window.DDRFactory && !window.DDRFactory.manifest) {
         await window.DDRFactory.fetchManifest();
       }
-      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
+      if (seq !== rsxSettingsSyncSeq) return;
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
-      const endTimeSec = Math.floor(Date.now() / 1000);
-      const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+      const endTimeSec = liveColumnarStore.lastTimeSec() ?? Math.floor(Date.now() / 1000);
+      const limit = Math.max(liveColumnarStore.barCount() || 0, 3000);
+
+      if (rsxHistoryAbort) rsxHistoryAbort.abort();
+      rsxHistoryAbort = new AbortController();
 
       const columnar = await API.fetchColumnarHistory({
         tf: window.currentTf,
@@ -181,40 +401,83 @@
         slots: resolveLiveSlotIds(),
         rsxSettings: resolveLiveRsxSettings(),
         symbol,
+        signal: rsxHistoryAbort.signal,
       });
-      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
-      if (!columnar?.times?.length) {
-        console.warn('[Renaissance] RSX settings sync — empty columnar response');
+      if (seq !== rsxSettingsSyncSeq) return;
+      if (!columnar?.plots || typeof columnar.plots !== 'object') {
+        console.warn('[Renaissance] RSX settings sync — empty plots');
+        return;
+      }
+      if (!Array.isArray(columnar.times) || !columnar.times.length) {
+        console.warn('[Renaissance] RSX settings sync — empty times (projection incomplete)');
         return;
       }
 
-      liveColumnarStore.replaceMonolith(columnar);
-      flushLiveTickBuffer();
-      completed = true;
-      if (!liveColumnarStore.invariantOk()) {
-        console.error('[Renaissance] RSX settings sync — invariant failed', liveColumnarStore.invariantMeta());
-        return;
-      }
+      const restDiag = columnar.projCont || {
+        closedBars: null,
+        projectedForming: null,
+        timesLen: columnar.times.length,
+        plotsLen: Array.isArray(columnar.plots?.line_rsx) ? columnar.plots.line_rsx.length : null,
+        lastOpenSec: columnar.times[columnar.times.length - 1],
+        lastRSX: tipRSXFromPlotMap(columnar.plots),
+      };
+      console.log('[ProjCont] REST history', restDiag);
+      const storeBefore = storeTipProbe('before_applyProjection');
 
-      window.historyHasMore = columnar.hasMore !== false;
-      await mountDDRLiveCutover();
-      if (seq !== rsxSettingsSyncSeq || !isCurrentEpoch(epoch)) return;
+      const viewportAnchor = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
+        ? ViewportManager.capture('live')
+        : null;
 
       beginDataUpdate();
       try {
-        liveRenderScheduler?.markDirty({ mode: 'full', viewport: 'fresh' });
+        // B2.1: atomic ProjectionSnapshot (times + OHLC + plots). Server owns length.
+        if (typeof liveColumnarStore.applyProjection === 'function') {
+          liveColumnarStore.applyProjection(columnar);
+        } else {
+          liveColumnarStore.replaceMonolith(columnar);
+        }
+        if (!liveColumnarStore.invariantOk()) {
+          console.error('[Renaissance] RSX settings sync — invariant failed', liveColumnarStore.invariantMeta());
+          return;
+        }
+        completed = true;
+        const storeAfter = storeTipProbe('after_applyProjection');
+        const lostProjection = Number(restDiag.timesLen) > Number(storeAfter?.timesLen);
+        const tipOpenLost = Number(restDiag.lastOpenSec) !== Number(storeAfter?.lastOpen)
+          && restDiag.projectedForming === true;
+        const tipRSXMatch = Number.isFinite(Number(restDiag.lastRSX))
+          && Number.isFinite(Number(storeAfter?.lastRSX))
+          && Math.abs(Number(restDiag.lastRSX) - Number(storeAfter.lastRSX)) < 1e-9;
+        console.log('[ProjCont] soft apply verdict', {
+          lostProjection,
+          tipOpenLost,
+          tipRSXMatch,
+          restTimesLen: restDiag.timesLen,
+          storeTimesLen: storeAfter?.timesLen,
+          restLastOpen: restDiag.lastOpenSec,
+          storeLastOpen: storeAfter?.lastOpen,
+          restLastRSX: restDiag.lastRSX,
+          storeLastRSX: storeAfter?.lastRSX,
+          storeBefore,
+        });
+        armProjContFirstWS(restDiag);
+        // ADR-014: never viewport:fresh — restore prior camera if capture succeeded.
+        liveRenderScheduler?.markDirty({
+          mode: 'full',
+          viewport: viewportAnchor ? 'restore' : 'preserve',
+          anchor: viewportAnchor || undefined,
+        });
       } finally {
         endDataUpdate();
       }
     } catch (err) {
+      if (err?.name === 'AbortError') return;
       console.error('[Renaissance] syncRsxIndicatorSettings failed:', err);
     } finally {
-      if (!isCurrentEpoch(epoch) || !completed) {
-        abortLiveTickBuffer();
-      }
       if (seq === rsxSettingsSyncSeq) {
         window.__isSettingsUpdating = false;
       }
+      void completed;
     }
   }
 
@@ -265,10 +528,13 @@
       runBacktest: noopAsync,
       stopBacktest: noop,
       syncRsxIndicatorSettings,
-      pushRsxSettingsToServer: noopAsync,
-      reloadRsxChartFromServer: noopAsync,
-      fetchRsxIndicatorSettings: noopAsync,
-      scheduleRsxSettingsSync: noop,
+      pushRsxSettingsToServer,
+      reloadRsxChartFromServer: async () => {
+        await reloadLiveForRsxSettings(rsxSettingsSyncSeq);
+      },
+      fetchRsxIndicatorSettings,
+      scheduleRsxSettingsSync,
+      flushRsxSettingsSync,
       triggerNavigatorAutoUpdate: noop,
       refreshStatsForMode: noop,
       initPanelSettingsOutsideClose: noop,
@@ -379,6 +645,9 @@
    */
   function beginAwaitTimelineHeal(reason, opts = {}) {
     const safetyMs = Number.isFinite(opts.safetyMs) ? opts.safetyMs : TIMELINE_HEAL_SAFETY_MS;
+    if (projContPending) {
+      skipProjContADR015('timeline heal', { healReason: reason });
+    }
     beginLiveTickBuffer();
     awaitingTimelinePublishable = true;
     if (typeof ToolbarController !== 'undefined') ToolbarController.setBuffering(true);
@@ -615,6 +884,7 @@
       return false;
     }
     if (!appendResult?.candle) return false;
+    maybeLogProjContFirstWS(tick);
     if (handoffDiag?.waiting) {
       const tip = Number(handoffDiag.historyTipOpen);
       const first = Number(tick?.time);
@@ -814,7 +1084,16 @@
     safeInit('Hydration orchestrator', initHydrationOrchestrator);
     safeInit('UI strategy', () => StrategyController.init());
     safeInit('UI risk', () => RiskController.init());
-    safeInit('UI rsx', () => RsxController.init());
+    safeInit('UI rsx', () => {
+      RsxController.init();
+      RsxController.onSettingsChanged(() => scheduleRsxSettingsSync('live'));
+      if (window.FloatingMenu?.setBeforeOutsideClose) {
+        FloatingMenu.setBeforeOutsideClose(async (menu) => {
+          if (!menu?.closest?.('.rsx-wrap')) return;
+          await flushRsxSettingsSync('live');
+        });
+      }
+    });
     safeInit('UI tabs', () => TabsController.init());
     safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: false }));
     safeInit('UI toolbar', () => ToolbarController.init());
@@ -832,6 +1111,9 @@
         setTimeout(boot, 500);
         return;
       }
+
+      // ADR-012: engine SSOT hydrates menu before first viewport paint.
+      await fetchRsxIndicatorSettings();
 
       attachLiveHistoryScrollArm();
       const priceChart = ChartAdapter.getChart('live', 'price');

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"trading_bot/core"
 	"trading_bot/exchange"
 	"trading_bot/market"
 	"trading_bot/server/wire"
@@ -32,6 +33,22 @@ type columnarHistoryResponse struct {
 	Annotations   []wire.Annotation    `json:"annotations"`
 	Sentinel      float64              `json:"sentinel"`
 	HasMore       bool                 `json:"hasMore"`
+	// ProjCont is a temporary ADR-015 probe (safe to ignore in consumers).
+	ProjCont *projectionContinuityDiag `json:"projCont,omitempty"`
+}
+
+// projectionContinuityDiag — ADR-015 scientific probe (History vs store vs first WS).
+type projectionContinuityDiag struct {
+	ClosedBars       int     `json:"closedBars"`
+	ProjectedForming bool    `json:"projectedForming"`
+	ProjectionMode   string  `json:"projectionMode,omitempty"` // none|append|overwrite
+	TimesLen         int     `json:"timesLen"`
+	PlotsLen         int     `json:"plotsLen"`
+	LastOpenSec      int64   `json:"lastOpenSec"`
+	LastRSX          float64 `json:"lastRSX"`
+	FrameCurOpenSec  int64   `json:"frameCurOpenSec,omitempty"`
+	FrameCurRSX      float64 `json:"frameCurRSX"`
+	FrameCurPresent  bool    `json:"frameCurPresent"`
 }
 
 func parseSlotsParam(raw string) []string {
@@ -149,12 +166,91 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		Sentinel:      sentinel,
 		HasMore:       hasMore,
 	}
-	// ADR-010: Viewport = closed projection + optional Frame forming tip (never Replay'd).
-	d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
+	closedBars := len(resp.Times)
+	// ADR-010 / B2.2: APPEND new forming bar or OVERWRITE Cap tip with Frame Cur.
+	mode := d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
 	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
 		return columnarHistoryResponse{}, false
 	}
+	resp.ProjCont = d.buildProjectionContinuityDiag(&resp, timeframe, binanceInterval, closedBars, mode)
+	logProjectionContinuity(resp.ProjCont, timeframe)
 	return resp, true
+}
+
+func tipRSXFromPlots(plots map[string][]float64) float64 {
+	if plots == nil {
+		return 0
+	}
+	col := plots["line_rsx"]
+	if len(col) == 0 {
+		col = plots["jurik_rsx"]
+	}
+	if len(col) == 0 {
+		return 0
+	}
+	return col[len(col)-1]
+}
+
+func plotColumnLen(plots map[string][]float64) int {
+	if plots == nil {
+		return 0
+	}
+	if col, ok := plots["line_rsx"]; ok {
+		return len(col)
+	}
+	for _, col := range plots {
+		return len(col)
+	}
+	return 0
+}
+
+func (d *DashboardServer) buildProjectionContinuityDiag(
+	resp *columnarHistoryResponse,
+	timeframe, binanceInterval string,
+	closedBars int,
+	mode viewportProjectionMode,
+) *projectionContinuityDiag {
+	if resp == nil || len(resp.Times) == 0 {
+		return nil
+	}
+	diag := &projectionContinuityDiag{
+		ClosedBars:       closedBars,
+		ProjectedForming: mode == viewportProjAppend || mode == viewportProjOverwrite,
+		ProjectionMode:   string(mode),
+		TimesLen:         len(resp.Times),
+		PlotsLen:         plotColumnLen(resp.Plots),
+		LastOpenSec:      resp.Times[len(resp.Times)-1],
+		LastRSX:          tipRSXFromPlots(resp.Plots),
+		FrameCurRSX:      0,
+	}
+	frame := d.frameForTimeframe(timeframe)
+	if frame == nil && binanceInterval != "" && binanceInterval != timeframe {
+		frame = d.frameForTimeframe(binanceInterval)
+	}
+	if frame == nil {
+		return diag
+	}
+	raw := frame.GetKlines()
+	if len(raw) == 0 {
+		return diag
+	}
+	tip := exchange.NormalizeKline(raw[len(raw)-1])
+	diag.FrameCurOpenSec = exchange.ChartTimeSec(tip.OpenTime)
+	if dag := frame.DAGTickFrame(); dag != nil {
+		diag.FrameCurPresent = true
+		diag.FrameCurRSX = dag.Get(core.SlotJurikRSX)
+	}
+	return diag
+}
+
+func logProjectionContinuity(diag *projectionContinuityDiag, tf string) {
+	if diag == nil {
+		return
+	}
+	log.Printf("[ProjCont] tf=%s mode=%s closedBars=%d projectedForming=%v timesLen=%d plotsLen=%d "+
+		"lastOpen=%d lastRSX=%.8f frameCurPresent=%v frameCurOpen=%d frameCurRSX=%.8f",
+		tf, diag.ProjectionMode, diag.ClosedBars, diag.ProjectedForming, diag.TimesLen, diag.PlotsLen,
+		diag.LastOpenSec, diag.LastRSX, diag.FrameCurPresent, diag.FrameCurOpenSec, diag.FrameCurRSX)
 }
 
 // filterAnnotationsByDisplayTimes keeps markers whose time is an exact member of display times.

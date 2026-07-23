@@ -47,6 +47,14 @@ func main() {
 	}
 	log.Println("[Init] SQLite history cache ready (history.db)")
 
+	if err := market.LoadRSXSettingsFromDisk(); err != nil {
+		log.Printf("[Init] WARNING: RSX settings load: %v — using defaults", err)
+	} else {
+		rsx := market.GetRSXSettings()
+		log.Printf("[Init] RSX settings SSOT: source=%s length=%d signal=%d gen=%d",
+			rsx.Source, rsx.Length, rsx.SignalLength, market.RSXSettingsGeneration())
+	}
+
 	restClient, err := exchange.NewBinanceExchange(cfg.BinanceAPIKey, cfg.BinanceSecretKey, false)
 	if err != nil {
 		log.Fatalf("[Init] Failed to create REST client: %v", err)

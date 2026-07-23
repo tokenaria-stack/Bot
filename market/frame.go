@@ -145,43 +145,46 @@ func (a *Frame) ApplyBacktestRSXConfig(settings RSXSettings) {
 	a.replayStreamingLocked()
 }
 
-// UpdateRSXScanConfig applies RSX settings on the fly: replays Jurik when length/signal/source
-// change, otherwise rebuilds divergence annotations only.
-func (a *Frame) UpdateRSXScanConfig(settings RSXSettings) {
+// UpdateRSXScanConfig applies live engine settings via ChangeImpact (ADR-013).
+// prev must be the settings snapshot from BEFORE ApplyRSXSettings committed.
+//
+// Invariant: Falcon/Jurik runtime is never mutated unless IndicatorReplay runs
+// SetRSX* and replayStreamingLocked in the same transaction.
+func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	prev := a.effectiveRSXSettings()
-	if a.rsxSettings != nil {
-		normalized := NormalizeRSXSettings(settings)
-		a.rsxSettings = &normalized
-	}
-	next := a.effectiveRSXSettings()
+	normalized := NormalizeRSXSettings(next)
+	// Live Frames follow engine SSOT (unpinned). Clear any stale pin.
+	a.rsxSettings = nil
 
-	a.falcon.SetRSXLength(next.Length)
-	a.falcon.SetRSXSignalLength(next.SignalLength)
-	a.falcon.SetRSXSource(next.Source)
-
-	if a.divEngine != nil {
-		a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(next))
-	}
-
-	if a.dag != nil {
-		_ = a.dag.OnConfigChange("rsx", nodes.RSXNodeConfig{
-			Length:       next.Length,
-			SignalLength: next.SignalLength,
-			Source:       next.Source,
-		})
-	}
-
-	needsReplay := prev.Length != next.Length ||
-		prev.SignalLength != next.SignalLength ||
-		normalizeRSXSource(prev.Source) != normalizeRSXSource(next.Source)
-	if needsReplay {
+	switch RSXImpactOfChange(prev, normalized) {
+	case ChangeImpactIndicatorReplay:
+		a.falcon.SetRSXLength(normalized.Length)
+		a.falcon.SetRSXSignalLength(normalized.SignalLength)
+		a.falcon.SetRSXSource(normalized.Source)
+		if a.divEngine != nil {
+			a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
+		}
+		if a.dag != nil {
+			_ = a.dag.OnConfigChange("rsx", nodes.RSXNodeConfig{
+				Length:       normalized.Length,
+				SignalLength: normalized.SignalLength,
+				Source:       normalized.Source,
+			})
+		}
 		a.replayStreamingLocked()
-		return
+	case ChangeImpactAnnotationOnly:
+		if a.divEngine != nil {
+			a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
+		}
+		a.rebuildRSXAnnotationsLocked()
+	case ChangeImpactGraphReplay:
+		// Reserved — B1 does not implement graph membership rebuild.
+		fallthrough
+	case ChangeImpactProjectionOnly:
+		// No engine mutation.
 	}
-	a.rebuildRSXAnnotationsLocked()
 }
 
 // JurikRSXColor returns the TradingView-style RSX line color for the latest bar.

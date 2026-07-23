@@ -211,7 +211,9 @@ class ChartCompositor {
     }
     if (intent?.viewport === 'fresh' || intent?.viewport == null) {
       this._commitFreshCamera();
+      return;
     }
+    // viewport: 'preserve' | 'restore' without usable anchor — leave camera alone (ADR-014).
   }
 
   /**

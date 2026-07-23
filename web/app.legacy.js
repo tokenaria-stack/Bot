@@ -269,8 +269,8 @@ let backtestIntervalChangeInFlight = false;
 async function pushRsxSettingsToServer(settings) {
   const payload = coerceRsxSettingsForAPI(settings);
   try {
-    const applied = await API.pushRsxSettings(payload);
-    return coerceRsxSettingsForAPI(applied);
+    const result = await API.pushRsxSettings(payload);
+    return result?.settings ? coerceRsxSettingsForAPI(result.settings) : coerceRsxSettingsForAPI(result);
   } catch (err) {
     console.warn('Failed to push RSX settings:', err);
     throw err;
@@ -279,24 +279,17 @@ async function pushRsxSettingsToServer(settings) {
 
 async function fetchRsxIndicatorSettings() {
   const version = ++rsxSettingsFetchVersion;
-  const localBeforeFetch = { ...RsxController.getSettings('live') };
   try {
-    const serverSettings = await API.fetchRsxSettings();
+    const result = await API.fetchRsxSettings();
     if (version !== rsxSettingsFetchVersion) return;
-    const merged = normalizeRsxSettingsFromAPI(
-      { ...serverSettings, ...localBeforeFetch },
+    const serverSettings = result?.settings || result;
+    const showPivots = RsxController.getSettings('live')?.show_pivots;
+    const applied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
+      { ...serverSettings, show_pivots: showPivots },
       defaultRsxSettings(),
-    );
-    const applied = RsxController.setSettings('live', merged);
+    ));
     RsxController.persist('live', applied);
     RsxController.applyToMenu('live', applied);
-    if (JSON.stringify(coerceRsxSettingsForAPI(serverSettings)) !== JSON.stringify(coerceRsxSettingsForAPI(applied))) {
-      try {
-        await pushRsxSettingsToServer(applied);
-      } catch (err) {
-        console.warn('Failed to sync local RSX settings to server:', err);
-      }
-    }
   } catch (err) {
     if (version === rsxSettingsFetchVersion) {
       console.warn('Failed to load RSX indicator settings:', err);

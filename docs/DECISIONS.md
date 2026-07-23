@@ -167,3 +167,125 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Consequences:** Phase A1 lands the correct time model with skip still on. Phase A2 enables calendar-aware healing: catch-up/gap/reconcile use `NextBarOpen` / `BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE calendar snap deferred until runtime proves need. Expected: weekly archive can heal to Cap; Buffering loops driven by stale 1w tip should stop once catch-up runs.
 
+---
+
+## ADR-012 — Indicator Configuration Rule (RSX B0)
+
+**Context:** Live RSX settings were owned by a poisoned FE path (localStorage → URL query → history reload → `pushRsxSettingsToServer: noop`). Engine Frames kept default `close` while TradingView uses HLC3. Patches would preserve dual ownership.
+
+**Decision:** Indicator parameters are **engine state**. Browser is a control surface only.
+
+- SSOT: `market.GetRSXSettings` / `ApplyRSXSettings` (compare-before-mutate, generation bump).
+- Autosave: `rsx_settings.json` on change; `LoadRSXSettingsFromDisk` at process start.
+- Default RSX `source = hlc3` (TV parity).
+- Menu: collect form → `POST /api/settings/indicators` → apply + Frame replay → viewport rebuild. GET hydrates menu; localStorage is cache only (never authoritative).
+- Long-term (docs only until Wozduh+#2): Registry → Config → DAG membership → Runtime → Projection. No IndicatorManager in B0.
+
+**Rejected:**
+- Repairing noop push / local-wins merge — **Reason:** dual SSOT (Rule 1 / 5).
+- Building IndicatorRegistry/graph for one indicator — **Reason:** power plant (Rule 6); extract after Wozduh.
+
+**Consequences:** Phase B0 enables TV source parity experiments. B1 = ChangeImpact + Viewport Contract (ADR-013/014). Remaining tip vs TV, if any = forming-bar Model 2 only.
+
+---
+
+## ADR-013 — Indicator Change Impact
+
+**Context:** Live RSX settings apply called `SetRSXLength` / `SetRSXSignalLength` before deciding whether to replay. Those setters clear Jurik buffers. DivMethod-only changes therefore wiped runtime and skipped replay → Cur tip mutated permanently (TV↔Fractal↔TV did not restore).
+
+**Decision:** Configuration changes are classified by **ChangeImpact** before any runtime mutation. Engine owns classification; browser never decides replay.
+
+```
+ProjectionOnly < AnnotationOnly < IndicatorReplay < GraphReplay
+```
+
+| Impact | Meaning | Examples (RSX B1) |
+|--------|---------|-------------------|
+| ProjectionOnly | Visual only | colors, visibility (FE) |
+| AnnotationOnly | Derived overlays; Jurik untouched | DivMethod, pivot, lookback, deltas |
+| IndicatorReplay | Walk-forward math; Set* then Replay in one transaction | Length, SignalLength, Source |
+| GraphReplay | Reserved enum only | enable/disable / DAG membership (future) |
+
+**Hard invariant:** Runtime may never be mutated unless the corresponding rebuild path executes in the same transaction.
+
+```
+// forbidden
+SetLength(); if replay { Replay() }
+// required
+if IndicatorReplay { SetLength(); Replay() }
+```
+
+B1: only RSX implements `RSXImpactOfChange`. Wozduh/ATR later implement the same idea — no registry/platform in B1.
+
+**Rejected:** Always-replay on any settings change — **Reason:** wasteful; AnnotationOnly must not touch Falcon. Building IndicatorRegistry — **Reason:** power plant (Rule 6).
+
+**Consequences:** DivMethod flips preserve bit-identical RSX tip. Length/Source still cold-replay. Annotation rebuild may remain a stub (Phase F); that is acceptable — do not fake Jurik replay.
+
+---
+
+## ADR-014 — Viewport Contract
+
+**Context:** B0 settings sync used `replaceMonolith` + `viewport: 'fresh'`, treating indicator apply as navigation and jumping the camera to the right edge.
+
+**Decision:** Indicator settings are **projection events**, never navigation events.
+
+Indicator apply may rebuild engine state, annotations, and plots. It **must never** change:
+
+- visible range, zoom, scroll, timeframe, crosshair
+
+Only pan, zoom, and timeframe selection may move the camera.
+
+FE apply path: debounce 200ms → POST → soft `updatePlots` + `mode: 'indicators'`. Save / outside-click flush pending or close if already synced. AbortController + generation ignore stale responses.
+
+**Rejected:** Full remount / `viewport: 'fresh'` on settings — **Reason:** wrong layer (navigation vs projection).
+
+**Consequences:** Camera stays put across RSX edits. Soft plot reload merges with live tip via store `lastTimeSec`.
+
+---
+
+## ADR-015 — Projection Continuity (investigation)
+
+**Context:** After B1, TipSSOT shows `DATA_PLANE_MATCH` while the chart tip still jumps on the first WS tick after soft settings apply. Architecture already has a single projector (`projectViewportFormingTip`, ADR-010). Suspected consumer seam: `updatePlots` truncates server-appended forming tip to store length.
+
+**Decision (contract — prove before code fix):**
+
+There is exactly one owner of the projected forming bar. History API and the realtime stream must expose the same forming state. A consumer may refresh/repaint without visible discontinuity if market data has not changed.
+
+Corollaries:
+
+- `projectViewportFormingTip` is the sole projector.
+- Frontend applies projection; it never synthesizes Cur.
+- Soft consumers must preserve the projection returned by the server.
+- The first WS update after a history refresh must be idempotent if market state is unchanged.
+
+**Probe (temporary):** `[ProjCont]` server log + `projCont` JSON field; FE `[ProjCont]` before/after soft apply and on first WS.
+
+**B2.1 fix:** Soft settings path uses `ColumnarStore.applyProjection(snapshot)` (columnar response as ProjectionSnapshot). Atomic times+OHLC+plots. Never `updatePlots` for projected tips. Camera via capture/restore (ADR-014). Regression: `web/projection_apply_test.js`.
+
+**B2.2 fix:** `projectViewportFormingTip` modes `none|append|overwrite`. Same-open Cap tip ← Frame OHLC + `BuildTickJSON` (no append). ADR-015 FE probe skips on new bar / timeline heal / long elapsed.
+
+**Rejected:** FE “stick Cur” / duplicate Close — **Reason:** second ownership (Rule 5 / ADR-010). Smarter `updatePlots` forever — **Reason:** partial consume remains the root anti-pattern.
+
+**Consequences:** Soft apply preserves N+1; same-open settings apply paints Frame Cur so first WS is idempotent when market unchanged. Debt **#86** closed.
+
+---
+
+## ADR-016 — Replay Lifecycle Ownership
+
+**Context:** After ADR-015 (projection continuity), TipSSOT/`ProjCont` showed faithful projection (`lastRSX == frameCurRSX`) while the chart tip still jumped on the first WS tick after RSX settings `IndicatorReplay`. Audit proved: `replayStreamingLocked` evaluated the live forming tip with `isClosed=true` and `markTailCommittedLocked` pinned that open — then WS `isClosed=false` re-applied Jurik from a Save that already included the tip (double IIR pass). Cold boot was fine because closed history and forming were separated; settings replay collapsed them into one closed loop.
+
+**Decision:** Frame runtime replay must reproduce the live candle lifecycle:
+
+1. Split `a.klines` by Cap forming predicate (`data.IsFormingCloseTime` — same as `dropFormingTip` / `isFormingKline`).
+2. Replay closed bars only with `isClosed=true`.
+3. `markTailCommittedLocked(closed)` — commit last **closed** bar only.
+4. If a forming tip exists: evaluate once with `isClosed=false`; **never** commit it.
+
+History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). This ADR owns **Frame runtime** replay only (`replayStreamingLocked` / `warmupStreaming` via shared `replayLifecycleLocked`).
+
+**Invariant:** A forming candle must never become `lastCommittedOpenTime` during replay. Same open + same OHLC + `isClosed=false` after settings replay must be idempotent.
+
+**Rejected:** Append `evaluate(forming,false)` after an all-closed loop — **Reason:** triple lifecycle / double Jurik. Patch `markTailCommitted` with last-bar exceptions — **Reason:** hides wrong caller contract. FE/projector heal of committed tip — **Reason:** wrong layer (ADR-015 already honest).
+
+**Consequences:** Soft settings apply publishes live-forming Cur; first WS tick no longer cliffs. Debt **#87** closed. Regression: `market/replay_lifecycle_test.go`.
+

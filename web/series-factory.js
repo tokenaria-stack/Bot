@@ -84,7 +84,7 @@ class DDRFactory {
     if (rsx) {
       params.set('rsx_length', String(rsx.length ?? 14));
       params.set('rsx_signal_length', String(rsx.signal_length ?? 9));
-      params.set('rsx_source', rsx.source ?? 'close');
+      params.set('rsx_source', rsx.source ?? 'hlc3');
       params.set('rsx_method', rsx.div_method ?? 'fractal');
       params.set('rsx_pivot_radius', String(rsx.pivot_radius ?? 2));
       params.set('rsx_div_lookback', String(rsx.div_lookback ?? 90));

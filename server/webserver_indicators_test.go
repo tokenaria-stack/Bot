@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"trading_bot/market"
@@ -12,7 +13,11 @@ import (
 
 func TestHandleIndicatorSettings(t *testing.T) {
 	market.ResetRSXSettings()
-	t.Cleanup(market.ResetRSXSettings)
+	market.SetRSXSettingsPath(filepath.Join(t.TempDir(), "rsx_settings.json"))
+	t.Cleanup(func() {
+		market.ResetRSXSettings()
+		market.SetRSXSettingsPath("")
+	})
 
 	d := &DashboardServer{}
 
@@ -20,6 +25,16 @@ func TestHandleIndicatorSettings(t *testing.T) {
 	d.handleIndicatorSettings(rec, httptest.NewRequest(http.MethodGet, "/api/settings/indicators", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET status = %d", rec.Code)
+	}
+	var getBody map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &getBody); err != nil {
+		t.Fatal(err)
+	}
+	settingsRaw, _ := json.Marshal(getBody["settings"])
+	var gotSettings market.RSXSettings
+	_ = json.Unmarshal(settingsRaw, &gotSettings)
+	if gotSettings.Source != "hlc3" {
+		t.Fatalf("default source = %q, want hlc3", gotSettings.Source)
 	}
 
 	body, _ := json.Marshal(market.RSXSettings{
@@ -37,12 +52,15 @@ func TestHandleIndicatorSettings(t *testing.T) {
 		t.Fatalf("POST status = %d", rec.Code)
 	}
 
-	var applied market.RSXSettings
+	var applied map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &applied); err != nil {
 		t.Fatal(err)
 	}
-	if applied.Length != 21 || applied.DivLookback != 120 || applied.SignalLength != 14 {
-		t.Fatalf("applied = %+v", applied)
+	settingsRaw, _ = json.Marshal(applied["settings"])
+	var s market.RSXSettings
+	_ = json.Unmarshal(settingsRaw, &s)
+	if s.Length != 21 || s.DivLookback != 120 || s.SignalLength != 14 {
+		t.Fatalf("applied = %+v", s)
 	}
 	cur := market.GetRSXSettings()
 	if cur.Length != 21 || cur.DivLookback != 120 || cur.SignalLength != 14 {

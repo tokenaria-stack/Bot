@@ -6,6 +6,12 @@ const FloatingMenu = (() => {
   /** @type {WeakMap<HTMLElement, HTMLElement>} menu → last anchor */
   const anchors = new WeakMap();
   let outsideBound = false;
+  /** @type {((menu: HTMLElement) => void | Promise<void>) | null} */
+  let beforeOutsideClose = null;
+
+  function setBeforeOutsideClose(fn) {
+    beforeOutsideClose = typeof fn === 'function' ? fn : null;
+  }
 
   function ensureOutsideClose() {
     if (outsideBound) return;
@@ -14,6 +20,7 @@ const FloatingMenu = (() => {
       if (window.__menuDragging) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
+      const toClose = [];
       document.querySelectorAll('.indicator-settings-menu:not([hidden])').forEach((menu) => {
         if (menu.contains(target)) return;
         const anchor = anchors.get(menu);
@@ -22,8 +29,20 @@ const FloatingMenu = (() => {
           // Gear click handles its own toggle.
           return;
         }
-        menu.hidden = true;
+        toClose.push(menu);
       });
+      if (!toClose.length) return;
+      // ADR-014 / B1: flush pending indicator applies before close (Figma-style).
+      void (async () => {
+        for (const menu of toClose) {
+          try {
+            if (beforeOutsideClose) await beforeOutsideClose(menu);
+          } catch (err) {
+            console.warn('[FloatingMenu] beforeOutsideClose failed:', err);
+          }
+          menu.hidden = true;
+        }
+      })();
     }, true);
   }
 
@@ -139,6 +158,7 @@ const FloatingMenu = (() => {
     toggle,
     initDrag,
     bindAll,
+    setBeforeOutsideClose,
   };
 })();
 

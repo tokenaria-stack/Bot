@@ -85,7 +85,7 @@ function coerceRsxSettingsForAPI(settings, defaults = defaultRsxSettings()) {
     length: Number(clampRsxLength(Number(settings?.length))),
     div_lookback: Number(clampRsxDivLookback(Number(settings?.div_lookback))),
     signal_length: Number(clampRsxSignalLength(Number(settings?.signal_length))),
-    source: settings?.source === 'hlc3' ? 'hlc3' : 'close',
+    source: settings?.source === 'close' ? 'close' : 'hlc3',
     pivot_radius: pivotRadius,
     pivotRadius,
     div_method: settings?.div_method === 'fractal' ? 'fractal' : 'tv',
