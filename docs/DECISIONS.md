@@ -366,3 +366,24 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Consequences:** Debt **#90**. Modules: `web/ui/pane-layout.js`, `web/ui/layout-controller.js`. Regressions: `web/pane_layout_test.js`, `web/layout_controller_test.js`. Instance: `window.paneLayout` after DDR mount.
 
+---
+
+## ADR-020 — HostID ScaleController + Chart Chrome Polish
+
+**Context:** Auto/Log was a single global SSOT bound only to price. Footers inherited create-time `autoScale` then never re-armed. Time axis labels sat on the top price pane; Ruler was stubbed. Need HostID-generic scale ownership before more oscillators (ATR, MACD).
+
+**Decision (Phase 1 — ScaleController foundation):**
+
+- `ScaleController.register({ context, hostId, chart, host, allowLog, scaleGroup? })` — no hardcoded pane switch.
+- Prefs per `hostId` in versioned `chart_scale_prefs_v3`; migrate v2 global → `price`. New hosts default Auto ON.
+- `scaleGroup` dormant (default `hostId`) — no group apply yet.
+- Price: `allowLog: true`. Footers: `allowLog: false` (Auto only).
+- Manual Y-gesture updates **that** hostId only. PaneLayout visibility must not reset prefs.
+- UI: `.scale-controls` with `data-scale-pane` / `data-allow-log`.
+
+**Deferred:** `PaneLayout.getBottomPane` + `ChartAdapter.setBottomAxis`; HH:mm + crosshair `Thu 23 Jul '26 14:05`; `RulerController`.
+
+**Rejected:** Global Auto/Log for all charts; Log on osc panes; group scale apply in P1; reviving legacy adapters.
+
+**Consequences:** Debt **#91**. Module: `web/ui/scale-controller.js`. Regression: `web/scale_controller_test.js`.
+

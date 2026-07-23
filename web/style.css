@@ -712,6 +712,12 @@
   pointer-events: auto;
 }
 
+/* Footers have no time-axis strip yet — sit closer to the bottom edge. */
+.osc-wrap .scale-controls,
+.rsx-wrap .scale-controls {
+  bottom: 6px;
+}
+
 .scale-btn {
   width: auto;
   min-width: 30px;

@@ -125,10 +125,11 @@
     };
   }
 
-  function priceScaleOptions(extra = {}) {
+  function priceScaleOptions(hostId, extra = {}) {
     const tv = typeof TV !== 'undefined' ? TV : { border: '#2a2e39' };
+    const id = hostId || 'price';
     const prefs = typeof ScaleController !== 'undefined'
-      ? ScaleController.getState()
+      ? ScaleController.getState('live', id)
       : { isAuto: true, isLog: false };
     return {
       borderColor: tv.border,
@@ -158,7 +159,7 @@
     return opts;
   }
 
-  function createPaneChart(host, width, height, showAxisLabels) {
+  function createPaneChart(host, width, height, showAxisLabels, hostId = 'price') {
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
@@ -168,7 +169,7 @@
       timeScale: unifiedTimeScaleOptions(showAxisLabels),
       width,
       height,
-      rightPriceScale: priceScaleOptions({
+      rightPriceScale: priceScaleOptions(hostId, {
         mode: LightweightCharts.PriceScaleMode.Normal,
         scaleMargins: showAxisLabels
           ? undefined
@@ -179,19 +180,20 @@
 
   function createPriceChart(host, width, height) {
     const prefs = typeof ScaleController !== 'undefined'
-      ? ScaleController.getState()
+      ? ScaleController.getState('live', 'price')
       : { isAuto: true, isLog: false };
     const mode = (typeof LightweightCharts !== 'undefined' && prefs.isLog)
       ? LightweightCharts.PriceScaleMode.Logarithmic
       : LightweightCharts.PriceScaleMode.Normal;
-    const chart = createPaneChart(host, width, height, true);
+    const chart = createPaneChart(host, width, height, true, 'price');
     chart.applyOptions({
-      rightPriceScale: priceScaleOptions({ mode }),
+      rightPriceScale: priceScaleOptions('price', { mode }),
     });
     return chart;
   }
 
-  function createSlaveChart(host, width, height) {
+  function createSlaveChart(host, width, height, hostId) {
+    const id = hostId || 'wozduh';
     return LightweightCharts.createChart(host, {
       autoSize: false,
       layout: layoutOptions(),
@@ -206,7 +208,8 @@
       height,
       handleScroll: false,
       handleScale: { axisPressedMouseMove: { price: true, time: false }, mouseWheel: false },
-      rightPriceScale: priceScaleOptions({
+      // Footers: never inherit price Log; Auto from that hostId's prefs (default ON).
+      rightPriceScale: priceScaleOptions(id, {
         mode: LightweightCharts.PriceScaleMode.Normal,
         scaleMargins: { top: 0.05, bottom: 0.05 },
       }),
@@ -437,8 +440,8 @@
     const rsxSize = hostSize(rsxHost, root?.clientWidth || 800, 140);
 
     const priceChart = createPriceChart(priceHost, priceSize.width, priceSize.height);
-    const wozduhChart = createSlaveChart(wozHost, wozSize.width, wozSize.height);
-    const rsxChart = createSlaveChart(rsxHost, rsxSize.width, rsxSize.height);
+    const wozduhChart = createSlaveChart(wozHost, wozSize.width, wozSize.height, 'wozduh');
+    const rsxChart = createSlaveChart(rsxHost, rsxSize.width, rsxSize.height, 'rsx');
 
     const sharedTs = unifiedTimeScaleOptions(false);
     wozduhChart.timeScale().applyOptions(sharedTs);
@@ -455,13 +458,13 @@
     const priceMargins = priceCfg?.priceScale?.scaleMargins || { top: 0.05, bottom: 0.22 };
     const volumeMargins = priceCfg?.volumeScale?.scaleMargins || { top: 0.82, bottom: 0 };
     const prefs = typeof ScaleController !== 'undefined'
-      ? ScaleController.getState()
+      ? ScaleController.getState('live', 'price')
       : { isAuto: true, isLog: false };
     const priceMode = (typeof LightweightCharts !== 'undefined' && prefs.isLog)
       ? LightweightCharts.PriceScaleMode.Logarithmic
       : LightweightCharts.PriceScaleMode.Normal;
     priceChart.priceScale('right').applyOptions({
-      ...priceScaleOptions({ mode: priceMode }),
+      ...priceScaleOptions('price', { mode: priceMode }),
       scaleMargins: priceMargins,
     });
     priceChart.priceScale('volume').applyOptions({
@@ -471,7 +474,27 @@
     });
 
     if (typeof ScaleController !== 'undefined') {
-      ScaleController.register('live', priceChart, priceHost);
+      ScaleController.register({
+        context: 'live',
+        hostId: 'price',
+        chart: priceChart,
+        host: priceHost,
+        allowLog: true,
+      });
+      ScaleController.register({
+        context: 'live',
+        hostId: 'wozduh',
+        chart: wozduhChart,
+        host: wozHost,
+        allowLog: false,
+      });
+      ScaleController.register({
+        context: 'live',
+        hostId: 'rsx',
+        chart: rsxChart,
+        host: rsxHost,
+        allowLog: false,
+      });
     }
     const state = {
       charts: { price: priceChart, wozduh: wozduhChart, rsx: rsxChart },

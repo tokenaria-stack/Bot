@@ -317,13 +317,34 @@ function chartTimeScaleOptions() {
 }
 
 
-function sharedRightPriceScaleOptions(extra = {}) {
+function scalePrefsFor(hostId) {
+  if (typeof ScaleController !== 'undefined' && ScaleController.getState) {
+    return ScaleController.getState('live', hostId || 'price');
+  }
+  return { isAuto: true, isLog: false };
+}
+
+function sharedRightPriceScaleOptions(hostIdOrExtra, maybeExtra) {
+  let hostId = 'price';
+  let extra = {};
+  if (typeof hostIdOrExtra === 'string') {
+    hostId = hostIdOrExtra;
+    extra = maybeExtra || {};
+  } else if (hostIdOrExtra && typeof hostIdOrExtra === 'object') {
+    extra = hostIdOrExtra;
+  }
+  const prefs = scalePrefsFor(hostId);
+  const allowLog = hostId === 'price';
+  const mode = (allowLog && prefs.isLog && typeof LightweightCharts !== 'undefined')
+    ? LightweightCharts.PriceScaleMode.Logarithmic
+    : LightweightCharts.PriceScaleMode.Normal;
   return {
     borderColor: TV.border,
-    autoScale: true,
+    autoScale: prefs.isAuto !== false,
     minimumWidth: CHART_PRICE_SCALE_MIN_WIDTH,
     alignLabels: true,
     borderVisible: true,
+    mode,
     ...extra,
   };
 }
@@ -350,9 +371,7 @@ function createPriceChartOptions(width, height) {
     timeScale: chartTimeScaleOptions(),
     width,
     height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Logarithmic,
-    }),
+    rightPriceScale: sharedRightPriceScaleOptions('price'),
   };
 }
 
@@ -369,8 +388,7 @@ function createWozduxChartOptions(width, height) {
     timeScale: { ...chartTimeScaleOptions(), visible: false },
     width,
     height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Normal,
+    rightPriceScale: sharedRightPriceScaleOptions('wozduh', {
       scaleMargins: { top: 0.05, bottom: 0.05 },
     }),
   };
@@ -389,8 +407,7 @@ function createRSXChartOptions(width, height) {
     timeScale: chartTimeScaleOptions(),
     width,
     height,
-    rightPriceScale: sharedRightPriceScaleOptions({
-      mode: LightweightCharts.PriceScaleMode.Normal,
+    rightPriceScale: sharedRightPriceScaleOptions('rsx', {
       scaleMargins: { top: 0.05, bottom: 0.05 },
     }),
   };
@@ -420,12 +437,40 @@ function applyOscPointDelta(oscPt, chartData = _live) {
 }
 
 
-// Shot 10A: price-scale Auto/Log lives in ScaleController (SSOT). Legacy bridge only.
+// ADR-020: ScaleController HostID register (legacy backtest multi-pane bridge).
 function initPriceScaleControls(chartData) {
-  if (!chartData?.chart || typeof ScaleController === 'undefined') return;
-  const host = chartData.elements?.chartContainer;
+  if (typeof ScaleController === 'undefined' || !chartData) return;
   const ctx = chartData._context || chartData.context || 'live';
-  ScaleController.register(ctx, chartData.chart, host);
+  const charts = chartData.charts || null;
+  const els = chartData.elements || {};
+  const priceChart = charts?.price || chartData.chart;
+  if (priceChart) {
+    ScaleController.register({
+      context: ctx,
+      hostId: 'price',
+      chart: priceChart,
+      host: els.chartContainer || null,
+      allowLog: true,
+    });
+  }
+  if (charts?.wozduh) {
+    ScaleController.register({
+      context: ctx,
+      hostId: 'wozduh',
+      chart: charts.wozduh,
+      host: els.oscContainer || null,
+      allowLog: false,
+    });
+  }
+  if (charts?.rsx) {
+    ScaleController.register({
+      context: ctx,
+      hostId: 'rsx',
+      chart: charts.rsx,
+      host: els.rsxContainer || null,
+      allowLog: false,
+    });
+  }
 }
 
 function destroyChartInstance(chartData) {
@@ -878,7 +923,7 @@ function initMultiPaneCharts(context, containerId, options = {}) {
   const priceMargins = INDICATOR_CONFIG.price.priceScale?.scaleMargins || { top: 0.05, bottom: 0.22 };
   const volumeMargins = INDICATOR_CONFIG.price.volumeScale?.scaleMargins || { top: 0.82, bottom: 0 };
   priceChart.priceScale('right').applyOptions({
-    ...sharedRightPriceScaleOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic }),
+    ...sharedRightPriceScaleOptions('price'),
     scaleMargins: priceMargins,
   });
   priceChart.priceScale('volume').applyOptions({

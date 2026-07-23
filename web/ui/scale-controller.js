@@ -1,117 +1,250 @@
 /**
- * ScaleController — declarative price-scale modes (Core 3.0 Shot 10A / 11D).
- * SSOT: { isAuto, isLog } → localStorage → applyScaleMode(chart) → UI .active
- * Boot invariant (11D): autoScale defaults ON. Off only after user Y-gesture on price scale.
+ * ScaleController — ADR-020 HostID-based Y-scale owner.
+ * Prefs per hostId (shared across live/backtest UI). Bindings per context+hostId.
+ * scaleGroup is a dormant socket (default = hostId); no group apply yet.
+ * Log only when allowLog=true (price). Visibility must never reset prefs.
  */
-const ScaleController = (() => {
+(function (global) {
   'use strict';
 
-  // Shot 11D: bump key so stale {isAuto:false} from the old default cannot blank candles.
-  const STORAGE_KEY = 'chart_scale_prefs_v2';
-  const DEFAULT_STATE = Object.freeze({ isAuto: true, isLog: false });
+  const STORAGE_KEY = 'chart_scale_prefs_v3';
+  const STORAGE_KEY_LEGACY = 'chart_scale_prefs_v2';
+  const VERSION = 3;
+  const DEFAULT_PANE = Object.freeze({ isAuto: true, isLog: false });
 
-  /** @type {{ isAuto: boolean, isLog: boolean }} */
-  let state = { ...DEFAULT_STATE };
+  /** @type {Map<string, { isAuto: boolean, isLog: boolean }>} hostId → prefs */
+  let prefsByHost = new Map();
 
-  /** @type {Map<string, { chart: object, host: HTMLElement }>} */
+  /**
+   * @typedef {{ context: string, hostId: string, chart: object, host?: HTMLElement|null, allowLog: boolean, scaleGroup: string }} ScaleBinding
+   * @type {Map<string, ScaleBinding>}
+   */
   const bindings = new Map();
 
   let buttonsBound = false;
+  let storage = null;
 
-  function loadState() {
+  function bindingKey(context, hostId) {
+    return `${String(context || '')}\0${String(hostId || '')}`;
+  }
+
+  function resolveStorage(explicit) {
+    if (explicit) return explicit;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_STATE };
-      const parsed = JSON.parse(raw);
-      return {
-        // Default ON; only an explicit false (user gesture / toggle) disables Auto.
-        isAuto: parsed?.isAuto !== false,
-        isLog: parsed?.isLog === true,
-      };
+      if (typeof global.localStorage !== 'undefined' && global.localStorage) {
+        return global.localStorage;
+      }
     } catch {
-      return { ...DEFAULT_STATE };
+      /* */
     }
+    const map = new Map();
+    return {
+      getItem(k) { return map.has(k) ? map.get(k) : null; },
+      setItem(k, v) { map.set(k, String(v)); },
+      removeItem(k) { map.delete(k); },
+    };
+  }
+
+  function defaultPaneState() {
+    return { isAuto: true, isLog: false };
+  }
+
+  function clonePane(p) {
+    return {
+      isAuto: p?.isAuto !== false,
+      isLog: p?.isLog === true,
+    };
+  }
+
+  /** Migrate v2 global {isAuto,isLog} → v3 panes.price; else empty map with defaults on demand. */
+  function loadPrefsMap(store) {
+    const out = new Map();
+    try {
+      const raw = store.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.version === VERSION && parsed.panes && typeof parsed.panes === 'object') {
+          for (const [hostId, pane] of Object.entries(parsed.panes)) {
+            if (!hostId) continue;
+            out.set(hostId, clonePane(pane));
+          }
+          return out;
+        }
+      }
+      const legacy = store.getItem(STORAGE_KEY_LEGACY);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        out.set('price', {
+          isAuto: parsed?.isAuto !== false,
+          isLog: parsed?.isLog === true,
+        });
+      }
+    } catch {
+      /* */
+    }
+    return out;
   }
 
   function persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        isAuto: !!state.isAuto,
-        isLog: !!state.isLog,
-      }));
+      const panes = {};
+      for (const [hostId, pane] of prefsByHost.entries()) {
+        panes[hostId] = clonePane(pane);
+      }
+      storage.setItem(STORAGE_KEY, JSON.stringify({ version: VERSION, panes }));
     } catch {
-      /* quota / private mode */
+      /* */
     }
   }
 
-  function getState() {
-    return { isAuto: !!state.isAuto, isLog: !!state.isLog };
+  function ensurePrefs(hostId) {
+    const id = String(hostId || '').trim();
+    if (!id) return defaultPaneState();
+    if (!prefsByHost.has(id)) {
+      prefsByHost.set(id, defaultPaneState());
+    }
+    return prefsByHost.get(id);
   }
 
-  function logMode() {
+  function resolveHostId(context, hostId) {
+    if (hostId != null && String(hostId).trim() !== '') return String(hostId).trim();
+    if (context === 'live' || context === 'backtest') return 'price';
+    if (context != null && String(context).trim() !== '') return String(context).trim();
+    return 'price';
+  }
+
+  /**
+   * @param {string} [_context] reserved for API symmetry; prefs are per hostId
+   * @param {string} [hostId]
+   */
+  function getState(_context, hostId) {
+    return clonePane(ensurePrefs(resolveHostId(_context, hostId)));
+  }
+
+  function logModeFor(pane, allowLog) {
     if (typeof LightweightCharts === 'undefined') return 0;
-    return state.isLog
+    const useLog = allowLog && pane.isLog;
+    return useLog
       ? LightweightCharts.PriceScaleMode.Logarithmic
       : LightweightCharts.PriceScaleMode.Normal;
   }
 
-  /**
-   * Sole chart binder: reads SSOT and applies LWC right price scale options.
-   * @param {object} chart LWC IChartApi
-   */
-  function applyScaleMode(chart) {
+  function applyScaleModeToChart(chart, pane, allowLog) {
     if (!chart?.priceScale) return;
+    const p = clonePane(pane);
     try {
       chart.priceScale('right').applyOptions({
-        autoScale: !!state.isAuto,
-        mode: logMode(),
+        autoScale: !!p.isAuto,
+        mode: logModeFor(p, !!allowLog),
       });
     } catch (err) {
-      console.warn('[ScaleController] applyScaleMode failed:', err);
+      try {
+        console.warn('[ScaleController] applyScaleMode failed:', err);
+      } catch {
+        /* */
+      }
     }
   }
 
+  function applyBinding(binding) {
+    if (!binding?.chart) return;
+    applyScaleModeToChart(binding.chart, ensurePrefs(binding.hostId), binding.allowLog);
+  }
+
   function applyAll() {
-    bindings.forEach(({ chart }) => applyScaleMode(chart));
+    bindings.forEach((b) => applyBinding(b));
     syncUI();
   }
 
   function syncUI() {
+    if (typeof document === 'undefined') return;
     document.querySelectorAll('.scale-controls').forEach((controls) => {
+      const hostId = String(controls.getAttribute('data-scale-pane') || 'price').trim();
+      const pane = ensurePrefs(hostId);
       const autoBtn = controls.querySelector('[data-action="auto"]');
       const logBtn = controls.querySelector('[data-action="log"]');
-      if (autoBtn) autoBtn.classList.toggle('active', !!state.isAuto);
-      if (logBtn) logBtn.classList.toggle('active', !!state.isLog);
+      if (autoBtn) autoBtn.classList.toggle('active', !!pane.isAuto);
+      if (logBtn) {
+        logBtn.classList.toggle('active', !!pane.isLog);
+        const allow = controls.getAttribute('data-allow-log') !== 'false';
+        logBtn.hidden = !allow;
+      }
     });
   }
 
-  function setState(patch, { apply = true } = {}) {
+  function setPanePrefs(hostId, patch, { apply = true } = {}) {
+    const id = String(hostId || '').trim();
+    if (!id) return false;
+    const cur = ensurePrefs(id);
+    const next = clonePane(cur);
     if (patch && typeof patch === 'object') {
       if (Object.prototype.hasOwnProperty.call(patch, 'isAuto')) {
-        state.isAuto = !!patch.isAuto;
+        next.isAuto = !!patch.isAuto;
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'isLog')) {
-        state.isLog = !!patch.isLog;
+        next.isLog = !!patch.isLog;
       }
     }
+    if (next.isAuto === cur.isAuto && next.isLog === cur.isLog) {
+      if (apply) {
+        bindings.forEach((b) => {
+          if (b.hostId === id) applyBinding(b);
+        });
+        syncUI();
+      }
+      return false;
+    }
+    prefsByHost.set(id, next);
     persist();
-    if (apply) applyAll();
-    else syncUI();
+    if (apply) {
+      bindings.forEach((b) => {
+        if (b.hostId === id) applyBinding(b);
+      });
+      syncUI();
+    }
+    return true;
   }
 
-  function toggleAuto() {
-    setState({ isAuto: !state.isAuto });
+  function toggleAuto(context, hostId) {
+    const resolved = resolveHostId(context, hostId);
+    const pane = ensurePrefs(resolved);
+    return setPanePrefs(resolved, { isAuto: !pane.isAuto });
   }
 
-  function toggleLog() {
-    setState({ isLog: !state.isLog });
+  /** allowLog from binding; else DOM data-allow-log; else false (no HostID hardcodes). */
+  function allowLogFor(hostId) {
+    let seen = false;
+    let allow = false;
+    bindings.forEach((b) => {
+      if (b.hostId !== hostId) return;
+      seen = true;
+      allow = !!b.allowLog;
+    });
+    if (seen) return allow;
+    if (typeof document !== 'undefined') {
+      const el = document.querySelector(`.scale-controls[data-scale-pane="${hostId}"]`);
+      if (el) return el.getAttribute('data-allow-log') !== 'false';
+    }
+    return false;
   }
 
-  function readChartAutoScale(chart) {
+  function toggleLog(context, hostId) {
+    const resolved = resolveHostId(context, hostId);
+    if (!allowLogFor(resolved)) return false;
+    const pane = ensurePrefs(resolved);
+    return setPanePrefs(resolved, { isLog: !pane.isLog });
+  }
+
+  /** @deprecated Prefer setPanePrefs / toggle*; kept for paint paths that patched global state. */
+  function setState(patch, opts) {
+    return setPanePrefs('price', patch, opts);
+  }
+
+  function readChartAutoScale(chart, fallbackAuto) {
     try {
       return chart.priceScale('right').options().autoScale !== false;
     } catch {
-      return !!state.isAuto;
+      return !!fallbackAuto;
     }
   }
 
@@ -131,25 +264,24 @@ const ScaleController = (() => {
     return clientX >= rect.right - scaleW;
   }
 
-  /**
-   * When the user drags/wheels the right price axis, LWC turns autoScale off.
-   * Sync SSOT + button highlight on pointerup / wheel (no setInterval).
-   */
-  function attachManualScaleWatch(context, chart, host) {
-    if (!host || !chart || host._scaleWatchBound) return;
+  function attachManualScaleWatch(binding) {
+    const { host, chart, hostId, context } = binding;
+    if (!host || !chart) return;
+    if (host._scaleWatchBound) {
+      try { host._scaleWatchDispose?.(); } catch { /* */ }
+    }
     host._scaleWatchBound = true;
 
     let draggingScale = false;
 
     const syncAutoFromChart = () => {
-      const binding = bindings.get(context);
-      const active = binding?.chart || chart;
+      const key = bindingKey(context, hostId);
+      const active = bindings.get(key)?.chart || chart;
       if (!active) return;
-      const autoOn = readChartAutoScale(active);
-      if (state.isAuto === autoOn) return;
-      state.isAuto = autoOn;
-      persist();
-      syncUI();
+      const pane = ensurePrefs(hostId);
+      const autoOn = readChartAutoScale(active, pane.isAuto);
+      if (pane.isAuto === autoOn) return;
+      setPanePrefs(hostId, { isAuto: autoOn });
     };
 
     const onMouseDown = (e) => {
@@ -162,7 +294,7 @@ const ScaleController = (() => {
     const onDblClick = (e) => {
       if (!isPointerOnPriceScale(host, chart, e.clientX)) return;
       e.stopPropagation();
-      setState({ isAuto: true });
+      setPanePrefs(hostId, { isAuto: true });
     };
     const onPointerEnd = () => {
       if (!draggingScale) return;
@@ -187,6 +319,7 @@ const ScaleController = (() => {
   }
 
   function bindButtons() {
+    if (typeof document === 'undefined') return;
     if (buttonsBound) {
       syncUI();
       return;
@@ -197,59 +330,133 @@ const ScaleController = (() => {
         const btn = e.target.closest('[data-action]');
         if (!btn || !controls.contains(btn)) return;
         e.stopPropagation();
+        const context = String(controls.getAttribute('data-scale-context') || 'live');
+        const hostId = String(controls.getAttribute('data-scale-pane') || 'price');
         const action = btn.getAttribute('data-action');
-        if (action === 'auto') toggleAuto();
-        else if (action === 'log') toggleLog();
+        if (action === 'auto') toggleAuto(context, hostId);
+        else if (action === 'log') toggleLog(context, hostId);
       });
     });
     syncUI();
   }
 
   /**
-   * Register a price chart for scale binding (call after createChart).
-   * @param {string} context 'live' | 'backtest'
-   * @param {object} chart
-   * @param {HTMLElement} host LWC host element (price pane)
+   * @param {object} args
+   * @param {string} args.context
+   * @param {string} args.hostId
+   * @param {object} args.chart
+   * @param {HTMLElement} [args.host]
+   * @param {boolean} [args.allowLog]
+   * @param {string} [args.scaleGroup] dormant socket; default hostId
    */
-  function register(context, chart, host) {
-    if (!context || !chart) return;
-    const prev = bindings.get(context);
+  function registerNew(args) {
+    const context = String(args.context || 'live');
+    const hostId = String(args.hostId || '').trim();
+    const chart = args.chart;
+    if (!hostId || !chart) return;
+    const allowLog = args.allowLog === true;
+    const scaleGroup = String(args.scaleGroup || hostId).trim() || hostId;
+    const host = args.host || null;
+    const key = bindingKey(context, hostId);
+
+    const prev = bindings.get(key);
     if (prev?.host?._scaleWatchDispose) {
-      try { prev.host._scaleWatchDispose(); } catch { /* noop */ }
+      try { prev.host._scaleWatchDispose(); } catch { /* */ }
     }
-    bindings.set(context, { chart, host });
-    applyScaleMode(chart);
-    if (host) attachManualScaleWatch(context, chart, host);
+
+    ensurePrefs(hostId);
+    // Log disallowed panes never keep isLog true in applied mode (prefs may still store false).
+    if (!allowLog) {
+      const p = ensurePrefs(hostId);
+      if (p.isLog) {
+        p.isLog = false;
+        prefsByHost.set(hostId, clonePane(p));
+        persist();
+      }
+    }
+
+    const binding = { context, hostId, chart, host, allowLog, scaleGroup };
+    bindings.set(key, binding);
+    applyBinding(binding);
+    if (host) attachManualScaleWatch(binding);
     syncUI();
   }
 
-  function unregister(context) {
-    const prev = bindings.get(context);
-    if (prev?.host?._scaleWatchDispose) {
-      try { prev.host._scaleWatchDispose(); } catch { /* noop */ }
+  /**
+   * Dual API:
+   * - register({ context, hostId, chart, host, allowLog, scaleGroup })
+   * - register(context, chart, host) legacy → hostId 'price', allowLog true
+   */
+  function register(arg1, arg2, arg3) {
+    if (arg1 && typeof arg1 === 'object' && arg1.chart && arg1.hostId) {
+      registerNew(arg1);
+      return;
     }
-    bindings.delete(context);
+    registerNew({
+      context: arg1 || 'live',
+      hostId: 'price',
+      chart: arg2,
+      host: arg3,
+      allowLog: true,
+    });
   }
 
-  function init() {
-    state = loadState();
+  function unregister(context, hostId) {
+    const key = hostId != null
+      ? bindingKey(context, hostId)
+      : bindingKey(context, 'price');
+    const prev = bindings.get(key);
+    if (prev?.host?._scaleWatchDispose) {
+      try { prev.host._scaleWatchDispose(); } catch { /* */ }
+    }
+    bindings.delete(key);
+  }
+
+  function init(options = {}) {
+    storage = resolveStorage(options.storage);
+    prefsByHost = loadPrefsMap(storage);
     bindButtons();
+    syncUI();
   }
 
-  return {
+  /** @private tests */
+  function _resetForTests(options = {}) {
+    bindings.forEach((b) => {
+      if (b?.host?._scaleWatchDispose) {
+        try { b.host._scaleWatchDispose(); } catch { /* */ }
+      }
+    });
+    bindings.clear();
+    buttonsBound = false;
+    storage = resolveStorage(options.storage);
+    prefsByHost = loadPrefsMap(storage);
+  }
+
+  const ScaleController = {
     init,
     register,
     unregister,
-    applyScaleMode,
+    applyScaleMode: (chart) => {
+      applyScaleModeToChart(chart, ensurePrefs('price'), true);
+    },
     applyAll,
     getState,
     setState,
+    setPanePrefs,
     toggleAuto,
     toggleLog,
     syncUI,
     isPointerOnPriceScale,
     priceScaleWidth,
+    VERSION,
+    STORAGE_KEY,
+    STORAGE_KEY_LEGACY,
+    _resetForTests,
+    _ensurePrefs: ensurePrefs,
   };
-})();
 
-window.ScaleController = ScaleController;
+  global.ScaleController = ScaleController;
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ScaleController;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);

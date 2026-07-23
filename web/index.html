@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=4.0.1" />
+  <link rel="stylesheet" href="/style.css?v=4.0.2" />
   <style>
     :root {
       --tv-bg: #131722;
@@ -1336,7 +1336,7 @@
         <div class="pane-label" id="volume-label">Vol<span class="val" id="volume-val">—</span></div>
         <div class="chart-legend" data-pane="price" data-context="live"></div>
         <div id="price-chart" class="lwc-host"></div>
-        <div class="scale-controls" data-scale-context="live" aria-label="Price scale controls">
+        <div class="scale-controls" data-scale-context="live" data-scale-pane="price" data-allow-log="true" aria-label="Price scale controls">
           <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
           <button type="button" class="scale-btn scale-btn--log" data-action="log" title="Logarithmic scale">Log</button>
         </div>
@@ -1348,6 +1348,9 @@
       <div class="chart-wrap osc-wrap" id="osc-wrap">
         <div class="chart-legend" data-pane="wozduh" data-context="live"></div>
         <div id="wozduh-chart" class="lwc-host"></div>
+        <div class="scale-controls" data-scale-context="live" data-scale-pane="wozduh" data-allow-log="false" aria-label="Wozduh scale controls">
+          <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
+        </div>
         <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
           <!-- Live: SettingsRenderer mounts checkboxes from DDR manifest (configurable). -->
         </div>
@@ -1355,6 +1358,9 @@
       <div class="chart-wrap rsx-wrap" id="rsx-wrap">
         <div class="chart-legend" data-pane="rsx" data-context="live"></div>
         <div id="rsx-chart" class="lwc-host"></div>
+        <div class="scale-controls" data-scale-context="live" data-scale-pane="rsx" data-allow-log="false" aria-label="RSX scale controls">
+          <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
+        </div>
         <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
           <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
           <div class="setting-row">
@@ -1471,7 +1477,7 @@
             <div class="chart-wrap chart-wrapper" id="bt-price-wrap">
               <div class="chart-legend" data-pane="price" data-context="backtest"></div>
               <div id="bt-price-chart" class="lwc-host"></div>
-              <div class="scale-controls" data-scale-context="backtest" aria-label="Price scale controls">
+              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="price" data-allow-log="true" aria-label="Price scale controls">
                 <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
                 <button type="button" class="scale-btn scale-btn--log" data-action="log" title="Logarithmic scale">Log</button>
               </div>
@@ -1481,6 +1487,9 @@
             <div class="chart-wrap osc-wrap" id="bt-osc-wrap">
               <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
               <div id="bt-wozduh-chart" class="lwc-host"></div>
+              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="wozduh" data-allow-log="false" aria-label="Wozduh scale controls">
+                <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
+              </div>
               <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
                 <!-- Backtest: legacy static menu still required until BT DDR cutover. -->
                 <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
@@ -1497,6 +1506,9 @@
             <div class="chart-wrap rsx-wrap" id="bt-rsx-wrap">
               <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
               <div id="bt-rsx-chart" class="lwc-host"></div>
+              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="rsx" data-allow-log="false" aria-label="RSX scale controls">
+                <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
+              </div>
               <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
               <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
                 <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
@@ -1788,8 +1800,8 @@
   <script src="/render-scheduler.js?v=3.5.0"></script>
   <!-- Legacy God Objects quarantined (Project Renaissance) -->
   <!-- <script src="/adapter.legacy.js?v=3.1.0" defer></script> -->
-  <script src="/ui/scale-controller.js?v=3.4.1" defer></script>
-  <script src="/chart-core.js?v=3.4.4" defer></script>
+  <script src="/ui/scale-controller.js?v=4.0.0" defer></script>
+  <script src="/chart-core.js?v=4.0.0" defer></script>
   <script src="/ui/viewport-manager.js?v=3.4.4" defer></script>
   <script src="/ui/chart-projection.js?v=3.1.0" defer></script>
   <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>

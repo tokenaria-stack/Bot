@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-020 / #91 P1 — ScaleController HostID (Jul 2026) ✅
+
+- Generic `register({ context, hostId, chart, allowLog, scaleGroup? })`; v3 prefs migrate from v2 price global.
+- Price Auto+Log; footers Auto-only; prefs survive hide/show. Debt **#91** P1. Regression: `web/scale_controller_test.js`.
+- Corrections: `toggleLog` gated by binding/`data-allow-log` (no hostId hardcode); prefs keyed by hostId across contexts; dormant `scaleGroup` only.
+
 ## Phase ADR-019 / #90 P5 — Fullscreen UX (Jul 2026) ✅
 
 - Dblclick empty LWC plot → `PaneLayout.toggleFullscreen`; Escape / dblclick again clears.
