@@ -352,15 +352,17 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - Ind menu is dumb UI generated from catalog (no hardcoded RSX/Wozduh). Optional `renderOptions.paneTitle`; else short-id UPPER / Title case.
 - Persist after every mutation. `subscribe` for Ind checkbox sync.
 
-**Deferred (same ADR, later phases):** fullscreen *enter* (dblclick) UX polish; `ChartAdapter.setHostActive` + Store-snapshot resume. HostID→wrap map may move into Manifest when N footers grow (STACKS is fine today).
+**Deferred (same ADR, later phases):** `ChartAdapter.setHostActive` + Store-snapshot resume. HostID→wrap map may move into Manifest when N footers grow (STACKS is fine today).
 
 **Phase 2 (Grid apply):** `LayoutController` builds `grid-template-rows` (`minmax(120px,1fr)` + `4px` gutters + footer px). Dynamic splitters only between visible panes. Ind / legend eye → `PaneLayout.setVisible` / `toggle` → layout apply + LWC resize. Unknown HostIDs without a wrap are skipped (no brick).
 
 **Phase 3 (height drag):** Splitter above footer `hostId` adjusts that footer's px only (drag down → shorter, drag up → taller). Price stays `1fr`. Mid-drag updates tracks only (no gutter rebuild). Chart resize coalesced to one `requestAnimationFrame`. `PaneLayout.setFooterHeight` persists. Stack budget keeps price ≥ 120px.
 
-**Phase 4 (reorder):** Legend header drag → `PaneLayout.moveHostBefore` / `setOrder` only. Hidden hosts keep relative slots. Drop commits once (no DOM ordering SSOT). `fullscreenPaneId` unchanged by reorder; apply toggles `.fullscreen-pane` from state; Escape clears via `setFullscreen(null)`.
+**Phase 4 (reorder):** Legend header drag → `PaneLayout.moveHostBefore` / `setOrder` only. Hidden hosts keep relative slots. Drop commits once (no DOM ordering SSOT). `fullscreenPaneId` unchanged by reorder.
 
-**Rejected:** Weighted `fr` footers (squashes price); trusting localStorage without ∩ manifest; Ind HTML hardcodes; deep render pause in Phase 1; server layout FSM; static HTML splitters between fixed neighbors.
+**Phase 5 (fullscreen):** Dblclick empty LWC plot chrome → `toggleFullscreen(paneId)`. Ignore legends / scales / splitters / controls. Escape / second dblclick → `setFullscreen(null)`. LayoutController only toggles `.fullscreen-pane` from state; order/heights/visible untouched. One rAF resize after apply.
+
+**Rejected:** Weighted `fr` footers (squashes price); trusting localStorage without ∩ manifest; Ind HTML hardcodes; deep render pause in Phase 1; server layout FSM; static HTML splitters between fixed neighbors; DOM-owned fullscreen class without PaneLayout.
 
 **Consequences:** Debt **#90**. Modules: `web/ui/pane-layout.js`, `web/ui/layout-controller.js`. Regressions: `web/pane_layout_test.js`, `web/layout_controller_test.js`. Instance: `window.paneLayout` after DDR mount.
 

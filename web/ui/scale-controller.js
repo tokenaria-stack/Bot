@@ -247,6 +247,8 @@ const ScaleController = (() => {
     toggleAuto,
     toggleLog,
     syncUI,
+    isPointerOnPriceScale,
+    priceScaleWidth,
   };
 })();
 

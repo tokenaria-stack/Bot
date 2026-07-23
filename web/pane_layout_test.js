@@ -240,6 +240,21 @@ test('setOrder permutes; moveHostBefore among visible preserves hidden slots', (
   assert.strictEqual(layout.getFullscreen(), 'rsx');
 });
 
+test('toggleFullscreen enters and exits; preserves order/heights/visible', () => {
+  const layout = PaneLayout.create({ storage: memoryStorage() });
+  layout.init({ manifest: sampleManifest() });
+  layout.setFooterHeight('rsx', 220);
+  const before = layout.getState();
+  assert.strictEqual(layout.toggleFullscreen('rsx'), true);
+  assert.strictEqual(layout.getFullscreen(), 'rsx');
+  assert.deepStrictEqual(layout.getState().order, before.order);
+  assert.deepStrictEqual(layout.getState().visible, before.visible);
+  assert.strictEqual(layout.getState().footerHeights.rsx, 220);
+  assert.strictEqual(layout.toggleFullscreen('rsx'), true);
+  assert.strictEqual(layout.getFullscreen(), null);
+  assert.strictEqual(layout.getState().footerHeights.rsx, 220);
+});
+
 test('price allowed as fullscreen target', () => {
   const layout = PaneLayout.create({ storage: memoryStorage() });
   layout.init({ manifest: sampleManifest() });

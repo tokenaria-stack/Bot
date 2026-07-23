@@ -1,7 +1,7 @@
 /**
- * LayoutController — ADR-019 Phase 2–4: CSS Grid geometry driven by PaneLayout.
+ * LayoutController — ADR-019 Phase 2–5: CSS Grid geometry driven by PaneLayout.
  * Price track is always 1fr; footers use footerHeights (px). Dynamic gutters only
- * between visible panes. Height drag + legend reorder mutate PaneLayout only.
+ * between visible panes. Height drag + legend reorder + fullscreen from PaneLayout.
  * No setHostActive here.
  */
 (function (global) {
@@ -9,6 +9,27 @@
 
   const GUTTER_PX = 4;
   const PRICE_MIN_PX = 120;
+  const TIME_SCALE_HIT_PX = 28;
+  const FULLSCREEN_IGNORE_SEL = [
+    'button',
+    'input',
+    'select',
+    'textarea',
+    'a',
+    'label',
+    '.chart-legend',
+    '.pane-splitter',
+    '.scale-controls',
+    '.indicator-settings-menu',
+    '.visibility-toggle-btn',
+    '.settings-toggle-btn',
+    '#orderflow-buffer',
+    '#timeline-sync-badge',
+    '.ruler-shade',
+    '.ruler-tooltip',
+    '.navigator-popup',
+    '.popup-container',
+  ].join(',');
 
   /** @type {Record<string, { stackId: string, priceId: string, hostWraps: Record<string,string>, chartHosts: Record<string,string> }>} */
   const STACKS = {
@@ -158,6 +179,70 @@
       if (clientY < rect.top + rect.height / 2) return id;
     }
     return null;
+  }
+
+  function isOnTimeScale(host, clientY) {
+    if (!host) return false;
+    const rect = host.getBoundingClientRect();
+    return clientY >= rect.bottom - TIME_SCALE_HIT_PX;
+  }
+
+  function isOnPriceScale(host, context, clientX) {
+    if (!host) return false;
+    const wrap = host.closest?.('.chart-wrap');
+    const pane = wrap?.id?.includes('price')
+      ? 'price'
+      : (wrap?.dataset?.paneHost || 'price');
+    let chart = null;
+    if (typeof ChartAdapter !== 'undefined' && ChartAdapter.getChart) {
+      chart = ChartAdapter.getChart(context === 'live' ? 'live' : context, pane);
+    }
+    if (typeof ScaleController !== 'undefined' && ScaleController.isPointerOnPriceScale) {
+      return ScaleController.isPointerOnPriceScale(host, chart, clientX);
+    }
+    const rect = host.getBoundingClientRect();
+    return clientX >= rect.right - 56;
+  }
+
+  function paneIdFromWrap(context, wrap) {
+    const cfg = STACKS[context];
+    if (!cfg || !wrap) return null;
+    if (wrap.id === cfg.priceId) return 'price';
+    if (wrap.dataset.paneHost) return wrap.dataset.paneHost;
+    const legend = wrap.querySelector('.chart-legend[data-pane]');
+    const fromLegend = legend?.dataset?.pane;
+    if (fromLegend && fromLegend !== 'price') return fromLegend;
+    return null;
+  }
+
+  function bindFullscreenToggle(context) {
+    const cfg = STACKS[context];
+    if (!cfg || typeof document === 'undefined') return;
+    const stack = document.getElementById(cfg.stackId);
+    if (!stack || stack.dataset.fullscreenBound === '1') return;
+    stack.dataset.fullscreenBound = '1';
+
+    stack.addEventListener('dblclick', (e) => {
+      if (!paneLayout || typeof paneLayout.toggleFullscreen !== 'function') return;
+      if (heightDrag || reorderDrag) return;
+
+      const wrap = e.target.closest?.('.chart-wrap');
+      if (!wrap || !stack.contains(wrap)) return;
+      if (e.target.closest?.(FULLSCREEN_IGNORE_SEL)) return;
+
+      const host = wrap.querySelector('.lwc-host');
+      // Empty plot chrome only: event must originate from the LWC host (canvas/plot).
+      if (!host || !(e.target === host || host.contains(e.target))) return;
+      if (isOnPriceScale(host, context, e.clientX)) return;
+      if (isOnTimeScale(host, e.clientY)) return;
+
+      const paneId = paneIdFromWrap(context, wrap);
+      if (!paneId) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      paneLayout.toggleFullscreen(paneId);
+    });
   }
 
   function bindFooterReorder(context, hostId, legendEl) {
@@ -313,6 +398,7 @@
     if (!stack) return;
 
     stack.classList.add('charts-stack--grid');
+    stack.classList.toggle('charts-stack--fullscreen', !!state.fullscreenPaneId);
     const footers = visibleHostIds(state, cfg.hostWraps);
     stack.style.display = 'grid';
     stack.style.gridTemplateColumns = 'minmax(0, 1fr)';
@@ -323,7 +409,6 @@
       priceEl.style.display = '';
       priceEl.style.gridRow = '1';
       priceEl.hidden = false;
-      // Fullscreen class is orthogonal to order; preserve if PaneLayout says so.
       priceEl.classList.toggle('fullscreen-pane', state.fullscreenPaneId === 'price');
     }
 
@@ -363,6 +448,8 @@
       const legend = wrap.querySelector('.chart-legend');
       if (legend) bindFooterReorder(context, hostId, legend);
     }
+
+    bindFullscreenToggle(context);
   }
 
   function forceChartResize(context) {
@@ -411,6 +498,7 @@
     applyStack('live', state);
     applyStack('backtest', state);
     syncLegendEyes(state);
+    document.body?.classList.toggle('is-pane-fullscreen', !!state.fullscreenPaneId);
     scheduleResize();
   }
 

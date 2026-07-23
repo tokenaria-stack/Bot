@@ -144,6 +144,11 @@ const ToolbarController = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (window.paneLayout && typeof window.paneLayout.getFullscreen === 'function'
+        && window.paneLayout.getFullscreen()) {
+        window.paneLayout.setFullscreen(null);
+        return;
+      }
       if (document.querySelector('.fullscreen-pane')) {
         if (window.paneLayout && typeof window.paneLayout.setFullscreen === 'function') {
           window.paneLayout.setFullscreen(null);

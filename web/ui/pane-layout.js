@@ -1,7 +1,7 @@
 /**
  * PaneLayout — ADR-019 FE SSOT for footer pane membership / order / heights / fullscreen.
  * Phase 1: state + persist ∩ manifest + Ind menu.
- * Phase 2–4: LayoutController reads this state for CSS Grid, heights, and reorder.
+ * Phase 2–5: LayoutController reads this state for CSS Grid, heights, reorder, fullscreen.
  *
  * Price is always present and is not a HostID. footerHeights are pixels only (no price key).
  */
@@ -421,6 +421,14 @@
       return state.fullscreenPaneId;
     }
 
+    /** Toggle fullscreen for a pane id (`price` or footer HostID). */
+    function toggleFullscreen(hostId) {
+      const id = hostId == null || hostId === '' ? null : String(hostId);
+      if (id == null) return setFullscreen(null);
+      if (state.fullscreenPaneId === id) return setFullscreen(null);
+      return setFullscreen(id);
+    }
+
     function subscribe(listener) {
       if (typeof listener !== 'function') return () => {};
       listeners.add(listener);
@@ -507,6 +515,7 @@
       moveHostBefore,
       subscribe,
       setFullscreen,
+      toggleFullscreen,
       getFullscreen,
       getState,
       mountIndMenu,
