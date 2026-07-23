@@ -71,6 +71,9 @@ type Runtime struct {
 	pendingDropped        int
 	onTimelineHealing     func()
 	onTimelinePublishable func()
+	// healClosedFetcher optional test/prod hook for Exact closed-range fill (ADR-017).
+	// nil → exchangeClient.FetchClosedRangePagesExact.
+	healClosedFetcher func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error)
 }
 
 type closedBarTelemetry struct {
@@ -541,6 +544,18 @@ func (m *Runtime) drainPendingTicks() []exchange.WsTick {
 	out := make([]exchange.WsTick, len(m.pendingTicks))
 	copy(out, m.pendingTicks)
 	m.pendingTicks = m.pendingTicks[:0]
+	return out
+}
+
+// snapshotPendingTicks copies the pending buffer without draining (heal probe).
+func (m *Runtime) snapshotPendingTicks() []exchange.WsTick {
+	m.pendingMu.Lock()
+	defer m.pendingMu.Unlock()
+	if len(m.pendingTicks) == 0 {
+		return nil
+	}
+	out := make([]exchange.WsTick, len(m.pendingTicks))
+	copy(out, m.pendingTicks)
 	return out
 }
 

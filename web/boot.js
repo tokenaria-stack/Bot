@@ -88,15 +88,12 @@
 	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
-	/** Phase D: wait for server timeline_publishable before loadDashboard. */
-	let awaitingTimelinePublishable = false;
-	let timelineHealSafetyTimer = null;
-	/** Browser↔bot reconnect may not imply Binance heal — shorter safety. */
-	const TIMELINE_HEAL_SAFETY_MS = 75000;
-	const TIMELINE_HEAL_BROWSER_SAFETY_MS = 8000;
 	/** Debt #69A: throttle return-to-live hydrate after history-window prune. */
 	let lastReturnToLiveAt = 0;
 	const RETURN_TO_LIVE_COOLDOWN_MS = 2000;
+
+  /** ADR-018 owner — constructed after helpers exist (see initTimelineRecovery). */
+  let timelineRecovery = null;
 
   /** Core 4.5: bind current TF bar duration to the store so appendTick can detect gaps. */
   function syncStoreTfInterval() {
@@ -322,7 +319,7 @@
     projContPending = {
       armedAt: Date.now(),
       rest: restDiag,
-      healingAtArm: !!awaitingTimelinePublishable,
+      healingAtArm: !!(timelineRecovery?.isHealing?.()),
     };
   }
 
@@ -352,7 +349,7 @@
     const rest = pending.rest || {};
     const elapsedMs = Date.now() - pending.armedAt;
     const ADR015_MAX_MS = 2000;
-    const healing = !!awaitingTimelinePublishable || !!window.__isDashboardLoading;
+    const healing = !!(timelineRecovery?.isHealing?.()) || !!window.__isDashboardLoading;
     const sameOpen = Number(rest.lastOpenSec) === wsOpen;
 
     if (healing || pending.healingAtArm) {
@@ -658,51 +655,50 @@
 
   function updateBufferingOverlay() {
     if (typeof ToolbarController === 'undefined') return;
-    // Keep overlay while awaiting server heal (do not clear on loadDashboard finally).
-    ToolbarController.setBuffering(!!awaitingTimelinePublishable || !!window.__isDashboardLoading);
+    // Dashboard hydrate only — timeline heal uses #timeline-sync-badge (ADR-018).
+    ToolbarController.setBuffering(!!window.__isDashboardLoading);
   }
 
-  /**
-   * Phase D: gap / healing → buffer + overlay; do NOT loadDashboard until publishable.
-   * @param {string} reason
-   * @param {{ safetyMs?: number }} [opts]
-   */
-  function beginAwaitTimelineHeal(reason, opts = {}) {
-    const safetyMs = Number.isFinite(opts.safetyMs) ? opts.safetyMs : TIMELINE_HEAL_SAFETY_MS;
-    if (projContPending) {
-      skipProjContADR015('timeline heal', { healReason: reason });
+  function enterTimelineHealing(reason) {
+    if (timelineRecovery) {
+      timelineRecovery.enter(reason);
+      return;
     }
+    // Fallback if script failed to load: buffer ticks only.
     beginLiveTickBuffer();
-    awaitingTimelinePublishable = true;
-    if (typeof ToolbarController !== 'undefined') ToolbarController.setBuffering(true);
-    console.warn('[Self-Healing] awaiting timeline_publishable...', { reason, safetyMs });
-    if (timelineHealSafetyTimer) clearTimeout(timelineHealSafetyTimer);
-    timelineHealSafetyTimer = setTimeout(() => {
-      timelineHealSafetyTimer = null;
-      if (!awaitingTimelinePublishable) return;
-      console.warn('[Self-Healing] timeline_publishable timeout — degraded loadDashboard', { reason });
-      awaitingTimelinePublishable = false;
-      loadDashboard();
-    }, safetyMs);
   }
 
   function onTimelineHealingFromServer() {
-    beginAwaitTimelineHeal('server timeline_healing');
+    enterTimelineHealing('server_timeline_healing');
   }
 
   function onTimelinePublishableFromServer() {
-    if (timelineHealSafetyTimer) {
-      clearTimeout(timelineHealSafetyTimer);
-      timelineHealSafetyTimer = null;
-    }
-    if (!awaitingTimelinePublishable) {
-      // Boot-storm / orphan ready: do not double loadDashboard (server should not heal on first Dial).
-      console.warn('[Self-Healing] timeline_publishable ignored (not awaiting)');
+    if (timelineRecovery) {
+      timelineRecovery.publishable();
       return;
     }
-    awaitingTimelinePublishable = false;
     if (window.__isDashboardLoading) return;
     loadDashboard();
+  }
+
+  function initTimelineRecovery() {
+    if (typeof TimelineRecovery === 'undefined' || !TimelineRecovery.create) {
+      console.warn('[Renaissance] TimelineRecovery module missing — heal UX degraded');
+      return;
+    }
+    timelineRecovery = TimelineRecovery.create({
+      watchdogMs: 25_000,
+      onEnter() {
+        if (projContPending) {
+          skipProjContADR015('timeline heal', { healReason: 'enter' });
+        }
+        beginLiveTickBuffer();
+      },
+      onRecovered() {
+        if (window.__isDashboardLoading) return;
+        loadDashboard();
+      },
+    });
   }
 
   function wsSubscribeTf(tf) {
@@ -903,7 +899,7 @@
       // Throttle: do not storm beginAwait; backend ingest gap / reconnect drives heal.
       if (!window.__isDashboardLoading && now - lastGapHealAt > GAP_HEAL_COOLDOWN_MS) {
         lastGapHealAt = now;
-        beginAwaitTimelineHeal('fe gapDetected');
+        enterTimelineHealing('fe_gapDetected');
       }
       return false;
     }
@@ -980,8 +976,8 @@
       onTimelinePublishable: onTimelinePublishableFromServer,
       // Browser↔bot reconnect ≠ Binance heal. Buffer + short safety; publishable wins if both drop.
       onReconnect: () => {
-        console.warn('[Self-Healing] browser WS reconnected — awaiting timeline / short safety');
-        beginAwaitTimelineHeal('browser ws reconnect', { safetyMs: TIMELINE_HEAL_BROWSER_SAFETY_MS });
+        console.warn('[Self-Healing] browser WS reconnected — entering timeline recovery');
+        enterTimelineHealing('browser_ws_reconnect');
       },
     });
   }
@@ -1103,6 +1099,7 @@
     installGlobalShims();
     installChartAdapterShims();
     initLiveRenderPipeline();
+    initTimelineRecovery();
 
     safeInit('DDR factory', initDDRFactory);
     safeInit('Hydration orchestrator', initHydrationOrchestrator);

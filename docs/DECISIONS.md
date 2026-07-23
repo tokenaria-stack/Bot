@@ -291,3 +291,50 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Consequences:** Soft settings apply publishes live-forming Cur; first WS tick no longer cliffs. Debt **#87** closed. Regression: `market/replay_lifecycle_test.go`.
 
+---
+
+## ADR-017 — Timeline Publishability Contract
+
+**Context:** After offline Binance reconnect, charts showed a one-bar hole (e.g. `14:03` then `14:05`). Probes proved: Cap+settle-grace REST ends at `14:03`; pending holds only `14:05`; `14:04` never existed in pending; ungated `applyTick` flush jumped the tip; `timeline_publishable` fired without post-flush continuity. FE painted the server `times[]` faithfully.
+
+**Decision:** A timeline may become publishable only after **all** heal mutations produce one contiguous Frame series:
+
+1. Cap REST (existing) → Cap-contiguous closed history.
+2. **Heal closed-gap fill (Exact):** if pending tip open skips ≥1 closed open after Frame tip, `FetchClosedRangePagesExact` for `[NextBarOpen(tip), PreviousBarOpen(pendingTip)]` — **without** `CapKlineEndToLastClosed(now)`. Proof of settlement: WS already has the later tip. Merge via `LoadHistoricalKlines` (no synthesis).
+3. Refuse flush while a pending tip jump remains.
+4. Flush pending with `applyTick` (not `ingestTipGap` — avoids reconcile recursion).
+5. Verify `framesSeriesContiguous` + pending empty → then `timeline_publishable`.
+
+**Rejected:** Replace flush `applyTick` with `ingestTipGap` — **Reason:** re-enters Reconcile with same Cap, loops/hangs. FE gap glue / interpolated candles — **Reason:** wrong ownership. Cap-only fill for the missing bar — **Reason:** settle grace still excludes bars the live tip has already proven closed.
+
+**Consequences:** Reconnect restores missing closed bars before live ticks attach. Debt **#88**. Regression: `market/timeline_heal_b3_test.go`. Buffering UX (double `timeline_healing`, 75s safety) remains a separate debt.
+
+---
+
+## ADR-018 — Timeline Recovery State (Frontend)
+
+**Context:** After ADR-017 made reconnect data contiguous, UX still felt stuck: every `timeline_healing` re-entered `beginAwaitTimelineHeal`, reset a 75s timer, and forced a full-screen Buffering overlay. Transport, timeline publishability, and UI buffering were mixed in `boot.js`.
+
+**Decision:** Frontend owns recovery presentation via a tiny state machine:
+
+- States: `LIVE` | `HEALING` only.
+- API: `enter(reason)`, `publishable()`, `isHealing()`.
+- Hooks: `onEnter` (e.g. start tick buffer), `onRecovered` (e.g. `loadDashboard`) — recovery does not know “dashboard.”
+- `enter` is idempotent: duplicates ignored; watchdog never reset.
+- Watchdog starts once on first enter (default 25s); diagnostic only (stalled badge + Retry).
+- UI: non-blocking `#timeline-sync-badge`; chart stays painted. Not `#orderflow-buffer`.
+- Server stays dumb (`timeline_healing` / `timeline_publishable` only). No server recovery FSM.
+
+**Ownership boundaries:**
+
+| Owner | Owns |
+|-------|------|
+| WS | transport |
+| TimelineRecovery | recovery lifecycle + sync badge + watchdog |
+| Dashboard (`boot.js`) | viewport reload via `onRecovered` |
+| Toolbar / hydrate | `#orderflow-buffer` for `__isDashboardLoading` only |
+
+**Rejected:** Multi-state reconnect ladders; server UX FSM; restarting timers on duplicate healing; heal using full-screen Buffering overlay.
+
+**Consequences:** Duplicate healing no longer extends wait; publishable exits immediately. Debt **#89**. Module: `web/timeline-recovery.js`. Regression: `web/timeline_recovery_test.js`.
+

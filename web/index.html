@@ -1098,6 +1098,51 @@
       padding: 1rem;
     }
 
+    /* ADR-018: non-blocking timeline heal badge (chart stays interactive). */
+    #timeline-sync-badge {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      z-index: 13;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      max-width: min(280px, 70%);
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid #2a2e39;
+      background: rgba(19, 23, 34, 0.92);
+      color: #d1d4dc;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    #timeline-sync-badge:not([hidden]) {
+      display: flex;
+    }
+    #timeline-sync-badge[hidden] {
+      display: none !important;
+    }
+    #timeline-sync-badge.is-stalled {
+      pointer-events: auto;
+      cursor: pointer;
+      border-color: #f7931a;
+      color: #f7931a;
+    }
+    #timeline-sync-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2962ff;
+      flex-shrink: 0;
+    }
+    #timeline-sync-badge.is-stalled::before {
+      background: #f7931a;
+    }
+
     @media (max-width: 768px) {
       .toolbar-meta { display: none; }
       .slim-header { gap: 16px; }
@@ -1264,6 +1309,7 @@
           <button type="button" class="scale-btn scale-btn--log" data-action="log" title="Logarithmic scale">Log</button>
         </div>
         <div id="orderflow-buffer">Buffering Order Flow data... Please wait.</div>
+        <div id="timeline-sync-badge" hidden aria-live="polite"></div>
         <div id="ruler-shade" class="ruler-shade"></div>
         <div id="ruler-tooltip" class="ruler-tooltip"></div>
       </div>
@@ -1721,6 +1767,7 @@
   <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>
   <script src="/api.js?v=3.1.0" defer></script>
   <script src="/ws.js?v=4.3.0" defer></script>
+  <script src="/timeline-recovery.js?v=1.0.0" defer></script>
   <script src="/ui/tabs-controller.js?v=3.1.0" defer></script>
   <script src="/ui/strategy-controller.js?v=3.1.0" defer></script>
   <script src="/ui/navigator-controller.js?v=3.1.0" defer></script>
@@ -1735,6 +1782,6 @@
   <script src="/ui/legend-renderer.js?v=4.0.2" defer></script>
   <script src="/ui/layout-controller.js?v=3.1.0" defer></script>
   <!-- <script src="/app.legacy.js?v=3.1.0" defer></script> -->
-  <script src="/boot.js?v=4.12.0-b22" defer></script>
+  <script src="/boot.js?v=4.13.0-b23" defer></script>
 </body>
 </html>

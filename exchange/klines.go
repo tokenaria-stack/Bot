@@ -116,13 +116,26 @@ const closedRangePageDelay = 150 * time.Millisecond
 // from fromMs is returned. Callers that need more must use FetchClosedRangePages.
 // Exchange holes are preserved as missing open_times — never invented.
 func (b *BinanceExchange) FetchClosedRange(symbol, interval string, fromMs, toMs int64) ([]Candle, error) {
+	return b.fetchClosedRange(symbol, interval, fromMs, toMs, true)
+}
+
+// FetchClosedRangeExact is heal-only: [fromMs, toMs] without CapKlineEndToLastClosed(now).
+// Caller must guarantee toMs is a fully closed bar open (e.g. PreviousBarOpen of a WS
+// forming tip). Used when settle grace still excludes bars that the live tip proves closed.
+func (b *BinanceExchange) FetchClosedRangeExact(symbol, interval string, fromMs, toMs int64) ([]Candle, error) {
+	return b.fetchClosedRange(symbol, interval, fromMs, toMs, false)
+}
+
+func (b *BinanceExchange) fetchClosedRange(symbol, interval string, fromMs, toMs int64, applyCap bool) ([]Candle, error) {
 	if b == nil || b.client == nil {
 		return nil, fmt.Errorf("futures client is not configured")
 	}
 	symbol = NormalizeFuturesSymbol(symbol)
 
-	if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
-		toMs = capped
+	if applyCap {
+		if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
+			toMs = capped
+		}
 	}
 	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, interval)
 	if fromMs < BinanceFuturesGenesisMs {
@@ -160,8 +173,19 @@ func (b *BinanceExchange) FetchClosedRange(symbol, interval string, fromMs, toMs
 // FetchClosedRangePages walks [fromMs, toMs] via repeated FetchClosedRange calls.
 // Still sterile: no synthesize, no SQLite writes. Rate-limited between pages.
 func (b *BinanceExchange) FetchClosedRangePages(symbol, interval string, fromMs, toMs int64) ([]Candle, error) {
-	if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
-		toMs = capped
+	return b.fetchClosedRangePages(symbol, interval, fromMs, toMs, true)
+}
+
+// FetchClosedRangePagesExact pages [fromMs, toMs] without Cap settle grace (ADR-017 heal fill).
+func (b *BinanceExchange) FetchClosedRangePagesExact(symbol, interval string, fromMs, toMs int64) ([]Candle, error) {
+	return b.fetchClosedRangePages(symbol, interval, fromMs, toMs, false)
+}
+
+func (b *BinanceExchange) fetchClosedRangePages(symbol, interval string, fromMs, toMs int64, applyCap bool) ([]Candle, error) {
+	if applyCap {
+		if capped, err := data.CapKlineEndToLastClosed(toMs, interval); err == nil {
+			toMs = capped
+		}
 	}
 	fromMs, toMs = alignKlineRangeMs(fromMs, toMs, interval)
 	if fromMs < BinanceFuturesGenesisMs {
@@ -174,7 +198,7 @@ func (b *BinanceExchange) FetchClosedRangePages(symbol, interval string, fromMs,
 	cursor := fromMs
 	all := make([]Candle, 0, maxKlinesLimit)
 	for cursor <= toMs {
-		page, err := b.FetchClosedRange(symbol, interval, cursor, toMs)
+		page, err := b.fetchClosedRange(symbol, interval, cursor, toMs, false) // already capped above if needed
 		if err != nil {
 			return nil, err
 		}

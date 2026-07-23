@@ -8,6 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-018 — TimelineRecovery UX (Jul 2026) ✅
+
+- FE owner: `web/timeline-recovery.js` (LIVE ↔ HEALING); idempotent `enter`; one-shot 25s watchdog.
+- Non-blocking `#timeline-sync-badge`; chart stays visible. Heal no longer drives `#orderflow-buffer`.
+- Debt **#89**. Regression: `web/timeline_recovery_test.js`.
+
+## Phase ADR-017 / B3.0 — Timeline Heal Continuity (Jul 2026) ✅
+
+- Root: Cap grace REST + pending tip jump + ungated flush → one-bar hole; publishable too early.
+- Fix: Exact closed-gap fill (`FetchClosedRangePagesExact`) before flush; publishable only after Frame contiguity.
+- Debt **#88**. Regression: `market/timeline_heal_b3_test.go`. Buffering 75s UX not in this phase.
+
 ## Probe dormancy — TipSSOT / ProjCont (Jul 2026)
 
 - After ADR-016, continuous `[TipSSOT]` / `[ProjCont]` runtime logs default **OFF**.
