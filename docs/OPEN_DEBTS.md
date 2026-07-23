@@ -19,7 +19,7 @@ Update this file when a debt opens, closes, or changes priority.
 | **87** | **Replay Lifecycle Ownership (ADR-016)** | ✅ | Frame `replayStreamingLocked`: closed→forming; never commit forming tip. History Cap stays closed-only |
 | **88** | **Timeline Publishability (ADR-017)** | ✅ **B3.0** | Exact closed-gap fill before pending flush; publishable only if Frame contiguous. Buffering UX separate |
 | **89** | **TimelineRecovery UX (ADR-018)** | ✅ | FE LIVE↔HEALING; idempotent enter; sync badge; 25s watchdog; boot wires only |
-| **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P3** | P1 SSOT+Ind. P2 Grid. P3 ✅ height drag + rAF resize. Next: reorder, fullscreen apply, `setHostActive` |
+| **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P4** | P1–P3 done. P4 ✅ legend reorder → `order` only. Next: fullscreen enter (dblclick), `setHostActive` |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | 🟡 | After #89 |
 | **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C done** | Bounded store + atomic prune + `windowMode` + WS/gap gates + **focal-time prune (69C)**. **69D** full sliding window + viewport-centered paint 🔜. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |

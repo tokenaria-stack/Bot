@@ -55,7 +55,7 @@ const LegendRenderer = (() => {
 
       const title = paneTitle(paneId);
       legendEl.innerHTML =
-        `<span class="pane-title" style="font-weight:bold;color:var(--tv-text);margin-right:8px;">${title}</span>`
+        `<span class="pane-title" title="Drag to reorder" style="font-weight:bold;color:var(--tv-text);margin-right:8px;cursor:grab;">${title}</span>`
         + `<button type="button" class="visibility-toggle-btn" data-target="${paneId}" title="Hide pane" aria-label="Toggle pane visibility">👁</button>`
         + `<button type="button" class="settings-toggle-btn ${toggleClass(paneId)}" data-target="${paneId}" title="Settings" aria-label="Settings">⚙</button>`;
 

@@ -1,8 +1,8 @@
 /**
- * LayoutController — ADR-019 Phase 2–3: CSS Grid geometry driven by PaneLayout.
+ * LayoutController — ADR-019 Phase 2–4: CSS Grid geometry driven by PaneLayout.
  * Price track is always 1fr; footers use footerHeights (px). Dynamic gutters only
- * between visible panes. Phase 3: splitter drag mutates footerHeights only.
- * No reorder / fullscreen / setHostActive here.
+ * between visible panes. Height drag + legend reorder mutate PaneLayout only.
+ * No setHostActive here.
  */
 (function (global) {
   'use strict';
@@ -104,7 +104,9 @@
   let paneLayout = null;
   let unsub = null;
   /** @type {null | { hostId: string, context: string, startY: number, startH: number, maxH: number, pointerId: number }} */
-  let drag = null;
+  let heightDrag = null;
+  /** @type {null | { hostId: string, context: string, pointerId: number, startY: number, started: boolean, beforeHostId: string|null }} */
+  let reorderDrag = null;
   let resizeRaf = 0;
   let dragApplyRaf = 0;
   let pendingDragHeight = null;
@@ -135,10 +137,106 @@
     scheduleResize();
   }
 
+  function clearReorderHighlights(context) {
+    const cfg = STACKS[context];
+    if (!cfg || typeof document === 'undefined') return;
+    for (const wrapId of Object.values(cfg.hostWraps)) {
+      document.getElementById(wrapId)?.classList.remove('is-reorder-source', 'is-reorder-target');
+    }
+  }
+
+  /** @returns {string|null} host to insert before, or null = end of visible list */
+  function dropBeforeHostAtY(context, clientY, movingHostId) {
+    const cfg = STACKS[context];
+    if (!cfg || !paneLayout) return null;
+    const state = paneLayout.getState();
+    const footers = visibleHostIds(state, cfg.hostWraps).filter((id) => id !== movingHostId);
+    for (const id of footers) {
+      const wrap = document.getElementById(cfg.hostWraps[id]);
+      if (!wrap || wrap.hidden) continue;
+      const rect = wrap.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) return id;
+    }
+    return null;
+  }
+
+  function bindFooterReorder(context, hostId, legendEl) {
+    if (!legendEl || legendEl.dataset.reorderBound === '1') return;
+    legendEl.dataset.reorderBound = '1';
+    legendEl.classList.add('chart-legend--reorderable');
+
+    legendEl.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.target.closest('button')) return;
+      if (!paneLayout || typeof paneLayout.moveHostBefore !== 'function') return;
+      if (heightDrag || reorderDrag) return;
+
+      e.preventDefault();
+      const wrap = legendEl.closest('.chart-wrap');
+      reorderDrag = {
+        hostId,
+        context,
+        pointerId: e.pointerId,
+        startY: e.clientY,
+        started: false,
+        beforeHostId: null,
+      };
+      try {
+        legendEl.setPointerCapture(e.pointerId);
+      } catch {
+        /* */
+      }
+
+      const onMove = (moveEvent) => {
+        if (!reorderDrag || moveEvent.pointerId !== reorderDrag.pointerId) return;
+        const dy = Math.abs(moveEvent.clientY - reorderDrag.startY);
+        if (!reorderDrag.started) {
+          if (dy < 5) return;
+          reorderDrag.started = true;
+          document.body?.classList.add('is-pane-reordering');
+          wrap?.classList.add('is-reorder-source');
+        }
+        const before = dropBeforeHostAtY(context, moveEvent.clientY, hostId);
+        if (before === reorderDrag.beforeHostId) return;
+        reorderDrag.beforeHostId = before;
+        clearReorderHighlights(context);
+        wrap?.classList.add('is-reorder-source');
+        if (before) {
+          const cfg = STACKS[context];
+          document.getElementById(cfg.hostWraps[before])?.classList.add('is-reorder-target');
+        }
+      };
+
+      const onUp = (upEvent) => {
+        if (reorderDrag && upEvent.pointerId !== reorderDrag.pointerId) return;
+        legendEl.removeEventListener('pointermove', onMove);
+        legendEl.removeEventListener('pointerup', onUp);
+        legendEl.removeEventListener('pointercancel', onUp);
+        try {
+          legendEl.releasePointerCapture(upEvent.pointerId);
+        } catch {
+          /* */
+        }
+        const session = reorderDrag;
+        reorderDrag = null;
+        document.body?.classList.remove('is-pane-reordering');
+        clearReorderHighlights(context);
+        if (!session?.started) return;
+        paneLayout.moveHostBefore(session.hostId, session.beforeHostId);
+        // subscribe → full apply + resize
+      };
+
+      legendEl.addEventListener('pointermove', onMove);
+      legendEl.addEventListener('pointerup', onUp);
+      legendEl.addEventListener('pointercancel', onUp);
+    });
+  }
+
   function bindSplitterDrag(gutter, context, hostId) {
     gutter.addEventListener('pointerdown', (e) => {
       if (e.button != null && e.button !== 0) return;
       if (!paneLayout || typeof paneLayout.setFooterHeight !== 'function') return;
+      if (reorderDrag) return;
       e.preventDefault();
       e.stopPropagation();
 
@@ -147,7 +245,7 @@
       const state = paneLayout.getState();
       const startH = Number(state.footerHeights?.[hostId]);
       const fallback = (typeof PaneLayout !== 'undefined' && PaneLayout.DEFAULT_FOOTER_HEIGHT_PX) || 180;
-      drag = {
+      heightDrag = {
         hostId,
         context,
         startY: e.clientY,
@@ -155,7 +253,7 @@
         maxH: maxFooterHeightFor(stack, state, hostId, cfg.hostWraps),
         pointerId: e.pointerId,
       };
-      pendingDragHeight = drag.startH;
+      pendingDragHeight = heightDrag.startH;
       try {
         gutter.setPointerCapture(e.pointerId);
       } catch {
@@ -164,26 +262,27 @@
       document.body?.classList.add('is-pane-resizing');
 
       const onMove = (moveEvent) => {
-        if (!drag || moveEvent.pointerId !== drag.pointerId) return;
-        const dy = moveEvent.clientY - drag.startY;
-        // Splitter sits above this footer: drag down → taller footer; price (1fr) shrinks.
+        if (!heightDrag || moveEvent.pointerId !== heightDrag.pointerId) return;
+        const dy = moveEvent.clientY - heightDrag.startY;
+        // Splitter sits above this footer: drag down → shorter footer; drag up → taller
+        // (price 1fr absorbs the difference).
         const minH = (typeof PaneLayout !== 'undefined' && PaneLayout.FOOTER_HEIGHT_MIN_PX) || 48;
-        pendingDragHeight = Math.max(minH, Math.min(drag.maxH, Math.round(drag.startH + dy)));
+        pendingDragHeight = Math.max(minH, Math.min(heightDrag.maxH, Math.round(heightDrag.startH - dy)));
         if (dragApplyRaf) return;
         dragApplyRaf = requestAnimationFrame(() => {
           dragApplyRaf = 0;
-          if (!drag || pendingDragHeight == null) return;
-          paneLayout.setFooterHeight(drag.hostId, pendingDragHeight);
+          if (!heightDrag || pendingDragHeight == null) return;
+          paneLayout.setFooterHeight(heightDrag.hostId, pendingDragHeight);
         });
       };
 
       const onUp = (upEvent) => {
-        if (drag && upEvent.pointerId !== drag.pointerId) return;
+        if (heightDrag && upEvent.pointerId !== heightDrag.pointerId) return;
         gutter.removeEventListener('pointermove', onMove);
         gutter.removeEventListener('pointerup', onUp);
         gutter.removeEventListener('pointercancel', onUp);
         try {
-          if (drag) gutter.releasePointerCapture(drag.pointerId);
+          if (heightDrag) gutter.releasePointerCapture(heightDrag.pointerId);
         } catch {
           /* */
         }
@@ -191,10 +290,10 @@
           cancelAnimationFrame(dragApplyRaf);
           dragApplyRaf = 0;
         }
-        if (drag && pendingDragHeight != null && paneLayout) {
-          paneLayout.setFooterHeight(drag.hostId, pendingDragHeight);
+        if (heightDrag && pendingDragHeight != null && paneLayout) {
+          paneLayout.setFooterHeight(heightDrag.hostId, pendingDragHeight);
         }
-        drag = null;
+        heightDrag = null;
         pendingDragHeight = null;
         document.body?.classList.remove('is-pane-resizing');
         // Full apply once after drag (safe to rebuild gutters).
@@ -224,14 +323,18 @@
       priceEl.style.display = '';
       priceEl.style.gridRow = '1';
       priceEl.hidden = false;
+      // Fullscreen class is orthogonal to order; preserve if PaneLayout says so.
+      priceEl.classList.toggle('fullscreen-pane', state.fullscreenPaneId === 'price');
     }
 
     for (const [hostId, wrapId] of Object.entries(cfg.hostWraps)) {
       const wrap = document.getElementById(wrapId);
       if (!wrap) continue;
+      wrap.dataset.paneHost = hostId;
       wrap.style.gridRow = '';
       wrap.style.display = 'none';
       wrap.hidden = true;
+      wrap.classList.toggle('fullscreen-pane', state.fullscreenPaneId === hostId);
     }
 
     clearDynamicGutters(stack);
@@ -256,6 +359,9 @@
       wrap.hidden = false;
       wrap.style.display = 'flex';
       wrap.style.gridRow = String(row++);
+
+      const legend = wrap.querySelector('.chart-legend');
+      if (legend) bindFooterReorder(context, hostId, legend);
     }
   }
 
@@ -296,8 +402,8 @@
 
   function apply() {
     if (!paneLayout || typeof paneLayout.getState !== 'function') return;
-    // Mid-drag: never rebuild gutters (would steal pointer capture).
-    if (drag) {
+    // Mid height-drag: never rebuild gutters (would steal pointer capture).
+    if (heightDrag) {
       applyTracksOnly(paneLayout.getState());
       return;
     }

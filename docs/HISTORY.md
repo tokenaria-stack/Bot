@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-019 / #90 P4 — Pane Reordering (Jul 2026) ✅
+
+- Legend drag → `PaneLayout.moveHostBefore` / `setOrder`; Grid rebuilds from `order`; heights/visible/fullscreen untouched.
+- Drop-once commit (no live DOM reordering as SSOT). Debt **#90** Phase 4.
+
 ## Phase ADR-019 / #90 P3 — Adjustable Pane Heights (Jul 2026) ✅
 
 - Splitter drag → `PaneLayout.setFooterHeight` (px only); price stays `1fr`.

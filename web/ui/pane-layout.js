@@ -1,7 +1,7 @@
 /**
  * PaneLayout — ADR-019 FE SSOT for footer pane membership / order / heights / fullscreen.
  * Phase 1: state + persist ∩ manifest + Ind menu.
- * Phase 2–3: LayoutController reads this state for CSS Grid + setFooterHeight (drag).
+ * Phase 2–4: LayoutController reads this state for CSS Grid, heights, and reorder.
  *
  * Price is always present and is not a HostID. footerHeights are pixels only (no price key).
  */
@@ -334,6 +334,75 @@
       return true;
     }
 
+    /**
+     * Replace footer order. Must be a permutation of known hosts (extras dropped,
+     * missing appended). Does not touch visible / heights / fullscreenPaneId.
+     * @param {string[]} nextOrder
+     * @returns {boolean}
+     */
+    function setOrder(nextOrder) {
+      if (!Array.isArray(nextOrder)) return false;
+      const allowed = new Set(state.order);
+      if (!allowed.size) return false;
+      const cleaned = [];
+      const seen = new Set();
+      for (const raw of nextOrder) {
+        const id = String(raw || '').trim();
+        if (!id || !allowed.has(id) || seen.has(id)) continue;
+        cleaned.push(id);
+        seen.add(id);
+      }
+      for (const id of state.order) {
+        if (!seen.has(id)) cleaned.push(id);
+      }
+      if (cleaned.length !== state.order.length) return false;
+      let same = true;
+      for (let i = 0; i < cleaned.length; i++) {
+        if (cleaned[i] !== state.order[i]) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return false;
+      commit({
+        ...cloneState(state),
+        order: cleaned,
+      });
+      return true;
+    }
+
+    /**
+     * Move host among visible footers; hidden hosts keep relative slots.
+     * @param {string} hostId
+     * @param {string|null} beforeHostId insert before this visible host; null = end of visible
+     * @returns {boolean}
+     */
+    function moveHostBefore(hostId, beforeHostId) {
+      const id = String(hostId || '').trim();
+      if (!id || !state.order.includes(id)) return false;
+      if (!state.visible.includes(id)) return false;
+
+      const vis = state.order.filter((h) => state.visible.includes(h));
+      const from = vis.indexOf(id);
+      if (from < 0) return false;
+      vis.splice(from, 1);
+
+      let to = vis.length;
+      if (beforeHostId != null && beforeHostId !== '') {
+        const before = String(beforeHostId).trim();
+        if (before === id) return false;
+        const bi = vis.indexOf(before);
+        to = bi >= 0 ? bi : vis.length;
+      }
+      vis.splice(to, 0, id);
+
+      let vi = 0;
+      const next = state.order.map((h) => (
+        state.visible.includes(h) ? vis[vi++] : h
+      ));
+      return setOrder(next);
+    }
+
     function setFullscreen(hostIdOrNull) {
       const allowed = allowedSet(catalog);
       let next = hostIdOrNull == null || hostIdOrNull === ''
@@ -434,6 +503,8 @@
       setVisible,
       toggle,
       setFooterHeight,
+      setOrder,
+      moveHostBefore,
       subscribe,
       setFullscreen,
       getFullscreen,

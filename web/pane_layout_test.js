@@ -209,6 +209,37 @@ test('setFooterHeight clamps and persists; price never stored', () => {
   assert.strictEqual(raw.footerHeights.rsx, PaneLayout.FOOTER_HEIGHT_MAX_PX);
 });
 
+test('setOrder permutes; moveHostBefore among visible preserves hidden slots', () => {
+  const layout = PaneLayout.create({ storage: memoryStorage() });
+  layout.init({
+    manifest: {
+      panes: {
+        p: [
+          { id: '1', hostId: 'rsx' },
+          { id: '2', hostId: 'wozduh' },
+          { id: '3', hostId: 'atr' },
+        ],
+      },
+    },
+  });
+  layout.setVisible('atr', false);
+  assert.deepStrictEqual(layout.getState().order, ['rsx', 'wozduh', 'atr']);
+  assert.strictEqual(layout.setOrder(['wozduh', 'rsx', 'atr']), true);
+  assert.deepStrictEqual(layout.getState().order, ['wozduh', 'rsx', 'atr']);
+  assert.strictEqual(layout.setOrder(['wozduh', 'rsx', 'atr']), false);
+
+  // Visible: wozduh, rsx — move rsx before wozduh; atr stays in hidden slot after visibles.
+  assert.strictEqual(layout.moveHostBefore('rsx', 'wozduh'), true);
+  assert.deepStrictEqual(layout.getState().order, ['rsx', 'wozduh', 'atr']);
+  assert.strictEqual(layout.getFullscreen(), null);
+
+  layout.setFullscreen('rsx');
+  assert.strictEqual(layout.setOrder(['wozduh', 'rsx', 'atr']), true);
+  assert.strictEqual(layout.moveHostBefore('wozduh', null), true);
+  assert.deepStrictEqual(layout.getState().order, ['rsx', 'wozduh', 'atr']);
+  assert.strictEqual(layout.getFullscreen(), 'rsx');
+});
+
 test('price allowed as fullscreen target', () => {
   const layout = PaneLayout.create({ storage: memoryStorage() });
   layout.init({ manifest: sampleManifest() });
