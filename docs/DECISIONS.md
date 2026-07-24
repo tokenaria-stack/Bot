@@ -408,3 +408,20 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Consequences:** Debt **#49** closed for live path. Modules: `web/ui/time-camera.js`, `web/chart-core.js`. Regression: `web/time_camera_test.js`.
 
+---
+
+## ADR-021 Phase 2 — CrosshairController
+
+**Context:** Syncing crosshair with `setCrosshairPosition` onto price while hovering footers painted a horizontal line in the price domain (foreign UX).
+
+**Decision:**
+
+- **`CrosshairController`** owns only `hoveredHostId` + V/H policy. **Never** mutates timeline / TimeCamera state.
+- Hovered pane: vert + horz. Peers: vert time-sync only; horz hidden via `applyOptions`.
+- Peer Y is always **target-local** (candle close / osc series of that pane) — never source oscillator Y on price.
+- ChartAdapter is the only LWC talker (`applyHorzVisibility`, `syncPeerCrosshairTime`).
+
+**Deferred:** InteractionController (P3).
+
+**Consequences:** Module `web/ui/crosshair-controller.js`. Regression: `web/crosshair_controller_test.js`.
+

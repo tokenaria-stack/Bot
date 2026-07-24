@@ -201,6 +201,7 @@
       grid: gridOptions(false),
       crosshair: {
         ...crosshairOptions(),
+        // Default peer state; CrosshairController enables horz only while hovered.
         horzLine: { visible: false, labelVisible: false },
       },
       timeScale: unifiedTimeScaleOptions(false),
@@ -344,8 +345,7 @@
   }
 
   /**
-   * Y for setCrosshairPosition must be in the *target* series domain.
-   * Same-chart: seriesData. Cross-pane: hydrated / store (never candle.close on osc).
+   * Y for peer time-sync must be in the *target* series domain (never source/foreign Y).
    */
   function resolveCrosshairY(state, targetChart, targetSeries, param) {
     const point = param.seriesData?.get?.(targetSeries);
@@ -359,45 +359,96 @@
     return null;
   }
 
-  function syncCrosshair(state) {
-    const charts = [state.charts.price, state.charts.wozduh, state.charts.rsx].filter(Boolean);
-    charts.forEach((source) => {
-      source.subscribeCrosshairMove((param) => {
-        // No physical mouse point → camera-scroll echo; never setCrosshairPosition.
-        if (!param || !param.point) return;
-        // Gesture mute: wheel/zoom range changes — do not fight the mouse.
-        if (typeof TimeCamera !== 'undefined' && TimeCamera.isGesturing()) return;
-        // Flyaway guard: never fight programmatic camera / paint frames.
-        if ((typeof TimeCamera !== 'undefined' && TimeCamera.isSyncing()) || _liveUpdating) return;
-        if (state._syncingCrosshair) return;
-        state._syncingCrosshair = true;
-        try {
-          if (param?.time == null) {
-            charts.forEach((target) => {
-              if (target !== source && typeof target.clearCrosshairPosition === 'function') {
-                target.clearCrosshairPosition();
-              }
-            });
-            return;
-          }
-          charts.forEach((target) => {
-            if (target === source) return;
-            if (typeof target.setCrosshairPosition !== 'function') return;
-            const targetSeries = crosshairSeriesForChart(state, target);
-            if (!targetSeries) {
-              target.clearCrosshairPosition?.();
-              return;
-            }
-            const yValue = resolveCrosshairY(state, target, targetSeries, param);
-            if (yValue == null || !Number.isFinite(yValue)) {
-              target.clearCrosshairPosition?.();
-              return;
-            }
-            target.setCrosshairPosition(yValue, param.time, targetSeries);
-          });
-        } finally {
-          state._syncingCrosshair = false;
+  function chartForHostId(state, hostId) {
+    if (!state?.charts) return null;
+    if (hostId === 'price') return state.charts.price;
+    if (hostId === 'wozduh') return state.charts.wozduh;
+    if (hostId === 'rsx') return state.charts.rsx;
+    return null;
+  }
+
+  function applyHorzVisibility(state, map) {
+    if (!state?.charts || !map) return;
+    Object.keys(map).forEach((hostId) => {
+      const chart = chartForHostId(state, hostId);
+      if (!chart?.applyOptions) return;
+      const visible = !!map[hostId];
+      try {
+        chart.applyOptions({
+          crosshair: {
+            horzLine: { visible, labelVisible: visible },
+          },
+        });
+      } catch { /* */ }
+    });
+  }
+
+  /**
+   * Sync vertical crosshair time to peers. Each peer uses its own local Y — never source Y.
+   */
+  function syncPeerCrosshairTime(state, sourceHostId, time, param) {
+    if (!state?.charts || time == null) return;
+    const panes = [
+      { hostId: 'price', chart: state.charts.price },
+      { hostId: 'wozduh', chart: state.charts.wozduh },
+      { hostId: 'rsx', chart: state.charts.rsx },
+    ];
+    panes.forEach(({ hostId, chart }) => {
+      if (!chart || hostId === sourceHostId) return;
+      if (typeof chart.setCrosshairPosition !== 'function') return;
+      const targetSeries = crosshairSeriesForChart(state, chart);
+      if (!targetSeries) {
+        chart.clearCrosshairPosition?.();
+        return;
+      }
+      // Local Y only (target pane domain). Forbidden: source oscillator Y on price.
+      const yValue = resolveCrosshairY(state, chart, targetSeries, param);
+      if (yValue == null || !Number.isFinite(yValue)) {
+        chart.clearCrosshairPosition?.();
+        return;
+      }
+      try {
+        chart.setCrosshairPosition(yValue, time, targetSeries);
+      } catch { /* */ }
+    });
+  }
+
+  function clearPeerCrosshairs(state, sourceHostId) {
+    if (!state?.charts) return;
+    ['price', 'wozduh', 'rsx'].forEach((hostId) => {
+      if (sourceHostId != null && hostId === sourceHostId) return;
+      const chart = chartForHostId(state, hostId);
+      try { chart?.clearCrosshairPosition?.(); } catch { /* */ }
+    });
+  }
+
+  function bindCrosshairController(state) {
+    if (typeof CrosshairController === 'undefined' || !state?.charts) return;
+
+    CrosshairController.bind({
+      applyHorzVisibility: (map) => applyHorzVisibility(state, map),
+      syncPeerTime: (sourceHostId, time, param) => {
+        syncPeerCrosshairTime(state, sourceHostId, time, param);
+      },
+      clearPeerCrosshairs: (sourceHostId) => clearPeerCrosshairs(state, sourceHostId),
+      shouldIgnore: () => {
+        if (_liveUpdating) return true;
+        if (typeof TimeCamera !== 'undefined') {
+          if (TimeCamera.isGesturing?.() || TimeCamera.isSyncing?.()) return true;
         }
+        return false;
+      },
+    });
+
+    const panes = [
+      { hostId: 'price', chart: state.charts.price },
+      { hostId: 'wozduh', chart: state.charts.wozduh },
+      { hostId: 'rsx', chart: state.charts.rsx },
+    ];
+    panes.forEach(({ hostId, chart }) => {
+      if (!chart?.subscribeCrosshairMove) return;
+      chart.subscribeCrosshairMove((param) => {
+        CrosshairController.onCrosshairMove(hostId, param);
       });
     });
   }
@@ -512,7 +563,6 @@
       charts: { price: priceChart, wozduh: wozduhChart, rsx: rsxChart },
       candleSeries,
       volumeSeries,
-      _syncingCrosshair: false,
       _disposers: [],
     };
 
@@ -521,7 +571,7 @@
     bindResize(wozHost, wozduhChart, state._disposers);
     bindResize(rsxHost, rsxChart, state._disposers);
     subscribePaneTimeProposals(state);
-    syncCrosshair(state);
+    bindCrosshairController(state);
     return state;
   }
 
@@ -627,6 +677,22 @@
         ...patch,
         sourceHostId: patch?.sourceHostId || 'system',
       });
+    },
+
+    /** ADR-021 P2 — thin CrosshairController surface (no policy here). */
+    setHoveredPane(hostId) {
+      if (typeof CrosshairController === 'undefined') return false;
+      return CrosshairController.setHovered(hostId);
+    },
+
+    applyCrosshairVisibility(map) {
+      if (!_live) return;
+      applyHorzVisibility(_live, map);
+    },
+
+    syncCrosshairTime(sourceHostId, time, param) {
+      if (!_live) return;
+      syncPeerCrosshairTime(_live, sourceHostId, time, param);
     },
 
     isInitialized(context) {

@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-021 / #49 P2 — CrosshairController (Jul 2026) ✅
+
+- Hover policy: horz only on hovered HostID; peers get time-aligned vert with **local** Y only.
+- Never mutates TimeCamera. Module: `web/ui/crosshair-controller.js`.
+
 ## Phase ADR-021 / #49 P0–P1 — TimeCamera (Jul 2026) ✅
 
 - `TimeCamera` atomic commit + echo lock; ChartAdapter apply-only for timeline.
