@@ -12,7 +12,10 @@
   const VERSION = 3;
   const DEFAULT_PANE = Object.freeze({ isAuto: true, isLog: false });
 
-  /** @type {Map<string, { isAuto: boolean, isLog: boolean }>} hostId → prefs */
+  /**
+   * @typedef {{ isAuto: boolean, isLog: boolean, manualRange?: { min: number, max: number } }} ScalePanePrefs
+   * @type {Map<string, ScalePanePrefs>} hostId → prefs
+   */
   let prefsByHost = new Map();
 
   /**
@@ -49,14 +52,90 @@
     return { isAuto: true, isLog: false };
   }
 
+  /**
+   * Shallow-clone pane prefs. Preserves unknown forward-compat fields.
+   * Normalizes only isAuto / isLog booleans.
+   */
   function clonePane(p) {
+    if (!p || typeof p !== 'object') return defaultPaneState();
+    const out = { ...p };
+    out.isAuto = p.isAuto !== false;
+    out.isLog = p.isLog === true;
+    if (p.manualRange && typeof p.manualRange === 'object') {
+      out.manualRange = {
+        min: p.manualRange.min,
+        max: p.manualRange.max,
+      };
+    }
+    return out;
+  }
+
+  /**
+   * Future Manual contract socket: Auto OFF is only self-sufficient with a valid Y window.
+   * @param {ScalePanePrefs|object|null|undefined} pane
+   */
+  function hasValidManualRange(pane) {
+    const r = pane && pane.manualRange;
+    if (!r || typeof r !== 'object') return false;
+    return Number.isFinite(r.min) && Number.isFinite(r.max) && r.min < r.max;
+  }
+
+  /**
+   * Invariant:
+   * Persisted scale state must be self-sufficient.
+   *
+   * Valid:
+   *   Auto ON
+   *   Auto OFF + manualRange { min, max } (finite, min < max)
+   *
+   * Invalid:
+   *   Auto OFF without valid manualRange
+   *
+   * Invalid states are repaired to Auto ON while preserving Log and other fields.
+   * Pure: no I/O, no DOM, no chart access.
+   *
+   * @param {{ version?: number, panes?: Record<string, object> }|null|undefined} input
+   * @returns {{ prefs: { version: number, panes: Record<string, object> }, dirty: boolean }}
+   */
+  function repairScalePrefs(input) {
+    const panesIn = input && input.panes && typeof input.panes === 'object' ? input.panes : {};
+    const panes = {};
+    let dirty = false;
+    for (const [hostId, pane] of Object.entries(panesIn)) {
+      if (!hostId) continue;
+      const next = clonePane(pane);
+      if (next.isAuto === false && !hasValidManualRange(next)) {
+        next.isAuto = true;
+        dirty = true;
+      }
+      panes[hostId] = next;
+    }
+    const version = Number.isFinite(input?.version) ? Number(input.version) : VERSION;
     return {
-      isAuto: p?.isAuto !== false,
-      isLog: p?.isLog === true,
+      prefs: { version: version === VERSION ? VERSION : version, panes },
+      dirty,
     };
   }
 
-  /** Migrate v2 global {isAuto,isLog} → v3 panes.price; else empty map with defaults on demand. */
+  function prefsMapToObject(map) {
+    const panes = {};
+    for (const [hostId, pane] of map.entries()) {
+      panes[hostId] = clonePane(pane);
+    }
+    return { version: VERSION, panes };
+  }
+
+  function prefsObjectToMap(prefs) {
+    const out = new Map();
+    const panes = prefs?.panes && typeof prefs.panes === 'object' ? prefs.panes : {};
+    for (const [hostId, pane] of Object.entries(panes)) {
+      if (!hostId) continue;
+      out.set(hostId, clonePane(pane));
+    }
+    return out;
+  }
+
+  /** Load → migrate v2 → Map (repair+persist happens in init). */
   function loadPrefsMap(store) {
     const out = new Map();
     try {
@@ -74,10 +153,10 @@
       const legacy = store.getItem(STORAGE_KEY_LEGACY);
       if (legacy) {
         const parsed = JSON.parse(legacy);
-        out.set('price', {
+        out.set('price', clonePane({
           isAuto: parsed?.isAuto !== false,
           isLog: parsed?.isLog === true,
-        });
+        }));
       }
     } catch {
       /* */
@@ -95,6 +174,15 @@
     } catch {
       /* */
     }
+  }
+
+  /** load → repair → optional one write. Shared by init / _resetForTests. */
+  function hydratePrefsFromStorage(store) {
+    const loaded = loadPrefsMap(store);
+    const { prefs, dirty } = repairScalePrefs(prefsMapToObject(loaded));
+    prefsByHost = prefsObjectToMap(prefs);
+    if (dirty) persist();
+    return dirty;
   }
 
   function ensurePrefs(hostId) {
@@ -258,9 +346,9 @@
   }
 
   function isPointerOnPriceScale(host, chart, clientX) {
-    if (!host || !chart) return false;
+    if (!host) return false;
     const rect = host.getBoundingClientRect();
-    const scaleW = priceScaleWidth(chart);
+    const scaleW = chart ? priceScaleWidth(chart) : 70;
     return clientX >= rect.right - scaleW;
   }
 
@@ -414,7 +502,7 @@
 
   function init(options = {}) {
     storage = resolveStorage(options.storage);
-    prefsByHost = loadPrefsMap(storage);
+    hydratePrefsFromStorage(storage);
     bindButtons();
     syncUI();
   }
@@ -429,7 +517,7 @@
     bindings.clear();
     buttonsBound = false;
     storage = resolveStorage(options.storage);
-    prefsByHost = loadPrefsMap(storage);
+    hydratePrefsFromStorage(storage);
   }
 
   const ScaleController = {
@@ -448,6 +536,8 @@
     syncUI,
     isPointerOnPriceScale,
     priceScaleWidth,
+    repairScalePrefs,
+    hasValidManualRange,
     VERSION,
     STORAGE_KEY,
     STORAGE_KEY_LEGACY,

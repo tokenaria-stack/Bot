@@ -388,6 +388,12 @@ function createWozduxChartOptions(width, height) {
     timeScale: { ...chartTimeScaleOptions(), visible: false },
     width,
     height,
+    handleScroll: false,
+    handleScale: {
+      mouseWheel: true,
+      axisPressedMouseMove: { price: true, time: false },
+      axisDoubleClickReset: { price: true, time: false },
+    },
     rightPriceScale: sharedRightPriceScaleOptions('wozduh', {
       scaleMargins: { top: 0.05, bottom: 0.05 },
     }),
@@ -407,6 +413,12 @@ function createRSXChartOptions(width, height) {
     timeScale: chartTimeScaleOptions(),
     width,
     height,
+    handleScroll: false,
+    handleScale: {
+      mouseWheel: true,
+      axisPressedMouseMove: { price: true, time: false },
+      axisDoubleClickReset: { price: true, time: false },
+    },
     rightPriceScale: sharedRightPriceScaleOptions('rsx', {
       scaleMargins: { top: 0.05, bottom: 0.05 },
     }),

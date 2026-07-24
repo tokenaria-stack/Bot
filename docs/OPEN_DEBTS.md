@@ -20,7 +20,7 @@ Update this file when a debt opens, closes, or changes priority.
 | **88** | **Timeline Publishability (ADR-017)** | ✅ **B3.0** | Exact closed-gap fill before pending flush; publishable only if Frame contiguous. Buffering UX separate |
 | **89** | **TimelineRecovery UX (ADR-018)** | ✅ | FE LIVE↔HEALING; idempotent enter; sync badge; 25s watchdog; boot wires only |
 | **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P5** | P1–P5 layout done. Optional later: `setHostActive` |
-| **91** | **Scale / time axis / Ruler (ADR-020)** | 🟡 **P2** | P1 ✅ HostID ScaleController. Next: bottom time axis + formats; RulerController |
+| **91** | **Scale / time axis / Ruler (ADR-020)** | 🟡 **P2** | Scale P1 + prefs repair + footer Y Manual. Timeline sync moved to **ADR-021**. Next: CrosshairController; bottom time axis; Ruler |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | 🟡 | After #89 |
 | **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C done** | Bounded store + atomic prune + `windowMode` + WS/gap gates + **focal-time prune (69C)**. **69D** full sliding window + viewport-centered paint 🔜. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |
@@ -58,7 +58,7 @@ Update this file when a debt opens, closes, or changes priority.
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
 | **79** | Self-heal `loadDashboard` resets camera to fresh | 🟢 | Wire `viewportAnchor` on gap-heal/reconnect |
-| **49** | Active Driver / slave scroll (Shot 6B) | 🔜 | Wheel proxy → master |
+| **49** | Active Driver / slave scroll (Shot 6B) | ✅ **ADR-021 P0–P1** | TimeCamera sole timeline owner; wheel proxy deleted; all panes propose |
 | **35** (charts) | Phase 8B annotations UI on prepend | 🔜 | `applyUniversalAnnotations` |
 | **29** | Backtest history bypasses Projection | 🟡 | Asymmetry vs live Atomic |
 | **82** | `prependMonolith` times not normalized via `chartTime` | 🟢 | Latent; server sends seconds |

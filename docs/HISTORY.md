@@ -8,6 +8,21 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-021 / #49 P0–P1 — TimeCamera (Jul 2026) ✅
+
+- `TimeCamera` atomic commit + echo lock; ChartAdapter apply-only for timeline.
+- Deleted `attachSlaveWheelProxy`; footers native pan/zoom; all panes propose. Crosshair unchanged (P2 later).
+
+## Phase ADR-020 / #91 — Footer Y-scale Manual parity (Jul 2026) ✅
+
+- Slave charts: Y drag/wheel/dblclick reset enabled; time-pan proxy skips price-scale hit zone.
+- ScaleController already tracked Auto OFF per HostID; restore `repairScalePrefs` unchanged (incomplete Manual → Auto ON on reload).
+
+## Phase ADR-020 / #91 — Scale prefs self-sufficiency repair (Jul 2026) ✅
+
+- Pure `repairScalePrefs` / `hasValidManualRange`: Auto OFF without `manualRange` → Auto ON (keep Log); dirty → one persist.
+- In-session Manual still works; incomplete Manual is not valid across reload until range persistence ships.
+
 ## Phase ADR-020 / #91 P1 — ScaleController HostID (Jul 2026) ✅
 
 - Generic `register({ context, hostId, chart, allowLog, scaleGroup? })`; v3 prefs migrate from v2 price global.

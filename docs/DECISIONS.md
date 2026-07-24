@@ -380,10 +380,31 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - Price: `allowLog: true`. Footers: `allowLog: false` (Auto only).
 - Manual Y-gesture updates **that** hostId only. PaneLayout visibility must not reset prefs.
 - UI: `.scale-controls` with `data-scale-pane` / `data-allow-log`.
+- **Persistence invariant:** prefs must be self-sufficient. Valid = Auto ON, or Auto OFF + `manualRange {min,max}`. Invalid Auto OFF (no range yet) is repaired to Auto ON via pure `repairScalePrefs` (preserve Log; dirty → one write). `manualRange` is a future socket — not written this phase.
 
-**Deferred:** `PaneLayout.getBottomPane` + `ChartAdapter.setBottomAxis`; HH:mm + crosshair `Thu 23 Jul '26 14:05`; `RulerController`.
+**Deferred:** `PaneLayout.getBottomPane` + `ChartAdapter.setBottomAxis`; HH:mm + crosshair `Thu 23 Jul '26 14:05`; `RulerController`; persist Manual Y range.
 
 **Rejected:** Global Auto/Log for all charts; Log on osc panes; group scale apply in P1; reviving legacy adapters.
 
 **Consequences:** Debt **#91**. Module: `web/ui/scale-controller.js`. Regression: `web/scale_controller_test.js`.
+
+---
+
+## ADR-021 — Chart Interaction Ownership (TimeCamera)
+
+**Context:** Footer pan/zoom broken; Active Driver Lite (`attachSlaveWheelProxy` + price-only sync) fragmented timeline ownership. Crosshair foreign-Y deferred to later phase.
+
+**Decision (Phases 0–1):**
+
+- **`TimeCamera`** sole originator of canonical `visibleLogicalRange` + `barSpacing` (+ optional `rightOffset`). Atomic `commit({ visibleRange, barSpacing, rightOffset, sourceHostId })` only — no piecemeal setters. Echo lock `isSyncing`.
+- **ChartAdapter** subscribes all panes, proposes via `TimeCamera.proposeFromPane`, applies only via `applyCommittedCamera`. Public `setVisibleLogicalRange` / `commitTimeCamera` originate through `commit`.
+- Footers: native LWC `handleScroll` / time wheel. **`attachSlaveWheelProxy` deleted.**
+- No chart is semantic master; any HostID may propose.
+- **ViewportManager** / **ScaleController** untouched (capture-restore and Y scale). ViewportManager may still call `ChartAdapter.setVisibleLogicalRange` (routes to TimeCamera).
+
+**Deferred:** CrosshairController (P2), InteractionController (P3).
+
+**Rejected:** Keeping wheel proxy; price-as-master sync; InteractionController in P0/P1.
+
+**Consequences:** Debt **#49** closed for live path. Modules: `web/ui/time-camera.js`, `web/chart-core.js`. Regression: `web/time_camera_test.js`.
 

@@ -231,11 +231,18 @@ class ChartCompositor {
       ? ViewportManager.HEALTHY_BAR_SPACING
       : 6;
 
+    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.commitTimeCamera === 'function') {
+      ChartAdapter.commitTimeCamera({
+        barSpacing: spacing,
+        rightOffset: 0,
+        sourceHostId: 'system',
+      });
+      return;
+    }
     ['price', 'wozduh', 'rsx'].forEach((pane) => {
       const chart = typeof ChartAdapter !== 'undefined'
         ? ChartAdapter.getChart('live', pane)
         : null;
-      // Layout-safe initialization: independent of DOM width.
       chart?.timeScale()?.applyOptions({ barSpacing: spacing, rightOffset: 0 });
     });
   }

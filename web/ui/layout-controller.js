@@ -190,9 +190,15 @@
   function isOnPriceScale(host, context, clientX) {
     if (!host) return false;
     const wrap = host.closest?.('.chart-wrap');
-    const pane = wrap?.id?.includes('price')
-      ? 'price'
-      : (wrap?.dataset?.paneHost || 'price');
+    let pane = 'price';
+    if (wrap?.dataset?.paneHost) {
+      pane = wrap.dataset.paneHost;
+    } else if (wrap?.id?.includes('price')) {
+      pane = 'price';
+    } else {
+      const legend = wrap?.querySelector?.('.chart-legend[data-pane]');
+      if (legend?.dataset?.pane) pane = legend.dataset.pane;
+    }
     let chart = null;
     if (typeof ChartAdapter !== 'undefined' && ChartAdapter.getChart) {
       chart = ChartAdapter.getChart(context === 'live' ? 'live' : context, pane);

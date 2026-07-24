@@ -181,17 +181,16 @@ assert.ok(applyAllIdx > setDataIdx, 'applyAll is AFTER setData in paintCandles (
 
 console.log('OK source contract: paintCandles setData → applyAll');
 
-// ─── Scenario A seed: persisted Auto OFF ────────────────────────────────────
-const scenA = runScenario('persisted Auto OFF', {
+// ─── Scenario A seed: persisted Auto OFF (repaired on hydrate) ──────────────
+const scenA = runScenario('persisted Auto OFF → repaired', {
   version: 3,
-  panes: { price: { isAuto: false, isLog: false } },
+  panes: { price: { isAuto: false, isLog: true } },
 });
-assert.strictEqual(scenA.restored.isAuto, false, 'A seed restores isAuto false');
+assert.strictEqual(scenA.restored.isAuto, true, 'A seed repaired to isAuto true on hydrate');
+assert.strictEqual(scenA.restored.isLog, true, 'A seed preserves isLog');
 assert.strictEqual(scenA.step3Ran, true, 'A: applyBinding after data runs');
-assert.strictEqual(scenA.step3Payload.autoScale, false, 'A: step3 reapplies Auto OFF');
-assert.strictEqual(scenA.step4Payload.autoScale, true, 'A: one Auto click turns ON');
-assert.strictEqual(scenA.samePayloadAsAutoClick, false, 'A: step3 ≠ step4 (state transition)');
-console.log('OK scenario A (persisted Auto OFF): step3 autoScale=false, click → true');
+assert.strictEqual(scenA.step3Payload.autoScale, true, 'A: step3 applies Auto ON after repair');
+console.log('OK scenario A (invalid Auto OFF): hydrate repairs to Auto ON, Log preserved');
 
 // ─── Scenario default / Auto ON ─────────────────────────────────────────────
 const scenOn = runScenario('default Auto ON', null);
@@ -234,34 +233,22 @@ console.log('OK scenario Log ON: step3 mode=Logarithmic, applyBinding after data
 
 // ─── Verdict ────────────────────────────────────────────────────────────────
 const report = {
-  title: 'Blank price chart — A/B/C diagnostic verdict',
+  title: 'Blank price chart — A/B/C diagnostic (post repairScalePrefs)',
   proven_from_code_and_test: {
     B_step3_never_runs: {
       result: 'RULED OUT for paintCandles happy path',
-      evidence: 'chart-core paintCandles: setData then ScaleController.applyAll; scenarios confirm applyBinding after data',
+      evidence: 'chart-core paintCandles: setData then ScaleController.applyAll',
     },
     A_persisted_Auto_OFF: {
-      result: 'VIABLE — explains one Auto click heal',
-      evidence: 'When price.isAuto=false, step3 reapplies autoScale:false; toggleAuto → true (state transition + different payload)',
-      user_check: "JSON.parse(localStorage.getItem('chart_scale_prefs_v3'))?.panes?.price",
+      result: 'FIXED by repairScalePrefs on hydrate',
+      evidence: 'Invalid Auto OFF without manualRange → Auto ON (preserve Log); dirty persist once',
     },
     C_idempotent_LWC: {
-      result: 'VIABLE ONLY IF price.isAuto===true after reload AND chart still blank',
-      evidence: 'applyAll after data sends autoScale:true; repeating applyAll is payload-identical (no transition). Real LWC visual not simulated here.',
-      note: 'One Auto click when already ON turns Auto OFF — cannot heal in one click. If user heals with ONE click, A is far more likely than C.',
-    },
-    Log_mode: {
-      result: 'Observable via prefs.isLog; applied at register and step3',
-      evidence: 'scenario Log ON applies mode=Logarithmic after data',
+      result: 'Not needed for the blank-chart case (was Branch A)',
+      evidence: 'Idempotent applyAll still true; no pulse shipped',
     },
   },
-  decision_tree: [
-    '1. Read panes.price after reload.',
-    '2. If isAuto===false → fix A (persistence). No hostReady/pulse.',
-    '3. If isAuto===true and blank → not B (apply runs); suspect C or Log/empty interaction; confirm with browser: step3 vs second applyAll same payload, still blank → private pulse inside ScaleController; public API hostReady if desired.',
-    '4. If applyAll never fires (no candles / early return) → that specific path is B; fix lifecycle for that path only.',
-  ],
-  no_fix_shipped: true,
+  no_lifecycle_hack: true,
 };
 
 console.log('\n========== DIAGNOSTIC REPORT ==========');
@@ -270,9 +257,7 @@ console.log('========================================\n');
 
 // Human verdict line
 console.log('VERDICT:');
-console.log('  B (missing post-data apply on paintCandles) = RULED OUT.');
-console.log('  A (persisted Auto OFF) = most likely if ONE Auto click heals.');
-console.log('  C (LWC needs transition) = only if isAuto already true and still blank;');
-console.log('    then one Auto click alone should NOT heal (it turns Auto off).');
-console.log('  ACTION: check localStorage panes.price.isAuto after reload before any fix.');
+console.log('  Branch A (invalid Auto OFF) = FIXED by repairScalePrefs on hydrate.');
+console.log('  Branch B = still RULED OUT. Branch C = no pulse shipped.');
+console.log('  Hard refresh once to heal existing localStorage; Log is preserved.');
 console.log('scale_blank_price_diag_test: ALL PASS');

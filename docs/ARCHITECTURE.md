@@ -106,10 +106,11 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 11. **Timeline Publishability (ADR-017).** Mid-session heal: Cap REST → Exact closed-gap fill (if pending tip jumps) → flush → Frame contiguity check → only then `timeline_publishable`. Never fabricate bars; never flush a tip jump.
 12. **Timeline Recovery UX (ADR-018).** FE `TimelineRecovery` owns LIVE↔HEALING; duplicate healing ignored; sync badge (not full-screen Buffering); watchdog once; `publishable` exits immediately via `onRecovered`.
 13. **PaneLayout (ADR-019).** FE owns footer pane membership (`visible` / `order` / `footerHeights` px / `fullscreenPaneId`). Ind menu from Manifest HostIDs; persist ∩ manifest. Price always on (not a HostID). **LayoutController** applies CSS Grid, height drag, legend reorder, and fullscreen.
-14. **ScaleController (ADR-020 P1).** HostID-based Y-scale prefs (`allowLog`, dormant `scaleGroup`). Price Auto+Log; footers Auto-only. Visibility must not reset prefs.
-15. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
-16. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
-17. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
+14. **ScaleController (ADR-020 P1).** HostID-based Y-scale prefs (`allowLog`, dormant `scaleGroup`). Price Auto+Log; footers Auto-only. Visibility must not reset prefs. Persisted state must be self-sufficient: Auto OFF without `manualRange` is repaired to Auto ON on restore.
+15. **TimeCamera (ADR-021 P0–P1).** Sole owner of live canonical timeline (`commit` only). ChartAdapter applies; all panes propose. Wheel proxy deleted. CrosshairController / InteractionController deferred.
+16. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
+17. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+18. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
 
 ---
 
