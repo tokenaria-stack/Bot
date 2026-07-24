@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-021 — Hover ownership (Jul 2026) ✅
+
+- `hoveredHostId` from wrapper `pointerenter`/`pointerleave` only (`data-pane-host`).
+- `syncTime` is time-only; cannot steal hover. Peers: local Y + horz re-asserted off.
+
 ## Phase ADR-021 / #49 P2 — CrosshairController (Jul 2026) ✅
 
 - Hover policy: horz only on hovered HostID; peers get time-aligned vert with **local** Y only.

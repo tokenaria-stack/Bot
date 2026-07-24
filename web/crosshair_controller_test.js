@@ -1,5 +1,5 @@
 /**
- * ADR-021 P2 CrosshairController unit tests (Node).
+ * ADR-021 hover ownership tests (Node).
  * Run: node web/crosshair_controller_test.js
  */
 'use strict';
@@ -13,16 +13,12 @@ function test(name, fn) {
 }
 
 function recordingHooks() {
-  const log = {
-    horzMaps: [],
-    syncPeers: [],
-    clears: [],
-  };
+  const log = { horzMaps: [], syncPeers: [], clears: [] };
   return {
     log,
     hooks: {
       applyHorzVisibility: (map) => { log.horzMaps.push({ ...map }); },
-      syncPeerTime: (sourceHostId, time, param) => {
+      syncPeerTime: (sourceHostId, time) => {
         log.syncPeers.push({ sourceHostId, time });
       },
       clearPeerCrosshairs: (sourceHostId) => {
@@ -32,87 +28,95 @@ function recordingHooks() {
   };
 }
 
-test('hover price: only price horz true', () => {
+test('hoveredHostId changes only from setHovered (pointer path)', () => {
   CrosshairController._resetForTests();
   const { log, hooks } = recordingHooks();
   CrosshairController.bind(hooks);
-  CrosshairController.setHovered('price');
-  const map = log.horzMaps[log.horzMaps.length - 1];
-  assert.strictEqual(map.price, true);
-  assert.strictEqual(map.rsx, false);
-  assert.strictEqual(map.wozduh, false);
-  assert.strictEqual(CrosshairController.getHovered(), 'price');
-});
-
-test('hover rsx: only rsx horz true; sync peers with time not source Y API', () => {
-  CrosshairController._resetForTests();
-  const { log, hooks } = recordingHooks();
-  CrosshairController.bind(hooks);
-  CrosshairController.onCrosshairMove('rsx', {
-    point: { x: 1, y: 2 },
-    time: 1000,
-    __sourceY: 55,
-  });
+  assert.strictEqual(CrosshairController.getHovered(), null);
+  CrosshairController.setHovered('rsx');
   assert.strictEqual(CrosshairController.getHovered(), 'rsx');
   const map = log.horzMaps[log.horzMaps.length - 1];
   assert.strictEqual(map.rsx, true);
   assert.strictEqual(map.price, false);
   assert.strictEqual(map.wozduh, false);
-  assert.strictEqual(log.syncPeers.length, 1);
-  assert.strictEqual(log.syncPeers[0].sourceHostId, 'rsx');
-  assert.strictEqual(log.syncPeers[0].time, 1000);
-  // Controller does not compute or send a peer Y — ChartAdapter resolves local Y per pane.
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(log.syncPeers[0], 'peerY'), false);
 });
 
-test('hover wozduh then leave: horz all false, peers cleared', () => {
+test('syncTime cannot change hoveredHostId', () => {
+  CrosshairController._resetForTests();
+  const { hooks } = recordingHooks();
+  CrosshairController.bind(hooks);
+  CrosshairController.setHovered('wozduh');
+  CrosshairController.syncTime({ sourceHostId: 'price', time: 100 });
+  assert.strictEqual(CrosshairController.getHovered(), 'wozduh');
+  CrosshairController.syncTime({ sourceHostId: 'rsx', time: 200 });
+  assert.strictEqual(CrosshairController.getHovered(), 'wozduh');
+});
+
+test('peer sync only from hovered source; repeated sync cannot steal hover', () => {
   CrosshairController._resetForTests();
   const { log, hooks } = recordingHooks();
   CrosshairController.bind(hooks);
-  CrosshairController.onCrosshairMove('wozduh', { point: { x: 0, y: 0 }, time: 50 });
-  assert.strictEqual(CrosshairController.getHovered(), 'wozduh');
-  CrosshairController.onCrosshairMove('wozduh', {}); // leave
-  assert.strictEqual(CrosshairController.getHovered(), null);
-  const map = log.horzMaps[log.horzMaps.length - 1];
+  CrosshairController.setHovered('rsx');
+  for (let i = 0; i < 20; i++) {
+    assert.strictEqual(
+      CrosshairController.syncTime({ sourceHostId: 'rsx', time: 1000 + i }),
+      true,
+    );
+    // Peer pretending to be active — must not sync and must not steal hover.
+    assert.strictEqual(
+      CrosshairController.syncTime({ sourceHostId: 'price', time: 1000 + i }),
+      false,
+    );
+    assert.strictEqual(CrosshairController.getHovered(), 'rsx');
+  }
+  assert.strictEqual(log.syncPeers.length, 20);
+  assert.ok(log.syncPeers.every((p) => p.sourceHostId === 'rsx'));
+  const map = CrosshairController.horzVisibilityMap(CrosshairController.getHovered());
+  assert.strictEqual(map.rsx, true);
   assert.strictEqual(map.price, false);
+  assert.strictEqual(map.wozduh, false);
+});
+
+test('horizontal line policy never migrates while hover fixed', () => {
+  CrosshairController._resetForTests();
+  const { log, hooks } = recordingHooks();
+  CrosshairController.bind(hooks);
+  CrosshairController.setHovered('price');
+  CrosshairController.syncTime({ sourceHostId: 'price', time: 42 });
+  // After sync, policy re-applied — still only price horz.
+  const map = log.horzMaps[log.horzMaps.length - 1];
+  assert.strictEqual(map.price, true);
   assert.strictEqual(map.rsx, false);
   assert.strictEqual(map.wozduh, false);
+});
+
+test('leave hover clears peers and horz', () => {
+  CrosshairController._resetForTests();
+  const { log, hooks } = recordingHooks();
+  CrosshairController.bind(hooks);
+  CrosshairController.setHovered('rsx');
+  CrosshairController.setHovered(null);
+  assert.strictEqual(CrosshairController.getHovered(), null);
+  const map = log.horzMaps[log.horzMaps.length - 1];
+  assert.deepStrictEqual(map, { price: false, wozduh: false, rsx: false });
   assert.ok(log.clears.includes(null));
 });
 
-test('horzVisibilityMap pure policy — exactly one horz when hovered', () => {
-  const price = CrosshairController.horzVisibilityMap('price');
-  assert.deepStrictEqual(price, { price: true, wozduh: false, rsx: false });
-  const rsx = CrosshairController.horzVisibilityMap('rsx');
-  assert.deepStrictEqual(rsx, { price: false, wozduh: false, rsx: true });
-  const none = CrosshairController.horzVisibilityMap(null);
-  assert.deepStrictEqual(none, { price: false, wozduh: false, rsx: false });
-});
-
-test('time sync without point does not set hover; null time clears peers', () => {
-  CrosshairController._resetForTests();
-  const { log, hooks } = recordingHooks();
-  CrosshairController.bind(hooks);
-  CrosshairController.onCrosshairMove('price', { point: { x: 1, y: 1 }, time: null });
-  assert.strictEqual(CrosshairController.getHovered(), 'price');
-  assert.ok(log.clears.includes('price'));
-  assert.strictEqual(log.syncPeers.length, 0);
-});
-
-test('shouldIgnore blocks moves', () => {
-  CrosshairController._resetForTests();
-  const { log, hooks } = recordingHooks();
-  hooks.shouldIgnore = () => true;
-  CrosshairController.bind(hooks);
-  CrosshairController.onCrosshairMove('rsx', { point: { x: 1, y: 1 }, time: 9 });
-  assert.strictEqual(CrosshairController.getHovered(), null);
-  assert.strictEqual(log.syncPeers.length, 0);
-});
-
-test('invariant: CrosshairController has no timeline API', () => {
+test('no LWC-shaped API on CrosshairController', () => {
+  assert.strictEqual(typeof CrosshairController.onCrosshairMove, 'undefined');
   assert.strictEqual(typeof CrosshairController.commit, 'undefined');
-  assert.strictEqual(typeof CrosshairController.proposeFromPane, 'undefined');
-  assert.strictEqual(typeof CrosshairController.setVisibleLogicalRange, 'undefined');
+  assert.strictEqual(typeof CrosshairController.syncTime.length, 'number');
+});
+
+test('horzVisibilityMap pure — exactly one horz when hovered', () => {
+  assert.deepStrictEqual(
+    CrosshairController.horzVisibilityMap('price'),
+    { price: true, wozduh: false, rsx: false },
+  );
+  assert.deepStrictEqual(
+    CrosshairController.horzVisibilityMap(null),
+    { price: false, wozduh: false, rsx: false },
+  );
 });
 
 console.log('crosshair_controller_test: ALL PASS');

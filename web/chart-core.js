@@ -345,17 +345,13 @@
   }
 
   /**
-   * Y for peer time-sync must be in the *target* series domain (never source/foreign Y).
+   * Local Y at business time for a target pane (never source/foreign Y).
    */
-  function resolveCrosshairY(state, targetChart, targetSeries, param) {
-    const point = param.seriesData?.get?.(targetSeries);
-    const fromParam = point?.value ?? point?.close;
-    if (Number.isFinite(fromParam)) return fromParam;
-
+  function resolveLocalYAtTime(state, targetChart, targetSeries, time) {
+    if (time == null || !targetChart || !targetSeries) return null;
     const anchorId = crosshairAnchorId(state, targetChart);
-    if (anchorId) return hydratedValueAtTime(anchorId, param.time);
-
-    if (targetChart === state.charts.price) return candleCloseAtTime(param.time);
+    if (anchorId) return hydratedValueAtTime(anchorId, time);
+    if (targetChart === state.charts.price) return candleCloseAtTime(time);
     return null;
   }
 
@@ -385,8 +381,9 @@
 
   /**
    * Sync vertical crosshair time to peers. Each peer uses its own local Y — never source Y.
+   * Does not touch the hovered/source pane (native LWC crosshair).
    */
-  function syncPeerCrosshairTime(state, sourceHostId, time, param) {
+  function syncPeerCrosshairTime(state, sourceHostId, time) {
     if (!state?.charts || time == null) return;
     const panes = [
       { hostId: 'price', chart: state.charts.price },
@@ -401,8 +398,7 @@
         chart.clearCrosshairPosition?.();
         return;
       }
-      // Local Y only (target pane domain). Forbidden: source oscillator Y on price.
-      const yValue = resolveCrosshairY(state, chart, targetSeries, param);
+      const yValue = resolveLocalYAtTime(state, chart, targetSeries, time);
       if (yValue == null || !Number.isFinite(yValue)) {
         chart.clearCrosshairPosition?.();
         return;
@@ -422,16 +418,52 @@
     });
   }
 
+  function isInsidePaneWrap(node) {
+    if (!node || typeof node.closest !== 'function') return false;
+    return !!node.closest('.chart-wrap[data-pane-host]');
+  }
+
+  /**
+   * Authoritative hover: PaneLayout wrappers only (never .lwc-host internals).
+   */
+  function bindPointerHoverOwnership(state, disposers) {
+    if (typeof CrosshairController === 'undefined' || typeof document === 'undefined') return;
+    const root = document.getElementById('live-chart-container')
+      || document.querySelector('.pro-chart-root');
+    if (!root) return;
+
+    const onEnter = (e) => {
+      const wrap = e.currentTarget;
+      const hostId = wrap?.dataset?.paneHost;
+      if (!hostId) return;
+      CrosshairController.setHovered(hostId);
+    };
+    const onLeave = (e) => {
+      const related = e.relatedTarget;
+      if (isInsidePaneWrap(related)) return;
+      CrosshairController.setHovered(null);
+    };
+
+    root.querySelectorAll('.chart-wrap[data-pane-host]').forEach((wrap) => {
+      wrap.addEventListener('pointerenter', onEnter);
+      wrap.addEventListener('pointerleave', onLeave);
+      disposers.push(() => {
+        wrap.removeEventListener('pointerenter', onEnter);
+        wrap.removeEventListener('pointerleave', onLeave);
+      });
+    });
+  }
+
   function bindCrosshairController(state) {
     if (typeof CrosshairController === 'undefined' || !state?.charts) return;
 
     CrosshairController.bind({
       applyHorzVisibility: (map) => applyHorzVisibility(state, map),
-      syncPeerTime: (sourceHostId, time, param) => {
-        syncPeerCrosshairTime(state, sourceHostId, time, param);
+      syncPeerTime: (sourceHostId, time) => {
+        syncPeerCrosshairTime(state, sourceHostId, time);
       },
       clearPeerCrosshairs: (sourceHostId) => clearPeerCrosshairs(state, sourceHostId),
-      shouldIgnore: () => {
+      shouldIgnoreTimeSync: () => {
         if (_liveUpdating) return true;
         if (typeof TimeCamera !== 'undefined') {
           if (TimeCamera.isGesturing?.() || TimeCamera.isSyncing?.()) return true;
@@ -440,6 +472,9 @@
       },
     });
 
+    bindPointerHoverOwnership(state, state._disposers);
+
+    // LWC observational only: time signal → never setHovered.
     const panes = [
       { hostId: 'price', chart: state.charts.price },
       { hostId: 'wozduh', chart: state.charts.wozduh },
@@ -448,7 +483,19 @@
     panes.forEach(({ hostId, chart }) => {
       if (!chart?.subscribeCrosshairMove) return;
       chart.subscribeCrosshairMove((param) => {
-        CrosshairController.onCrosshairMove(hostId, param);
+        if (!param) return;
+        // Optional: ignore synthetic / non-pointer moves (not ownership — sync filter only).
+        if (param.point == null) return;
+        if (Object.prototype.hasOwnProperty.call(param, 'sourceEvent') && !param.sourceEvent) {
+          return;
+        }
+        const hovered = CrosshairController.getHovered();
+        if (!hovered || hostId !== hovered) return;
+        if (param.time == null) {
+          CrosshairController.syncTime({ sourceHostId: hostId, time: null });
+          return;
+        }
+        CrosshairController.syncTime({ sourceHostId: hostId, time: param.time });
       });
     });
   }
@@ -690,9 +737,9 @@
       applyHorzVisibility(_live, map);
     },
 
-    syncCrosshairTime(sourceHostId, time, param) {
+    syncCrosshairTime(sourceHostId, time) {
       if (!_live) return;
-      syncPeerCrosshairTime(_live, sourceHostId, time, param);
+      syncPeerCrosshairTime(_live, sourceHostId, time);
     },
 
     isInitialized(context) {

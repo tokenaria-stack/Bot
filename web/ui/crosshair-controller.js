@@ -1,11 +1,13 @@
 /**
- * CrosshairController — ADR-021 Phase 2.
+ * CrosshairController — ADR-021 hover ownership + V/H policy.
  *
- * Owns: hoveredHostId + V/H visibility / time-sync policy.
- * Does NOT own: timeline, barSpacing, scale, mouse routing.
- * Never propagates foreign Y between panes.
+ * Invariant: LWC events are observational, never authoritative.
+ * Browser pointer events (on PaneLayout wrappers) are authoritative for hoveredHostId.
  *
- * ChartAdapter binds apply hooks (sole LWC talker).
+ * Owns: hoveredHostId, hover/horz visibility policy, peer time-sync requests.
+ * Does NOT know: chart, series, LWC params, timeline, barSpacing.
+ *
+ * Public API is semantic only: setHovered / syncTime.
  */
 (function (global) {
   'use strict';
@@ -14,14 +16,14 @@
 
   /** @type {string|null} */
   let hoveredHostId = null;
-  let applying = false;
+  let syncingPeers = false;
 
   /**
    * @typedef {{
    *   applyHorzVisibility: (map: Record<string, boolean>) => void,
-   *   syncPeerTime: (sourceHostId: string, time: *, param: object) => void,
+   *   syncPeerTime: (sourceHostId: string, time: *) => void,
    *   clearPeerCrosshairs: (sourceHostId: string|null) => void,
-   *   shouldIgnore?: () => boolean,
+   *   shouldIgnoreTimeSync?: () => boolean,
    * }} CrosshairHooks
    * @type {CrosshairHooks|null}
    */
@@ -63,7 +65,7 @@
   function unbind() {
     hooks = null;
     hoveredHostId = null;
-    applying = false;
+    syncingPeers = false;
   }
 
   function getHovered() {
@@ -71,6 +73,7 @@
   }
 
   /**
+   * ONLY authoritative path for hover ownership (DOM pointer → ChartAdapter → here).
    * @param {string|null} hostId
    * @returns {boolean} true if hover changed
    */
@@ -79,48 +82,43 @@
     if (hoveredHostId === next) return false;
     hoveredHostId = next;
     applyHoverPolicy();
+    if (next == null) {
+      hooks?.clearPeerCrosshairs?.(null);
+    }
     return true;
   }
 
   /**
-   * ChartAdapter forwards LWC subscribeCrosshairMove here.
-   * @param {string} hostId
-   * @param {object} param
+   * Time-only sync request. Never changes hoveredHostId.
+   * @param {{ sourceHostId: string, time: * }} payload
+   * @returns {boolean} true if peer sync was requested
    */
-  function onCrosshairMove(hostId, param) {
-    if (applying) return;
-    if (hooks?.shouldIgnore && hooks.shouldIgnore()) return;
+  function syncTime(payload) {
+    if (hooks?.shouldIgnoreTimeSync && hooks.shouldIgnoreTimeSync()) return false;
+    if (!payload || typeof payload !== 'object') return false;
 
-    const id = normalizeHostId(hostId);
-    if (!id) return;
-
-    // No physical point → left this pane (or camera echo).
-    if (!param || !param.point) {
-      if (hoveredHostId === id) {
-        setHovered(null);
-        hooks?.clearPeerCrosshairs?.(null);
-      }
-      return;
+    const sourceHostId = normalizeHostId(payload.sourceHostId);
+    if (!sourceHostId) return false;
+    // Only the hovered pane may drive peer time sync.
+    if (hoveredHostId == null || sourceHostId !== hoveredHostId) return false;
+    if (payload.time == null) {
+      hooks?.clearPeerCrosshairs?.(sourceHostId);
+      return false;
     }
 
-    setHovered(id);
-
-    if (param.time == null) {
-      hooks?.clearPeerCrosshairs?.(id);
-      return;
-    }
-
-    applying = true;
+    syncingPeers = true;
     try {
-      // Peers: time sync only, each peer uses its own local Y inside ChartAdapter.
-      hooks?.syncPeerTime?.(id, param.time, param);
+      hooks?.syncPeerTime?.(sourceHostId, payload.time);
     } finally {
-      applying = false;
+      syncingPeers = false;
     }
+    // Re-assert horz policy after peer setCrosshairPosition (LWC may paint H).
+    applyHoverPolicy();
+    return true;
   }
 
-  function isApplying() {
-    return applying;
+  function isSyncingPeers() {
+    return syncingPeers;
   }
 
   /** @private tests */
@@ -134,9 +132,9 @@
     unbind,
     getHovered,
     setHovered,
-    onCrosshairMove,
+    syncTime,
     horzVisibilityMap,
-    isApplying,
+    isSyncingPeers,
     _resetForTests,
   };
 

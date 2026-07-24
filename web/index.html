@@ -1332,7 +1332,7 @@
 
       <div id="live-chart-container" class="pro-chart-root">
       <div class="charts-stack" id="charts-stack">
-      <div class="chart-wrap chart-wrapper" id="price-wrap">
+      <div class="chart-wrap chart-wrapper" id="price-wrap" data-pane-host="price">
         <div class="pane-label" id="volume-label">Vol<span class="val" id="volume-val">—</span></div>
         <div class="chart-legend" data-pane="price" data-context="live"></div>
         <div id="price-chart" class="lwc-host"></div>
@@ -1474,7 +1474,7 @@
       <div class="backtest-panel">
         <div id="backtest-chart-container" class="pro-chart-root">
           <div class="charts-stack" id="bt-charts-stack">
-            <div class="chart-wrap chart-wrapper" id="bt-price-wrap">
+            <div class="chart-wrap chart-wrapper" id="bt-price-wrap" data-pane-host="price">
               <div class="chart-legend" data-pane="price" data-context="backtest"></div>
               <div id="bt-price-chart" class="lwc-host"></div>
               <div class="scale-controls" data-scale-context="backtest" data-scale-pane="price" data-allow-log="true" aria-label="Price scale controls">
@@ -1802,8 +1802,8 @@
   <!-- <script src="/adapter.legacy.js?v=3.1.0" defer></script> -->
   <script src="/ui/scale-controller.js?v=4.1.1" defer></script>
   <script src="/ui/time-camera.js?v=1.0.0" defer></script>
-  <script src="/ui/crosshair-controller.js?v=1.0.0" defer></script>
-  <script src="/chart-core.js?v=4.3.0" defer></script>
+  <script src="/ui/crosshair-controller.js?v=1.1.0" defer></script>
+  <script src="/chart-core.js?v=4.4.0" defer></script>
   <script src="/ui/viewport-manager.js?v=3.4.4" defer></script>
   <script src="/ui/chart-projection.js?v=3.1.0" defer></script>
   <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>

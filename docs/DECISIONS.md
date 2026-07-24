@@ -417,11 +417,12 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 **Decision:**
 
 - **`CrosshairController`** owns only `hoveredHostId` + V/H policy. **Never** mutates timeline / TimeCamera state.
-- Hovered pane: vert + horz. Peers: vert time-sync only; horz hidden via `applyOptions`.
-- Peer Y is always **target-local** (candle close / osc series of that pane) — never source oscillator Y on price.
-- ChartAdapter is the only LWC talker (`applyHorzVisibility`, `syncPeerCrosshairTime`).
+- **Hover ownership (refinement):** `hoveredHostId` is set **only** from browser pointer events on PaneLayout wrappers (`data-pane-host`). Never from `subscribeCrosshairMove` / synthetic LWC. LWC events are observational; browser pointer is authoritative.
+- Semantic API: `setHovered(hostId)`, `syncTime({ sourceHostId, time })` — no chart/series/param.
+- Hovered pane: vert + horz. Peers: vert time-sync with **target-local** Y; horz hidden (re-asserted after peer sync).
+- ChartAdapter is the only LWC talker.
 
-**Deferred:** InteractionController (P3).
+**Deferred:** InteractionController (P3) — pointer→CrosshairController directly until IC has ≥2 jobs.
 
 **Consequences:** Module `web/ui/crosshair-controller.js`. Regression: `web/crosshair_controller_test.js`.
 
