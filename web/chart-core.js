@@ -117,11 +117,19 @@
 
   function crosshairOptions() {
     const base = typeof SHARED_CROSSHAIR !== 'undefined' ? { ...SHARED_CROSSHAIR } : {};
+    // Short dashes (LineStyle.Dashed) — not Dotted circles. Same V+H on every pane.
+    const dashed = (typeof LightweightCharts !== 'undefined')
+      ? LightweightCharts.LineStyle.Dashed
+      : 2;
+    const line = {
+      width: 1,
+      style: dashed,
+    };
     return {
       ...base,
       mode: 0, // CrosshairMode.Normal — free float with mouse (no Magnet)
-      vertLine: { ...(base.vertLine || {}), width: 1, style: 1 }, // LineStyle.Dotted
-      horzLine: { ...(base.horzLine || {}), width: 1, style: 1 },
+      vertLine: { ...(base.vertLine || {}), ...line },
+      horzLine: { ...(base.horzLine || {}), ...line },
     };
   }
 
@@ -365,6 +373,9 @@
 
   function applyHorzVisibility(state, map) {
     if (!state?.charts || !map) return;
+    const dashed = (typeof LightweightCharts !== 'undefined')
+      ? LightweightCharts.LineStyle.Dashed
+      : 2;
     Object.keys(map).forEach((hostId) => {
       const chart = chartForHostId(state, hostId);
       if (!chart?.applyOptions) return;
@@ -372,7 +383,16 @@
       try {
         chart.applyOptions({
           crosshair: {
-            horzLine: { visible, labelVisible: visible },
+            horzLine: {
+              visible,
+              labelVisible: visible,
+              width: 1,
+              style: dashed,
+            },
+            vertLine: {
+              width: 1,
+              style: dashed,
+            },
           },
         });
       } catch { /* */ }
