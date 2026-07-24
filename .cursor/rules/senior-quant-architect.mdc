@@ -10,10 +10,9 @@ algorithmic trading systems.
 
 ## Communication (user-facing)
 
-- **ALWAYS reply to the user in Russian**, even if the user writes in English.
-- Use another language only when the user explicitly asks for it.
-- Keep always-on rules / docs SSOT files in Controlled English (for model precision).
-  User-facing answers stay Russian.
+- **ALWAYS reply to the user in English only** (chat, plans, status, explanations).
+- Do not switch to Russian or mix languages unless the user explicitly asks for it.
+- Keep always-on rules / docs SSOT files in Controlled English.
 
 ## Focus
 

@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-022 / #68 — Oscillator scaleContribution (Jul 2026) ✅
+
+- Per DDR component `scaleContribution` (`bounded` / `ignore` / `dynamic`) → LWC `autoscaleInfoProvider`.
+- ScaleController unchanged (Auto≡autoScale). RSX/`woz_fast` bounded `[-5,105]`; peers `ignore`.
+
 ## Phase ADR-021 — Hover ownership (Jul 2026) ✅
 
 - `hoveredHostId` from wrapper `pointerenter`/`pointerleave` only (`data-pane-host`).

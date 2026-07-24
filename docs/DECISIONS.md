@@ -410,7 +410,28 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 ---
 
-## ADR-021 Phase 2 — CrosshairController
+## ADR-022 — Oscillator Scale Contribution (Debt #68)
+
+**Context:** RSX/Wozduh Auto fitted Y to visible samples (bounce). Forcing `setVisibleRange` / special-casing ScaleController was rejected (broke load; inverted Auto≡autoScale).
+
+**Decision:**
+
+- **ScaleController** stays Auto / Manual / Log only (`autoScale` true/false). No oscillator domains.
+- Each **DDR component** may declare `renderOptions.scaleContribution`: `dynamic` | `bounded` | `ignore`.
+- Tiny **`ScaleContribution.createAutoscaleProvider`** maps contribution → LWC `autoscaleInfoProvider`.
+- **SeriesFactory** strips `scaleContribution` and attaches the provider — no hostId / primary heuristics.
+- Ship only three types. No `symmetric` / `boundedFloor` until a real consumer.
+
+**Wire:**
+
+- `line_rsx` → `bounded(-5,105)`; `line_rsx_signal` → `ignore`.
+- `woz_fast` → `bounded(-5,105)`; other Wozduh lines → `ignore`.
+
+**Rejected:** ScaleController range freeze; `hostId === "rsx"`; `isPrimaryLine`; parallel `INDICATORS_CONFIG`.
+
+**Consequences:** Debt **#68** closed. Modules: `web/ui/scale-contribution.js`, `web/series-factory.js`, `ui_config/rsx_layout.go`, `ui_config/wozduh_layout.go`. Tests: `web/scale_contribution_test.js`, `ui_config/scale_contribution_test.go`.
+
+---
 
 **Context:** Syncing crosshair with `setCrosshairPosition` onto price while hovering footers painted a horizontal line in the price domain (foreign UX).
 

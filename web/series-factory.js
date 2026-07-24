@@ -2,6 +2,12 @@
  * DDRFactory — Data-Driven Rendering (DDR) module (Phase 6 cutover).
  * Manifest-driven series mount + columnar history hydration + live tick updates.
  */
+const ScaleContributionApi = (typeof ScaleContribution !== 'undefined')
+  ? ScaleContribution
+  : (typeof require === 'function'
+    ? (() => { try { return require('./ui/scale-contribution.js'); } catch { return null; } })()
+    : null);
+
 class DDRFactory {
   /** @type {number} Server-side sentinel (wire.HistoryAbsent / math.MaxFloat64). */
   static get HISTORY_ABSENT() {
@@ -241,6 +247,15 @@ class DDRFactory {
     // scaleMargins belongs on PriceScale, not SeriesOptions.
     const scaleMargins = seriesOpts.scaleMargins;
     delete seriesOpts.scaleMargins;
+    // ADR-022: DDR domain contribution — not an LWC series option key.
+    const scaleContribution = seriesOpts.scaleContribution;
+    delete seriesOpts.scaleContribution;
+    if (ScaleContributionApi && typeof ScaleContributionApi.createAutoscaleProvider === 'function') {
+      const provider = ScaleContributionApi.createAutoscaleProvider(scaleContribution);
+      if (provider !== undefined) {
+        seriesOpts.autoscaleInfoProvider = provider;
+      }
+    }
 
     let series;
     switch (kind) {
