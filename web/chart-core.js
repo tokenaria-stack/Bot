@@ -36,20 +36,58 @@
     return new Date(sec * 1000);
   }
 
+  /** LWC TickMarkType ids (fallback when library not loaded — e.g. Node source tests). */
+  function tickMarkTypes() {
+    if (typeof LightweightCharts !== 'undefined' && LightweightCharts.TickMarkType) {
+      return LightweightCharts.TickMarkType;
+    }
+    return { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 };
+  }
+
   /**
-   * Ported from adapter.legacy chartTimeFormatBundle, with cached Intl instances.
-   * LWC default tick marks use UTC components; we format in the browser local TZ.
+   * Debt #91 — local-TZ formatters (display only).
+   * Crosshair: detailed datetime. Axis ticks: minimal by TickMarkType (not currentTf).
    */
   function chartTimeFormatBundle() {
     if (_timeFormatBundle) return _timeFormatBundle;
 
-    const locale = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+    // Chart chrome is always English (TV-style), independent of browser UI locale.
+    // Timezone remains the browser's local zone — only month/day names are fixed.
+    const locale = 'en-US';
     const timeZone = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : undefined;
 
     const dtfOpts = timeZone ? { timeZone } : {};
-    const dtfTime = new Intl.DateTimeFormat(locale, {
+    // Crosshair label — TV-style detailed (e.g. "24 Jul 2026, 21:10").
+    const dtfCrosshair = new Intl.DateTimeFormat(locale, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      ...dtfOpts,
+    });
+    // Axis / date-only helpers (minimal).
+    const dtfYear = new Intl.DateTimeFormat(locale, { year: 'numeric', ...dtfOpts });
+    const dtfMonth = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      year: '2-digit',
+      ...dtfOpts,
+    });
+    const dtfDay = new Intl.DateTimeFormat(locale, {
+      day: '2-digit',
+      month: 'short',
+      ...dtfOpts,
+    });
+    const dtfHm = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      ...dtfOpts,
+    });
+    const dtfHms = new Intl.DateTimeFormat(locale, {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
@@ -63,20 +101,30 @@
       ...dtfOpts,
     });
 
-    const formatTime = (time) => dtfTime.format(unixChartTimeToDate(time));
+    const formatCrosshairTime = (time) => dtfCrosshair.format(unixChartTimeToDate(time));
     const formatDate = (time) => dtfDate.format(unixChartTimeToDate(time));
 
+    const T = tickMarkTypes();
     const tickMarkFormatter = (time, tickMarkType) => {
-      if (typeof LightweightCharts !== 'undefined'
-        && tickMarkType === LightweightCharts.TickMarkType.Time) {
-        return formatTime(time);
+      const d = unixChartTimeToDate(time);
+      switch (tickMarkType) {
+        case T.Year:
+          return dtfYear.format(d);
+        case T.Month:
+          return dtfMonth.format(d);
+        case T.DayOfMonth:
+          return dtfDay.format(d);
+        case T.TimeWithSeconds:
+          return dtfHms.format(d);
+        case T.Time:
+        default:
+          return dtfHm.format(d);
       }
-      return formatDate(time);
     };
 
     _timeFormatBundle = {
       locale,
-      timeFormatter: formatTime,
+      timeFormatter: formatCrosshairTime,
       dateFormatter: formatDate,
       tickMarkFormatter,
     };
@@ -88,22 +136,42 @@
     return { locale, timeFormatter, dateFormatter };
   }
 
-  function layoutOptions() {
-    const tv = typeof TV !== 'undefined' ? TV : { bg: '#131722', grid: '#1e222d', border: '#2a2e39', text: '#787b86' };
+  function themeChrome() {
+    if (typeof ChartTheme !== 'undefined') {
+      return {
+        bg: ChartTheme.bg,
+        grid: ChartTheme.grid,
+        border: ChartTheme.border,
+        text: ChartTheme.text,
+        textBright: ChartTheme.textBright,
+      };
+    }
+    const tv = typeof TV !== 'undefined' ? TV : {};
     return {
-      background: { color: tv.bg },
-      textColor: tv.text,
+      bg: tv.bg || '#131722',
+      grid: tv.grid || '#1e222d',
+      border: tv.border || '#2A2E39',
+      text: tv.text || '#787b86',
+      textBright: '#D1D4DC',
+    };
+  }
+
+  function layoutOptions() {
+    const t = themeChrome();
+    return {
+      background: { color: t.bg },
+      textColor: t.text,
       fontSize: 11,
       attributionLogo: false,
     };
   }
 
   function gridOptions(horzVisible = true) {
-    const tv = typeof TV !== 'undefined' ? TV : { grid: '#1e222d' };
+    const t = themeChrome();
     return {
-      vertLines: { color: tv.grid, style: LightweightCharts.LineStyle.Dotted },
+      vertLines: { color: t.grid, style: LightweightCharts.LineStyle.Dotted },
       horzLines: horzVisible
-        ? { color: tv.grid, style: LightweightCharts.LineStyle.Dotted }
+        ? { color: t.grid, style: LightweightCharts.LineStyle.Dotted }
         : { visible: false },
     };
   }
@@ -115,32 +183,59 @@
     return base;
   }
 
-  function crosshairOptions() {
-    const base = typeof SHARED_CROSSHAIR !== 'undefined' ? { ...SHARED_CROSSHAIR } : {};
-    // Short dashes (LineStyle.Dashed) — not Dotted circles. Same V+H on every pane.
+  /**
+   * Shared vert-line chrome (Debt #91). Must be re-applied in applyHorzVisibility
+   * so peer sync cannot wipe label contrast.
+   */
+  function vertLineChrome(extra = {}) {
+    const t = themeChrome();
     const dashed = (typeof LightweightCharts !== 'undefined')
       ? LightweightCharts.LineStyle.Dashed
       : 2;
-    const line = {
+    return {
       width: 1,
       style: dashed,
+      labelVisible: true,
+      labelBackgroundColor: t.border || '#2A2E39',
+      labelTextColor: t.textBright || '#D1D4DC',
+      ...extra,
     };
+  }
+
+  /** Price-scale crosshair label contrast (same tokens as vert). */
+  function horzLineChrome(extra = {}) {
+    const t = themeChrome();
+    const dashed = (typeof LightweightCharts !== 'undefined')
+      ? LightweightCharts.LineStyle.Dashed
+      : 2;
+    return {
+      width: 1,
+      style: dashed,
+      labelVisible: true,
+      labelBackgroundColor: t.border || '#2A2E39',
+      labelTextColor: t.textBright || '#D1D4DC',
+      ...extra,
+    };
+  }
+
+  function crosshairOptions() {
+    const base = typeof SHARED_CROSSHAIR !== 'undefined' ? { ...SHARED_CROSSHAIR } : {};
     return {
       ...base,
       mode: 0, // CrosshairMode.Normal — free float with mouse (no Magnet)
-      vertLine: { ...(base.vertLine || {}), ...line },
-      horzLine: { ...(base.horzLine || {}), ...line },
+      vertLine: { ...(base.vertLine || {}), ...vertLineChrome() },
+      horzLine: { ...(base.horzLine || {}), ...horzLineChrome() },
     };
   }
 
   function priceScaleOptions(hostId, extra = {}) {
-    const tv = typeof TV !== 'undefined' ? TV : { border: '#2a2e39' };
+    const t = themeChrome();
     const id = hostId || 'price';
     const prefs = typeof ScaleController !== 'undefined'
       ? ScaleController.getState('live', id)
       : { isAuto: true, isLog: false };
     return {
-      borderColor: tv.border,
+      borderColor: t.border,
       autoScale: !!prefs.isAuto,
       minimumWidth: PRICE_SCALE_MIN,
       alignLabels: true,
@@ -406,9 +501,6 @@
 
   function applyHorzVisibility(state, map) {
     if (!state?.charts || !map) return;
-    const dashed = (typeof LightweightCharts !== 'undefined')
-      ? LightweightCharts.LineStyle.Dashed
-      : 2;
     Object.keys(map).forEach((hostId) => {
       const chart = chartForHostId(state, hostId);
       if (!chart?.applyOptions) return;
@@ -416,16 +508,12 @@
       try {
         chart.applyOptions({
           crosshair: {
-            horzLine: {
+            // Re-assert vert chrome so peer sync cannot wipe Debt #91 label colors.
+            vertLine: vertLineChrome(),
+            horzLine: horzLineChrome({
               visible,
               labelVisible: visible,
-              width: 1,
-              style: dashed,
-            },
-            vertLine: {
-              width: 1,
-              style: dashed,
-            },
+            }),
           },
         });
       } catch { /* */ }

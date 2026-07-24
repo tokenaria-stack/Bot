@@ -382,7 +382,7 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - UI: `.scale-controls` with `data-scale-pane` / `data-allow-log`.
 - **Persistence invariant:** prefs must be self-sufficient. Valid = Auto ON, or Auto OFF + `manualRange {min,max}`. Invalid Auto OFF (no range yet) is repaired to Auto ON via pure `repairScalePrefs` (preserve Log; dirty → one write). `manualRange` is a future socket — not written this phase.
 
-**Deferred:** `RulerController`; persist Manual Y range; HH:mm crosshair datetime polish. Bottom axis → **ADR-023**.
+**Deferred:** persist Manual Y range. HH:mm crosshair datetime polish → **closed (Debt #91 chrome)**. Bottom axis → **ADR-023**. Ruler → **ADR-025**.
 
 **Rejected:** Global Auto/Log for all charts; Log on osc panes; group scale apply in P1; reviving legacy adapters.
 

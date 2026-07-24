@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase Debt #91 — Datetime chrome (Jul 2026) ✅
+
+- `localization.timeFormatter`: detailed local-TZ crosshair (`dd MMM yyyy HH:mm`).
+- `tickMarkFormatter`: minimal labels by LWC `TickMarkType` (not `currentTf`).
+- `vertLineChrome()` shared by create options + `applyHorzVisibility` (peer sync cannot wipe contrast).
+- No new controllers/DOM; ADR-023 ownership unchanged.
+
 ## Phase ADR-025 — TV Ruler complete (Jul 2026) ✅
 
 - Anchors `logical+price` (time optional); two-click FSM; finite rectangle; `RulerMetrics` tooltip (no Vol).

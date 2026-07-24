@@ -243,7 +243,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 
 **Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE). Frame runtime replay = closed→forming lifecycle (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
-**Time axis labels:** UTC unix data unchanged; LWC `localization` + `tickMarkFormatter` format in browser local TZ ([`web/chart-core.js`](../web/chart-core.js)).  
+**Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner still via ADR-023 `timeScale.visible`.  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  
 **Floating menus:** `position:fixed` viewport (`floating-menu.js`).
 
