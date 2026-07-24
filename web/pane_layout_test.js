@@ -262,4 +262,88 @@ test('price allowed as fullscreen target', () => {
   assert.strictEqual(layout.getFullscreen(), 'price');
 });
 
+// ─── ADR-023 bottom time axis owner ─────────────────────────────────────────
+
+test('resolveBottomTimeAxisHostId: last visible footer owns axis', () => {
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['wozduh', 'rsx'],
+      visible: ['wozduh', 'rsx'],
+      fullscreenPaneId: null,
+    }),
+    'rsx',
+  );
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['rsx', 'wozduh'],
+      visible: ['rsx', 'wozduh'],
+      fullscreenPaneId: null,
+    }),
+    'wozduh',
+  );
+});
+
+test('resolveBottomTimeAxisHostId: no footers → price; hidden last skipped', () => {
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['wozduh', 'rsx'],
+      visible: [],
+      fullscreenPaneId: null,
+    }),
+    'price',
+  );
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['wozduh', 'rsx'],
+      visible: ['wozduh'],
+      fullscreenPaneId: null,
+    }),
+    'wozduh',
+  );
+});
+
+test('resolveBottomTimeAxisHostId: fullscreen overrides stack bottom', () => {
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['wozduh', 'rsx'],
+      visible: ['wozduh', 'rsx'],
+      fullscreenPaneId: 'price',
+    }),
+    'price',
+  );
+  assert.strictEqual(
+    PaneLayout.resolveBottomTimeAxisHostId({
+      order: ['wozduh', 'rsx'],
+      visible: ['wozduh', 'rsx'],
+      fullscreenPaneId: 'wozduh',
+    }),
+    'wozduh',
+  );
+});
+
+test('exactly one showsBottomTimeAxis among price+footers', () => {
+  const state = {
+    order: ['wozduh', 'rsx'],
+    visible: ['wozduh', 'rsx'],
+    fullscreenPaneId: null,
+  };
+  const hosts = ['price', 'wozduh', 'rsx'];
+  const owners = hosts.filter((h) => PaneLayout.showsBottomTimeAxis(state, h));
+  assert.deepStrictEqual(owners, ['rsx']);
+});
+
+test('instance getBottomTimeAxisHostId tracks reorder/hide', () => {
+  const layout = PaneLayout.create({ storage: memoryStorage() });
+  layout.init({ manifest: sampleManifest() });
+  // default catalog order from sample: rsx, wozduh
+  assert.strictEqual(layout.getBottomTimeAxisHostId(), 'wozduh');
+  layout.setOrder(['wozduh', 'rsx']);
+  assert.strictEqual(layout.getBottomTimeAxisHostId(), 'rsx');
+  layout.setVisible('rsx', false);
+  assert.strictEqual(layout.getBottomTimeAxisHostId(), 'wozduh');
+  layout.setVisible('wozduh', false);
+  assert.strictEqual(layout.getBottomTimeAxisHostId(), 'price');
+  assert.strictEqual(layout.showsBottomTimeAxis('price'), true);
+});
+
 console.log('pane_layout_test: ALL PASS');

@@ -149,17 +149,23 @@
     };
   }
 
+  /**
+   * Time-scale chrome for one pane.
+   * @param {boolean} showAxisLabels labels + visible strip (bottom owner only)
+   */
   function unifiedTimeScaleOptions(showAxisLabels) {
     const base = timeScaleOptions();
     const { tickMarkFormatter } = chartTimeFormatBundle();
+    const show = !!showAxisLabels;
     const opts = {
       ...base,
-      timeVisible: showAxisLabels,
+      visible: show,
+      timeVisible: show,
       secondsVisible: false,
     };
-    // Keep axis/grid geometry; hide tick labels on slave panes only.
-    // Price pane: local-TZ formatter (LWC default is UTC components → 8h skew in UTC+8).
-    if (!showAxisLabels) {
+    // Non-owner: hide the strip entirely (ADR-023 — no reserved blank axis height).
+    // Owner: local-TZ formatter (LWC default is UTC components → 8h skew in UTC+8).
+    if (!show) {
       opts.tickMarkFormatter = () => '';
     } else {
       opts.tickMarkFormatter = tickMarkFormatter;
@@ -212,6 +218,7 @@
         // Default peer state; CrosshairController enables horz only while hovered.
         horzLine: { visible: false, labelVisible: false },
       },
+      // ADR-023: default no bottom axis; LayoutController → setBottomTimeAxis picks the owner.
       timeScale: unifiedTimeScaleOptions(false),
       width,
       height,
@@ -232,6 +239,30 @@
         scaleMargins: { top: 0.05, bottom: 0.05 },
       }),
     });
+  }
+
+  /**
+   * ADR-023: mirror PaneLayout bottom-axis owner into LWC timeScale.visible.
+   * ChartAdapter only applies; does not decide ownership.
+   * @param {string} ownerHostId from PaneLayout.getBottomTimeAxisHostId()
+   */
+  function setBottomTimeAxis(ownerHostId) {
+    if (!_live?.charts) return;
+    const owner = String(ownerHostId || 'price').trim() || 'price';
+    const panes = [
+      { hostId: 'price', chart: _live.charts.price },
+      { hostId: 'wozduh', chart: _live.charts.wozduh },
+      { hostId: 'rsx', chart: _live.charts.rsx },
+    ];
+    for (const { hostId, chart } of panes) {
+      if (!chart || typeof chart.timeScale !== 'function') continue;
+      const show = hostId === owner;
+      try {
+        chart.timeScale().applyOptions(unifiedTimeScaleOptions(show));
+      } catch {
+        /* disposed */
+      }
+    }
   }
 
   function isFiniteLogicalRange(range) {
@@ -279,11 +310,11 @@
   }
 
   /**
-   * ADR-021: every pane proposes; TimeCamera commits; apply under echo lock.
+   * ADR-021/024: every pane proposes via InteractionController → TimeCamera.
    * Y-scale gestures do not emit visible-logical-range changes (LWC).
    */
   function subscribePaneTimeProposals(state) {
-    if (typeof TimeCamera === 'undefined' || !state?.charts) return;
+    if (typeof InteractionController === 'undefined' || !state?.charts) return;
     const panes = [
       { hostId: 'price', chart: state.charts.price },
       { hostId: 'wozduh', chart: state.charts.wozduh },
@@ -292,14 +323,14 @@
     panes.forEach(({ hostId, chart }) => {
       if (!chart?.timeScale) return;
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (!range || TimeCamera.isSyncing() || _liveUpdating) return;
+        if (!range || _liveUpdating) return;
         if (!isFiniteLogicalRange(range)) return;
         let barSpacing = null;
         try {
           const s = chart.timeScale().options()?.barSpacing;
           if (Number.isFinite(s) && s > 0) barSpacing = s;
         } catch { /* */ }
-        TimeCamera.proposeFromPane(hostId, range, barSpacing);
+        InteractionController.onRangeChanged(hostId, range, barSpacing);
       });
     });
   }
@@ -445,9 +476,10 @@
 
   /**
    * Authoritative hover: PaneLayout wrappers only (never .lwc-host internals).
+   * DOM leave resolution stays here; InteractionController only receives the decision.
    */
   function bindPointerHoverOwnership(state, disposers) {
-    if (typeof CrosshairController === 'undefined' || typeof document === 'undefined') return;
+    if (typeof InteractionController === 'undefined' || typeof document === 'undefined') return;
     const root = document.getElementById('live-chart-container')
       || document.querySelector('.pro-chart-root');
     if (!root) return;
@@ -456,12 +488,12 @@
       const wrap = e.currentTarget;
       const hostId = wrap?.dataset?.paneHost;
       if (!hostId) return;
-      CrosshairController.setHovered(hostId);
+      InteractionController.onPointerEnter(hostId);
     };
     const onLeave = (e) => {
       const related = e.relatedTarget;
       if (isInsidePaneWrap(related)) return;
-      CrosshairController.setHovered(null);
+      InteractionController.onPointerLeave();
     };
 
     root.querySelectorAll('.chart-wrap[data-pane-host]').forEach((wrap) => {
@@ -494,7 +526,7 @@
 
     bindPointerHoverOwnership(state, state._disposers);
 
-    // LWC observational only: time signal → never setHovered.
+    // LWC observational only: extract time → InteractionController (never setHovered here).
     const panes = [
       { hostId: 'price', chart: state.charts.price },
       { hostId: 'wozduh', chart: state.charts.wozduh },
@@ -504,18 +536,12 @@
       if (!chart?.subscribeCrosshairMove) return;
       chart.subscribeCrosshairMove((param) => {
         if (!param) return;
-        // Optional: ignore synthetic / non-pointer moves (not ownership — sync filter only).
         if (param.point == null) return;
         if (Object.prototype.hasOwnProperty.call(param, 'sourceEvent') && !param.sourceEvent) {
           return;
         }
-        const hovered = CrosshairController.getHovered();
-        if (!hovered || hostId !== hovered) return;
-        if (param.time == null) {
-          CrosshairController.syncTime({ sourceHostId: hostId, time: null });
-          return;
-        }
-        CrosshairController.syncTime({ sourceHostId: hostId, time: param.time });
+        if (typeof InteractionController === 'undefined') return;
+        InteractionController.onCrosshairMove(hostId, param.time == null ? null : param.time);
       });
     });
   }
@@ -573,10 +599,10 @@
     const wozduhChart = createSlaveChart(wozHost, wozSize.width, wozSize.height, 'wozduh');
     const rsxChart = createSlaveChart(rsxHost, rsxSize.width, rsxSize.height, 'rsx');
 
-    const sharedTs = unifiedTimeScaleOptions(false);
-    wozduhChart.timeScale().applyOptions(sharedTs);
-    rsxChart.timeScale().applyOptions(sharedTs);
+    // Bootstrap: price owns axis until LayoutController applies PaneLayout owner.
     priceChart.timeScale().applyOptions(unifiedTimeScaleOptions(true));
+    wozduhChart.timeScale().applyOptions(unifiedTimeScaleOptions(false));
+    rsxChart.timeScale().applyOptions(unifiedTimeScaleOptions(false));
 
     const priceCfg = resolvePricePaneConfig();
     const candleOpts = priceCfg?.candle || { upColor: '#089981', downColor: '#f23645', wickUpColor: '#089981', wickDownColor: '#f23645', borderVisible: false };
@@ -670,6 +696,12 @@
       if (typeof LightweightCharts === 'undefined') return false;
       if (_live?.charts?.price) return true;
       _live = buildLiveState(selectors);
+      // ADR-023: LayoutController often attaches before charts exist — re-mirror owner now.
+      if (typeof LayoutController !== 'undefined' && typeof LayoutController.apply === 'function') {
+        LayoutController.apply();
+      } else if (typeof paneLayout !== 'undefined' && paneLayout?.getBottomTimeAxisHostId) {
+        setBottomTimeAxis(paneLayout.getBottomTimeAxisHostId());
+      }
       return !!_live;
     },
 
@@ -746,10 +778,13 @@
       });
     },
 
-    /** ADR-021 P2 — thin CrosshairController surface (no policy here). */
+    /** ADR-021 P3 — hover via InteractionController (no policy here). */
     setHoveredPane(hostId) {
-      if (typeof CrosshairController === 'undefined') return false;
-      return CrosshairController.setHovered(hostId);
+      if (typeof InteractionController === 'undefined') return false;
+      if (hostId == null || hostId === '') {
+        return InteractionController.onPointerLeave();
+      }
+      return InteractionController.onPointerEnter(hostId);
     },
 
     applyCrosshairVisibility(map) {
@@ -760,6 +795,14 @@
     syncCrosshairTime(sourceHostId, time) {
       if (!_live) return;
       syncPeerCrosshairTime(_live, sourceHostId, time);
+    },
+
+    /**
+     * ADR-023 — apply PaneLayout bottom time-axis owner (mirror only).
+     * @param {string} ownerHostId
+     */
+    setBottomTimeAxis(ownerHostId) {
+      setBottomTimeAxis(ownerHostId);
     },
 
     isInitialized(context) {

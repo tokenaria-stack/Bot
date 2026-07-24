@@ -94,6 +94,35 @@
   }
 
   /**
+   * ADR-023: which pane owns the single visible bottom time axis.
+   * Derived from PaneLayout state only (fullscreen → else last visible footer → else price).
+   * Not hostId hardcoding; ChartAdapter must not recompute this.
+   * @param {{ order?: string[], visible?: string[], fullscreenPaneId?: string|null }|null|undefined} state
+   * @returns {string} 'price' or a footer HostID
+   */
+  function resolveBottomTimeAxisHostId(state) {
+    if (!state || typeof state !== 'object') return 'price';
+    const fs = state.fullscreenPaneId;
+    if (fs != null && String(fs).trim() !== '') {
+      return String(fs).trim();
+    }
+    const visible = new Set(Array.isArray(state.visible) ? state.visible : []);
+    const order = Array.isArray(state.order) ? state.order : [];
+    let last = null;
+    for (const id of order) {
+      if (visible.has(id)) last = id;
+    }
+    return last || 'price';
+  }
+
+  /** @param {object} state @param {string} hostId */
+  function showsBottomTimeAxis(state, hostId) {
+    const id = String(hostId || '').trim();
+    if (!id) return false;
+    return resolveBottomTimeAxisHostId(state) === id;
+  }
+
+  /**
    * Intersect saved layout with current catalog. Version mismatch → defaults.
    * Hidden hosts keep footerHeights; unknown hosts dropped; new hosts appended.
    */
@@ -429,6 +458,14 @@
       return setFullscreen(id);
     }
 
+    function getBottomTimeAxisHostId() {
+      return resolveBottomTimeAxisHostId(state);
+    }
+
+    function paneShowsBottomTimeAxis(hostId) {
+      return showsBottomTimeAxis(state, hostId);
+    }
+
     function subscribe(listener) {
       if (typeof listener !== 'function') return () => {};
       listeners.add(listener);
@@ -517,6 +554,8 @@
       setFullscreen,
       toggleFullscreen,
       getFullscreen,
+      getBottomTimeAxisHostId,
+      showsBottomTimeAxis: paneShowsBottomTimeAxis,
       getState,
       mountIndMenu,
       /** @private tests */
@@ -530,6 +569,8 @@
     restoreFromSaved,
     defaultState,
     clampHeightPx,
+    resolveBottomTimeAxisHostId,
+    showsBottomTimeAxis,
     VERSION,
     LS_KEY,
     DEFAULT_FOOTER_HEIGHT_PX,

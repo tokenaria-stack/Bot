@@ -382,7 +382,7 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - UI: `.scale-controls` with `data-scale-pane` / `data-allow-log`.
 - **Persistence invariant:** prefs must be self-sufficient. Valid = Auto ON, or Auto OFF + `manualRange {min,max}`. Invalid Auto OFF (no range yet) is repaired to Auto ON via pure `repairScalePrefs` (preserve Log; dirty → one write). `manualRange` is a future socket — not written this phase.
 
-**Deferred:** `PaneLayout.getBottomPane` + `ChartAdapter.setBottomAxis`; HH:mm + crosshair `Thu 23 Jul '26 14:05`; `RulerController`; persist Manual Y range.
+**Deferred:** `RulerController`; persist Manual Y range; HH:mm crosshair datetime polish. Bottom axis → **ADR-023**.
 
 **Rejected:** Global Auto/Log for all charts; Log on osc panes; group scale apply in P1; reviving legacy adapters.
 
@@ -402,7 +402,7 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - No chart is semantic master; any HostID may propose.
 - **ViewportManager** / **ScaleController** untouched (capture-restore and Y scale). ViewportManager may still call `ChartAdapter.setVisibleLogicalRange` (routes to TimeCamera).
 
-**Deferred:** CrosshairController (P2), InteractionController (P3).
+**Deferred:** CrosshairController (P2) ✅, InteractionController (P3) → **ADR-024**.
 
 **Rejected:** Keeping wheel proxy; price-as-master sync; InteractionController in P0/P1.
 
@@ -433,6 +433,27 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 ---
 
+## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
+
+**Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.
+
+**Decision:**
+
+- **One timeline, one visible bottom axis.** PaneLayout declares the owner via `resolveBottomTimeAxisHostId(state)` (fullscreen → else last visible footer in `order` → else `price`).
+- **LayoutController** allocates stack geometry and marks `data-bottom-time-axis`; calls `ChartAdapter.setBottomTimeAxis(owner)`.
+- **ChartAdapter** only mirrors: `timeScale.visible` / labels on for the owner, **off** for all other panes (reclaim strip height). No `hostId === "wozduh"` branching.
+- **TimeCamera / Crosshair / ScaleController / ScaleContribution** unchanged.
+
+**Keep:** 4px pane splitters (resize chrome). They are not phantom axis gaps.
+
+**Rejected:** Negative margins / CSS overlap; blank-but-visible slave axes; hardcoding Wozduh as axis owner; deleting gutters.
+
+**Consequences:** Closes ADR-020 deferred `getBottomPane` + `setBottomAxis` for the live stack. Modules: `pane-layout.js`, `layout-controller.js`, `chart-core.js`. Tests: `pane_layout_test.js`, `bottom_time_axis_test.js`. Debt **#91** partial (Ruler still open).
+
+---
+
+## ADR-021 Phase 2 — CrosshairController
+
 **Context:** Syncing crosshair with `setCrosshairPosition` onto price while hovering footers painted a horizontal line in the price domain (foreign UX).
 
 **Decision:**
@@ -443,7 +464,30 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - Hovered pane: vert + horz. Peers: vert time-sync with **target-local** Y; horz hidden (re-asserted after peer sync).
 - ChartAdapter is the only LWC talker.
 
-**Deferred:** InteractionController (P3) — pointer→CrosshairController directly until IC has ≥2 jobs.
+**Deferred:** (none for interaction stack — ADR-024 completes P3). Ruler / datetime chrome are separate ADRs.
 
 **Consequences:** Module `web/ui/crosshair-controller.js`. Regression: `web/crosshair_controller_test.js`.
+
+---
+
+## ADR-024 — InteractionController (Complete ADR-021 P3)
+
+**Context:** TimeCamera and CrosshairController worked, but ChartAdapter still routed LWC events into them directly — adapter + interaction router in one module.
+
+**Decision:**
+
+- **`InteractionController`** owns interaction routing only: `onPointerEnter` / `onPointerLeave` / `onRangeChanged` / `onCrosshairMove` / `dispose`.
+- **ChartAdapter** keeps LWC subscriptions, DOM leave resolution, and LWC→semantic extraction; forwards to InteractionController. System/compositor `TimeCamera.commit` paths stay on ChartAdapter (not user interaction).
+- **TimeCamera / CrosshairController / ScaleController** unchanged. ScaleController Y-hit remains on LayoutController until a second consumer needs IC to filter it (Rule 6 — no unused socket).
+- No event bus, no PointerDispatcher, no generic framework.
+
+**Pipeline:**
+
+```
+LWC → ChartAdapter → InteractionController → TimeCamera | CrosshairController
+```
+
+**Rejected:** Moving LWC apply hooks into IC; inventing ScaleController routing without a consumer; behavioral changes.
+
+**Consequences:** Completes ADR-021. Module: `web/ui/interaction-controller.js`. Tests: `web/interaction_controller_test.js`. Next UI feature (Ruler) plugs into IC.
 

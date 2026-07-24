@@ -698,7 +698,7 @@
   position: relative;
 }
 
-/* ── Price scale controls (TradingView-style, bottom of Y-axis) ── */
+/* Price / bottom-axis owner: clear the time-axis strip. */
 .scale-controls {
   position: absolute;
   right: 6px;
@@ -712,10 +712,14 @@
   pointer-events: auto;
 }
 
-/* Footers have no time-axis strip yet — sit closer to the bottom edge. */
-.osc-wrap .scale-controls,
-.rsx-wrap .scale-controls {
+/* Intermediate panes: no visible time axis (ADR-023) — sit closer to the edge. */
+.chart-wrap[data-bottom-time-axis="0"] .scale-controls {
   bottom: 6px;
+}
+
+/* Explicit owner (footer or price) keeps clearance above the axis. */
+.chart-wrap[data-bottom-time-axis="1"] .scale-controls {
+  bottom: 22px;
 }
 
 .scale-btn {

@@ -8,6 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-024 / ADR-021 P3 — InteractionController (Jul 2026) ✅
+
+- Thin router: pointer / range / crosshair-time → TimeCamera + CrosshairController.
+- ChartAdapter is LWC-only for interaction; no behavior change. Ruler can plug in next.
+
+## Phase ADR-023 — Single bottom time axis (Jul 2026) ✅
+
+- PaneLayout owns bottom-axis HostID; LayoutController marks DOM + calls `ChartAdapter.setBottomTimeAxis`.
+- Non-owner panes: `timeScale.visible: false` (no blank reserved strip). Splitter gutters kept.
+
 ## Phase ADR-022 / #68 — Oscillator scaleContribution (Jul 2026) ✅
 
 - Per DDR component `scaleContribution` (`bounded` / `ignore` / `dynamic`) → LWC `autoscaleInfoProvider`.

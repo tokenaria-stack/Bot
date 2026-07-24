@@ -493,6 +493,25 @@
     });
   }
 
+  function syncBottomTimeAxis(state) {
+    const owner = (typeof PaneLayout !== 'undefined' && PaneLayout.resolveBottomTimeAxisHostId)
+      ? PaneLayout.resolveBottomTimeAxisHostId(state)
+      : 'price';
+
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('.chart-wrap[data-pane-host]').forEach((wrap) => {
+        const hostId = String(wrap.getAttribute('data-pane-host') || '').trim();
+        if (!hostId) return;
+        wrap.dataset.bottomTimeAxis = hostId === owner ? '1' : '0';
+      });
+    }
+
+    // Live charts only (ChartAdapter); backtest may grow a mirror later.
+    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.setBottomTimeAxis === 'function') {
+      ChartAdapter.setBottomTimeAxis(owner);
+    }
+  }
+
   function apply() {
     if (!paneLayout || typeof paneLayout.getState !== 'function') return;
     // Mid height-drag: never rebuild gutters (would steal pointer capture).
@@ -504,6 +523,7 @@
     applyStack('live', state);
     applyStack('backtest', state);
     syncLegendEyes(state);
+    syncBottomTimeAxis(state);
     document.body?.classList.toggle('is-pane-fullscreen', !!state.fullscreenPaneId);
     scheduleResize();
   }
