@@ -157,7 +157,10 @@ const ToolbarController = (() => {
         }
         return;
       }
-      if (typeof ruler !== 'undefined' && ruler.active && typeof resetRuler === 'function') {
+      if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.resetRuler === 'function'
+        && typeof RulerController !== 'undefined' && RulerController.isActive()) {
+        ChartAdapter.resetRuler();
+      } else if (typeof ruler !== 'undefined' && ruler.active && typeof resetRuler === 'function') {
         resetRuler();
       }
     });

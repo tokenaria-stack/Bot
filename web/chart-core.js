@@ -299,6 +299,8 @@
         } catch { /* */ }
       });
     }
+    // ADR-025: keep overlay pinned to business times after camera move.
+    refreshRulerOverlay();
   }
 
   function bindTimeCamera() {
@@ -546,6 +548,229 @@
     });
   }
 
+  // ─── ADR-025 Ruler (translate + render only) ─────────────────────────────
+
+  function ensureRulerDom() {
+    const wrap = document.getElementById('price-wrap');
+    if (!wrap) return null;
+    let shade = document.getElementById('ruler-shade');
+    if (!shade) {
+      shade = document.createElement('div');
+      shade.id = 'ruler-shade';
+      shade.className = 'ruler-shade';
+      wrap.appendChild(shade);
+    }
+    let guides = document.getElementById('ruler-guides');
+    if (!guides) {
+      guides = document.createElement('div');
+      guides.id = 'ruler-guides';
+      guides.className = 'ruler-guides';
+      ['v1', 'v2', 'h1', 'h2'].forEach((edge) => {
+        const el = document.createElement('div');
+        el.className = `ruler-guide ruler-guide-${edge.startsWith('v') ? 'v' : 'h'}`;
+        el.dataset.edge = edge;
+        guides.appendChild(el);
+      });
+      wrap.appendChild(guides);
+    }
+    // Phase 1: no labels/statistics — keep tooltip hidden.
+    const tip = document.getElementById('ruler-tooltip');
+    if (tip) tip.style.display = 'none';
+    return { wrap, shade, guides };
+  }
+
+  /**
+   * ChartAdapter-only: map semantic geometry → overlay pixels.
+   * @param {{ hostId: string, startTime: *, endTime: *, startPrice: number, endPrice: number }|null} geo
+   */
+  function renderRuler(geo) {
+    const dom = ensureRulerDom();
+    if (!dom) return;
+    const { shade, guides } = dom;
+    if (!geo || geo.hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) {
+      shade.style.display = 'none';
+      guides.style.display = 'none';
+      return;
+    }
+    const chart = _live.charts.price;
+    const series = _live.candleSeries;
+    let x1;
+    let x2;
+    let y1;
+    let y2;
+    try {
+      x1 = chart.timeScale().timeToCoordinate(geo.startTime);
+      x2 = chart.timeScale().timeToCoordinate(geo.endTime);
+      y1 = series.priceToCoordinate(geo.startPrice);
+      y2 = series.priceToCoordinate(geo.endPrice);
+    } catch {
+      shade.style.display = 'none';
+      guides.style.display = 'none';
+      return;
+    }
+    if (x1 == null || x2 == null || y1 == null || y2 == null) {
+      shade.style.display = 'none';
+      guides.style.display = 'none';
+      return;
+    }
+    const left = Math.min(x1, x2);
+    const top = Math.min(y1, y2);
+    const width = Math.max(Math.abs(x2 - x1), 2);
+    const height = Math.max(Math.abs(y2 - y1), 2);
+
+    shade.style.display = 'block';
+    shade.style.left = `${left}px`;
+    shade.style.top = `${top}px`;
+    shade.style.width = `${width}px`;
+    shade.style.height = `${height}px`;
+
+    guides.style.display = 'block';
+    const byEdge = {};
+    guides.querySelectorAll('[data-edge]').forEach((el) => {
+      byEdge[el.dataset.edge] = el;
+    });
+    if (byEdge.v1) {
+      byEdge.v1.style.left = `${x1}px`;
+      byEdge.v1.style.display = 'block';
+    }
+    if (byEdge.v2) {
+      byEdge.v2.style.left = `${x2}px`;
+      byEdge.v2.style.display = 'block';
+    }
+    if (byEdge.h1) {
+      byEdge.h1.style.top = `${y1}px`;
+      byEdge.h1.style.display = 'block';
+    }
+    if (byEdge.h2) {
+      byEdge.h2.style.top = `${y2}px`;
+      byEdge.h2.style.display = 'block';
+    }
+  }
+
+  function refreshRulerOverlay() {
+    if (typeof RulerController === 'undefined') return;
+    renderRuler(RulerController.getGeometry());
+  }
+
+  /**
+   * Translate pointer client coords → semantic { time, price } on price pane.
+   * @returns {{ time: *, price: number }|null}
+   */
+  function logicalPointFromClient(hostId, clientX, clientY) {
+    if (hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) return null;
+    const host = document.getElementById('price-chart');
+    if (!host) return null;
+    const rect = host.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    if (typeof ScaleController !== 'undefined'
+      && ScaleController.isPointerOnPriceScale
+      && ScaleController.isPointerOnPriceScale(host, _live.charts.price, clientX)) {
+      return null;
+    }
+    let time;
+    let price;
+    try {
+      time = _live.charts.price.timeScale().coordinateToTime(x);
+      price = _live.candleSeries.coordinateToPrice(y);
+    } catch {
+      return null;
+    }
+    if (time == null || price == null || !Number.isFinite(price)) return null;
+    return { time, price };
+  }
+
+  function setRulerCursor(active) {
+    const wrap = document.getElementById('price-wrap');
+    if (wrap) wrap.classList.toggle('ruler-armed', !!active);
+    const host = document.getElementById('price-chart');
+    if (host) host.style.cursor = active ? 'crosshair' : '';
+    if (typeof ToolbarController !== 'undefined' && ToolbarController.setRulerActive) {
+      ToolbarController.setRulerActive(!!active);
+    }
+  }
+
+  /**
+   * ADR-025: pointer capture on price wrap → InteractionController (semantic only).
+   */
+  function bindRulerPointerRouting(state, disposers) {
+    if (typeof InteractionController === 'undefined' || typeof document === 'undefined') return;
+    const wrap = document.getElementById('price-wrap');
+    const host = document.getElementById('price-chart');
+    if (!wrap || !host) return;
+
+    let capturing = false;
+
+    const onDown = (e) => {
+      if (typeof RulerController === 'undefined' || !RulerController.isActive()) return;
+      if (e.button != null && e.button !== 0) return;
+      const point = logicalPointFromClient('price', e.clientX, e.clientY);
+      if (!point) return;
+      const handled = InteractionController.onPointerDown('price', point);
+      if (!handled) return;
+      capturing = true;
+      try { wrap.setPointerCapture(e.pointerId); } catch { /* */ }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onMove = (e) => {
+      if (!capturing && (typeof RulerController === 'undefined' || RulerController.getState() !== 'dragging')) {
+        return;
+      }
+      const point = logicalPointFromClient('price', e.clientX, e.clientY);
+      if (!point) return;
+      InteractionController.onPointerMove('price', point);
+    };
+    const onUp = (e) => {
+      if (!capturing && (typeof RulerController === 'undefined' || RulerController.getState() !== 'dragging')) {
+        return;
+      }
+      InteractionController.onPointerUp('price');
+      capturing = false;
+      try { wrap.releasePointerCapture(e.pointerId); } catch { /* */ }
+    };
+    const onCancel = (e) => {
+      if (!capturing) return;
+      InteractionController.onPointerCancel('price');
+      capturing = false;
+      try { wrap.releasePointerCapture(e.pointerId); } catch { /* */ }
+    };
+
+    wrap.addEventListener('pointerdown', onDown);
+    wrap.addEventListener('pointermove', onMove);
+    wrap.addEventListener('pointerup', onUp);
+    wrap.addEventListener('pointercancel', onCancel);
+    disposers.push(() => {
+      wrap.removeEventListener('pointerdown', onDown);
+      wrap.removeEventListener('pointermove', onMove);
+      wrap.removeEventListener('pointerup', onUp);
+      wrap.removeEventListener('pointercancel', onCancel);
+    });
+  }
+
+  function bindRulerController(state) {
+    if (typeof RulerController === 'undefined') return;
+    RulerController.bind({
+      render: (geo) => renderRuler(geo),
+    });
+    bindRulerPointerRouting(state, state._disposers);
+  }
+
+  function toggleRuler() {
+    if (typeof RulerController === 'undefined') return false;
+    RulerController.toggle();
+    setRulerCursor(RulerController.isActive());
+    return RulerController.isActive();
+  }
+
+  function resetRuler() {
+    if (typeof RulerController === 'undefined') return false;
+    RulerController.disarm();
+    setRulerCursor(false);
+    return true;
+  }
+
   function bindResize(host, chart, disposers) {
     if (!host || !chart) return;
     const ro = new ResizeObserver((entries) => {
@@ -665,6 +890,7 @@
     bindResize(rsxHost, rsxChart, state._disposers);
     subscribePaneTimeProposals(state);
     bindCrosshairController(state);
+    bindRulerController(state);
     return state;
   }
 
@@ -681,6 +907,7 @@
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }
+    refreshRulerOverlay();
   }
 
   function updateCandle(state, candle) {
@@ -804,6 +1031,12 @@
     setBottomTimeAxis(ownerHostId) {
       setBottomTimeAxis(ownerHostId);
     },
+
+    /** ADR-025 — toolbar / Escape / tab switch. */
+    toggleRuler,
+    resetRuler,
+    setRulerCursor,
+    renderRuler,
 
     isInitialized(context) {
       return context === 'live' && !!_live?.charts?.price;

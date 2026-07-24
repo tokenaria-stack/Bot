@@ -481,13 +481,47 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - **TimeCamera / CrosshairController / ScaleController** unchanged. ScaleController Y-hit remains on LayoutController until a second consumer needs IC to filter it (Rule 6 — no unused socket).
 - No event bus, no PointerDispatcher, no generic framework.
 
+**Invariant:** InteractionController accepts **only semantic interaction events**. Translation from DOM / LWC / browser-specific objects is the **exclusive** responsibility of ChartAdapter. Never `onCrosshairMove(hostId, lwcParam)`.
+
 **Pipeline:**
 
 ```
-LWC → ChartAdapter → InteractionController → TimeCamera | CrosshairController
+Browser / LWC events
+        │
+        ▼
+ChartAdapter          ← translates (DOM/LWC → semantic)
+        │
+        ▼
+InteractionController ← routes only
+        │
+ ┌──────┼──────────────┬─────────────┐
+ ▼      ▼              ▼             ▼
+TimeCamera  CrosshairController  RulerController (ADR-025)
 ```
 
-**Rejected:** Moving LWC apply hooks into IC; inventing ScaleController routing without a consumer; behavioral changes.
+ChartAdapter translates. InteractionController routes. Controllers own behavior.
+
+**Rejected:** Moving LWC apply hooks into IC; inventing ScaleController routing without a consumer; behavioral changes; EventBus / PointerDispatcher / InteractionContext / MouseService; merging TimeCamera or Crosshair into IC.
 
 **Consequences:** Completes ADR-021. Module: `web/ui/interaction-controller.js`. Tests: `web/interaction_controller_test.js`. Next UI feature (Ruler) plugs into IC.
+
+---
+
+## ADR-025 — Ruler Foundation (Phase 1)
+
+**Context:** Legacy ruler lived in `app.legacy.js` / `adapter.legacy.js` with parallel LWC click/move handlers and measurement UI. Live path had noops. Interaction stack (ADR-021–024) is ready for a first consumer beyond TimeCamera/Crosshair.
+
+**Decision:**
+
+- **`RulerController`** owns lifecycle only: `idle → armed → dragging → finished`. Semantic geometry `{ hostId, startTime, endTime, startPrice, endPrice }`. No DOM/LWC.
+- **`InteractionController`** routes `onPointerDown/Move/Up/Cancel` (semantic points only).
+- **`ChartAdapter`** translates client→`{time,price}`, renders rectangle + V/H guides, refreshes after camera/paint. Only LWC/DOM touchpoint.
+- Phase 1: price pane only; click-drag-release; **no** labels, %, bars, fibs, snap, persist, hotkeys-as-features.
+- Future sockets declared only: MeasurementFormatter / StatisticsProvider / DrawingManager.
+
+**Invariant:** ChartAdapter translates + renders. InteractionController routes. RulerController owns ruler state. No second pointer pipeline.
+
+**Rejected:** Full TradingView Measure Tool; EventBus; ruler math in ChartAdapter; DOM in RulerController; bypassing InteractionController.
+
+**Consequences:** Debt **#91** ruler slice. Modules: `web/ui/ruler-controller.js`, IC + `chart-core.js`. Tests: `web/ruler_controller_test.js`. Labels/stats = later ADR.
 

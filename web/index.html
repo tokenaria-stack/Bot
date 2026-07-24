@@ -1088,6 +1088,37 @@
       z-index: 10;
     }
 
+    .ruler-guides {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+    }
+
+    .ruler-guide {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(41,98,255,0.55);
+      display: none;
+    }
+
+    .ruler-guide-v {
+      top: 0;
+      bottom: 0;
+      width: 1px;
+    }
+
+    .ruler-guide-h {
+      left: 0;
+      right: 0;
+      height: 1px;
+    }
+
+    #price-wrap.ruler-armed .lwc-host {
+      cursor: crosshair;
+    }
+
     .ruler-tooltip,
     #ruler-tooltip {
       position: absolute;
@@ -1804,15 +1835,16 @@
   <script src="/ui/scale-controller.js?v=4.1.1" defer></script>
   <script src="/ui/time-camera.js?v=1.0.0" defer></script>
   <script src="/ui/crosshair-controller.js?v=1.1.0" defer></script>
-  <script src="/ui/interaction-controller.js?v=1.0.0" defer></script>
-  <script src="/chart-core.js?v=4.6.0" defer></script>
+  <script src="/ui/interaction-controller.js?v=1.1.0" defer></script>
+  <script src="/ui/ruler-controller.js?v=1.0.0" defer></script>
+  <script src="/chart-core.js?v=4.7.0" defer></script>
   <script src="/ui/viewport-manager.js?v=3.4.4" defer></script>
   <script src="/ui/chart-projection.js?v=3.1.0" defer></script>
   <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>
   <script src="/api.js?v=3.1.0" defer></script>
   <script src="/ws.js?v=4.3.0" defer></script>
   <script src="/timeline-recovery.js?v=1.0.0" defer></script>
-  <script src="/ui/tabs-controller.js?v=3.1.0" defer></script>
+  <script src="/ui/tabs-controller.js?v=3.2.0" defer></script>
   <script src="/ui/strategy-controller.js?v=3.1.0" defer></script>
   <script src="/ui/navigator-controller.js?v=3.1.0" defer></script>
   <script src="/ui/wozduh-controller.js?v=4.0.0" defer></script>
@@ -1822,11 +1854,11 @@
   <script src="/ui/rsx-controller.js?v=3.1.0" defer></script>
   <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.0.1" defer></script>
-  <script src="/ui/toolbar-controller.js?v=4.1.1" defer></script>
+  <script src="/ui/toolbar-controller.js?v=4.2.0" defer></script>
   <script src="/ui/legend-renderer.js?v=4.2.0" defer></script>
   <script src="/ui/layout-controller.js?v=4.4.0" defer></script>
   <script src="/ui/pane-layout.js?v=1.4.0" defer></script>
   <!-- <script src="/app.legacy.js?v=3.1.0" defer></script> -->
-  <script src="/boot.js?v=4.15.0-b25" defer></script>
+  <script src="/boot.js?v=4.16.0" defer></script>
 </body>
 </html>

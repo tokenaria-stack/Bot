@@ -561,9 +561,17 @@
       initPanelSettingsOutsideClose: noop,
       initPanelSettingsEnterNavigation: noop,
       initEquityChart: noop,
-      toggleRuler: noop,
-      resetRuler: noop,
-      setRulerCursor: noop,
+      toggleRuler: () => (typeof ChartAdapter !== 'undefined' && ChartAdapter.toggleRuler
+        ? ChartAdapter.toggleRuler()
+        : undefined),
+      resetRuler: () => (typeof ChartAdapter !== 'undefined' && ChartAdapter.resetRuler
+        ? ChartAdapter.resetRuler()
+        : undefined),
+      setRulerCursor: (active) => {
+        if (typeof ChartAdapter !== 'undefined' && ChartAdapter.setRulerCursor) {
+          ChartAdapter.setRulerCursor(active);
+        }
+      },
       getRulerChartData: () => null,
       shouldRunLivePoll: () => false,
       pollLatestState: noopAsync,

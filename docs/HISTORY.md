@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-025 — Ruler foundation (Jul 2026) ✅
+
+- `RulerController` state + geometry; IC routes pointer semantics; ChartAdapter translates/renders guides+rectangle (no labels).
+- Proves interaction stack accepts a new consumer without parallel mouse paths. Stats/formatters deferred.
+
 ## Phase ADR-024 / ADR-021 P3 — InteractionController (Jul 2026) ✅
 
 - Thin router: pointer / range / crosshair-time → TimeCamera + CrosshairController.

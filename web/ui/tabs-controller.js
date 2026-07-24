@@ -52,13 +52,14 @@ const TabsController = (() => {
 
     applyToolbarVisibility(targetId);
 
-    if (typeof ruler !== 'undefined' && ruler.active) {
-      ruler.active = false;
+    if (typeof ChartAdapter !== 'undefined' && ChartAdapter.resetRuler) {
+      ChartAdapter.resetRuler();
+    } else if (typeof resetRuler === 'function') {
+      resetRuler();
+    } else if (typeof RulerController !== 'undefined' && RulerController.isActive()) {
+      RulerController.disarm();
       document.getElementById('ruler-btn')?.classList.remove('active');
-      if (typeof setRulerCursor === 'function') setRulerCursor(false);
     }
-    if (typeof resetRuler === 'function') resetRuler();
-
     if (typeof TimeframeController !== 'undefined') {
       TimeframeController.syncToolbar();
     }
