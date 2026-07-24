@@ -507,21 +507,22 @@ ChartAdapter translates. InteractionController routes. Controllers own behavior.
 
 ---
 
-## ADR-025 — Ruler Foundation (Phase 1)
+## ADR-025 — TradingView-style Ruler (complete)
 
-**Context:** Legacy ruler lived in `app.legacy.js` / `adapter.legacy.js` with parallel LWC click/move handlers and measurement UI. Live path had noops. Interaction stack (ADR-021–024) is ready for a first consumer beyond TimeCamera/Crosshair.
+**Context:** Phase 1 foundation used drag-release + time-required points + infinite H/V guides (looked like a blue cross). Empty/future space failed when `coordinateToTime` returned null.
 
-**Decision:**
+**Decision (final):**
 
-- **`RulerController`** owns lifecycle only: `idle → armed → dragging → finished`. Semantic geometry `{ hostId, startTime, endTime, startPrice, endPrice }`. No DOM/LWC.
-- **`InteractionController`** routes `onPointerDown/Move/Up/Cancel` (semantic points only).
-- **`ChartAdapter`** translates client→`{time,price}`, renders rectangle + V/H guides, refreshes after camera/paint. Only LWC/DOM touchpoint.
-- Phase 1: price pane only; click-drag-release; **no** labels, %, bars, fibs, snap, persist, hotkeys-as-features.
-- Future sockets declared only: MeasurementFormatter / StatisticsProvider / DrawingManager.
+- **Anchors:** `{ logical, price, time? }` only — never screen `x/y`. ChartAdapter re-projects via `logicalToCoordinate` / `priceToCoordinate` on every render (pan/zoom/resize safe).
+- **Two-click FSM:** `idle → armed → placing → finished`. 1st click = A, move = preview, 2nd click = B. `pointerUp` does **not** finish. `onCancel` (Esc / right-click) → `armed` (tool stays on).
+- **Bars:** `abs(logicalB − logicalA)` only — never Δtime / TF (weekend/gap safe).
+- **`RulerMetrics`:** pure numbers (`deltaPrice`, `%`, `bars`, `duration`, `ticks`). ChartAdapter owns tooltip HTML lifecycle.
+- **Render:** finite rectangle (shade border) only — no infinite guides. Crosshair remains the infinite primitive.
+- **Empty space:** `coordinateToLogical` + price-scale `y` required; `time` optional.
 
-**Invariant:** ChartAdapter translates + renders. InteractionController routes. RulerController owns ruler state. No second pointer pipeline.
+**Pipeline:** `ChartAdapter → InteractionController → RulerController → RulerMetrics → ChartAdapter(render)`.
 
-**Rejected:** Full TradingView Measure Tool; EventBus; ruler math in ChartAdapter; DOM in RulerController; bypassing InteractionController.
+**Rejected:** DrawingManager / EventBus; pixels in controller; bars from elapsed time; requiring `time`; DOM in RulerController; Volume line in Phase 1 tooltip.
 
-**Consequences:** Debt **#91** ruler slice. Modules: `web/ui/ruler-controller.js`, IC + `chart-core.js`. Tests: `web/ruler_controller_test.js`. Labels/stats = later ADR.
+**Consequences:** Debt **#91** ruler product slice closed for Measure v1. Modules: `ruler-controller.js`, `ruler-metrics.js`, IC, `chart-core.js`. Tests: `web/ruler_controller_test.js`.
 

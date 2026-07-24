@@ -548,7 +548,7 @@
     });
   }
 
-  // ─── ADR-025 Ruler (translate + render only) ─────────────────────────────
+  // ─── ADR-025 Ruler (translate + project + tooltip DOM only) ───────────────
 
   function ensureRulerDom() {
     const wrap = document.getElementById('price-wrap');
@@ -560,59 +560,84 @@
       shade.className = 'ruler-shade';
       wrap.appendChild(shade);
     }
-    let guides = document.getElementById('ruler-guides');
-    if (!guides) {
-      guides = document.createElement('div');
-      guides.id = 'ruler-guides';
-      guides.className = 'ruler-guides';
-      ['v1', 'v2', 'h1', 'h2'].forEach((edge) => {
-        const el = document.createElement('div');
-        el.className = `ruler-guide ruler-guide-${edge.startsWith('v') ? 'v' : 'h'}`;
-        el.dataset.edge = edge;
-        guides.appendChild(el);
-      });
-      wrap.appendChild(guides);
+    let tip = document.getElementById('ruler-tooltip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'ruler-tooltip';
+      tip.className = 'ruler-tooltip';
+      wrap.appendChild(tip);
     }
-    // Phase 1: no labels/statistics — keep tooltip hidden.
-    const tip = document.getElementById('ruler-tooltip');
-    if (tip) tip.style.display = 'none';
-    return { wrap, shade, guides };
+    // Remove legacy infinite guides if present (ADR-025 finite rectangle only).
+    const guides = document.getElementById('ruler-guides');
+    if (guides) guides.remove();
+    return { wrap, shade, tip };
+  }
+
+  function rulerIntervalMs() {
+    const tf = (typeof window !== 'undefined' && window.currentTf) ? window.currentTf : '1m';
+    if (typeof getIntervalMs === 'function') {
+      const ms = Number(getIntervalMs(tf));
+      if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    if (typeof TimeNormalizer !== 'undefined' && TimeNormalizer.getIntervalMs) {
+      const ms = Number(TimeNormalizer.getIntervalMs(tf));
+      if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    return 60_000;
+  }
+
+  function rulerMinMove() {
+    try {
+      const fmt = _live?.candleSeries?.options?.()?.priceFormat;
+      const mm = Number(fmt?.minMove);
+      if (Number.isFinite(mm) && mm > 0) return mm;
+    } catch { /* */ }
+    return 0.1;
   }
 
   /**
-   * ChartAdapter-only: map semantic geometry → overlay pixels.
-   * @param {{ hostId: string, startTime: *, endTime: *, startPrice: number, endPrice: number }|null} geo
+   * Project semantic anchors → finite rectangle + tooltip.
+   * Uses logicalToCoordinate / priceToCoordinate every frame (pan/zoom safe).
+   * @param {{ hostId: string, anchorA: object, anchorB: object, preview?: boolean }|null} geo
    */
   function renderRuler(geo) {
     const dom = ensureRulerDom();
     if (!dom) return;
-    const { shade, guides } = dom;
+    const { wrap, shade, tip } = dom;
     if (!geo || geo.hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) {
       shade.style.display = 'none';
-      guides.style.display = 'none';
+      tip.style.display = 'none';
       return;
     }
     const chart = _live.charts.price;
     const series = _live.candleSeries;
+    const a = geo.anchorA;
+    const b = geo.anchorB;
     let x1;
     let x2;
     let y1;
     let y2;
     try {
-      x1 = chart.timeScale().timeToCoordinate(geo.startTime);
-      x2 = chart.timeScale().timeToCoordinate(geo.endTime);
-      y1 = series.priceToCoordinate(geo.startPrice);
-      y2 = series.priceToCoordinate(geo.endPrice);
+      const ts = chart.timeScale();
+      x1 = typeof ts.logicalToCoordinate === 'function'
+        ? ts.logicalToCoordinate(a.logical)
+        : null;
+      x2 = typeof ts.logicalToCoordinate === 'function'
+        ? ts.logicalToCoordinate(b.logical)
+        : null;
+      y1 = series.priceToCoordinate(a.price);
+      y2 = series.priceToCoordinate(b.price);
     } catch {
       shade.style.display = 'none';
-      guides.style.display = 'none';
+      tip.style.display = 'none';
       return;
     }
     if (x1 == null || x2 == null || y1 == null || y2 == null) {
       shade.style.display = 'none';
-      guides.style.display = 'none';
+      tip.style.display = 'none';
       return;
     }
+
     const left = Math.min(x1, x2);
     const top = Math.min(y1, y2);
     const width = Math.max(Math.abs(x2 - x1), 2);
@@ -624,27 +649,29 @@
     shade.style.width = `${width}px`;
     shade.style.height = `${height}px`;
 
-    guides.style.display = 'block';
-    const byEdge = {};
-    guides.querySelectorAll('[data-edge]').forEach((el) => {
-      byEdge[el.dataset.edge] = el;
+    if (typeof RulerMetrics === 'undefined') {
+      tip.style.display = 'none';
+      return;
+    }
+    const metrics = RulerMetrics.compute(a, b, {
+      intervalMs: rulerIntervalMs(),
+      minMove: rulerMinMove(),
     });
-    if (byEdge.v1) {
-      byEdge.v1.style.left = `${x1}px`;
-      byEdge.v1.style.display = 'block';
+    const lines = RulerMetrics.tooltipLines(metrics);
+    tip.innerHTML = `<div>${lines.line1}</div><div>${lines.line2}</div>`;
+    tip.style.display = 'block';
+
+    const tipW = tip.offsetWidth || 140;
+    const tipH = tip.offsetHeight || 40;
+    // Centered directly below the finite selection box.
+    let tipLeft = left + width / 2 - tipW / 2;
+    let tipTop = top + height + 8;
+    tipLeft = Math.max(4, Math.min(tipLeft, wrap.clientWidth - tipW - 4));
+    if (tipTop + tipH > wrap.clientHeight - 4) {
+      tipTop = Math.max(4, top - tipH - 8);
     }
-    if (byEdge.v2) {
-      byEdge.v2.style.left = `${x2}px`;
-      byEdge.v2.style.display = 'block';
-    }
-    if (byEdge.h1) {
-      byEdge.h1.style.top = `${y1}px`;
-      byEdge.h1.style.display = 'block';
-    }
-    if (byEdge.h2) {
-      byEdge.h2.style.top = `${y2}px`;
-      byEdge.h2.style.display = 'block';
-    }
+    tip.style.left = `${tipLeft}px`;
+    tip.style.top = `${Math.max(4, tipTop)}px`;
   }
 
   function refreshRulerOverlay() {
@@ -653,8 +680,8 @@
   }
 
   /**
-   * Translate pointer client coords → semantic { time, price } on price pane.
-   * @returns {{ time: *, price: number }|null}
+   * Viewport coords → semantic anchor. time optional (empty/future space OK).
+   * @returns {{ logical: number, price: number, time: *|null }|null}
    */
   function logicalPointFromClient(hostId, clientX, clientY) {
     if (hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) return null;
@@ -663,22 +690,30 @@
     const rect = host.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    // Allow slight out-of-bounds for empty future strip at the edge.
+    if (x < -2 || y < -2 || x > rect.width + 2 || y > rect.height + 2) return null;
     if (typeof ScaleController !== 'undefined'
       && ScaleController.isPointerOnPriceScale
       && ScaleController.isPointerOnPriceScale(host, _live.charts.price, clientX)) {
       return null;
     }
-    let time;
+    let logical;
     let price;
+    let time = null;
     try {
-      time = _live.charts.price.timeScale().coordinateToTime(x);
+      const ts = _live.charts.price.timeScale();
+      logical = ts.coordinateToLogical(x);
       price = _live.candleSeries.coordinateToPrice(y);
+      try {
+        time = ts.coordinateToTime(x);
+      } catch {
+        time = null;
+      }
     } catch {
       return null;
     }
-    if (time == null || price == null || !Number.isFinite(price)) return null;
-    return { time, price };
+    if (!Number.isFinite(logical) || price == null || !Number.isFinite(price)) return null;
+    return { logical, price, time: time == null ? null : time };
   }
 
   function setRulerCursor(active) {
@@ -692,60 +727,56 @@
   }
 
   /**
-   * ADR-025: pointer capture on price wrap → InteractionController (semantic only).
+   * Two-click routing: down places A or B; move previews; up ignored for finish.
    */
   function bindRulerPointerRouting(state, disposers) {
     if (typeof InteractionController === 'undefined' || typeof document === 'undefined') return;
     const wrap = document.getElementById('price-wrap');
-    const host = document.getElementById('price-chart');
-    if (!wrap || !host) return;
-
-    let capturing = false;
+    if (!wrap) return;
 
     const onDown = (e) => {
       if (typeof RulerController === 'undefined' || !RulerController.isActive()) return;
+      if (e.button === 2) {
+        InteractionController.onCancel();
+        e.preventDefault();
+        return;
+      }
       if (e.button != null && e.button !== 0) return;
       const point = logicalPointFromClient('price', e.clientX, e.clientY);
       if (!point) return;
       const handled = InteractionController.onPointerDown('price', point);
       if (!handled) return;
-      capturing = true;
-      try { wrap.setPointerCapture(e.pointerId); } catch { /* */ }
       e.preventDefault();
       e.stopPropagation();
     };
     const onMove = (e) => {
-      if (!capturing && (typeof RulerController === 'undefined' || RulerController.getState() !== 'dragging')) {
-        return;
-      }
+      if (typeof RulerController === 'undefined') return;
+      if (RulerController.getState() !== 'placing') return;
       const point = logicalPointFromClient('price', e.clientX, e.clientY);
       if (!point) return;
       InteractionController.onPointerMove('price', point);
     };
-    const onUp = (e) => {
-      if (!capturing && (typeof RulerController === 'undefined' || RulerController.getState() !== 'dragging')) {
-        return;
-      }
-      InteractionController.onPointerUp('price');
-      capturing = false;
-      try { wrap.releasePointerCapture(e.pointerId); } catch { /* */ }
+    const onContext = (e) => {
+      if (typeof RulerController === 'undefined' || !RulerController.isActive()) return;
+      InteractionController.onCancel();
+      e.preventDefault();
     };
-    const onCancel = (e) => {
-      if (!capturing) return;
-      InteractionController.onPointerCancel('price');
-      capturing = false;
-      try { wrap.releasePointerCapture(e.pointerId); } catch { /* */ }
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (typeof RulerController === 'undefined' || !RulerController.isActive()) return;
+      // Cancel measure but keep armed (TV-like). Full disarm is toolbar toggle.
+      InteractionController.onCancel();
     };
 
     wrap.addEventListener('pointerdown', onDown);
     wrap.addEventListener('pointermove', onMove);
-    wrap.addEventListener('pointerup', onUp);
-    wrap.addEventListener('pointercancel', onCancel);
+    wrap.addEventListener('contextmenu', onContext);
+    document.addEventListener('keydown', onKey);
     disposers.push(() => {
       wrap.removeEventListener('pointerdown', onDown);
       wrap.removeEventListener('pointermove', onMove);
-      wrap.removeEventListener('pointerup', onUp);
-      wrap.removeEventListener('pointercancel', onCancel);
+      wrap.removeEventListener('contextmenu', onContext);
+      document.removeEventListener('keydown', onKey);
     });
   }
 
@@ -777,6 +808,7 @@
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width <= 0 || rect.height <= 0) return;
       chart.applyOptions({ width: rect.width, height: rect.height });
+      refreshRulerOverlay();
     });
     ro.observe(host);
     disposers.push(() => ro.disconnect());

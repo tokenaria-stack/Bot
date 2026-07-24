@@ -8,10 +8,10 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## Phase ADR-025 — Ruler foundation (Jul 2026) ✅
+## Phase ADR-025 — TV Ruler complete (Jul 2026) ✅
 
-- `RulerController` state + geometry; IC routes pointer semantics; ChartAdapter translates/renders guides+rectangle (no labels).
-- Proves interaction stack accepts a new consumer without parallel mouse paths. Stats/formatters deferred.
+- Anchors `logical+price` (time optional); two-click FSM; finite rectangle; `RulerMetrics` tooltip (no Vol).
+- Empty/future space via `coordinateToLogical`; bars from logical Δ; Esc/right-click cancel → stay armed.
 
 ## Phase ADR-024 / ADR-021 P3 — InteractionController (Jul 2026) ✅
 

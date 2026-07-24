@@ -20,7 +20,7 @@ Update this file when a debt opens, closes, or changes priority.
 | **88** | **Timeline Publishability (ADR-017)** | ✅ **B3.0** | Exact closed-gap fill before pending flush; publishable only if Frame contiguous. Buffering UX separate |
 | **89** | **TimelineRecovery UX (ADR-018)** | ✅ | FE LIVE↔HEALING; idempotent enter; sync badge; 25s watchdog; boot wires only |
 | **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P5** | P1–P5 layout done. Optional later: `setHostActive` |
-| **91** | **Scale / time axis / Ruler (ADR-020)** | 🟡 **P2** | Scale + bottom axis + **Ruler Phase 1 (ADR-025) ✅**. Next: ruler labels/stats; HH:mm chrome; full Measure Tool later |
+| **91** | **Scale / time axis / Ruler (ADR-020)** | 🟡 **P2** | Scale + bottom axis + **Ruler TV Measure (ADR-025) ✅**. Next: HH:mm chrome; fib/drawings later |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | ✅ | ADR-022: per-component `scaleContribution` → `autoscaleInfoProvider` |
 | **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C done** | Bounded store + atomic prune + `windowMode` + WS/gap gates + **focal-time prune (69C)**. **69D** full sliding window + viewport-centered paint 🔜. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |

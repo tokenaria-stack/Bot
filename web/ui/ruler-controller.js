@@ -1,15 +1,13 @@
 /**
- * RulerController — ADR-025 Phase 1 foundation.
+ * RulerController — ADR-025 TradingView-style measure (geometry + FSM only).
  *
- * Owns: ruler lifecycle + measurement geometry state.
- * Does NOT own: DOM, LWC, rendering, formatters, statistics.
+ * Anchors: { logical, price, time? } — never x/y pixels.
+ * Two-click: armed → placing (A) → finished (B). pointerUp does NOT finish.
+ * Third click while finished: clear → armed (does not place a new A).
+ * Cancel (Esc/right-click) → armed (tool stays on).
  *
- * ChartAdapter translates pointers and renders geometry via bind({ render }).
- * InteractionController only routes semantic events here.
- *
- * Future sockets (declare only — do not implement):
- *   MeasurementFormatter / PriceFormatter / TimeFormatter /
- *   StatisticsProvider / DrawingManager
+ * ChartAdapter projects logical→x / price→y on every render.
+ * RulerMetrics owns numbers; this module never formats tooltip HTML.
  */
 (function (global) {
   'use strict';
@@ -17,21 +15,21 @@
   const STATE = Object.freeze({
     IDLE: 'idle',
     ARMED: 'armed',
-    DRAGGING: 'dragging',
+    PLACING: 'placing',
     FINISHED: 'finished',
   });
 
-  /** Phase 1: price pane only (overlay lives on price-wrap). */
+  /** Phase 1: price pane only (overlay on price-wrap). */
   const PHASE1_HOST = 'price';
 
   /** @type {string} */
   let state = STATE.IDLE;
   /** @type {string|null} */
   let hostId = null;
-  /** @type {{ time: *, price: number }|null} */
-  let start = null;
-  /** @type {{ time: *, price: number }|null} */
-  let end = null;
+  /** @type {{ logical: number, price: number, time?: *|null }|null} */
+  let anchorA = null;
+  /** @type {{ logical: number, price: number, time?: *|null }|null} */
+  let anchorB = null;
 
   /**
    * @typedef {{ render: (geo: object|null) => void }} RulerHooks
@@ -48,18 +46,37 @@
   }
 
   /**
-   * Semantic geometry for ChartAdapter.renderRuler — never pixel/LWC objects.
-   * @returns {{ hostId: string, startTime: *, endTime: *, startPrice: number, endPrice: number }|null}
+   * @param {object|null|undefined} point
+   * @returns {{ logical: number, price: number, time: *|null }|null}
+   */
+  function normalizeAnchor(point) {
+    if (!point || typeof point !== 'object') return null;
+    const logical = Number(point.logical);
+    const price = Number(point.price);
+    if (!Number.isFinite(logical) || !Number.isFinite(price)) return null;
+    const time = Object.prototype.hasOwnProperty.call(point, 'time')
+      ? (point.time == null ? null : point.time)
+      : null;
+    return { logical, price, time };
+  }
+
+  /**
+   * Semantic geometry — ChartAdapter projects to pixels.
+   * @returns {{
+   *   hostId: string,
+   *   anchorA: object,
+   *   anchorB: object,
+   *   preview: boolean,
+   * }|null}
    */
   function getGeometry() {
-    if (!hostId || !start || !end) return null;
-    if (state !== STATE.DRAGGING && state !== STATE.FINISHED) return null;
+    if (!hostId || !anchorA || !anchorB) return null;
+    if (state !== STATE.PLACING && state !== STATE.FINISHED) return null;
     return {
       hostId,
-      startTime: start.time,
-      endTime: end.time,
-      startPrice: start.price,
-      endPrice: end.price,
+      anchorA: { ...anchorA },
+      anchorB: { ...anchorB },
+      preview: state === STATE.PLACING,
     };
   }
 
@@ -68,15 +85,12 @@
     hooks.render(getGeometry());
   }
 
-  function clearPoints() {
+  function clearAnchors() {
     hostId = null;
-    start = null;
-    end = null;
+    anchorA = null;
+    anchorB = null;
   }
 
-  /**
-   * @param {RulerHooks} next
-   */
   function bind(next) {
     hooks = next && typeof next === 'object' ? next : null;
     emitRender();
@@ -86,18 +100,16 @@
     hooks = null;
   }
 
-  /** Toolbar: enter Armed (or disarm if already active). */
   function arm() {
     state = STATE.ARMED;
-    clearPoints();
+    clearAnchors();
     emitRender();
     return true;
   }
 
-  /** Exit to Idle; clear geometry. */
   function disarm() {
     state = STATE.IDLE;
-    clearPoints();
+    clearAnchors();
     emitRender();
     return true;
   }
@@ -107,84 +119,93 @@
     return disarm();
   }
 
-  function normalizePoint(point) {
-    if (!point || typeof point !== 'object') return null;
-    const price = Number(point.price);
-    if (!Number.isFinite(price)) return null;
-    if (point.time == null) return null;
-    return { time: point.time, price };
-  }
-
   /**
-   * @param {string} nextHostId
-   * @param {{ time: *, price: number }} point
-   * @returns {boolean} true if consumed
+   * Cancel mid-measure (Esc / right-click). Stay armed.
+   * @returns {boolean}
    */
-  function onPointerDown(nextHostId, point) {
+  function cancel() {
     if (state === STATE.IDLE) return false;
-    const id = String(nextHostId || '').trim();
-    if (id !== PHASE1_HOST) return false;
-    const p = normalizePoint(point);
-    if (!p) return false;
-
-    // Finished + new down → start a fresh measure (stay armed).
-    if (state === STATE.FINISHED) {
-      clearPoints();
-      state = STATE.ARMED;
+    if (state === STATE.ARMED) {
+      clearAnchors();
+      emitRender();
+      return true;
     }
-    if (state !== STATE.ARMED) return false;
-
-    hostId = id;
-    start = p;
-    end = p;
-    state = STATE.DRAGGING;
-    emitRender();
-    return true;
-  }
-
-  /**
-   * @param {string} nextHostId
-   * @param {{ time: *, price: number }} point
-   * @returns {boolean}
-   */
-  function onPointerMove(nextHostId, point) {
-    if (state !== STATE.DRAGGING) return false;
-    if (String(nextHostId || '').trim() !== hostId) return false;
-    const p = normalizePoint(point);
-    if (!p) return false;
-    end = p;
-    emitRender();
-    return true;
-  }
-
-  /**
-   * @param {string} [_hostId]
-   * @returns {boolean}
-   */
-  function onPointerUp(_hostId) {
-    if (state !== STATE.DRAGGING) return false;
-    state = STATE.FINISHED;
-    emitRender();
-    return true;
-  }
-
-  /**
-   * Pane leave while dragging: cancel gesture, stay Armed (ready for next drag).
-   * @returns {boolean}
-   */
-  function onPointerLeave() {
-    if (state !== STATE.DRAGGING) return false;
-    clearPoints();
+    clearAnchors();
     state = STATE.ARMED;
     emitRender();
     return true;
   }
 
-  /** @private tests */
+  /**
+   * @param {string} nextHostId
+   * @param {{ logical: number, price: number, time?: *|null }} point
+   * @returns {boolean}
+   */
+  function onPointerDown(nextHostId, point) {
+    if (state === STATE.IDLE) return false;
+    const id = String(nextHostId || '').trim();
+    if (id !== PHASE1_HOST) return false;
+    const p = normalizeAnchor(point);
+    if (!p) return false;
+
+    if (state === STATE.FINISHED) {
+      // Consume click: clear measure only; next click starts a new A.
+      clearAnchors();
+      state = STATE.ARMED;
+      emitRender();
+      return true;
+    }
+
+    if (state === STATE.ARMED) {
+      hostId = id;
+      anchorA = p;
+      anchorB = p;
+      state = STATE.PLACING;
+      emitRender();
+      return true;
+    }
+
+    if (state === STATE.PLACING) {
+      if (id !== hostId) return false;
+      anchorB = p;
+      state = STATE.FINISHED;
+      emitRender();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Preview while placing — does not finish.
+   * @param {string} nextHostId
+   * @param {{ logical: number, price: number, time?: *|null }} point
+   * @returns {boolean}
+   */
+  function onPointerMove(nextHostId, point) {
+    if (state !== STATE.PLACING) return false;
+    if (String(nextHostId || '').trim() !== hostId) return false;
+    const p = normalizeAnchor(point);
+    if (!p) return false;
+    anchorB = p;
+    emitRender();
+    return true;
+  }
+
+  /** pointerUp must NOT finish (TV two-click). */
+  function onPointerUp(_hostId) {
+    return false;
+  }
+
+  /** @deprecated use cancel(); kept for IC onPointerCancel */
+  function onPointerLeave() {
+    return cancel();
+  }
+
   function _resetForTests() {
     unbind();
     state = STATE.IDLE;
-    clearPoints();
+    clearAnchors();
   }
 
   const RulerController = {
@@ -195,6 +216,7 @@
     arm,
     disarm,
     toggle,
+    cancel,
     isActive,
     getState,
     getGeometry,

@@ -24,6 +24,6 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | Forming-bar tip vs TV, **#76 ScoreNodes**, **#91** ruler labels/HH:mm, **#69D** sliding window |
+| NEXT | Forming-bar tip vs TV, **#76 ScoreNodes**, **#91** HH:mm chrome, **#69D** sliding window |
 
 Update the owning SSOT file — do not duplicate content here.

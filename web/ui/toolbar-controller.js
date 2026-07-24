@@ -157,6 +157,11 @@ const ToolbarController = (() => {
         }
         return;
       }
+      if (typeof InteractionController !== 'undefined' && InteractionController.onCancel
+        && typeof RulerController !== 'undefined' && RulerController.isActive()) {
+        InteractionController.onCancel();
+        return;
+      }
       if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.resetRuler === 'function'
         && typeof RulerController !== 'undefined' && RulerController.isActive()) {
         ChartAdapter.resetRuler();
