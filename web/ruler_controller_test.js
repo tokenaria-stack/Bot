@@ -82,10 +82,15 @@ test('two-click FSM: armed → placing → finished; pointerUp ignored', () => {
   assert.ok(!Object.prototype.hasOwnProperty.call(geo.anchorA, 'x'));
 });
 
-test('third click while finished: clear → armed (no new A)', () => {
+test('third click while finished: one-shot exit → idle + onActiveChange(false)', () => {
   RulerController._resetForTests();
-  RulerController.bind({ render: () => {} });
+  const activeEvents = [];
+  RulerController.bind({
+    render: () => {},
+    onActiveChange: (active) => activeEvents.push(active),
+  });
   RulerController.arm();
+  assert.deepStrictEqual(activeEvents, [true]);
   RulerController.onPointerDown('price', { logical: 1, price: 100, time: null });
   RulerController.onPointerDown('price', { logical: 9, price: 120, time: null });
   assert.strictEqual(RulerController.getState(), 'finished');
@@ -94,17 +99,17 @@ test('third click while finished: clear → armed (no new A)', () => {
     RulerController.onPointerDown('price', { logical: 50, price: 200, time: null }),
     true,
   );
-  assert.strictEqual(RulerController.getState(), 'armed');
+  assert.strictEqual(RulerController.getState(), 'idle');
   assert.strictEqual(RulerController.getGeometry(), null);
-  assert.strictEqual(RulerController.isActive(), true);
+  assert.strictEqual(RulerController.isActive(), false);
+  assert.deepStrictEqual(activeEvents, [true, false]);
 
-  // Fourth click starts a fresh measure at the new point.
+  // Further clicks do nothing until re-armed via toolbar.
   assert.strictEqual(
     RulerController.onPointerDown('price', { logical: 50, price: 200, time: null }),
-    true,
+    false,
   );
-  assert.strictEqual(RulerController.getState(), 'placing');
-  assert.strictEqual(RulerController.getGeometry().anchorA.logical, 50);
+  assert.strictEqual(RulerController.getState(), 'idle');
 });
 
 test('cancel mid-placing → armed; geometry cleared', () => {

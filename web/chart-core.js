@@ -784,6 +784,7 @@
     if (typeof RulerController === 'undefined') return;
     RulerController.bind({
       render: (geo) => renderRuler(geo),
+      onActiveChange: (active) => setRulerCursor(active),
     });
     bindRulerPointerRouting(state, state._disposers);
   }

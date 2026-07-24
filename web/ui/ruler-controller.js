@@ -3,7 +3,7 @@
  *
  * Anchors: { logical, price, time? } — never x/y pixels.
  * Two-click: armed → placing (A) → finished (B). pointerUp does NOT finish.
- * Third click while finished: clear → armed (does not place a new A).
+ * Third click while finished: one-shot exit — clear → idle (disarm + UI notify).
  * Cancel (Esc/right-click) → armed (tool stays on).
  *
  * ChartAdapter projects logical→x / price→y on every render.
@@ -32,7 +32,10 @@
   let anchorB = null;
 
   /**
-   * @typedef {{ render: (geo: object|null) => void }} RulerHooks
+   * @typedef {{
+   *   render: (geo: object|null) => void,
+   *   onActiveChange?: (active: boolean) => void,
+   * }} RulerHooks
    * @type {RulerHooks|null}
    */
   let hooks = null;
@@ -85,6 +88,12 @@
     hooks.render(getGeometry());
   }
 
+  function emitActiveChange(active) {
+    if (typeof hooks?.onActiveChange === 'function') {
+      hooks.onActiveChange(!!active);
+    }
+  }
+
   function clearAnchors() {
     hostId = null;
     anchorA = null;
@@ -104,6 +113,7 @@
     state = STATE.ARMED;
     clearAnchors();
     emitRender();
+    emitActiveChange(true);
     return true;
   }
 
@@ -111,6 +121,7 @@
     state = STATE.IDLE;
     clearAnchors();
     emitRender();
+    emitActiveChange(false);
     return true;
   }
 
@@ -149,10 +160,8 @@
     if (!p) return false;
 
     if (state === STATE.FINISHED) {
-      // Consume click: clear measure only; next click starts a new A.
-      clearAnchors();
-      state = STATE.ARMED;
-      emitRender();
+      // One-shot: clear + full exit (idle). Toolbar notified via onActiveChange.
+      disarm();
       return true;
     }
 
