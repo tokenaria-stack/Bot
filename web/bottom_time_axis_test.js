@@ -21,6 +21,7 @@ test('chart-core source contract: setBottomTimeAxis + timeScale.visible', () => 
   assert.ok(/visible:\s*show/.test(src) || src.includes('visible: show'), 'visible tied to show labels');
   assert.ok(!/hostId\s*===\s*['"]wozduh['"]/.test(src.split('setBottomTimeAxis')[1]?.slice(0, 800) || ''),
     'setBottomTimeAxis body must not hardcode wozduh owner');
+  assert.ok(src.includes('_bottomTimeAxisHostId'), 'tracks axis owner for time-label renderer');
 });
 
 test('layout-controller syncs ChartAdapter from PaneLayout owner', () => {

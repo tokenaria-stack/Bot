@@ -32,12 +32,29 @@ function fakeChart() {
   };
 }
 
-test('public surface is attach / refresh / dispose only (product API)', () => {
+test('public surface is attach / refresh / dispose / applyCrosshairTime (no series leak)', () => {
   const keys = Object.keys(TimelineDecoration).filter((k) => !k.startsWith('_'));
-  assert.deepStrictEqual(keys.sort(), ['attach', 'dispose', 'refresh']);
+  assert.deepStrictEqual(keys.sort(), ['applyCrosshairTime', 'attach', 'dispose', 'refresh']);
   assert.strictEqual(typeof TimelineDecoration.update, 'undefined');
   assert.strictEqual(typeof TimelineDecoration.getSeries, 'undefined');
   assert.strictEqual(typeof TimelineDecoration.series, 'undefined');
+});
+
+test('applyCrosshairTime uses private series without exposing it', () => {
+  TimelineDecoration._resetForTests();
+  const calls = [];
+  const chart = fakeChart();
+  chart.setCrosshairPosition = (price, time, series) => {
+    calls.push({ price, time, series });
+  };
+  TimelineDecoration.attach(chart);
+  const privateSeries = chart.created[0];
+  assert.strictEqual(TimelineDecoration.applyCrosshairTime(chart, 12345, 1.5), true);
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].time, 12345);
+  assert.strictEqual(calls[0].price, 1.5);
+  assert.strictEqual(calls[0].series, privateSeries);
+  assert.strictEqual(TimelineDecoration.applyCrosshairTime(chart, 12345, NaN), false);
 });
 
 test('attach creates internal series with mandatory chrome options', () => {
@@ -116,6 +133,18 @@ test('source: no update() / getSeries; never touches candleSeries', () => {
 test('autoscaleInfoProvider factory returns null', () => {
   const opts = TimelineDecoration._decorationSeriesOptionsForTests();
   assert.strictEqual(opts.autoscaleInfoProvider(), null);
+});
+
+test('Phase 2 chart-core composition contracts', () => {
+  const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  assert.ok(core.includes('refreshDecorationFromState'));
+  assert.ok(core.includes('TimelineDecoration.attach'));
+  assert.ok(core.includes('TimelineDecoration.dispose'));
+  assert.ok(core.includes('_lastRealCandleTime'));
+  assert.ok(core.includes('isNewBar'));
+  // Tip path must stay update(), not setData(real+ws).
+  assert.ok(core.includes('state.candleSeries.update(candle)'));
+  assert.ok(!core.includes('applyCandlesWithWhitespace'));
 });
 
 console.log('timeline_decoration_test: ALL PASS');

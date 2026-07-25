@@ -98,17 +98,18 @@ test('1M next is first of next month UTC', () => {
   assert.strictEqual(times[0], Date.UTC(2024, 2, 1) / 1000);
 });
 
-test('DisplayTimeline is pure; Phase 0 candle pipeline has no whitespace merge', () => {
+test('DisplayTimeline is pure; ChartAdapter composes decoration (no candle merge)', () => {
   const helper = fs.readFileSync(path.join(__dirname, 'ui/display-timeline.js'), 'utf8');
   assert.ok(!/\bliveColumnarStore\b/.test(helper));
   assert.ok(!/\.setData\s*\(/.test(helper));
   assert.ok(!/\.update\s*\(/.test(helper));
   const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
-  // Phase 0: DisplayTimeline module remains, but must not feed candleSeries.
   assert.ok(!core.includes('applyCandlesWithWhitespace'));
   assert.ok(!core.includes('mergeCandlesWithWhitespace'));
-  assert.ok(!core.includes('buildWhitespaceBars'));
-  assert.ok(!/setData\([^)]*concat|real\.concat/.test(core));
+  assert.ok(core.includes('refreshDecorationFromState'));
+  assert.ok(core.includes('TimelineDecoration'));
+  assert.ok(core.includes('buildWhitespaceBars'));
+  assert.ok(!/candleSeries\.setData\([^)]*concat|real\.concat\(whitespace/.test(core));
 });
 
 console.log('display_timeline_test: ALL PASS');

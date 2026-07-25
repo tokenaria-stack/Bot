@@ -157,4 +157,14 @@ test('chart-core ADR-026: extract logical + single applyPeerCrosshair path', () 
   assert.ok(src.includes('Never invent') || src.includes('never invent'), 'no fake time comment');
 });
 
+test('chart-core ADR-027 polish: bottom time label owned by sync, rendered on axis owner', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  assert.ok(src.includes('ensureBottomAxisTimeLabel'));
+  assert.ok(src.includes('resolveDisplayTimeAtLogical'));
+  assert.ok(src.includes('_bottomTimeAxisHostId'));
+  assert.ok(src.includes('TimelineDecoration.applyCrosshairTime'));
+  // No pane-branch label painting (price/footer special cases).
+  assert.ok(!/if\s*\(\s*hostId\s*===\s*['"]price['"]\s*\).*timeLabel/s.test(src));
+});
+
 console.log('crosshair_controller_test: ALL PASS');

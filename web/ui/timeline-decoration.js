@@ -4,8 +4,10 @@
  * Owns: how display-only future timestamps become visible on the LWC time scale.
  * Does NOT own: future math (DisplayTimeline), candles, camera, crosshair, store/DDR.
  *
- * Public API: attach / refresh / dispose only.
+ * Public API: attach / refresh / dispose / applyCrosshairTime.
  * No series getters, no series.update, no event bus.
+ * applyCrosshairTime — ChartAdapter-only seam so the bottom-axis owner can
+ * paint LWC's native time label from synchronized {time} without exposing series.
  *
  * Private series title (for legend filters later): __timeline_decoration__
  */
@@ -123,6 +125,29 @@
     return true;
   }
 
+  /**
+   * Position LWC crosshair on this chart via the private decoration series.
+   * Used so the bottom-axis owner can render the native time label when it is
+   * not the hovered pane (series stays private — no getter).
+   * @param {object} chart
+   * @param {*} time LWC chart time (unix sec / BusinessDay)
+   * @param {number} price local Y for setCrosshairPosition (mid-scale ok)
+   * @returns {boolean}
+   */
+  function applyCrosshairTime(chart, time, price) {
+    const att = findAttachment(chart);
+    if (!att?.series || !chart || time == null) return false;
+    if (typeof chart.setCrosshairPosition !== 'function') return false;
+    const y = Number(price);
+    if (!Number.isFinite(y)) return false;
+    try {
+      chart.setCrosshairPosition(y, time, att.series);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** @private tests */
   function _resetForTests() {
     attachments = [];
@@ -137,6 +162,7 @@
     attach,
     refresh,
     dispose,
+    applyCrosshairTime,
     // Test seams only (not for product callers).
     _resetForTests,
     _decorationSeriesOptionsForTests,

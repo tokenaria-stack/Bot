@@ -339,11 +339,13 @@
   /**
    * ADR-023: mirror PaneLayout bottom-axis owner into LWC timeScale.visible.
    * ChartAdapter only applies; does not decide ownership.
+   * Bottom axis is the time-label *renderer* only — never the sync owner (ADR-027 polish).
    * @param {string} ownerHostId from PaneLayout.getBottomTimeAxisHostId()
    */
   function setBottomTimeAxis(ownerHostId) {
     if (!_live?.charts) return;
     const owner = String(ownerHostId || 'price').trim() || 'price';
+    _live._bottomTimeAxisHostId = owner;
     const panes = [
       { hostId: 'price', chart: _live.charts.price },
       { hostId: 'wozduh', chart: _live.charts.wozduh },
@@ -398,8 +400,8 @@
     refreshRulerOverlay();
     // ADR-026: re-project empty-space peer guides after camera move.
     refreshPeerCrosshair(_live);
-    // ADR-027 Phase 0: candleSeries is real-only again (tip update invariant).
-    // Future whitespace returns via TimelineDecoration in Phase 1+.
+    // ADR-027: grow/shrink decoration whitespace for the new visible future strip.
+    refreshDecorationFromState(_live);
   }
 
   function bindTimeCamera() {
@@ -502,14 +504,7 @@
   function resolveLocalYForCrosshair(state, targetChart, targetSeries, time) {
     const y = resolveLocalYAtTime(state, targetChart, targetSeries, time);
     if (y != null && Number.isFinite(y)) return y;
-    try {
-      const ps = targetChart?.priceScale?.('right');
-      const range = ps?.getVisibleRange?.();
-      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
-        return (range.from + range.to) / 2;
-      }
-    } catch { /* */ }
-    return null;
+    return midVisiblePrice(targetChart);
   }
 
   function chartForHostId(state, hostId) {
@@ -518,6 +513,56 @@
     if (hostId === 'wozduh') return state.charts.wozduh;
     if (hostId === 'rsx') return state.charts.rsx;
     return null;
+  }
+
+  function midVisiblePrice(chart) {
+    try {
+      const ps = chart?.priceScale?.('right');
+      const range = ps?.getVisibleRange?.();
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        return (range.from + range.to) / 2;
+      }
+    } catch { /* */ }
+    return null;
+  }
+
+  /**
+   * Paint LWC native crosshair (incl. time label) on one pane.
+   * Market series first; decoration series fallback (future DisplayTimeline times).
+   */
+  function paintNativeCrosshairAtTime(state, hostId, time) {
+    const chart = chartForHostId(state, hostId);
+    if (!chart || time == null || typeof chart.setCrosshairPosition !== 'function') return false;
+    const market = crosshairSeriesForChart(state, chart);
+    let y = market ? resolveLocalYForCrosshair(state, chart, market, time) : null;
+    if (market && y != null && Number.isFinite(y)) {
+      try {
+        chart.setCrosshairPosition(y, time, market);
+        return true;
+      } catch { /* */ }
+    }
+    if (typeof TimelineDecoration === 'undefined' || !TimelineDecoration.applyCrosshairTime) {
+      return false;
+    }
+    if (y == null || !Number.isFinite(y)) y = midVisiblePrice(chart);
+    if (y == null || !Number.isFinite(y)) y = 0;
+    return TimelineDecoration.applyCrosshairTime(chart, time, y);
+  }
+
+  /**
+   * ADR-027 polish — bottom time label is global sync state rendered on the
+   * ADR-023 axis owner. Hovered pane must never own the label.
+   * Re-assert after peer sync and after applyHorzVisibility (options can reset chrome).
+   */
+  function ensureBottomAxisTimeLabel(state) {
+    if (!state?.charts) return;
+    const saved = state._peerCrosshair;
+    const owner = state._bottomTimeAxisHostId;
+    if (!saved || !owner) return;
+    // Owner hovered → native LWC already paints its own time label.
+    if (saved.sourceHostId === owner) return;
+    if (saved.time == null) return;
+    paintNativeCrosshairAtTime(state, owner, saved.time);
   }
 
   function applyHorzVisibility(state, map) {
@@ -539,6 +584,9 @@
         });
       } catch { /* */ }
     });
+    // Horz policy runs after peer sync and may reset LWC crosshair chrome —
+    // re-assert bottom-axis time label (renderer only; sync owner stays CrosshairController).
+    ensureBottomAxisTimeLabel(state);
   }
 
   /**
@@ -572,27 +620,16 @@
       }
       if (time != null) {
         hidePeerGuide(hostId);
-        if (typeof chart.setCrosshairPosition !== 'function') return;
-        const targetSeries = crosshairSeriesForChart(state, chart);
-        if (!targetSeries) {
-          chart.clearCrosshairPosition?.();
-          return;
-        }
-        const yValue = resolveLocalYForCrosshair(state, chart, targetSeries, time);
-        if (yValue == null || !Number.isFinite(yValue)) {
-          chart.clearCrosshairPosition?.();
-          showPeerGuideAtLogical(hostId, chart, logical);
-          return;
-        }
-        try {
-          chart.setCrosshairPosition(yValue, time, targetSeries);
-        } catch { /* */ }
+        if (paintNativeCrosshairAtTime(state, hostId, time)) return;
+        try { chart.clearCrosshairPosition?.(); } catch { /* */ }
+        showPeerGuideAtLogical(hostId, chart, logical);
         return;
       }
-      // Empty / future space: logical guide only — never invent time.
+      // Empty space without resolvable time: logical guide only (ADR-026).
       try { chart.clearCrosshairPosition?.(); } catch { /* */ }
       showPeerGuideAtLogical(hostId, chart, logical);
     });
+    ensureBottomAxisTimeLabel(state);
   }
 
   /** Re-project stored empty-space guides after camera / resize. */
@@ -715,11 +752,46 @@
   }
 
   /**
-   * ChartAdapter translate: LWC param → { logical, time? }. Never invents time.
+   * Resolve chart time at a logical index from real candles + DisplayTimeline.
+   * Same timestamps already injected via TimelineDecoration — lookup, not invention.
+   * @param {object|null} state
+   * @param {number} logical
+   * @returns {*|null}
+   */
+  function resolveDisplayTimeAtLogical(state, logical) {
+    const real = state?._realCandles;
+    if (!Array.isArray(real) || !real.length) return null;
+    const lastLogical = real.length - 1;
+    const idx = Math.round(Number(logical));
+    if (!Number.isFinite(idx)) return null;
+    if (idx >= 0 && idx <= lastLogical) {
+      const t = real[idx]?.time;
+      return t == null ? null : t;
+    }
+    if (typeof DisplayTimeline === 'undefined' || !DisplayTimeline.buildFutureTimes) return null;
+    const offset = idx - lastLogical;
+    if (offset <= 0) {
+      const t = real[lastLogical]?.time;
+      return t == null ? null : t;
+    }
+    const lastSec = Number(real[lastLogical]?.time);
+    if (!Number.isFinite(lastSec)) return null;
+    const tf = (typeof window !== 'undefined' && window.currentTf) ? window.currentTf : '1m';
+    const times = DisplayTimeline.buildFutureTimes({
+      lastTimeSec: lastSec,
+      count: offset,
+      tf,
+    });
+    return times[offset - 1] ?? null;
+  }
+
+  /**
+   * ChartAdapter translate: LWC param → { logical, time? }.
+   * Never invents time — may look up DisplayTimeline times already on the decoration plane.
    */
   function extractCrosshairPosition(chart, param) {
     if (!param || param.point == null) return null;
-    const time = param.time == null ? null : param.time;
+    let time = param.time == null ? null : param.time;
     let logical = param.logical;
     if (logical == null && chart?.timeScale) {
       try {
@@ -730,6 +802,15 @@
     }
     logical = Number(logical);
     if (!Number.isFinite(logical)) return null;
+    if (time == null && chart?.timeScale) {
+      try {
+        const ct = chart.timeScale().coordinateToTime?.(param.point.x);
+        if (ct != null) time = ct;
+      } catch { /* */ }
+    }
+    if (time == null) {
+      time = resolveDisplayTimeAtLogical(_live, logical);
+    }
     return { logical, time };
   }
 
@@ -1141,8 +1222,23 @@
       charts: { price: priceChart, wozduh: wozduhChart, rsx: rsxChart },
       candleSeries,
       volumeSeries,
+      _realCandles: null,
+      _lastRealCandleTime: null,
+      _bottomTimeAxisHostId: 'price',
+      _peerCrosshair: null,
       _disposers: [],
     };
+
+    // ADR-027: decoration plane on every live pane (TimeCamera logical alignment + ADR-023 axis owner).
+    if (typeof TimelineDecoration !== 'undefined') {
+      TimelineDecoration.dispose();
+      TimelineDecoration.attach(priceChart);
+      TimelineDecoration.attach(wozduhChart);
+      TimelineDecoration.attach(rsxChart);
+      state._disposers.push(() => {
+        if (typeof TimelineDecoration !== 'undefined') TimelineDecoration.dispose();
+      });
+    }
 
     bindTimeCamera();
     bindResize(priceHost, priceChart, state._disposers);
@@ -1155,12 +1251,58 @@
   }
 
   /**
-   * ADR-027 Phase 0 — candleSeries is real OHLC only.
-   * Invariant: last series item === forming tip ⇒ update(tip) is always legal.
-   * Future whitespace returns via TimelineDecoration (Phase 1+); not on this series.
+   * ADR-027 composer helper — ChartAdapter only.
+   * Reads real tip + camera; DisplayTimeline owns math; TimelineDecoration owns LWC setData.
+   */
+  function refreshDecorationFromState(state) {
+    if (typeof TimelineDecoration === 'undefined') return;
+    if (typeof DisplayTimeline === 'undefined') return;
+    if (!state) return;
+    const real = state._realCandles;
+    if (!Array.isArray(real) || !real.length) {
+      TimelineDecoration.refresh({ times: [] });
+      return;
+    }
+    const lastTimeSec = Number(real[real.length - 1]?.time);
+    if (!Number.isFinite(lastTimeSec)) {
+      TimelineDecoration.refresh({ times: [] });
+      return;
+    }
+
+    let visibleTo = null;
+    let rightOffset = null;
+    try {
+      const range = state.charts?.price?.timeScale?.()?.getVisibleLogicalRange?.();
+      if (range && Number.isFinite(range.to)) visibleTo = range.to;
+    } catch { /* */ }
+    if (typeof TimeCamera !== 'undefined' && TimeCamera.getCanonical) {
+      const c = TimeCamera.getCanonical();
+      if (c && Number.isFinite(c.rightOffset)) rightOffset = c.rightOffset;
+      if (c?.visibleRange && Number.isFinite(c.visibleRange.to)) {
+        visibleTo = c.visibleRange.to;
+      }
+    }
+
+    const tf = (typeof window !== 'undefined' && window.currentTf) ? window.currentTf : '1m';
+    const bars = DisplayTimeline.buildWhitespaceBars({
+      lastTimeSec,
+      lastLogical: real.length - 1,
+      visibleTo,
+      rightOffset,
+      tf,
+    });
+    const times = bars.map((b) => b.time);
+    TimelineDecoration.refresh({ times });
+  }
+
+  /**
+   * ADR-027 — candleSeries is real OHLC only (tip update invariant).
+   * Future strip via TimelineDecoration, never concatenated onto candles.
    */
   function paintCandles(state, candles) {
     if (!state?.candleSeries || !Array.isArray(candles) || !candles.length) return;
+    state._realCandles = candles;
+    state._lastRealCandleTime = candles[candles.length - 1]?.time ?? null;
     state.candleSeries.setData(candles);
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.setData(toVolumeBars(candles));
@@ -1172,14 +1314,29 @@
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }
+    refreshDecorationFromState(state);
     refreshRulerOverlay();
   }
 
   function updateCandle(state, candle) {
     if (!state?.candleSeries || !candle) return;
+    const isNewBar = candle.time !== state._lastRealCandleTime;
+    if (Array.isArray(state._realCandles) && state._realCandles.length) {
+      if (state._realCandles[state._realCandles.length - 1]?.time === candle.time) {
+        state._realCandles[state._realCandles.length - 1] = candle;
+      } else {
+        state._realCandles.push(candle);
+      }
+    } else {
+      state._realCandles = [candle];
+    }
     state.candleSeries.update(candle);
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.update(toVolumeBars([candle])[0]);
+    }
+    if (isNewBar) {
+      state._lastRealCandleTime = candle.time;
+      refreshDecorationFromState(state);
     }
   }
 

@@ -1,5 +1,8 @@
 /**
  * LegendRenderer — dumb DDR chrome: pane title + eye + settings gear.
+ *
+ * Pane legends are HTML (not LWC series walkers). If a future HUD iterates
+ * chart series, ignore title === '__timeline_decoration__' (ADR-027 decoration).
  */
 const LegendRenderer = (() => {
   function paneTitle(paneId) {
