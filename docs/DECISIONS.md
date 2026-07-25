@@ -400,9 +400,9 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - **ChartAdapter** subscribes all panes, proposes via `TimeCamera.proposeFromPane`, applies only via `applyCommittedCamera`. Public `setVisibleLogicalRange` / `commitTimeCamera` originate through `commit`.
 - Footers: native LWC `handleScroll` / time wheel. **`attachSlaveWheelProxy` deleted.**
 - No chart is semantic master; any HostID may propose.
-- **ViewportManager** / **ScaleController** untouched (capture-restore and Y scale). ViewportManager may still call `ChartAdapter.setVisibleLogicalRange` (routes to TimeCamera).
+- **ViewportManager** / **ScaleController** untouched in P0/P1 (capture-restore and Y scale). **Superseded for navigation ownership by ADR-028** (ViewportManager becomes translator only; TimeCamera owns VIEW).
 
-**Deferred:** CrosshairController (P2) ✅, InteractionController (P3) → **ADR-024**.
+**Deferred:** CrosshairController (P2) ✅, InteractionController (P3) → **ADR-024**. Navigation semantics → **ADR-028** / TF transition → **ADR-029**.
 
 **Rejected:** Keeping wheel proxy; price-as-master sync; InteractionController in P0/P1.
 
@@ -611,4 +611,152 @@ Future LWC Primitive API may replace HTML guide / mid-Y; do not chase now.
 **Rejected:** DrawingManager / EventBus; pixels in controller; bars from elapsed time; requiring `time`; DOM in RulerController; Volume line in Phase 1 tooltip.
 
 **Consequences:** Debt **#91** ruler product slice closed for Measure v1. Modules: `ruler-controller.js`, `ruler-metrics.js`, IC, `chart-core.js`. Tests: `web/ruler_controller_test.js`.
+
+---
+
+## ADR-028 — TimeCamera Navigation Ownership (VIEW)
+
+**Context:** Time Domain Audit showed the TF-switch “jump left / full empty” symptom is not a rendering bug. Navigation state is fragmented across ViewportManager pin/intent/restore, direct LWC `applyOptions` / `scrollToPosition`, range-only TimeCamera commits, and a wrong live-edge predicate that treats large future overhang as “pinned.” ADR-021 made TimeCamera the canonical range writer on paper; it did not yet make **navigation** (what the human is looking at) a first-class concept with one owner.
+
+**Amends:** ADR-021 (ViewportManager may own capture-restore policy → demoted to translator). Does not change Crosshair (026), Decoration (027), or PaneLayout (023).
+
+**Decision:**
+
+### Laws (permanent)
+
+1. **TimeframeController never decides where the camera goes. TimeCamera always decides.**
+2. **Navigation never depends on timeframe density.** No `if (tf === '1D')` (or any TF) branches in navigation. Preserve meaning (time), not bar density.
+3. **One camera write path only:** Application → TimeCamera → ChartAdapter **CameraCommit** → LWC. No second writers.
+
+### What TimeCamera owns
+
+Navigation semantics only — split SSOT:
+
+| Piece | Fields | Meaning |
+|-------|--------|---------|
+| **ViewIntent** | `LIVE` \| `HISTORY` (future socket: `REPLAY`) | Why the user is looking |
+| **ViewGeometry** | `centerTime`, `visibleBars`, `barSpacing`, `rightPadding` | What they see |
+
+Derived LWC fields `{ visibleRange, barSpacing, rightOffset }` are outputs of CameraCommit — not competing SSOTs.
+
+### What TimeCamera does **not** own
+
+- Market data / bar indexing / `nearestLogicalForTime`
+- Timeframe duration math for lookup
+- Rendering / LWC calls
+- Crosshair, decoration, layout, scale prefs
+
+### Lifecycle
+
+```
+capture   → from latest committed camera state only (never mid-apply / inertia half-state)
+propose   → navigation semantics (intent + geometry); may request a time→logical resolve
+commit    → atomic CameraCommit via ChartAdapter
+```
+
+**Propose ≠ blind restore.** When exact `centerTime` has no bar, data resolves nearest logical; TimeCamera proposes valid geometry — it does not insist on an impossible restore.
+
+### Data lookup boundary (mandatory)
+
+```
+TimeCamera requests centerTime
+        │
+        ▼
+Data layer / ChartCompositor  →  nearestLogicalForTime(times, centerTime)
+        │
+        ▼
+TimeCamera receives resolved logical
+        │
+        ▼
+CameraCommit
+```
+
+TimeCamera never searches candles and never asks “what logical index is this?” of the store itself.
+
+### CameraCommit (one transaction)
+
+ChartAdapter applies navigation as **one** CameraCommit `{ visibleRange, barSpacing, rightOffset }` (rightOffset derived from tip + `rightPadding` when LIVE). The rest of the app must never treat separate `setBarSpacing` / `setVisibleLogicalRange` / `scrollToPosition` as public navigation operations. Internally LWC may need multiple calls; the application sees exactly one commit.
+
+### ViewportManager
+
+Translator / capture helper only. Must not own LIVE/HISTORY policy, must not clamp/sticky-decide TF navigation, must not write LWC camera directly (`applyOptions` spacing/offset, `scrollToPosition`). Phase D migrates; this ADR freezes the target.
+
+**Rejected:**
+
+- `NavigationManager` / new controllers / event buses
+- TF-owned camera / density branches
+- Preserving bare logical index across TF
+- Unbounded `rightPadding` as market truth
+- TimeCamera performing store/bar search
+- Second camera write paths (including ViewportManager direct LWC)
+
+**Consequences:** Constitution updated. Implementation = Phase D1 (shadow) → D2 (cutover) after ADR-029. Runtime unchanged until then. Offenders to retire: `isPinnedRight` false sticky, unbounded sticky offset, VM direct LWC writers, non-atomic range-only commits.
+
+---
+
+## ADR-029 — Timeframe Transition Protocol
+
+**Context:** ADR-028 freezes navigation ownership. TF switching still needs an explicit protocol so LIVE sticky-edge and HISTORY center-anchor behave like TradingView without TF-specific code. Depends on ADR-028; does not invent a second owner.
+
+**Decision:**
+
+### Pipeline
+
+```
+TF click
+  → TimeCamera.capture()                 # from latest committed state only
+  → TimeframeController sets currentTf   # TF id only — no camera
+  → prepareLiveTfHandoff + loadDashboard
+  → paint new market data
+  → DataResolve(centerTime → nearest logical) or tip logical if LIVE
+  → TimeCamera.propose(ViewIntent + ViewGeometry + resolved logical)
+  → ChartAdapter CameraCommit (atomic)
+```
+
+TimeframeController never chooses LIVE vs HISTORY, never sets range/offset/spacing.
+
+### ViewIntent classification (hysteresis)
+
+Let `tip` = last real logical index, `to` = committed visible `to`, `overhang = to - tip`, `SLACK = 1.5`.
+
+- **LIVE** if `overhang >= -SLACK` (tip on screen or within slack left; future/right padding allowed).
+- **HISTORY** if `to < tip - SLACK` (user clearly pulled tip off the right).
+
+Do not treat large positive overhang alone as a reason to invent density-specific behavior — clamp handles void.
+
+### LIVE propose
+
+- Stick to new series tip.
+- Preserve healthy breathing room: `rightPadding = min(saved, min(50, max(5, floor(visibleBars / 4))))`.
+- Keep healthy `barSpacing` (poison → healthy default 6).
+- Never carry unbounded future void across TF density change.
+
+### HISTORY propose
+
+- Preserve `centerTime` (screen-center meaning).
+- DataResolve → nearest logical on the **new** series.
+- Center geometry on that logical; keep `visibleBars` / `barSpacing` (poison-sanitized).
+- **Never** jump to live tip.
+
+### Error / poison
+
+| Case | Action |
+|------|--------|
+| Null / failed capture | Fresh LIVE: healthy spacing, `rightPadding: 0` |
+| No bar for `centerTime` | Nearest logical (data layer) |
+| Empty series | Fresh LIVE / no-op until data exists |
+| Accordion poison (`visibleBars` huge / spacing crushed) | Healthy defaults (spacing 6, bars capped ≤ 400, floor ≥ 50 when restoring window) |
+
+### Explicit non-goals
+
+- No TF-specific branches
+- No Crosshair / Decoration / PaneLayout redesign
+- No TimeCamera bar indexing
+- No `fitContent` / `scrollToRealTime` on the live TF path
+
+**Rejected:** Left-edge anchor; preserving logical index across TF; Sticky Live Edge without overhang clamp; ViewportManager owning transition policy; blind `restore()` that cannot propose nearest.
+
+**Consequences:** Protocol ready for Phase D1/D2. Modules affected at implement time: `time-camera.js`, `viewport-manager.js` (demote), `timeframe-controller.js` / `boot.js` / `chart-compositor.js` (wire propose after paint), `chart-core.js` (CameraCommit). Tests: intent classification, clamp, nearest-bar helper (outside TimeCamera), TF contract (single write path).
+
+---
 

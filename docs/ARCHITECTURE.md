@@ -29,7 +29,7 @@ Memory-update routing (user: «сохрани в памяти» / «update MEMOR
 
 ## Core Ownership Model (Jeweler Constitution)
 
-**Status:** Frozen. Frontend chart architecture is stable after ADR-023, ADR-026, ADR-027, and the Ownership Audit.
+**Status:** Frozen. Frontend chart architecture is stable after ADR-023, ADR-026, ADR-027, ADR-028 (navigation), ADR-029 (TF transition protocol), and the Ownership Audits.
 
 This is not an ADR. It is the permanent constitution of the frontend.  
 Future ADRs must conform to it. Future features ask one question first: **which existing owner does this belong to?** If none — write an ADR. If one exists — put the work there.
@@ -46,6 +46,9 @@ No new Registries, Services, Event Buses, or `*Manager` facades without a justif
 | **Decoration ≠ Market Data** | Display chrome never enters the market-data plane (`ColumnarStore` / DDR / `candleSeries`). |
 | **Rendering ≠ Policy** | Controllers decide; ChartAdapter paints. Paint never invents policy. |
 | **Composition ≠ Ownership** | Wiring owners together does not transfer their responsibilities to the composer. |
+| **TF ≠ Navigation** | TimeframeController never decides where the camera goes. TimeCamera always decides. |
+| **Navigation ≠ Density** | Navigation never depends on timeframe density. No TF branches in camera logic. Preserve time meaning. |
+| **One Camera Write Path** | Application → TimeCamera → ChartAdapter CameraCommit → LWC. No second writers. |
 
 ### 2. Ownership Map
 
@@ -57,11 +60,14 @@ No new Registries, Services, Event Buses, or `*Manager` facades without a justif
 | Timeline decoration rendering | TimelineDecoration |
 | Crosshair policy (hover + sync) | CrosshairController |
 | Rendering translation (LWC / DOM) | ChartAdapter |
-| Time camera (canonical viewport) | TimeCamera |
+| **User navigation / VIEW** | **TimeCamera** (ViewIntent + ViewGeometry) |
+| **time → logical lookup** | **Data layer / ChartCompositor** (`nearestLogicalForTime`) |
+| Camera apply to LWC | ChartAdapter **CameraCommit only** |
 | Scale preferences (Auto / Manual / Log) | ScaleController |
 | Layout / visible bottom time axis | PaneLayout |
 | Interaction routing | InteractionController |
 | Ruler policy (measure FSM) | RulerController |
+| Active timeframe id | TimeframeController |
 
 Do not invent owners outside this map. Extend only via ADR.
 
@@ -72,13 +78,16 @@ Do not invent owners outside this map. Extend only via ADR.
 | **ColumnarStore / DDR** | Bounded market display window and indicator series data. Not chrome, not camera, not crosshair policy. |
 | **DisplayTimeline** | Pure future bar-open timestamps for display. No LWC, no store writes. |
 | **TimelineDecoration** | Sealed LWC rendering of display-only timeline chrome. Never market OHLC; never `update(tip)`. |
-| **ChartAdapter** | Sole talker to Lightweight Charts. Translates and composes. Never owns business rules, hover policy, or future-time math. |
+| **ChartAdapter** | Sole talker to Lightweight Charts. Translates and composes. Applies navigation only via **CameraCommit**. Never owns business rules, hover policy, future-time math, or navigation intent. |
 | **CrosshairController** | Hover ownership and synchronized `{ logical, time? }` + V/H policy. Never renders; never invents timestamps. |
-| **TimeCamera** | Canonical live timeline state (`commit` only). Never formats axis labels; never paints. |
+| **TimeCamera** | Owns the user's **VIEW**: ViewIntent (`LIVE` \| `HISTORY`) + ViewGeometry (`centerTime`, `visibleBars`, `barSpacing`, `rightPadding`). Capture / propose / commit. Never formats labels, never paints, never indexes market bars. |
+| **Data / ChartCompositor** | Resolves `centerTime → nearest logical` for TimeCamera propose. Owns lookup, not navigation semantics. |
 | **ScaleController** | Per-pane Y-scale preferences. Does not own oscillator domain math (contribution stays with series config). |
 | **PaneLayout** | Pane membership and which HostID shows the bottom time axis. Declares; does not paint LWC. |
 | **InteractionController** | Routes semantic interaction events to controllers. Accepts no raw DOM/LWC objects. |
 | **RulerController** | Measure-tool FSM and semantic anchors. ChartAdapter projects geometry. |
+| **TimeframeController** | Active TF id + toolbar. Never moves the camera. |
+| **ViewportManager** | Capture/translate helper only (ADR-028). Not a camera owner; no direct LWC camera writes (target after Phase D). |
 
 **LayoutController** allocates DOM/CSS from PaneLayout — composition/apply, not a second layout owner.
 
@@ -87,12 +96,15 @@ Do not invent owners outside this map. Extend only via ADR.
 - Future timestamps originate only from **DisplayTimeline**.
 - Decoration never enters the market-data plane; `candleSeries` holds real candles only.
 - Controllers never render (no LWC, no measurement DOM).
-- **ChartAdapter** never owns business rules, hover policy, or timeline math.
+- **ChartAdapter** never owns business rules, hover policy, timeline math, or navigation intent.
 - **PaneLayout** declares bottom-axis ownership; it does not own crosshair sync state. The axis owner **renders** the time label; the hovered pane does not.
-- **TimeCamera** never formats time and never draws chrome.
+- **TimeCamera** never formats time, never draws chrome, never searches candles.
 - **CrosshairController** owns synchronization policy, not paint.
 - **TimelineDecoration** owns decoration series lifecycle; ChartAdapter only composes refresh payloads.
-- Translation details (HTML peer guide, mid-Y, private series handles) stay behind the correct owner — they are not new owners and not reasons to add architecture.
+- **Timeframe switching never owns navigation** — it asks TimeCamera to capture/propose after data reload.
+- **Navigation never depends on TF density** — no timeframe branches in camera logic.
+- Camera writes go through **one CameraCommit** only.
+- Translation details (HTML peer guide, mid-Y, private series handles, Debt #80 layout fallback) stay behind the correct owner — they are not new owners and not reasons to add architecture.
 
 ### 5. ADR Relationship
 
@@ -103,12 +115,13 @@ These decisions **establish** the constitution; they do not replace it:
 | **ADR-023** | Layout / single bottom time-axis ownership |
 | **ADR-026** | Crosshair sync semantics (`logical` primary; no fabricated time) |
 | **ADR-027** | Market plane vs Decoration plane |
-| **Ownership Audit** | Verified the live implementation respects the map above |
+| **ADR-028** | Navigation / VIEW ownership (TimeCamera ViewIntent + ViewGeometry) |
+| **ADR-029** | Timeframe transition protocol (LIVE sticky + HISTORY center-anchor) |
+| **Ownership Audits** | Verified implementation against the map (chart chrome; time domain) |
 
-Implementation may evolve (e.g. Primitive instead of an HTML guide). Ownership does not — unless a new ADR amends this constitution.
+Implementation may evolve (e.g. Primitive instead of an HTML guide; Phase D navigation cutover). Ownership does not — unless a new ADR amends this constitution.
 
 ---
-
 ## Package layers
 
 ```
@@ -160,6 +173,9 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `DisplayTimeline` | ADR-027: pure future bar-open times for display whitespace (never store/DDR) |
 | `TimelineDecoration` | ADR-027: sealed LWC decoration series; time-scale chrome only |
 | `Decoration Plane` | Display-only timeline chrome; never mixed into `candleSeries` |
+| `ViewIntent` | ADR-028: `LIVE` \| `HISTORY` — why the user is looking |
+| `ViewGeometry` | ADR-028: `centerTime`, `visibleBars`, `barSpacing`, `rightPadding` |
+| `CameraCommit` | ADR-028: single ChartAdapter navigation transaction to LWC |
 
 ### Banned names (Go identifiers)
 
@@ -193,7 +209,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 13. **PaneLayout (ADR-019).** FE owns footer pane membership (`visible` / `order` / `footerHeights` px / `fullscreenPaneId`). Ind menu from Manifest HostIDs; persist ∩ manifest. Price always on (not a HostID). **LayoutController** applies CSS Grid, height drag, legend reorder, and fullscreen.
 14. **ScaleController (ADR-020 P1).** HostID-based Y-scale prefs (`allowLog`, dormant `scaleGroup`). Price Auto+Log; footers Auto-only. Visibility must not reset prefs. Persisted state must be self-sufficient: Auto OFF without `manualRange` is repaired to Auto ON on restore.
 15. **Scale contribution (ADR-022 / #68).** What Auto *measures* is per DDR component (`renderOptions.scaleContribution`: `dynamic` | `bounded` | `ignore`) → LWC `autoscaleInfoProvider`. ScaleController never owns oscillator domains.
-16. **TimeCamera (ADR-021 P0–P1).** Sole owner of live canonical timeline (`commit` only). ChartAdapter applies; all panes propose. Wheel proxy deleted.
+16. **TimeCamera (ADR-021 + ADR-028).** Sole owner of user **VIEW** navigation: ViewIntent (`LIVE` \| `HISTORY`) + ViewGeometry (`centerTime`, `visibleBars`, `barSpacing`, `rightPadding`). Capture / propose / atomic CameraCommit via ChartAdapter. Never indexes market bars (data/compositor resolves time→logical). TF transition protocol → **ADR-029**.
 17. **CrosshairController (ADR-021 P2 + ADR-026).** Owns `hoveredHostId` + V/H policy only; never timeline. Hover from wrapper pointer events only; LWC move is `{ logical, time? }` (`syncPosition`). Peers: native vert when time exists, else adapter logical guide; local Y only; no foreign horz.
 18. **InteractionController (ADR-024 / P3).** Routes pointer / range / crosshair-time only. ChartAdapter adapts LWC; specialized controllers own policy.
 19. **RulerController (ADR-025).** Anchors `logical+price` (+ optional time); two-click FSM; `RulerMetrics` for Δ/%/bars/duration; ChartAdapter projects + tooltip. Finite rectangle only.

@@ -8,11 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 / ADR-029 — Navigation ownership + TF transition (Jul 2026) ✅ docs
+
+- **ADR-028:** TimeCamera owns user VIEW (ViewIntent + ViewGeometry); one CameraCommit write path; ViewportManager → translator; no bar lookup in TimeCamera.
+- **ADR-029:** TF transition protocol — LIVE sticky + clamped breathing room; HISTORY center-time + zoom; DataResolve for nearest logical.
+- Constitution laws: TF ≠ navigation; navigation ≠ density; one camera write path.
+- Runtime Phase D1/D2 **not started** — docs freeze only.
+
 ## Phase Architecture Freeze — Core Ownership Model (Jul 2026) ✅
 
 - Frontend chart architecture declared stable (ADR-023 / 026 / 027 + Ownership Audit).
 - Permanent **Core Ownership Model (Jeweler Constitution)** section in `docs/ARCHITECTURE.md` (not a separate OWNERSHIP.md).
-- Strategy shift: stop inventing architecture; polish behavior within frozen owners.
+- Strategy shift: stop inventing architecture; polish behavior within frozen owners. Navigation later extended by ADR-028/029.
 
 ## Phase ADR-027 P4 — Ownership Audit & Consolidation (Jul 2026) ✅
 
