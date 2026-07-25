@@ -398,6 +398,8 @@
     refreshRulerOverlay();
     // ADR-026: re-project empty-space peer guides after camera move.
     refreshPeerCrosshair(_live);
+    // ADR-027 Phase 0: candleSeries is real-only again (tip update invariant).
+    // Future whitespace returns via TimelineDecoration in Phase 1+.
   }
 
   function bindTimeCamera() {
@@ -493,6 +495,23 @@
     return null;
   }
 
+  /**
+   * ADR-027: when time is on display whitespace (no series value), still place
+   * native crosshair so the time label shows — use visible mid price (local only).
+   */
+  function resolveLocalYForCrosshair(state, targetChart, targetSeries, time) {
+    const y = resolveLocalYAtTime(state, targetChart, targetSeries, time);
+    if (y != null && Number.isFinite(y)) return y;
+    try {
+      const ps = targetChart?.priceScale?.('right');
+      const range = ps?.getVisibleRange?.();
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        return (range.from + range.to) / 2;
+      }
+    } catch { /* */ }
+    return null;
+  }
+
   function chartForHostId(state, hostId) {
     if (!state?.charts) return null;
     if (hostId === 'price') return state.charts.price;
@@ -559,9 +578,10 @@
           chart.clearCrosshairPosition?.();
           return;
         }
-        const yValue = resolveLocalYAtTime(state, chart, targetSeries, time);
+        const yValue = resolveLocalYForCrosshair(state, chart, targetSeries, time);
         if (yValue == null || !Number.isFinite(yValue)) {
           chart.clearCrosshairPosition?.();
+          showPeerGuideAtLogical(hostId, chart, logical);
           return;
         }
         try {
@@ -1134,6 +1154,11 @@
     return state;
   }
 
+  /**
+   * ADR-027 Phase 0 — candleSeries is real OHLC only.
+   * Invariant: last series item === forming tip ⇒ update(tip) is always legal.
+   * Future whitespace returns via TimelineDecoration (Phase 1+); not on this series.
+   */
   function paintCandles(state, candles) {
     if (!state?.candleSeries || !Array.isArray(candles) || !candles.length) return;
     state.candleSeries.setData(candles);

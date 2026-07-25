@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-027 — Display timeline whitespace (Jul 2026) ✅
+
+- Pure `DisplayTimeline` → future `{ time }` whitespace; ChartAdapter injects at paint only.
+- Native axis ticks + crosshair time labels work in the future strip; store/DDR untouched.
+
 ## Phase ADR-026 — Crosshair empty-space sync (Jul 2026) ✅
 
 - Peer sync payload `{ logical, time? }`; clear only when logical missing.

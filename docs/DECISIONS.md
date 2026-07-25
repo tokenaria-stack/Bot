@@ -507,6 +507,23 @@ ChartAdapter translates. InteractionController routes. Controllers own behavior.
 
 ---
 
+## ADR-027 — Display Timeline Extension (future whitespace)
+
+**Context:** ADR-026 synced peer crosshair lines in empty space via `logical`, but the LWC time scale still ended at the last real candle — no bottom ticks and no native crosshair time label in the future strip (`rightOffset` / logical past last bar).
+
+**Decision:**
+
+- Pure **`DisplayTimeline`** builds display-only future bar-open times (fixed step + UTC week/month, aligned with `data.NextBarOpen`).
+- **ChartAdapter** alone merges `{ time }` whitespace onto the candle series at paint / camera refresh. Volume stays real-only.
+- Whitespace never enters ColumnarStore, DDR, engine, persistence, or analytics. A real candle at that open replaces the whitespace slot.
+- CrosshairController / TimeCamera / ScaleController / PaneLayout unchanged. Peer Y on whitespace uses local visible mid (adapter-only) so native time labels can show.
+
+**Rejected:** Fabricating time inside CrosshairController; custom DOM bottom axis; storing future bars in the data model.
+
+**Consequences:** Modules: `web/ui/display-timeline.js`, `chart-core.js`. Tests: `web/display_timeline_test.js`.
+
+---
+
 ## ADR-026 — Crosshair Empty-Space Sync
 
 **Context:** Peer vertical crosshairs synced only via `param.time`. In empty/future space LWC sets `time` undefined while still providing `logical`, so peers were cleared while the hovered pane kept a native line.
