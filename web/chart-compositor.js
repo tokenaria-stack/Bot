@@ -155,6 +155,14 @@ class ChartCompositor {
           barCount: delta.barCount ?? this._store.barCount(),
         });
       }
+      // Tip may advance on new bars — refresh observation cache after paint (no camera policy).
+      if (typeof this._store.snapshot === 'function') {
+        const snap = ChartCompositor.extractWindow(
+          this._store.snapshot(),
+          ChartCompositor.RENDER_WINDOW_LIMIT,
+        );
+        this._observeShadowWorld(snap);
+      }
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
@@ -177,6 +185,8 @@ class ChartCompositor {
       });
     }
     this._commitFullCamera(intent);
+    // ADR-028 D1.5: observe committed world only AFTER production camera path returns.
+    this._observeShadowWorld(snapshot);
   }
 
   _flushPrepend(storeData, snapshot, intent) {
@@ -195,6 +205,25 @@ class ChartCompositor {
       });
     }
     this._commitPrependCamera(snapshot, prependAnchor);
+    this._observeShadowWorld(snapshot);
+  }
+
+  /**
+   * ADR-028 D1.5 — publish tipLogical + seriesTimes to TimeCamera shadow.
+   * Observation only. Must run after existing production CameraCommit path.
+   * Does not change paint, ViewportManager, or CameraCommit.
+   * @param {object} snapshot windowed snapshot (same series the chart just painted)
+   */
+  _observeShadowWorld(snapshot) {
+    if (typeof TimeCamera === 'undefined' || typeof TimeCamera.observeCommittedWorld !== 'function') {
+      return;
+    }
+    const times = Array.isArray(snapshot?.times) ? snapshot.times : null;
+    if (!times || !times.length) return;
+    TimeCamera.observeCommittedWorld({
+      tipLogical: times.length - 1,
+      timesSec: times,
+    });
   }
 
   /**

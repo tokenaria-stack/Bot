@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 D1.5 — Shadow fidelity observe-only (Jul 2026) ✅
+
+- After production setData + CameraCommit, ChartCompositor publishes `tipLogical` + `timesSec` via `TimeCamera.observeCommittedWorld`.
+- Shadow fills ViewIntent + centerTime from committed world; no tip←rightOffset inference.
+- ViewportManager still authoritative — zero behavior / ownership / LWC-write changes. D2 not started.
+
 ## Phase ADR-028 D1 — Shadow TimeCamera (Jul 2026) ✅
 
 - Shadow ViewIntent + ViewGeometry inside TimeCamera; capture after commit only.

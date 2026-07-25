@@ -39,10 +39,17 @@
 
   /**
    * Optional tip for shadow intent (logical index of last real bar).
-   * Set via noteTipLogical — does not search store. Null until noted.
+   * Observation only — set via observeCommittedWorld / noteTipLogical.
    * @type {number|null}
    */
   let notedTipLogical = null;
+
+  /**
+   * Last observed series times (unix sec) for shadow centerTime.
+   * Observation cache only — never used to write LWC.
+   * @type {number[]|null}
+   */
+  let notedTimesSec = null;
 
   /**
    * DataResolve seam (ADR-028) — compositor/store implements in D2.
@@ -193,7 +200,8 @@
   }
 
   /**
-   * Refresh shadow from latest committed canonical. Never writes LWC.
+   * Refresh shadow from latest committed canonical + observation inputs.
+   * Never writes LWC. Never infers tip from rightOffset (ADR-028 D1.5).
    * @param {{ tipLogical?: number|null, timesSec?: number[]|null }} [opts]
    */
   function refreshShadowFromCanonical(opts) {
@@ -203,26 +211,24 @@
       return;
     }
 
-    const tip = opts && Object.prototype.hasOwnProperty.call(opts, 'tipLogical')
-      ? opts.tipLogical
+    const tipLogical = opts && Object.prototype.hasOwnProperty.call(opts, 'tipLogical')
+      ? (Number.isFinite(opts.tipLogical) ? Number(opts.tipLogical) : null)
       : notedTipLogical;
-    // Prefer explicit tip; else derive from committed rightOffset when coherent.
-    let tipLogical = Number.isFinite(tip) ? Number(tip) : null;
-    if (tipLogical == null && Number.isFinite(canonical.rightOffset)) {
-      tipLogical = range.to - Number(canonical.rightOffset);
-    }
+
+    const times = opts && Object.prototype.hasOwnProperty.call(opts, 'timesSec')
+      ? opts.timesSec
+      : notedTimesSec;
 
     const visibleBars = range.to - range.from;
     const centerLogical = computeCenterLogical(range);
     let centerTime = null;
-    const times = opts?.timesSec;
     if (Array.isArray(times) && times.length) {
       centerTime = computeCenterTimeMs(times, range);
     }
 
     const rightPadding = tipLogical != null
       ? computeRightPadding(range.to, tipLogical)
-      : (Number.isFinite(canonical.rightOffset) ? Math.max(0, canonical.rightOffset) : null);
+      : null;
 
     const intent = tipLogical != null
       ? classifyViewIntent(range.to, tipLogical, SLACK)
@@ -235,6 +241,7 @@
         visibleBars: Number.isFinite(visibleBars) ? visibleBars : null,
         barSpacing: Number.isFinite(canonical.barSpacing) ? canonical.barSpacing : null,
         rightPadding,
+        // Private cache only — not semantic ViewGeometry identity (ADR-028).
         centerLogical,
       },
     };
@@ -243,12 +250,36 @@
     try {
       if (typeof global !== 'undefined' && global.__TIME_CAMERA_SHADOW_DEBUG__) {
         // eslint-disable-next-line no-console
-        console.debug('[TimeCamera D1 shadow]', {
+        console.debug('[TimeCamera D1.5 shadow]', {
           canonical: snapshot(),
           shadow: snapshotShadow(),
+          tipLogical,
+          timesLen: Array.isArray(times) ? times.length : 0,
         });
       }
     } catch { /* */ }
+  }
+
+  /**
+   * D1.5 — observe the committed market world (after production CameraCommit).
+   * Observation inputs only. MUST NOT: CameraCommit, scroll, write LWC, classify
+   * externally, or change ViewportManager.
+   * @param {{ tipLogical: number, timesSec: number[] }} world
+   */
+  function observeCommittedWorld(world) {
+    if (!world || typeof world !== 'object') return;
+    const tip = Number(world.tipLogical);
+    notedTipLogical = Number.isFinite(tip) ? tip : null;
+    if (Array.isArray(world.timesSec) && world.timesSec.length) {
+      // Copy so later store mutations cannot poison the observation cache mid-frame.
+      notedTimesSec = world.timesSec.slice();
+    } else {
+      notedTimesSec = null;
+    }
+    refreshShadowFromCanonical({
+      tipLogical: notedTipLogical,
+      timesSec: notedTimesSec,
+    });
   }
 
   function snapshot() {
@@ -283,6 +314,8 @@
     applyCommitted = null;
     shouldSkip = null;
     dataResolve = null;
+    notedTipLogical = null;
+    notedTimesSec = null;
     isSyncing = false;
     cameraGesturing = false;
     if (gestureTimer) {
@@ -292,7 +325,8 @@
   }
 
   /**
-   * Optional tip logical for shadow intent (from series length − 1). Not a store search.
+   * Observation only (D1/D1.5). Does not commit, scroll, or write LWC.
+   * Prefer observeCommittedWorld after production CameraCommit.
    * @param {number|null|undefined} tipLogical
    */
   function noteTipLogical(tipLogical) {
@@ -301,7 +335,7 @@
   }
 
   /**
-   * Bind DataResolve seam (D2). D1 may leave unbound — resolveNearestLogical returns null.
+   * DataResolve seam (D2). Observation/composition only — must not CameraCommit.
    * @param {{ nearestLogicalForTime: (centerTimeMs: number) => number|null }|null} api
    */
   function bindDataResolve(api) {
@@ -367,8 +401,12 @@
       isSyncing = false;
     }
 
-    // D1: shadow capture only after successful committed apply (not mid-sync).
-    refreshShadowFromCanonical();
+    // D1/D1.5: shadow capture after successful committed apply (not mid-sync).
+    // Uses last observed tip/times when present — never infers tip from rightOffset.
+    refreshShadowFromCanonical({
+      tipLogical: notedTipLogical,
+      timesSec: notedTimesSec,
+    });
     return true;
   }
 
@@ -415,6 +453,7 @@
     canonical = { visibleRange: null, barSpacing: null, rightOffset: null };
     shadowView = emptyShadowView();
     notedTipLogical = null;
+    notedTimesSec = null;
   }
 
   const TimeCamera = {
@@ -427,14 +466,17 @@
     isGesturing,
     getCanonical,
     isFiniteLogicalRange,
-    // D1 seams — not navigation public API for product callers.
+    /**
+     * D1.5 observation APIs only — MUST NOT CameraCommit / scroll / write LWC /
+     * drive ViewportManager. See observeCommittedWorld.
+     */
+    observeCommittedWorld,
     noteTipLogical,
     bindDataResolve,
     resolveNearestLogical,
     _getShadowView,
     _refreshShadowFromCanonical: refreshShadowFromCanonical,
     _resetForTests,
-    // Pure helpers for unit tests / future D2 (not LWC owners).
     _helpers: {
       classifyViewIntent,
       computeCenterLogical,

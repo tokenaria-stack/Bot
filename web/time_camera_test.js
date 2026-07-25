@@ -195,7 +195,59 @@ test('shadow capture after commit: LIVE + geometry from tip/rightOffset', () => 
   assert.strictEqual(shadow.geometry.barSpacing, 6);
   assert.strictEqual(shadow.geometry.rightPadding, 11); // 110 - 99
   assert.strictEqual(shadow.geometry.centerLogical, 80);
-  assert.strictEqual(shadow.geometry.centerTime, null); // no times in D1 without DataResolve input
+  assert.strictEqual(shadow.geometry.centerTime, null); // no times until observeCommittedWorld
+});
+
+test('D1.5 observeCommittedWorld fills centerTime after committed range', () => {
+  TimeCamera._resetForTests();
+  TimeCamera.bind({ applyCommitted: () => {} });
+  // Production-like: camera commit first…
+  TimeCamera.commit({
+    visibleRange: { from: 0, to: 4 },
+    barSpacing: 6,
+    rightOffset: 0,
+    sourceHostId: 'system',
+  });
+  // …then compositor publishes committed market world.
+  const times = [1000, 1060, 1120, 1180, 1240];
+  TimeCamera.observeCommittedWorld({ tipLogical: 4, timesSec: times });
+  const shadow = TimeCamera._getShadowView();
+  assert.strictEqual(shadow.intent, 'LIVE');
+  assert.strictEqual(shadow.geometry.centerTime, 1120 * 1000);
+  assert.strictEqual(shadow.geometry.rightPadding, 0);
+  assert.strictEqual(shadow.geometry.centerLogical, 2);
+});
+
+test('D1.5 never infers tip from rightOffset alone', () => {
+  TimeCamera._resetForTests();
+  TimeCamera.bind({ applyCommitted: () => {} });
+  TimeCamera.commit({
+    visibleRange: { from: 50, to: 110 },
+    barSpacing: 6,
+    rightOffset: 11,
+    sourceHostId: 'system',
+  });
+  const shadow = TimeCamera._getShadowView();
+  assert.strictEqual(shadow.intent, null);
+  assert.strictEqual(shadow.geometry.rightPadding, null);
+  assert.strictEqual(shadow.geometry.centerTime, null);
+});
+
+test('observeCommittedWorld does not call applyCommitted (observation only)', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  TimeCamera.commit({
+    visibleRange: { from: 0, to: 10 },
+    barSpacing: 6,
+    sourceHostId: 'system',
+  });
+  assert.strictEqual(applies, 1);
+  TimeCamera.observeCommittedWorld({
+    tipLogical: 10,
+    timesSec: Array.from({ length: 11 }, (_, i) => 1000 + i * 60),
+  });
+  assert.strictEqual(applies, 1);
 });
 
 test('shadow capture: HISTORY when tip pulled off right', () => {
