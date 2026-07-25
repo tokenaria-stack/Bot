@@ -139,4 +139,99 @@ test('footer-then-price gestures stay synchronized in canonical state', () => {
   assert.strictEqual(c.barSpacing, 6);
 });
 
+// ─── ADR-028 D1 shadow (pure helpers + capture; no LWC behavior change) ─────
+
+test('classifyViewIntent: LIVE when tip in frame or within SLACK', () => {
+  const { classifyViewIntent } = TimeCamera._helpers;
+  assert.strictEqual(classifyViewIntent(100, 99, 1.5), 'LIVE'); // overhang +1
+  assert.strictEqual(classifyViewIntent(100, 100, 1.5), 'LIVE'); // on tip
+  assert.strictEqual(classifyViewIntent(98.6, 100, 1.5), 'LIVE'); // overhang -1.4 >= -1.5
+  assert.strictEqual(classifyViewIntent(200, 100, 1.5), 'LIVE'); // large future still LIVE
+});
+
+test('classifyViewIntent: HISTORY when tip clearly off the right', () => {
+  const { classifyViewIntent } = TimeCamera._helpers;
+  assert.strictEqual(classifyViewIntent(90, 100, 1.5), 'HISTORY');
+  assert.strictEqual(classifyViewIntent(98, 100, 1.5), 'HISTORY'); // -2 < -1.5
+  assert.strictEqual(classifyViewIntent(NaN, 100, 1.5), null);
+});
+
+test('computeCenterLogical is midpoint not left edge', () => {
+  const { computeCenterLogical } = TimeCamera._helpers;
+  assert.strictEqual(computeCenterLogical({ from: 10, to: 30 }), 20);
+  assert.strictEqual(computeCenterLogical({ from: 0, to: 1 }), 0.5);
+  assert.strictEqual(computeCenterLogical(null), null);
+});
+
+test('computeCenterTimeMs uses center bar from supplied times (pure)', () => {
+  const { computeCenterTimeMs } = TimeCamera._helpers;
+  const times = [1000, 1060, 1120, 1180, 1240]; // sec
+  // center logical ~2 → 1120s → 1120000 ms
+  assert.strictEqual(computeCenterTimeMs(times, { from: 0, to: 4 }), 1120 * 1000);
+  assert.strictEqual(computeCenterTimeMs([], { from: 0, to: 4 }), null);
+});
+
+test('clampRightPadding caps void across density (ADR-029)', () => {
+  const { clampRightPadding } = TimeCamera._helpers;
+  assert.strictEqual(clampRightPadding(1000, 100), 25); // min(1000, min(50, max(5, 25)))
+  assert.strictEqual(clampRightPadding(3, 100), 3);
+  assert.strictEqual(clampRightPadding(-1, 100), 0);
+  assert.strictEqual(clampRightPadding(100, 8), 5); // floor(8/4)=2 → max(5,2)=5 → min(100,5)=5
+});
+
+test('shadow capture after commit: LIVE + geometry from tip/rightOffset', () => {
+  TimeCamera._resetForTests();
+  TimeCamera.bind({ applyCommitted: () => {} });
+  TimeCamera.noteTipLogical(99);
+  TimeCamera.commit({
+    visibleRange: { from: 50, to: 110 },
+    barSpacing: 6,
+    rightOffset: 11,
+    sourceHostId: 'system',
+  });
+  const shadow = TimeCamera._getShadowView();
+  assert.strictEqual(shadow.intent, 'LIVE');
+  assert.strictEqual(shadow.geometry.visibleBars, 60);
+  assert.strictEqual(shadow.geometry.barSpacing, 6);
+  assert.strictEqual(shadow.geometry.rightPadding, 11); // 110 - 99
+  assert.strictEqual(shadow.geometry.centerLogical, 80);
+  assert.strictEqual(shadow.geometry.centerTime, null); // no times in D1 without DataResolve input
+});
+
+test('shadow capture: HISTORY when tip pulled off right', () => {
+  TimeCamera._resetForTests();
+  TimeCamera.bind({ applyCommitted: () => {} });
+  TimeCamera.noteTipLogical(200);
+  TimeCamera.commit({
+    visibleRange: { from: 10, to: 100 },
+    barSpacing: 6,
+    sourceHostId: 'price',
+  });
+  assert.strictEqual(TimeCamera._getShadowView().intent, 'HISTORY');
+});
+
+test('shadow helpers poison / null inputs stay safe', () => {
+  const h = TimeCamera._helpers;
+  assert.strictEqual(h.computeRightPadding(NaN, 10), null);
+  assert.strictEqual(h.clampRightPadding(NaN, 10), 0);
+  assert.strictEqual(h.classifyViewIntent(10, NaN), null);
+});
+
+test('DataResolve seam unbound returns null; bind works without LWC', () => {
+  TimeCamera._resetForTests();
+  assert.strictEqual(TimeCamera.resolveNearestLogical(1_700_000_000_000), null);
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => (ms > 0 ? 42 : null),
+  });
+  assert.strictEqual(TimeCamera.resolveNearestLogical(1_700_000_000_000), 42);
+  TimeCamera.bindDataResolve(null);
+  assert.strictEqual(TimeCamera.resolveNearestLogical(1_700_000_000_000), null);
+});
+
+test('D1 commit still applies only via bind hook (no LWC APIs on TimeCamera)', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'ui/time-camera.js'), 'utf8');
+  assert.ok(!/setVisibleLogicalRange|scrollToPosition|scrollToRealTime|fitContent/.test(src));
+  assert.ok(!/applyOptions/.test(src));
+});
+
 console.log('time_camera_test: ALL PASS');

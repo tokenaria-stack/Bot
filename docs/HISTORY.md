@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 D1 — Shadow TimeCamera (Jul 2026) ✅
+
+- Shadow ViewIntent + ViewGeometry inside TimeCamera; capture after commit only.
+- Pure helpers (classify / center / clamp); DataResolve seam unbound.
+- ViewportManager still paint authority — **zero behavior change**. D2 not started.
+
 ## Phase ADR-028 / ADR-029 — Navigation ownership + TF transition (Jul 2026) ✅ docs
 
 - **ADR-028:** TimeCamera owns user VIEW (ViewIntent + ViewGeometry); one CameraCommit write path; ViewportManager → translator; no bar lookup in TimeCamera.
