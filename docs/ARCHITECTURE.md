@@ -15,7 +15,7 @@
 |----------|------|
 | `.cursor/rules/jeweler-protocol.mdc` | Engineering rules (always-on) |
 | `.cursor/rules/senior-quant-architect.mdc` | Role / thinking style (always-on) |
-| `docs/ARCHITECTURE.md` | Current architecture (this file) |
+| `docs/ARCHITECTURE.md` | Current architecture + **Core Ownership Model** (frontend constitution) |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |
@@ -24,6 +24,88 @@
 
 Memory-update routing (user: «сохрани в памяти» / «update MEMORY»): see Role
 `.cursor/rules/senior-quant-architect.mdc` → section **When user says "save / update memory"**.
+
+---
+
+## Core Ownership Model (Jeweler Constitution)
+
+**Status:** Frozen. Frontend chart architecture is stable after ADR-023, ADR-026, ADR-027, and the Ownership Audit.
+
+This is not an ADR. It is the permanent constitution of the frontend.  
+Future ADRs must conform to it. Future features ask one question first: **which existing owner does this belong to?** If none — write an ADR. If one exists — put the work there.
+
+No new Registries, Services, Event Buses, or `*Manager` facades without a justifying ADR.
+
+### 1. Core Laws
+
+| Law | Meaning |
+|-----|---------|
+| **One Truth** | A fact has one authoritative source. Never copy domain truth into a second module. |
+| **One Owner** | A concern has exactly one module responsible for it. |
+| **Translation ≠ Ownership** | Adapting DOM/LWC/pixels to semantics is not owning the policy or the data. |
+| **Decoration ≠ Market Data** | Display chrome never enters the market-data plane (`ColumnarStore` / DDR / `candleSeries`). |
+| **Rendering ≠ Policy** | Controllers decide; ChartAdapter paints. Paint never invents policy. |
+| **Composition ≠ Ownership** | Wiring owners together does not transfer their responsibilities to the composer. |
+
+### 2. Ownership Map
+
+| Concern | Sole Owner |
+|---------|------------|
+| Market display data | ColumnarStore / DDR |
+| Live candle series updates | `candleSeries` via ChartAdapter composition |
+| Future timeline math | DisplayTimeline |
+| Timeline decoration rendering | TimelineDecoration |
+| Crosshair policy (hover + sync) | CrosshairController |
+| Rendering translation (LWC / DOM) | ChartAdapter |
+| Time camera (canonical viewport) | TimeCamera |
+| Scale preferences (Auto / Manual / Log) | ScaleController |
+| Layout / visible bottom time axis | PaneLayout |
+| Interaction routing | InteractionController |
+| Ruler policy (measure FSM) | RulerController |
+
+Do not invent owners outside this map. Extend only via ADR.
+
+### 3. Responsibilities
+
+| Owner | Responsibility |
+|-------|----------------|
+| **ColumnarStore / DDR** | Bounded market display window and indicator series data. Not chrome, not camera, not crosshair policy. |
+| **DisplayTimeline** | Pure future bar-open timestamps for display. No LWC, no store writes. |
+| **TimelineDecoration** | Sealed LWC rendering of display-only timeline chrome. Never market OHLC; never `update(tip)`. |
+| **ChartAdapter** | Sole talker to Lightweight Charts. Translates and composes. Never owns business rules, hover policy, or future-time math. |
+| **CrosshairController** | Hover ownership and synchronized `{ logical, time? }` + V/H policy. Never renders; never invents timestamps. |
+| **TimeCamera** | Canonical live timeline state (`commit` only). Never formats axis labels; never paints. |
+| **ScaleController** | Per-pane Y-scale preferences. Does not own oscillator domain math (contribution stays with series config). |
+| **PaneLayout** | Pane membership and which HostID shows the bottom time axis. Declares; does not paint LWC. |
+| **InteractionController** | Routes semantic interaction events to controllers. Accepts no raw DOM/LWC objects. |
+| **RulerController** | Measure-tool FSM and semantic anchors. ChartAdapter projects geometry. |
+
+**LayoutController** allocates DOM/CSS from PaneLayout — composition/apply, not a second layout owner.
+
+### 4. Ownership Rules
+
+- Future timestamps originate only from **DisplayTimeline**.
+- Decoration never enters the market-data plane; `candleSeries` holds real candles only.
+- Controllers never render (no LWC, no measurement DOM).
+- **ChartAdapter** never owns business rules, hover policy, or timeline math.
+- **PaneLayout** declares bottom-axis ownership; it does not own crosshair sync state. The axis owner **renders** the time label; the hovered pane does not.
+- **TimeCamera** never formats time and never draws chrome.
+- **CrosshairController** owns synchronization policy, not paint.
+- **TimelineDecoration** owns decoration series lifecycle; ChartAdapter only composes refresh payloads.
+- Translation details (HTML peer guide, mid-Y, private series handles) stay behind the correct owner — they are not new owners and not reasons to add architecture.
+
+### 5. ADR Relationship
+
+These decisions **establish** the constitution; they do not replace it:
+
+| ADR | Established |
+|-----|-------------|
+| **ADR-023** | Layout / single bottom time-axis ownership |
+| **ADR-026** | Crosshair sync semantics (`logical` primary; no fabricated time) |
+| **ADR-027** | Market plane vs Decoration plane |
+| **Ownership Audit** | Verified the live implementation respects the map above |
+
+Implementation may evolve (e.g. Primitive instead of an HTML guide). Ownership does not — unless a new ADR amends this constitution.
 
 ---
 
@@ -142,75 +224,19 @@ Invariant: IC accepts only semantic events — never raw DOM/LWC objects.
 
 ---
 
-## Chart planes & ownership (ADR-027 freeze)
+## Chart planes (ADR-027)
 
-### Fundamental invariant
-
-`candleSeries` always contains **only real market candles**. Decoration never enters the market-data plane.
-
-### Two-plane model
+Two planes, one composer — ownership is fixed in **Core Ownership Model** above.
 
 ```
 Market Plane                         Decoration Plane
 ─────────────────                    ────────────────────
-ColumnarStore                        DisplayTimeline      (pure future times)
-DDR                                  TimelineDecoration   (sealed LWC whitespace)
-candleSeries  ← setData(real)        (private series; autoscale null)
-update(tip)   ← forming tip only     refresh({ times }) from ChartAdapter
+ColumnarStore / DDR                  DisplayTimeline
+candleSeries + update(tip)           TimelineDecoration
 ```
 
-LWC time-scale union = market times ∪ decoration times. Tip `update()` sees only the market series.
-
-### Ownership map (one responsibility each)
-
-| Owner | Exactly one responsibility |
-|-------|----------------------------|
-| **DisplayTimeline** | Future bar-open time math (pure). |
-| **TimelineDecoration** | How display times become LWC time-scale chrome (sealed series). |
-| **ChartAdapter** | LWC translate + compose planes; never invents business logic. |
-| **CrosshairController** | Hover ownership + synchronized `{ logical, time? }` + V/H policy. |
-| **TimeCamera** | Canonical live timeline (`commit` only). |
-| **ScaleController** | Per-pane Y Auto / Manual / Log prefs. |
-| **PaneLayout** | Pane membership + which HostID owns the visible bottom time axis. |
-
-### Permanent architecture laws
-
-1. **One truth per module.**
-2. **One owner per concern.**
-3. **Translation is not ownership** (ChartAdapter / Group B details are not second owners).
-4. **Decoration is never market data.**
-5. **ChartAdapter composes but never invents business logic.**
-
-### ChartAdapter crosshair apply (private composition)
-
-Conceptual private steps inside the adapter (not public architecture features):
-
-```
-applyCrosshair (ChartAdapter private)
-  ├── applyPeerCrosshair     — peer vert sync (native or logical guide)
-  ├── applyBottomAxisLabel   — re-assert native time label on ADR-023 axis owner
-  └── applyLogicalGuide      — HTML peer guide when time is unresolved
-```
-
-These are private adapter steps, not public architecture features. Bottom label rendering is driven by CrosshairController sync + PaneLayout axis owner — not a hovered-pane feature and not a new controller.
-
-### Group B — encapsulated translation (not debt)
-
-Intentionally kept behind ChartAdapter / TimelineDecoration until LWC evolves (e.g. Primitive API):
-
-- HTML `.peer-crosshair-guide` (ADR-026 empty-space vert when `time` is null)
-- Mid-visible-price Y fallback for peer `setCrosshairPosition` on whitespace
-- Private decoration series + legend ignore of `__timeline_decoration__`
-
-These are LWC limitation translations. Correct owner already exists. Do not chase in Phase 4 unless an ownership audit finds duplication.
-
-### Future ADR candidates (real debt only)
-
-- Global ChartAdapter destroy lifecycle (`_disposers` not guaranteed on every teardown)
-- Primitive migration for peer crosshair guide
-- True duplicate ownership / duplicate time math / duplicate rendering found by Phase 4 audit
-
-Do not propose speculative modules.
+LWC may union times for chrome. Tip `update()` sees only the market series.  
+Why / rejected alternatives → `docs/DECISIONS.md` (ADR-027).
 
 ---
 

@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase Architecture Freeze — Core Ownership Model (Jul 2026) ✅
+
+- Frontend chart architecture declared stable (ADR-023 / 026 / 027 + Ownership Audit).
+- Permanent **Core Ownership Model (Jeweler Constitution)** section in `docs/ARCHITECTURE.md` (not a separate OWNERSHIP.md).
+- Strategy shift: stop inventing architecture; polish behavior within frozen owners.
+
 ## Phase ADR-027 P4 — Ownership Audit & Consolidation (Jul 2026) ✅
 
 - Live path: one owner per concern (DisplayTimeline / TimelineDecoration / ChartAdapter / CrosshairController / PaneLayout). No Group A duplicates requiring removal.
