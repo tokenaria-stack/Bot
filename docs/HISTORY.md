@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-027 P4 — Ownership Audit & Consolidation (Jul 2026) ✅
+
+- Live path: one owner per concern (DisplayTimeline / TimelineDecoration / ChartAdapter / CrosshairController / PaneLayout). No Group A duplicates requiring removal.
+- Consolidated: private `applyBottomAxisLabel` naming (was `ensureBottomAxisTimeLabel` — not a public concept).
+- Kept: Group B translations; quarantined `adapter.legacy.js` peer sync (dormant; not loaded).
+- Category C left for future ADRs: global destroy / `_disposers`, Primitive peer guide.
+
 ## Phase ADR-027 — Decoration Plane / display timeline (Jul 2026) ✅
 
 - **Invariant:** `candleSeries` = real market candles only; decoration never enters the market-data plane.
@@ -15,7 +22,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - ChartAdapter composes only — rejected `setData(real+whitespace)` (broke tip `update()` invariant).
 - Decoration attached on all live panes; native axis ticks + crosshair time labels in the future strip.
 - **Polish:** bottom-axis time label is rendered on the ADR-023 axis owner from synchronized crosshair state — not owned by the hovered pane.
-- Group B (HTML peer guide, mid-Y) left as encapsulated adapter translation. Docs freeze = Phase 3; ownership burn = Phase 4.
+- Group B (HTML peer guide, mid-Y) left as encapsulated adapter translation. Docs freeze = Phase 3; Ownership Audit & Consolidation = Phase 4.
 
 ## Phase ADR-026 — Crosshair empty-space sync (Jul 2026) ✅
 

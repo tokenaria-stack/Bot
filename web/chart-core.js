@@ -550,11 +550,11 @@
   }
 
   /**
-   * ADR-027 polish — bottom time label is global sync state rendered on the
+   * Private ChartAdapter crosshair step (not a public architecture feature).
+   * Bottom time label = sync semantics (CrosshairController) rendered on the
    * ADR-023 axis owner. Hovered pane must never own the label.
-   * Re-assert after peer sync and after applyHorzVisibility (options can reset chrome).
    */
-  function ensureBottomAxisTimeLabel(state) {
+  function applyBottomAxisLabel(state) {
     if (!state?.charts) return;
     const saved = state._peerCrosshair;
     const owner = state._bottomTimeAxisHostId;
@@ -586,7 +586,7 @@
     });
     // Horz policy runs after peer sync and may reset LWC crosshair chrome —
     // re-assert bottom-axis time label (renderer only; sync owner stays CrosshairController).
-    ensureBottomAxisTimeLabel(state);
+    applyBottomAxisLabel(state);
   }
 
   /**
@@ -629,7 +629,7 @@
       try { chart.clearCrosshairPosition?.(); } catch { /* */ }
       showPeerGuideAtLogical(hostId, chart, logical);
     });
-    ensureBottomAxisTimeLabel(state);
+    applyBottomAxisLabel(state);
   }
 
   /** Re-project stored empty-space guides after camera / resize. */
@@ -752,8 +752,9 @@
   }
 
   /**
-   * Resolve chart time at a logical index from real candles + DisplayTimeline.
-   * Same timestamps already injected via TimelineDecoration — lookup, not invention.
+   * Resolve chart time at a logical index.
+   * Real bars → candle times; future logical → DisplayTimeline.buildFutureTimes
+   * (same math as decoration refresh — composition, not a second math owner).
    * @param {object|null} state
    * @param {number} logical
    * @returns {*|null}

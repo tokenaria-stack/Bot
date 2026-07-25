@@ -159,7 +159,8 @@ test('chart-core ADR-026: extract logical + single applyPeerCrosshair path', () 
 
 test('chart-core ADR-027 polish: bottom time label owned by sync, rendered on axis owner', () => {
   const src = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
-  assert.ok(src.includes('ensureBottomAxisTimeLabel'));
+  assert.ok(src.includes('applyBottomAxisLabel'));
+  assert.ok(!src.includes('ensureBottomAxisTimeLabel'), 'no separate public concept name');
   assert.ok(src.includes('resolveDisplayTimeAtLogical'));
   assert.ok(src.includes('_bottomTimeAxisHostId'));
   assert.ok(src.includes('TimelineDecoration.applyCrosshairTime'));

@@ -192,7 +192,7 @@ applyCrosshair (ChartAdapter private)
   └── applyLogicalGuide      — HTML peer guide when time is unresolved
 ```
 
-Implementation may use internal names; the law is: bottom label rendering is a private adapter step driven by CrosshairController sync + PaneLayout axis owner — not a hovered-pane feature and not a new controller.
+These are private adapter steps, not public architecture features. Bottom label rendering is driven by CrosshairController sync + PaneLayout axis owner — not a hovered-pane feature and not a new controller.
 
 ### Group B — encapsulated translation (not debt)
 
