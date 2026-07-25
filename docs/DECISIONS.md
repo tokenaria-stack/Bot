@@ -507,6 +507,25 @@ ChartAdapter translates. InteractionController routes. Controllers own behavior.
 
 ---
 
+## ADR-026 — Crosshair Empty-Space Sync
+
+**Context:** Peer vertical crosshairs synced only via `param.time`. In empty/future space LWC sets `time` undefined while still providing `logical`, so peers were cleared while the hovered pane kept a native line.
+
+**Decision:**
+
+- Semantic payload: `{ logical, time? }` — **logical is primary**; time is optional metadata.
+- **Never fabricate/extrapolate timestamps.**
+- CrosshairController clears peers only when `logical` is missing — not when `time` is null.
+- Hovered pane stays native LWC.
+- ChartAdapter single entry `renderPeerCrosshair` / internal `applyPeerCrosshair`: `time` → `setCrosshairPosition` (local Y); else → logical guide (`logicalToCoordinate`, DOM `.peer-crosshair-guide` behind the adapter socket).
+- No `CrosshairState` store; no foreign Y; TimeCamera / Scale / PaneLayout / Ruler unchanged.
+
+**Rejected:** Fake time for `setCrosshairPosition`; HTML as a public API; controller-owned Y; second sync socket beside native apply.
+
+**Consequences:** Modules: `crosshair-controller.js`, `interaction-controller.js`, `chart-core.js`. Tests: `crosshair_controller_test.js`, `interaction_controller_test.js`.
+
+---
+
 ## ADR-025 — TradingView-style Ruler (complete)
 
 **Context:** Phase 1 foundation used drag-release + time-required points + infinite H/V guides (looked like a blue cross). Empty/future space failed when `coordinateToTime` returned null.

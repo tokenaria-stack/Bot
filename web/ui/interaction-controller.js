@@ -23,9 +23,19 @@
     return !!TimeCamera.proposeFromPane(hostId, range, barSpacing);
   }
 
-  function onCrosshairMove(hostId, time) {
+  /**
+   * Semantic crosshair move. Position: { logical, time? } — never LWC param / x,y.
+   * @param {string} hostId
+   * @param {{ logical: number, time?: *|null }} position
+   */
+  function onCrosshairMove(hostId, position) {
     if (typeof CrosshairController === 'undefined') return false;
-    return !!CrosshairController.syncTime({ sourceHostId: hostId, time });
+    if (!position || typeof position !== 'object') return false;
+    return !!CrosshairController.syncPosition({
+      sourceHostId: hostId,
+      logical: position.logical,
+      time: position.time,
+    });
   }
 
   /**

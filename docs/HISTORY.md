@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-026 — Crosshair empty-space sync (Jul 2026) ✅
+
+- Peer sync payload `{ logical, time? }`; clear only when logical missing.
+- Native `setCrosshairPosition` when time exists; else ChartAdapter logical guide (no fake time).
+
 ## Phase Debt #91 — Datetime chrome (Jul 2026) ✅
 
 - `localization.timeFormatter`: detailed local-TZ crosshair (`dd MMM yyyy HH:mm`).

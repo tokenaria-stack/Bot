@@ -396,6 +396,8 @@
     }
     // ADR-025: keep overlay pinned to business times after camera move.
     refreshRulerOverlay();
+    // ADR-026: re-project empty-space peer guides after camera move.
+    refreshPeerCrosshair(_live);
   }
 
   function bindTimeCamera() {
@@ -521,42 +523,138 @@
   }
 
   /**
-   * Sync vertical crosshair time to peers. Each peer uses its own local Y — never source Y.
-   * Does not touch the hovered/source pane (native LWC crosshair).
+   * ADR-026 — single peer-crosshair apply entry.
+   * time present → native setCrosshairPosition (local Y only).
+   * time null + logical → logical guide (no fabricated timestamps).
+   * Never touches the hovered/source pane (native LWC owns it).
+   * @param {object} state
+   * @param {string} sourceHostId
+   * @param {{ logical: number, time?: *|null }} pos
    */
-  function syncPeerCrosshairTime(state, sourceHostId, time) {
-    if (!state?.charts || time == null) return;
+  function applyPeerCrosshair(state, sourceHostId, pos) {
+    if (!state?.charts || !pos) return;
+    const logical = Number(pos.logical);
+    if (!Number.isFinite(logical)) {
+      clearPeerCrosshairs(state, sourceHostId);
+      return;
+    }
+    const time = pos.time == null ? null : pos.time;
+    state._peerCrosshair = { sourceHostId, logical, time };
+
     const panes = [
       { hostId: 'price', chart: state.charts.price },
       { hostId: 'wozduh', chart: state.charts.wozduh },
       { hostId: 'rsx', chart: state.charts.rsx },
     ];
     panes.forEach(({ hostId, chart }) => {
-      if (!chart || hostId === sourceHostId) return;
-      if (typeof chart.setCrosshairPosition !== 'function') return;
-      const targetSeries = crosshairSeriesForChart(state, chart);
-      if (!targetSeries) {
-        chart.clearCrosshairPosition?.();
+      if (!chart || hostId === sourceHostId) {
+        hidePeerGuide(hostId);
         return;
       }
-      const yValue = resolveLocalYAtTime(state, chart, targetSeries, time);
-      if (yValue == null || !Number.isFinite(yValue)) {
-        chart.clearCrosshairPosition?.();
+      if (time != null) {
+        hidePeerGuide(hostId);
+        if (typeof chart.setCrosshairPosition !== 'function') return;
+        const targetSeries = crosshairSeriesForChart(state, chart);
+        if (!targetSeries) {
+          chart.clearCrosshairPosition?.();
+          return;
+        }
+        const yValue = resolveLocalYAtTime(state, chart, targetSeries, time);
+        if (yValue == null || !Number.isFinite(yValue)) {
+          chart.clearCrosshairPosition?.();
+          return;
+        }
+        try {
+          chart.setCrosshairPosition(yValue, time, targetSeries);
+        } catch { /* */ }
         return;
       }
-      try {
-        chart.setCrosshairPosition(yValue, time, targetSeries);
-      } catch { /* */ }
+      // Empty / future space: logical guide only — never invent time.
+      try { chart.clearCrosshairPosition?.(); } catch { /* */ }
+      showPeerGuideAtLogical(hostId, chart, logical);
     });
   }
 
+  /** Re-project stored empty-space guides after camera / resize. */
+  function refreshPeerCrosshair(state) {
+    const saved = state?._peerCrosshair;
+    if (!saved || !Number.isFinite(saved.logical)) return;
+    if (saved.time != null) return; // native LWC peers; no guide to refresh
+    applyPeerCrosshair(state, saved.sourceHostId, saved);
+  }
+
   function clearPeerCrosshairs(state, sourceHostId) {
-    if (!state?.charts) return;
+    if (state) state._peerCrosshair = null;
+    if (!state?.charts) {
+      hideAllPeerGuides();
+      return;
+    }
     ['price', 'wozduh', 'rsx'].forEach((hostId) => {
       if (sourceHostId != null && hostId === sourceHostId) return;
       const chart = chartForHostId(state, hostId);
       try { chart?.clearCrosshairPosition?.(); } catch { /* */ }
+      hidePeerGuide(hostId);
     });
+  }
+
+  const PEER_GUIDE_HOST_EL = Object.freeze({
+    price: 'price-chart',
+    wozduh: 'wozduh-chart',
+    rsx: 'rsx-chart',
+  });
+
+  function peerGuideColor() {
+    if (typeof ChartTheme !== 'undefined' && ChartTheme.crosshair) return ChartTheme.crosshair;
+    return '#555555';
+  }
+
+  function ensurePeerGuideEl(hostId) {
+    const elId = PEER_GUIDE_HOST_EL[hostId];
+    if (!elId || typeof document === 'undefined') return null;
+    const host = document.getElementById(elId);
+    if (!host) return null;
+    let guide = host.querySelector(':scope > .peer-crosshair-guide');
+    if (!guide) {
+      guide = document.createElement('div');
+      guide.className = 'peer-crosshair-guide';
+      guide.setAttribute('aria-hidden', 'true');
+      host.appendChild(guide);
+    }
+    guide.style.borderLeftColor = peerGuideColor();
+    return guide;
+  }
+
+  function showPeerGuideAtLogical(hostId, chart, logical) {
+    const guide = ensurePeerGuideEl(hostId);
+    if (!guide || !chart?.timeScale) {
+      hidePeerGuide(hostId);
+      return;
+    }
+    let x = null;
+    try {
+      x = chart.timeScale().logicalToCoordinate(logical);
+    } catch {
+      x = null;
+    }
+    if (x == null || !Number.isFinite(x)) {
+      guide.style.display = 'none';
+      return;
+    }
+    guide.style.display = 'block';
+    guide.style.left = `${x}px`;
+  }
+
+  function hidePeerGuide(hostId) {
+    if (typeof document === 'undefined') return;
+    const elId = PEER_GUIDE_HOST_EL[hostId];
+    if (!elId) return;
+    const host = document.getElementById(elId);
+    const guide = host?.querySelector?.(':scope > .peer-crosshair-guide');
+    if (guide) guide.style.display = 'none';
+  }
+
+  function hideAllPeerGuides() {
+    ['price', 'wozduh', 'rsx'].forEach(hidePeerGuide);
   }
 
   function isInsidePaneWrap(node) {
@@ -596,13 +694,32 @@
     });
   }
 
+  /**
+   * ChartAdapter translate: LWC param → { logical, time? }. Never invents time.
+   */
+  function extractCrosshairPosition(chart, param) {
+    if (!param || param.point == null) return null;
+    const time = param.time == null ? null : param.time;
+    let logical = param.logical;
+    if (logical == null && chart?.timeScale) {
+      try {
+        logical = chart.timeScale().coordinateToLogical(param.point.x);
+      } catch {
+        logical = null;
+      }
+    }
+    logical = Number(logical);
+    if (!Number.isFinite(logical)) return null;
+    return { logical, time };
+  }
+
   function bindCrosshairController(state) {
     if (typeof CrosshairController === 'undefined' || !state?.charts) return;
 
     CrosshairController.bind({
       applyHorzVisibility: (map) => applyHorzVisibility(state, map),
-      syncPeerTime: (sourceHostId, time) => {
-        syncPeerCrosshairTime(state, sourceHostId, time);
+      syncPeerCrosshair: (sourceHostId, pos) => {
+        applyPeerCrosshair(state, sourceHostId, pos);
       },
       clearPeerCrosshairs: (sourceHostId) => clearPeerCrosshairs(state, sourceHostId),
       shouldIgnoreTimeSync: () => {
@@ -616,7 +733,7 @@
 
     bindPointerHoverOwnership(state, state._disposers);
 
-    // LWC observational only: extract time → InteractionController (never setHovered here).
+    // LWC observational only: extract {logical,time?} → InteractionController.
     const panes = [
       { hostId: 'price', chart: state.charts.price },
       { hostId: 'wozduh', chart: state.charts.wozduh },
@@ -631,7 +748,9 @@
           return;
         }
         if (typeof InteractionController === 'undefined') return;
-        InteractionController.onCrosshairMove(hostId, param.time == null ? null : param.time);
+        const pos = extractCrosshairPosition(chart, param);
+        if (!pos) return;
+        InteractionController.onCrosshairMove(hostId, pos);
       });
     });
   }
@@ -1140,9 +1259,19 @@
       applyHorzVisibility(_live, map);
     },
 
-    syncCrosshairTime(sourceHostId, time) {
+    /**
+     * ADR-026 — peer crosshair apply (native time path or logical guide).
+     * @param {string} sourceHostId
+     * @param {{ logical: number, time?: *|null }} pos
+     */
+    renderPeerCrosshair(sourceHostId, pos) {
       if (!_live) return;
-      syncPeerCrosshairTime(_live, sourceHostId, time);
+      applyPeerCrosshair(_live, sourceHostId, pos);
+    },
+
+    /** @deprecated ADR-026 — use renderPeerCrosshair({ logical, time? }) */
+    syncCrosshairTime(_sourceHostId, _time) {
+      /* Legacy time-only API cannot represent empty space — no-op. */
     },
 
     /**

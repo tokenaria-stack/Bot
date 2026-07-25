@@ -1096,6 +1096,19 @@
       cursor: crosshair;
     }
 
+    /* ADR-026 — peer vertical guide in empty/future space (ChartAdapter-owned). */
+    .peer-crosshair-guide {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      border-left: 1px dashed #555555;
+      pointer-events: none;
+      display: none;
+      z-index: 9;
+      box-sizing: border-box;
+    }
+
     .ruler-tooltip,
     #ruler-tooltip {
       position: absolute;
@@ -1815,11 +1828,11 @@
   <!-- <script src="/adapter.legacy.js?v=3.1.0" defer></script> -->
   <script src="/ui/scale-controller.js?v=4.1.1" defer></script>
   <script src="/ui/time-camera.js?v=1.0.0" defer></script>
-  <script src="/ui/crosshair-controller.js?v=1.1.0" defer></script>
-  <script src="/ui/interaction-controller.js?v=1.2.0" defer></script>
+  <script src="/ui/crosshair-controller.js?v=1.2.0" defer></script>
+  <script src="/ui/interaction-controller.js?v=1.3.0" defer></script>
   <script src="/ui/ruler-metrics.js?v=1.0.0" defer></script>
   <script src="/ui/ruler-controller.js?v=1.3.0" defer></script>
-  <script src="/chart-core.js?v=4.10.1" defer></script>
+  <script src="/chart-core.js?v=4.11.0" defer></script>
   <script src="/ui/viewport-manager.js?v=3.4.4" defer></script>
   <script src="/ui/chart-projection.js?v=3.1.0" defer></script>
   <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>

@@ -1,13 +1,15 @@
 /**
- * CrosshairController — ADR-021 hover ownership + V/H policy.
+ * CrosshairController — ADR-021 hover ownership + V/H policy (+ ADR-026 empty-space sync).
  *
  * Invariant: LWC events are observational, never authoritative.
  * Browser pointer events (on PaneLayout wrappers) are authoritative for hoveredHostId.
  *
- * Owns: hoveredHostId, hover/horz visibility policy, peer time-sync requests.
- * Does NOT know: chart, series, LWC params, timeline, barSpacing.
+ * Owns: hoveredHostId, hover/horz visibility policy, peer sync requests.
+ * Does NOT know: chart, series, LWC params, timeline, barSpacing, pixels, Y.
  *
- * Public API is semantic only: setHovered / syncTime.
+ * Public API is semantic only: setHovered / syncPosition.
+ * Sync payload: { sourceHostId, logical, time? } — logical primary; time optional.
+ * Never fabricates timestamps (ADR-026).
  */
 (function (global) {
   'use strict';
@@ -21,7 +23,7 @@
   /**
    * @typedef {{
    *   applyHorzVisibility: (map: Record<string, boolean>) => void,
-   *   syncPeerTime: (sourceHostId: string, time: *) => void,
+   *   syncPeerCrosshair: (sourceHostId: string, pos: { logical: number, time?: *|null }) => void,
    *   clearPeerCrosshairs: (sourceHostId: string|null) => void,
    *   shouldIgnoreTimeSync?: () => boolean,
    * }} CrosshairHooks
@@ -89,32 +91,49 @@
   }
 
   /**
-   * Time-only sync request. Never changes hoveredHostId.
-   * @param {{ sourceHostId: string, time: * }} payload
+   * Peer sync request. Never changes hoveredHostId. Never invents time.
+   * Clears peers only when logical is missing (leave / invalid) — not when time is null.
+   * @param {{ sourceHostId: string, logical: number, time?: *|null }} payload
    * @returns {boolean} true if peer sync was requested
    */
-  function syncTime(payload) {
+  function syncPosition(payload) {
     if (hooks?.shouldIgnoreTimeSync && hooks.shouldIgnoreTimeSync()) return false;
     if (!payload || typeof payload !== 'object') return false;
 
     const sourceHostId = normalizeHostId(payload.sourceHostId);
     if (!sourceHostId) return false;
-    // Only the hovered pane may drive peer time sync.
+    // Only the hovered pane may drive peer sync.
     if (hoveredHostId == null || sourceHostId !== hoveredHostId) return false;
-    if (payload.time == null) {
+
+    const logical = Number(payload.logical);
+    if (!Number.isFinite(logical)) {
       hooks?.clearPeerCrosshairs?.(sourceHostId);
       return false;
     }
 
+    const time = Object.prototype.hasOwnProperty.call(payload, 'time')
+      ? (payload.time == null ? null : payload.time)
+      : null;
+
     syncingPeers = true;
     try {
-      hooks?.syncPeerTime?.(sourceHostId, payload.time);
+      hooks?.syncPeerCrosshair?.(sourceHostId, { logical, time });
     } finally {
       syncingPeers = false;
     }
     // Re-assert horz policy after peer setCrosshairPosition (LWC may paint H).
     applyHoverPolicy();
     return true;
+  }
+
+  /** @deprecated ADR-026 — use syncPosition({ logical, time? }) */
+  function syncTime(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    // Legacy callers that only passed time cannot sync empty space; require logical.
+    if (!Object.prototype.hasOwnProperty.call(payload, 'logical')) {
+      return false;
+    }
+    return syncPosition(payload);
   }
 
   function isSyncingPeers() {
@@ -132,6 +151,7 @@
     unbind,
     getHovered,
     setHovered,
+    syncPosition,
     syncTime,
     horzVisibilityMap,
     isSyncingPeers,

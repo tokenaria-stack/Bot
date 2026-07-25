@@ -31,7 +31,7 @@ test('onPointerEnter / Leave route to CrosshairController only', () => {
   const maps = [];
   CrosshairController.bind({
     applyHorzVisibility: (m) => maps.push({ ...m }),
-    syncPeerTime: () => {},
+    syncPeerCrosshair: () => {},
     clearPeerCrosshairs: () => {},
   });
   assert.strictEqual(InteractionController.onPointerEnter('rsx'), true);
@@ -58,20 +58,45 @@ test('onRangeChanged routes to TimeCamera.proposeFromPane', () => {
   assert.strictEqual(applied[0].sourceHostId, 'wozduh');
 });
 
-test('onCrosshairMove routes syncTime; non-hovered source ignored by CrosshairController', () => {
+test('onCrosshairMove routes {logical,time?}; non-hovered source ignored', () => {
   CrosshairController._resetForTests();
   InteractionController._resetForTests();
   const peers = [];
   CrosshairController.bind({
     applyHorzVisibility: () => {},
-    syncPeerTime: (sourceHostId, time) => peers.push({ sourceHostId, time }),
+    syncPeerCrosshair: (sourceHostId, pos) => peers.push({ sourceHostId, ...pos }),
     clearPeerCrosshairs: () => {},
   });
   InteractionController.onPointerEnter('price');
-  assert.strictEqual(InteractionController.onCrosshairMove('price', 100), true);
-  assert.strictEqual(InteractionController.onCrosshairMove('rsx', 200), false);
-  assert.deepStrictEqual(peers, [{ sourceHostId: 'price', time: 100 }]);
+  assert.strictEqual(
+    InteractionController.onCrosshairMove('price', { logical: 50, time: 100 }),
+    true,
+  );
+  assert.strictEqual(
+    InteractionController.onCrosshairMove('rsx', { logical: 60, time: 200 }),
+    false,
+  );
+  assert.deepStrictEqual(peers, [{ sourceHostId: 'price', logical: 50, time: 100 }]);
   assert.strictEqual(CrosshairController.getHovered(), 'price');
+});
+
+test('onCrosshairMove empty-space (time null) still syncs via logical', () => {
+  CrosshairController._resetForTests();
+  InteractionController._resetForTests();
+  const peers = [];
+  const clears = [];
+  CrosshairController.bind({
+    applyHorzVisibility: () => {},
+    syncPeerCrosshair: (sourceHostId, pos) => peers.push({ sourceHostId, ...pos }),
+    clearPeerCrosshairs: (id) => clears.push(id),
+  });
+  InteractionController.onPointerEnter('price');
+  assert.strictEqual(
+    InteractionController.onCrosshairMove('price', { logical: 999, time: null }),
+    true,
+  );
+  assert.strictEqual(clears.length, 0);
+  assert.deepStrictEqual(peers, [{ sourceHostId: 'price', logical: 999, time: null }]);
 });
 
 test('chart-core interaction paths go through InteractionController', () => {

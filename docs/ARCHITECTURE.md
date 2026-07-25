@@ -109,7 +109,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 14. **ScaleController (ADR-020 P1).** HostID-based Y-scale prefs (`allowLog`, dormant `scaleGroup`). Price Auto+Log; footers Auto-only. Visibility must not reset prefs. Persisted state must be self-sufficient: Auto OFF without `manualRange` is repaired to Auto ON on restore.
 15. **Scale contribution (ADR-022 / #68).** What Auto *measures* is per DDR component (`renderOptions.scaleContribution`: `dynamic` | `bounded` | `ignore`) → LWC `autoscaleInfoProvider`. ScaleController never owns oscillator domains.
 16. **TimeCamera (ADR-021 P0–P1).** Sole owner of live canonical timeline (`commit` only). ChartAdapter applies; all panes propose. Wheel proxy deleted.
-17. **CrosshairController (ADR-021 P2).** Owns `hoveredHostId` + V/H policy only; never timeline. Hover from wrapper pointer events only; LWC move is time-only (`syncTime`). Peers: vert + local Y; no foreign horz.
+17. **CrosshairController (ADR-021 P2 + ADR-026).** Owns `hoveredHostId` + V/H policy only; never timeline. Hover from wrapper pointer events only; LWC move is `{ logical, time? }` (`syncPosition`). Peers: native vert when time exists, else adapter logical guide; local Y only; no foreign horz.
 17b. **InteractionController (ADR-024 / P3).** Routes pointer / range / crosshair-time only. ChartAdapter adapts LWC; specialized controllers own policy.
 17c. **RulerController (ADR-025).** Anchors `logical+price` (+ optional time); two-click FSM; `RulerMetrics` for Δ/%/bars/duration; ChartAdapter projects + tooltip. Finite rectangle only.
 

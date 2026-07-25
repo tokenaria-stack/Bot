@@ -27,6 +27,7 @@
     '#timeline-sync-badge',
     '.ruler-shade',
     '.ruler-tooltip',
+    '.peer-crosshair-guide',
     '.navigator-popup',
     '.popup-container',
   ].join(',');
