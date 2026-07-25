@@ -442,13 +442,13 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 - **One timeline, one visible bottom axis.** PaneLayout declares the owner via `resolveBottomTimeAxisHostId(state)` (fullscreen → else last visible footer in `order` → else `price`).
 - **LayoutController** allocates stack geometry and marks `data-bottom-time-axis`; calls `ChartAdapter.setBottomTimeAxis(owner)`.
 - **ChartAdapter** only mirrors: `timeScale.visible` / labels on for the owner, **off** for all other panes (reclaim strip height). No `hostId === "wozduh"` branching.
-- **TimeCamera / Crosshair / ScaleController / ScaleContribution** unchanged.
+- **TimeCamera / Crosshair / ScaleController / ScaleContribution** unchanged for axis *ownership*. Crosshair **time label rendering** on that owner is clarified in **ADR-027 amendment** (sync owns semantics; axis owner renders).
 
 **Keep:** 4px pane splitters (resize chrome). They are not phantom axis gaps.
 
 **Rejected:** Negative margins / CSS overlap; blank-but-visible slave axes; hardcoding Wozduh as axis owner; deleting gutters.
 
-**Consequences:** Closes ADR-020 deferred `getBottomPane` + `setBottomAxis` for the live stack. Modules: `pane-layout.js`, `layout-controller.js`, `chart-core.js`. Tests: `pane_layout_test.js`, `bottom_time_axis_test.js`. Debt **#91** partial (Ruler still open).
+**Consequences:** Closes ADR-020 deferred `getBottomPane` + `setBottomAxis` for the live stack. Modules: `pane-layout.js`, `layout-controller.js`, `chart-core.js`. Tests: `pane_layout_test.js`, `bottom_time_axis_test.js`.
 
 ---
 
@@ -507,20 +507,70 @@ ChartAdapter translates. InteractionController routes. Controllers own behavior.
 
 ---
 
-## ADR-027 — Display Timeline Extension (future whitespace)
+## ADR-027 — Display Timeline / Decoration Plane (repaired)
 
 **Context:** ADR-026 synced peer crosshair lines in empty space via `logical`, but the LWC time scale still ended at the last real candle — no bottom ticks and no native crosshair time label in the future strip (`rightOffset` / logical past last bar).
 
-**Decision:**
+**Fundamental invariant:**
 
-- Pure **`DisplayTimeline`** builds display-only future bar-open times (fixed step + UTC week/month, aligned with `data.NextBarOpen`).
-- **ChartAdapter** alone merges `{ time }` whitespace onto the candle series at paint / camera refresh. Volume stays real-only.
-- Whitespace never enters ColumnarStore, DDR, engine, persistence, or analytics. A real candle at that open replaces the whitespace slot.
-- CrosshairController / TimeCamera / ScaleController / PaneLayout unchanged. Peer Y on whitespace uses local visible mid (adapter-only) so native time labels can show.
+> The `candleSeries` always contains only real market candles.  
+> Decoration never enters the market-data plane.
 
-**Rejected:** Fabricating time inside CrosshairController; custom DOM bottom axis; storing future bars in the data model.
+**Decision (final — Decoration Plane):**
 
-**Consequences:** Modules: `web/ui/display-timeline.js`, `chart-core.js`. Tests: `web/display_timeline_test.js`.
+Two planes, one composer:
+
+| Plane | Owns | Must not |
+|-------|------|----------|
+| **Market Plane** | `ColumnarStore`, DDR, `candleSeries`, forming-tip `update()` | Hold future whitespace; invent display times |
+| **Decoration Plane** | `DisplayTimeline` (pure future time math), `TimelineDecoration` (sealed LWC whitespace series) | Touch store/DDR/OHLC; expose series getters; call `update()` |
+
+- **`DisplayTimeline`** — pure future bar-open times (fixed step + UTC week/month, aligned with `data.NextBarOpen`). No LWC, no store.
+- **`TimelineDecoration`** — sealed LWC owner: `attach` / `refresh` / `dispose` / `applyCrosshairTime`. Private series (`__timeline_decoration__`, `autoscaleInfoProvider: () => null`). No `getSeries`, no market `update()`.
+- **`ChartAdapter`** — composer only: `setData(real)` / `update(tip)` on candles; builds decoration payload from tip + TimeCamera; fans `TimelineDecoration` across live panes (TimeCamera logical alignment + ADR-023 axis owner). Never invents business math.
+- CrosshairController / TimeCamera / ScaleController / PaneLayout ownership unchanged.
+
+**ADR-027 amendment — bottom-axis time label:**
+
+The bottom-axis time label is **not** owned by the hovered pane.  
+`CrosshairController` owns synchronized semantic position `{ logical, time? }`.  
+Rendering of the label is always delegated to the configured bottom-axis owner (PaneLayout → ChartAdapter `setBottomTimeAxis` → LWC `timeScale.visible` on that pane only).  
+ChartAdapter private crosshair apply re-asserts the native label on that renderer after peer sync / horz policy — translation, not a new owner.
+
+**Why candle+whitespace mixing was rejected (tip invariant):**
+
+An early attempt appended DisplayTimeline whitespace onto `candleSeries` so LWC’s time-scale union would extend. That made `last item !== forming tip`: LWC `update(tip)` then failed (`Cannot update oldest data`) because the series tip was decoration, not the live candle. Mixing decoration into the market series also poisoned the tip SSOT and invited store/DDR confusion.
+
+**Why TimelineDecoration fixes the conflict:**
+
+Decoration is a separate invisible series on each pane. LWC unions times for axis/crosshair chrome; `candleSeries` remains real-only so `update(tip)` stays O(1) and honest. Market plane and decoration plane never share a series.
+
+**Rejected:**
+
+- `setData(real + whitespace)` / merge onto `candleSeries` — **Reason:** breaks tip `update()` invariant; decoration enters market plane.
+- Fabricating time inside CrosshairController — **Reason:** ADR-026; sync must not invent timestamps.
+- Custom DOM bottom axis / second label painter — **Reason:** LWC axis owner is the renderer; duplicate chrome.
+- Storing future bars in ColumnarStore / DDR / engine — **Reason:** display-only; not market truth.
+- New controllers for decoration or bottom label — **Reason:** ChartAdapter composition + existing owners suffice.
+
+**Group B — encapsulated translation (not architectural debt):**
+
+| Detail | Owner | Note |
+|--------|-------|------|
+| HTML `.peer-crosshair-guide` | ChartAdapter | When `time` is null; ADR-026 logical guide |
+| Mid-visible-price Y for peer `setCrosshairPosition` | ChartAdapter | Local Y only; whitespace has no series value |
+| Private decoration series + legend title filter | TimelineDecoration / legend chrome | LWC needs a series handle; not market data |
+| `applyCrosshairTime` seam | TimelineDecoration | Positions native label without exposing series |
+
+Future LWC Primitive API may replace HTML guide / mid-Y; do not chase now.
+
+**Future ADR candidates (real debt only):**
+
+- Global ChartAdapter destroy lifecycle (`_disposers` not guaranteed on every teardown path).
+- Primitive migration for peer crosshair guide (replace HTML translation).
+- Any remaining true duplicate ownership found in Phase 4 audit — not speculative modules.
+
+**Consequences:** Modules: `web/ui/display-timeline.js`, `web/ui/timeline-decoration.js`, `web/chart-core.js`. Tests: `web/display_timeline_test.js`, `web/timeline_decoration_test.js`, crosshair/bottom-axis contracts. Phase 2 approved; Phase 4 ownership burn audits against this freeze.
 
 ---
 

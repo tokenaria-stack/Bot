@@ -75,6 +75,9 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
+| `DisplayTimeline` | ADR-027: pure future bar-open times for display whitespace (never store/DDR) |
+| `TimelineDecoration` | ADR-027: sealed LWC decoration series; time-scale chrome only |
+| `Decoration Plane` | Display-only timeline chrome; never mixed into `candleSeries` |
 
 ### Banned names (Go identifiers)
 
@@ -110,9 +113,13 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 15. **Scale contribution (ADR-022 / #68).** What Auto *measures* is per DDR component (`renderOptions.scaleContribution`: `dynamic` | `bounded` | `ignore`) → LWC `autoscaleInfoProvider`. ScaleController never owns oscillator domains.
 16. **TimeCamera (ADR-021 P0–P1).** Sole owner of live canonical timeline (`commit` only). ChartAdapter applies; all panes propose. Wheel proxy deleted.
 17. **CrosshairController (ADR-021 P2 + ADR-026).** Owns `hoveredHostId` + V/H policy only; never timeline. Hover from wrapper pointer events only; LWC move is `{ logical, time? }` (`syncPosition`). Peers: native vert when time exists, else adapter logical guide; local Y only; no foreign horz.
-18. **DisplayTimeline (ADR-027).** Pure future bar-open times for LWC whitespace. ChartAdapter injects display-only; never ColumnarStore/DDR.
-17b. **InteractionController (ADR-024 / P3).** Routes pointer / range / crosshair-time only. ChartAdapter adapts LWC; specialized controllers own policy.
-17c. **RulerController (ADR-025).** Anchors `logical+price` (+ optional time); two-click FSM; `RulerMetrics` for Δ/%/bars/duration; ChartAdapter projects + tooltip. Finite rectangle only.
+18. **InteractionController (ADR-024 / P3).** Routes pointer / range / crosshair-time only. ChartAdapter adapts LWC; specialized controllers own policy.
+19. **RulerController (ADR-025).** Anchors `logical+price` (+ optional time); two-click FSM; `RulerMetrics` for Δ/%/bars/duration; ChartAdapter projects + tooltip. Finite rectangle only.
+20. **Decoration Plane (ADR-027).** `DisplayTimeline` = pure future time math; `TimelineDecoration` = sealed LWC whitespace. `candleSeries` stays real-only (`update(tip)` invariant). ChartAdapter composes; never merges decoration into market data.
+21. **Bottom time axis (ADR-023 + ADR-027 amendment).** PaneLayout declares the single visible axis owner; LayoutController allocates; ChartAdapter mirrors `timeScale.visible`. The bottom-axis **time label** is rendered on that owner from synchronized crosshair state — never owned by the hovered pane. Intermediate panes reserve zero axis height.
+22. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
+23. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
+24. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
 
 **Interaction pipeline (canonical):**
 
@@ -132,10 +139,78 @@ TimeCamera  CrosshairController  RulerController
 
 ChartAdapter translates. InteractionController routes. Controllers own behavior.  
 Invariant: IC accepts only semantic events — never raw DOM/LWC objects.
-19. **Bottom time axis (ADR-023).** PaneLayout declares the single visible axis owner; LayoutController allocates; ChartAdapter mirrors `timeScale.visible`. Intermediate panes reserve zero axis height.
-20. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
-21. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
-22. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
+
+---
+
+## Chart planes & ownership (ADR-027 freeze)
+
+### Fundamental invariant
+
+`candleSeries` always contains **only real market candles**. Decoration never enters the market-data plane.
+
+### Two-plane model
+
+```
+Market Plane                         Decoration Plane
+─────────────────                    ────────────────────
+ColumnarStore                        DisplayTimeline      (pure future times)
+DDR                                  TimelineDecoration   (sealed LWC whitespace)
+candleSeries  ← setData(real)        (private series; autoscale null)
+update(tip)   ← forming tip only     refresh({ times }) from ChartAdapter
+```
+
+LWC time-scale union = market times ∪ decoration times. Tip `update()` sees only the market series.
+
+### Ownership map (one responsibility each)
+
+| Owner | Exactly one responsibility |
+|-------|----------------------------|
+| **DisplayTimeline** | Future bar-open time math (pure). |
+| **TimelineDecoration** | How display times become LWC time-scale chrome (sealed series). |
+| **ChartAdapter** | LWC translate + compose planes; never invents business logic. |
+| **CrosshairController** | Hover ownership + synchronized `{ logical, time? }` + V/H policy. |
+| **TimeCamera** | Canonical live timeline (`commit` only). |
+| **ScaleController** | Per-pane Y Auto / Manual / Log prefs. |
+| **PaneLayout** | Pane membership + which HostID owns the visible bottom time axis. |
+
+### Permanent architecture laws
+
+1. **One truth per module.**
+2. **One owner per concern.**
+3. **Translation is not ownership** (ChartAdapter / Group B details are not second owners).
+4. **Decoration is never market data.**
+5. **ChartAdapter composes but never invents business logic.**
+
+### ChartAdapter crosshair apply (private composition)
+
+Conceptual private steps inside the adapter (not public architecture features):
+
+```
+applyCrosshair (ChartAdapter private)
+  ├── applyPeerCrosshair     — peer vert sync (native or logical guide)
+  ├── applyBottomAxisLabel   — re-assert native time label on ADR-023 axis owner
+  └── applyLogicalGuide      — HTML peer guide when time is unresolved
+```
+
+Implementation may use internal names; the law is: bottom label rendering is a private adapter step driven by CrosshairController sync + PaneLayout axis owner — not a hovered-pane feature and not a new controller.
+
+### Group B — encapsulated translation (not debt)
+
+Intentionally kept behind ChartAdapter / TimelineDecoration until LWC evolves (e.g. Primitive API):
+
+- HTML `.peer-crosshair-guide` (ADR-026 empty-space vert when `time` is null)
+- Mid-visible-price Y fallback for peer `setCrosshairPosition` on whitespace
+- Private decoration series + legend ignore of `__timeline_decoration__`
+
+These are LWC limitation translations. Correct owner already exists. Do not chase in Phase 4 unless an ownership audit finds duplication.
+
+### Future ADR candidates (real debt only)
+
+- Global ChartAdapter destroy lifecycle (`_disposers` not guaranteed on every teardown)
+- Primitive migration for peer crosshair guide
+- True duplicate ownership / duplicate time math / duplicate rendering found by Phase 4 audit
+
+Do not propose speculative modules.
 
 ---
 
@@ -244,7 +319,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 
 **Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE). Frame runtime replay = closed→forming lifecycle (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
-**Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner still via ADR-023 `timeScale.visible`.  
+**Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner via ADR-023 `timeScale.visible`; future strip via ADR-027 Decoration Plane; crosshair time label always rendered on that owner (not the hovered pane).  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  
 **Floating menus:** `position:fixed` viewport (`floating-menu.js`).
 

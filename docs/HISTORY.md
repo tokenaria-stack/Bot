@@ -8,10 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## Phase ADR-027 — Display timeline whitespace (Jul 2026) ✅
+## Phase ADR-027 — Decoration Plane / display timeline (Jul 2026) ✅
 
-- Pure `DisplayTimeline` → future `{ time }` whitespace; ChartAdapter injects at paint only.
-- Native axis ticks + crosshair time labels work in the future strip; store/DDR untouched.
+- **Invariant:** `candleSeries` = real market candles only; decoration never enters the market-data plane.
+- **Two planes:** Market (`ColumnarStore` / DDR / `candleSeries` / `update(tip)`) vs Decoration (`DisplayTimeline` math + sealed `TimelineDecoration` LWC whitespace).
+- ChartAdapter composes only — rejected `setData(real+whitespace)` (broke tip `update()` invariant).
+- Decoration attached on all live panes; native axis ticks + crosshair time labels in the future strip.
+- **Polish:** bottom-axis time label is rendered on the ADR-023 axis owner from synchronized crosshair state — not owned by the hovered pane.
+- Group B (HTML peer guide, mid-Y) left as encapsulated adapter translation. Docs freeze = Phase 3; ownership burn = Phase 4.
 
 ## Phase ADR-026 — Crosshair empty-space sync (Jul 2026) ✅
 
