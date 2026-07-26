@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track A Step 1 — VIEW-preserving prune (Jul 2026) ✅
+
+- Contract: WS-01, WS-02, WS-03 · Acceptance: S1–S3 (partial) · Evidence: E3-01, E3-04, E3-05 (partial).
+- `ColumnarStore._prunePreservingView`: prune only outside captured VIEW time bounds; never shrink below VIEW span.
+- Boot `mergeIntoStore` passes `viewFromSec`/`viewToSec` from logical range before prepend.
+- Paint tip-tail (S4 / E3-02) and product HARD_CAP wall (S6 / E3-03) not in this step — stopped for review.
+
 ## Stage E3.5b — Working Set acceptance gate frozen (Jul 2026) ✅
 
 - [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md): done = Gate 1 (S1–S7) + Gate 2 (blocking E3) + Gate 3 (U1–U7).

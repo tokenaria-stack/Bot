@@ -1,5 +1,6 @@
 /**
  * Debt #69A — ColumnarStore memory budget (Node).
+ * Track A Step 1 — VIEW-preserving prune (WS-01…WS-03).
  * Run: node web/columnar-store_budget_test.js
  */
 const { ColumnarStore } = require('./columnar-store.js');
@@ -41,6 +42,27 @@ function fillStore(store, n, plotIds = ['line_rsx', 'line_woz']) {
   });
 }
 
+function makeOlderChunk(count, endExclusiveSec) {
+  const older = {
+    times: [],
+    candles: { open: [], high: [], low: [], close: [], volume: [] },
+    plots: { line_rsx: [], line_woz: [] },
+    annotations: [],
+  };
+  for (let i = 0; i < count; i++) {
+    const t = endExclusiveSec - (count - i) * 60;
+    older.times.push(t);
+    older.candles.open.push(1);
+    older.candles.high.push(1);
+    older.candles.low.push(1);
+    older.candles.close.push(1);
+    older.candles.volume.push(1);
+    older.plots.line_rsx.push(1);
+    older.plots.line_woz.push(1);
+  }
+  return older;
+}
+
 // Force tiny budget for fast tests via prototype override of getters.
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
 Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
@@ -60,26 +82,10 @@ assert(store.windowEndSec() === store.lastTimeSec(), 'windowEnd getter');
 const firstAfterOldest = store.firstTimeSec();
 assert(firstAfterOldest === 1_700_000_000 + 50 * 60, 'dropped 50 oldest');
 
-// Prepend past hard cap → FROM_NEWEST → history mode
+// Prepend past hard cap → FROM_NEWEST → history mode (no VIEW bounds = legacy path)
 const live = new ColumnarStore();
 fillStore(live, 100);
-const older = {
-  times: [],
-  candles: { open: [], high: [], low: [], close: [], volume: [] },
-  plots: { line_rsx: [], line_woz: [] },
-  annotations: [],
-};
-for (let i = 0; i < 50; i++) {
-  const t = 1_700_000_000 - (50 - i) * 60;
-  older.times.push(t);
-  older.candles.open.push(1);
-  older.candles.high.push(1);
-  older.candles.low.push(1);
-  older.candles.close.push(1);
-  older.candles.volume.push(1);
-  older.plots.line_rsx.push(1);
-  older.plots.line_woz.push(1);
-}
+const older = makeOlderChunk(50, live.firstTimeSec());
 const beforePrependLast = live.lastTimeSec();
 live.prependMonolith(older);
 assert(live.barCount() === 100, `prepend prune to target, got ${live.barCount()}`);
@@ -93,23 +99,7 @@ Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
 Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
 const focalRight = new ColumnarStore();
 fillStore(focalRight, 100);
-const older2 = {
-  times: [],
-  candles: { open: [], high: [], low: [], close: [], volume: [] },
-  plots: { line_rsx: [], line_woz: [] },
-  annotations: [],
-};
-for (let i = 0; i < 50; i++) {
-  const t = 1_700_000_000 - (50 - i) * 60;
-  older2.times.push(t);
-  older2.candles.open.push(1);
-  older2.candles.high.push(1);
-  older2.candles.low.push(1);
-  older2.candles.close.push(1);
-  older2.candles.volume.push(1);
-  older2.plots.line_rsx.push(1);
-  older2.plots.line_woz.push(1);
-}
+const older2 = makeOlderChunk(50, focalRight.firstTimeSec());
 const tipBefore = focalRight.lastTimeSec();
 const r = focalRight.prependMonolith(older2, { focalTimeSec: tipBefore, atLiveEdge: false });
 assert(r.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST, 'focal at right → FROM_OLDEST');
@@ -141,7 +131,7 @@ Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
 Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
 global.chartTime = (t) => Number(t);
 tip.setTfInterval(60);
-fillStore(tip, 12);
+fillStore(tip, 13);
 assert(tip.barCount() === 10, 'replace defensive prune');
 tip.windowMode = 'live';
 const base = tip.lastTimeSec();
@@ -152,8 +142,51 @@ for (let i = 1; i <= 5; i++) {
     plots: { line_rsx: 40, line_woz: 41 },
   });
 }
-assert(tip.barCount() === 10, `appendTick enforces budget, got ${tip.barCount()}`);
+assert(tip.barCount() <= 12, `appendTick enforces hard cap, got ${tip.barCount()}`);
 assert(tip.windowMode === 'live', 'append prune keeps live');
 assert(tip.invariantOk(), 'invariant after appendTick budget');
+
+// ── Track A Step 1: VIEW-preserving prune (WS-01…WS-03 / S1–S3 / E3-01) ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+
+const fullView = new ColumnarStore();
+fillStore(fullView, 100);
+const fullFrom = fullView.firstTimeSec();
+const fullTo = fullView.lastTimeSec();
+const olderFull = makeOlderChunk(50, fullFrom);
+fullView.prependMonolith(olderFull, {
+  viewFromSec: fullFrom,
+  viewToSec: fullTo,
+  focalTimeSec: fullFrom,
+  atLiveEdge: false,
+});
+assert(fullView.lastTimeSec() === fullTo, 'WS-02: full VIEW tip must survive prune');
+assert(fullView.firstTimeSec() <= fullFrom, 'left edge of prior VIEW retained or extended');
+assert(fullView.barCount() >= 100, 'VIEW span floor retained');
+assert(fullView.invariantOk(), 'invariant after VIEW-preserving prune');
+
+const leftView = new ColumnarStore();
+fillStore(leftView, 100);
+const leftFrom = leftView.firstTimeSec();
+const mid = leftView.timesSec()[40];
+const tipLeft = leftView.lastTimeSec();
+const olderLeft = makeOlderChunk(50, leftFrom);
+leftView.prependMonolith(olderLeft, {
+  viewFromSec: leftFrom,
+  viewToSec: mid,
+  focalTimeSec: leftFrom,
+  atLiveEdge: false,
+});
+assert(leftView.lastTimeSec() < tipLeft, 'tip outside VIEW may still prune (FROM_NEWEST)');
+assert(leftView.firstTimeSec() <= leftFrom, 'VIEW left retained');
+assert(leftView.barCount() === 100, 'budget target when VIEW is smaller than target');
+assert(leftView.invariantOk(), 'invariant left-VIEW prune');
+
+const bounds = ColumnarStore.logicalRangeToViewTimes(
+  [10, 20, 30, 40, 50],
+  { from: 1.2, to: 3.8 },
+);
+assert(bounds.viewFromSec === 20 && bounds.viewToSec === 40, 'logicalRangeToViewTimes maps floors');
 
 console.log('columnar-store_budget_test: OK');

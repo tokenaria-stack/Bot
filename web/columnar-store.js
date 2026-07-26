@@ -3,6 +3,7 @@
  * Mirrors server wire JSON; annotations indexed by snapped ms for O(1) marker patches.
  *
  * Debt #69A: bounded display cache (not a historical DB). Server owns durable history.
+ * Track A / Working Set: retention may never invalidate the committed VIEW (WS-01…WS-03).
  */
 class ColumnarStore {
   static get BUDGET_TARGET() {
@@ -281,6 +282,11 @@ class ColumnarStore {
     return this._times.length > 0 ? Number(this._times[this._times.length - 1]) : null;
   }
 
+  /** Read-only bar open times (sec). Caller must not mutate. */
+  timesSec() {
+    return this._times;
+  }
+
   /** Computed window bounds (Debt #69A) — no duplicated mutable start/end fields. */
   windowStartSec() {
     return this.firstTimeSec();
@@ -292,6 +298,92 @@ class ColumnarStore {
 
   isLiveWindow() {
     return this.windowMode !== 'history';
+  }
+
+  /**
+   * Map a visible logical range to store time bounds (capture before merge/prune).
+   * @param {number[]} timesSec
+   * @param {{ from: number, to: number }|null|undefined} range
+   * @returns {{ viewFromSec: number, viewToSec: number }|null}
+   */
+  static logicalRangeToViewTimes(timesSec, range) {
+    if (!Array.isArray(timesSec) || !timesSec.length || !range) return null;
+    if (!Number.isFinite(range.from) || !Number.isFinite(range.to) || !(range.to > range.from)) {
+      return null;
+    }
+    const n = timesSec.length;
+    let i0 = Math.floor(range.from);
+    let i1 = Math.floor(range.to);
+    if (i1 < i0) i1 = i0;
+    i0 = Math.max(0, Math.min(n - 1, i0));
+    i1 = Math.max(0, Math.min(n - 1, i1));
+    const viewFromSec = Number(timesSec[i0]);
+    const viewToSec = Number(timesSec[i1]);
+    if (![viewFromSec, viewToSec].every(Number.isFinite)) return null;
+    return { viewFromSec, viewToSec };
+  }
+
+  /**
+   * Inclusive VIEW time → half-open index range [start, end) in current _times.
+   * @returns {{ start: number, end: number }|null}
+   */
+  _viewIndexRange(viewFromSec, viewToSec) {
+    const n = this._times.length;
+    if (n === 0) return null;
+    const a = Number(viewFromSec);
+    const b = Number(viewToSec);
+    if (![a, b].every(Number.isFinite) || b < a) return null;
+    let start = 0;
+    while (start < n && Number(this._times[start]) < a) start += 1;
+    let end = n;
+    while (end > start && Number(this._times[end - 1]) > b) end -= 1;
+    if (start >= end) return null;
+    return { start, end };
+  }
+
+  /**
+   * Atomic slice [start, end) for times, candles.*, plots, annotations.
+   * @param {number} start
+   * @param {number} end exclusive
+   * @param {{ droppedNewest?: boolean }} [meta]
+   */
+  _applySlice(start, end, meta = {}) {
+    const n = this._times.length;
+    const s = Math.max(0, Math.min(n, Math.floor(Number(start)) || 0));
+    const e = Math.max(s, Math.min(n, Math.floor(Number(end)) || 0));
+    if (s === 0 && e === n) return;
+
+    this._times = this._times.slice(s, e);
+    this._candles = {
+      open: this._candles.open.slice(s, e),
+      high: this._candles.high.slice(s, e),
+      low: this._candles.low.slice(s, e),
+      close: this._candles.close.slice(s, e),
+      volume: this._candles.volume.slice(s, e),
+    };
+    const nextPlots = {};
+    for (const [id, col] of Object.entries(this._plots)) {
+      nextPlots[id] = Array.isArray(col) ? col.slice(s, e) : [];
+    }
+    this._plots = nextPlots;
+
+    if (this._times.length === 0) {
+      this._annotations = [];
+      this._annotationMap.clear();
+    } else {
+      const t0 = Number(this._times[0]);
+      const t1 = Number(this._times[this._times.length - 1]);
+      this._annotations = this._annotations.filter((ann) => {
+        const t = Number(ann?.time ?? ann?.Time);
+        return Number.isFinite(t) && t >= t0 && t <= t1;
+      });
+      this._rebuildAnnotationMapFromArray(this._annotations);
+    }
+
+    if (meta.droppedNewest === true) {
+      this.windowMode = 'history';
+    }
+    this._meta = { ...this._meta, added: this._times.length };
   }
 
   /**
@@ -313,46 +405,55 @@ class ColumnarStore {
       start = drop;
       end = n;
     }
+    this._applySlice(start, end, {
+      droppedNewest: direction === ColumnarStore.PRUNE_FROM_NEWEST,
+    });
+  }
 
-    this._times = this._times.slice(start, end);
-    this._candles = {
-      open: this._candles.open.slice(start, end),
-      high: this._candles.high.slice(start, end),
-      low: this._candles.low.slice(start, end),
-      close: this._candles.close.slice(start, end),
-      volume: this._candles.volume.slice(start, end),
-    };
-    const nextPlots = {};
-    for (const [id, col] of Object.entries(this._plots)) {
-      nextPlots[id] = Array.isArray(col) ? col.slice(start, end) : [];
-    }
-    this._plots = nextPlots;
+  /**
+   * Track A (WS-01…WS-03): prune only outside VIEW. Never shrink below VIEW span.
+   * @param {number} targetCount
+   * @param {'oldest'|'newest'} direction
+   * @param {{ start: number, end: number }} view half-open index range
+   */
+  _prunePreservingView(targetCount, direction, view) {
+    const n = this._times.length;
+    const v0 = Math.max(0, Math.min(n, view.start));
+    const v1 = Math.max(v0, Math.min(n, view.end));
+    const viewLen = v1 - v0;
+    const keepCount = Math.max(Math.floor(Number(targetCount)) || 0, viewLen);
+    if (n <= keepCount) return;
 
-    if (this._times.length === 0) {
-      this._annotations = [];
-      this._annotationMap.clear();
-    } else {
-      const t0 = Number(this._times[0]);
-      const t1 = Number(this._times[this._times.length - 1]);
-      this._annotations = this._annotations.filter((ann) => {
-        const t = Number(ann?.time ?? ann?.Time);
-        return Number.isFinite(t) && t >= t0 && t <= t1;
-      });
-      this._rebuildAnnotationMapFromArray(this._annotations);
-    }
-
+    let needDrop = n - keepCount;
+    const leftAvail = v0;
+    const rightAvail = n - v1;
+    let dropLeft = 0;
+    let dropRight = 0;
     if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
-      this.windowMode = 'history';
+      dropRight = Math.min(needDrop, rightAvail);
+      needDrop -= dropRight;
+      dropLeft = Math.min(needDrop, leftAvail);
+    } else {
+      dropLeft = Math.min(needDrop, leftAvail);
+      needDrop -= dropLeft;
+      dropRight = Math.min(needDrop, rightAvail);
     }
-    this._meta = { ...this._meta, added: this._times.length };
+    if (dropLeft === 0 && dropRight === 0) return;
+    this._applySlice(dropLeft, n - dropRight, { droppedNewest: dropRight > 0 });
   }
 
   /**
    * @param {'oldest'|'newest'} direction
+   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [opts]
    */
-  _enforceBudget(direction) {
+  _enforceBudget(direction, opts = {}) {
     if (this._times.length <= ColumnarStore.BUDGET_HARD_CAP) return;
-    this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
+    const view = this._viewIndexRange(opts.viewFromSec, opts.viewToSec);
+    if (!view) {
+      this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
+      return;
+    }
+    this._prunePreservingView(ColumnarStore.BUDGET_TARGET, direction, view);
   }
 
   /**
@@ -587,13 +688,17 @@ class ColumnarStore {
     };
 
     // Debt #69C: direction from viewport focal (default NEWEST = safe for left-scroll history).
+    // Track A: pass VIEW time bounds so prune cannot invalidate visible bars (WS-01…WS-03).
     const direction = this.resolveBudgetPruneDirection({
       focalTimeSec: options.focalTimeSec,
       atLiveEdge: options.atLiveEdge === true,
       pruneDirection: options.pruneDirection,
       defaultDirection: ColumnarStore.PRUNE_FROM_NEWEST,
     });
-    this._enforceBudget(direction);
+    this._enforceBudget(direction, {
+      viewFromSec: options.viewFromSec,
+      viewToSec: options.viewToSec,
+    });
 
     return { added, pruneDirection: direction, windowMode: this.windowMode };
   }

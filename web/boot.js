@@ -845,9 +845,19 @@
         const focalTimeSec = (cap?.centerTimeMs != null && Number.isFinite(cap.centerTimeMs))
           ? cap.centerTimeMs / 1000
           : null;
+        // Capture VIEW times before prepend (logical indices shift after merge).
+        const viewTimes = (typeof ColumnarStore !== 'undefined'
+          && ColumnarStore.logicalRangeToViewTimes)
+          ? ColumnarStore.logicalRangeToViewTimes(
+            liveColumnarStore.timesSec?.(),
+            viewportRange,
+          )
+          : null;
         const { added } = liveColumnarStore.prependMonolith(data, {
           focalTimeSec,
           atLiveEdge: cap?.isAtRightEdge === true,
+          viewFromSec: viewTimes?.viewFromSec,
+          viewToSec: viewTimes?.viewToSec,
         });
         if (added <= 0) return null;
         return { added, viewportRange };
