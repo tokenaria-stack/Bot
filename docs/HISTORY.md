@@ -8,11 +8,26 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 1 Validation (Jul 2026) ✅
+
+- Investigation only: [`TRACK_B_STEP1_VALIDATION.md`](TRACK_B_STEP1_VALIDATION.md).
+- Verdict: Mutation Set law correct; no WS/Lifetime regressions introduced.
+- Lifetime **3 / 7 Pass**; CL-05 / C2 Partial (same-op only).
+- Recommendation: **Proceed to Track B Step 2** (no Step 1 repair).
+- Evidence delta: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md) §6.
+
+## Track B Step 1 — Mutation Set same-op prune guard (Jul 2026) ✅
+
+- Report: [`TRACK_B_STEP1.md`](TRACK_B_STEP1.md). Plan: [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
+- Law: successful growth establishes Mutation Set; same-op prune must not remove it.
+- Paths: prepend / append new bar / soft applyProjection protected; commit-paired replace excluded.
+- Lifetime headline **~2–3 / 7**. No Capacity / Camera / Paint ownership changes.
+
 ## Track B Step 1 Plan — Cache Lifetime anti-thrash (Jul 2026) ✅
 
-- Plan only: [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
+- Plan only (superseded by implementation above): [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
 - Objective: mutation-local neighborhood protection after growth prune (CL-05 / C2); WS untouched.
-- Honest post-step Lifetime estimate ~2–3 / 7. No code in this stage.
+- Honest post-step Lifetime estimate ~2–3 / 7.
 
 ## Stage E5 — Constitution Consistency Audit (Jul 2026) ✅
 

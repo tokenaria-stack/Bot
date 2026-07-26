@@ -1094,8 +1094,8 @@
       }
 
       // Shot 11C Atomic Swap: mutate store + ensure DDR hosts offline, then ONE full paint.
-      // Commit-paired (FreshLive / TF hydrate): intentional world replace — VIEW omit OK.
-      liveColumnarStore.replaceMonolith(columnar);
+      // Commit-paired (FreshLive / TF hydrate): intentional world replace — no Mutation Set.
+      liveColumnarStore.replaceMonolith(columnar, { commitPaired: true });
       const histTimes = Array.isArray(columnar.times) ? columnar.times : [];
       const historyTipOpen = histTimes.length ? Number(histTimes[histTimes.length - 1]) : null;
       handoffDiag = { historyTipOpen, waiting: true };

@@ -22,9 +22,9 @@ Update this file when a debt opens, closes, or changes priority.
 | **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P5** | P1–P5 layout done. Optional later: `setHostActive` |
 | **91** | **Scale / time axis / Ruler (ADR-020)** | ✅ | Scale + bottom axis + Ruler (ADR-025) + **HH:mm datetime chrome**. Fib/drawings = future product, not blocking |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | ✅ | ADR-022: per-component `scaleContribution` → `autoscaleInfoProvider` |
-| **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C done** | Bounded store + atomic prune + `windowMode` + WS/gap gates + **focal-time prune (69C)**. **69D** full sliding window + viewport-centered paint 🔜. |
+| **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C + Track A + Track B Step 1** | Bounded store + VIEW-preserving prune + Mutation Set same-op guard (CL-05). Capacity / Lifetime Step 2+ still open. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |
-| **69D** | Full sliding viewport window + paint alignment | 🔜 | **RED FLAG:** when Store becomes viewport-centered, `ChartCompositor.extractWindow` (currently tip-tail) MUST become viewport-centered too |
+| **69D** | Full sliding viewport window + paint alignment | 🟡 partial | Track A paint VIEW-covering done; Track B Step 1 Mutation Set done. Remaining: Lifetime Step 2+, Capacity constitution. |
 | **80** | `ViewportManager.restore` 0×0 width risk (`setVisibleLogicalRange`) | ✅ | D2: layout deferral via `whenHostHasLayout` → TimeCamera.propose (no raw LWC); live restore retired |
 | **81** | **Timeline Publish Gate** (reconnect heal) | ✅ | Phases A–D + P0: WS hooks, Runtime gate, forced REST@1bar, FE await `timeline_publishable`. P1/P2 (status poll / GetWindow degraded) deferred |
 | **82** | **Calendar bar boundary** (`1w`/`1M` time model) | ✅ **A1+A2** | ADR-011 Cap/align/CloseTime. A2: catch-up/gap/reconcile via `NextBarOpen`/`BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE snap deferred unless runtime proves need |

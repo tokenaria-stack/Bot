@@ -111,6 +111,29 @@ Emergency Policy         (unspecified)
 
 ---
 
+## 6. Evidence ledger delta — Track B Step 1 validation (Jul 2026)
+
+**Source:** [`TRACK_B_STEP1_VALIDATION.md`](TRACK_B_STEP1_VALIDATION.md) (investigation only).
+
+| Evidence | Delta after Step 1 |
+|----------|-------------------|
+| Same-op growth → discard Mutation Set → refetch | **Closed** on prepend / append-new-bar / soft applyProjection |
+| Multi-op continuous roam thrash (E3-05 residual) | **Still open** — Mutation Set is operation-local by law |
+| Shrink-on-narrow (E3-07 / L2) | **Still open** |
+| Numeric ceilings as product walls (E3-03) | **Still open** (Capacity) |
+| Mutation Set persists across ops | **Disproven** — ephemeral opts only; correct |
+| WS weakened by Mutation Set | **Not observed** |
+
+| Scorecard | Post Step 1 validation |
+|-----------|------------------------|
+| Lifetime L1–L7 | **3 / 7 Pass** (L1, L4, L6); L3/L5/L7 Partial; L2 Fail |
+| Continuity C2 | **Partial** (same-op only) |
+| Working Set S1–S5 | No Step 1 regression found |
+
+**Recommendation recorded:** Proceed to Track B Step 2 (no Step 1 repair).
+
+---
+
 ## Document status
 
-Evidence ledger closed for Stage E4. Guarantees live only in the frozen Contract + Acceptance documents.
+Evidence ledger closed for Stage E4; **delta §6** appended after Track B Step 1 validation. Guarantees live only in the frozen Contract + Acceptance documents.

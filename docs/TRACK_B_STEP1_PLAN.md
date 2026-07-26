@@ -1,8 +1,8 @@
 # Track B — Cache Lifetime · Step 1 Plan
 
-**Status:** Plan only (not implemented). Ready for implementation when approved.  
+**Status:** Implemented — see [`TRACK_B_STEP1.md`](TRACK_B_STEP1.md).  
 **Kind:** Smallest first implementation step for Lifetime obedience.  
-**Not:** code (yet), Step 2, constitution edits, Capacity/Emergency freeze, redesign.
+**Not:** Step 2, constitution edits, Capacity/Emergency freeze, redesign.
 
 **Frozen laws:** [`WORKING_SET_CONTRACT.md`](WORKING_SET_CONTRACT.md), [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md).  
 **Frozen gates:** [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
@@ -13,9 +13,18 @@
 
 ## Step 1 runtime law (frozen for this step)
 
-> **Bars introduced by a successful growth operation must not become immediate prune candidates as a consequence of that same growth operation.**
+> **A successful cache growth operation establishes a temporary Mutation Set. Any prune caused by that same growth operation must not remove members of that Mutation Set.**
 
-Independent of prepend/append/chunk/LOD terminology. Still valid if transport, replay, or storage changes.
+Applies to **growth operations**, not every function. Independent of prepend/append/chunk/LOD/streaming terminology. Still valid if transport, replay, or storage changes.
+
+### Growth-path classification
+
+| Growth operation | Creates Mutation Set? | Same-operation prune possible? | Step 1 protected? |
+|------------------|----------------------|--------------------------------|-------------------|
+| prepend | Yes | Yes | Yes |
+| append new bar | Yes | Yes | Yes |
+| applyProjection (preserve) | Yes | Yes | Yes |
+| replaceMonolith (commit-paired) | World replacement | Not applicable | Excluded by design |
 
 ### Sets (this step only)
 
@@ -54,7 +63,7 @@ Evidence target (E4): after growth past the capacity trigger, retention often dr
 
 ### In scope
 
-1. **Growth operations that may trigger prune** (any successful bar-adding path that then calls budget enforcement — today: prepend growth and new-bar append growth).  
+1. **Growth operations that may trigger prune** (any successful bar-adding path that then calls budget enforcement — today: prepend growth, new-bar append growth, soft applyProjection).  
 2. **Mutation Set protection for that prune only:** the prune caused by that growth must not remove the Mutation Set.  
 3. **Working Set remains sacrosanct.**  
 4. **EOF unchanged** (CL-04).  
@@ -93,7 +102,7 @@ Do **not** in Step 1:
 |------|----------------------------|
 | `web/columnar-store.js` | After successful growth, budget prune must exclude Mutation Set from candidates |
 | `web/columnar-store_budget_test.js` | Anti-thrash + WS non-regression |
-| `web/boot.js` | Likely none if store knows what it just added |
+| `web/boot.js` | Commit-paired hydrate flag |
 | `web/index.html` | Cache bump if scripts change |
 
 Unlikely: compositor, TimeCamera, hydration EOF, server.
@@ -163,6 +172,4 @@ Smallest change that freezes an objective Lifetime law, hits E4 thrash, seeds CL
 
 ## Stop
 
-Plan strengthened. No code until implementation approval.
-
-**Next:** Track B Step 1 implementation against this runtime law, then stop for review.
+Implementation complete — report [`TRACK_B_STEP1.md`](TRACK_B_STEP1.md). Validate before Track B Step 2.

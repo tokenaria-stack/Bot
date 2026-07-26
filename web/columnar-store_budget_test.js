@@ -1,6 +1,7 @@
 /**
  * Debt #69A — ColumnarStore memory budget (Node).
  * Track A Step 1 — VIEW-preserving prune (WS-01…WS-03).
+ * Track B Step 1 — Mutation Set survives same-operation growth prune (CL-05).
  * Run: node web/columnar-store_budget_test.js
  */
 const { ColumnarStore } = require('./columnar-store.js');
@@ -33,13 +34,14 @@ function fillStore(store, n, plotIds = ['line_rsx', 'line_woz']) {
     { time: times[Math.floor(n / 2)], text: 'B' },
     { time: times[n - 1], text: 'C' },
   ];
+  // World-fill helper: commit-paired so test fixtures can exercise prune without Mutation Set.
   store.replaceMonolith({
     times,
     candles: { open, high, low, close, volume },
     plots,
     annotations,
     timeframe: '1m',
-  });
+  }, { commitPaired: true });
 }
 
 function makeOlderChunk(count, endExclusiveSec) {
@@ -185,7 +187,7 @@ proj2.applyProjection({
   annotations: snap.annotations,
 }, { viewFromSec: projFrom, viewToSec: projTo });
 assert(proj2.lastTimeSec() === projTo, 'applyProjection preserve-paired keeps VIEW tip');
-assert(proj2.barCount() >= 100, 'VIEW floor under applyProjection');
+assert(proj2.barCount() === 100, 'soft applyProjection under HARD_CAP stays intact');
 assert(proj2.invariantOk(), 'invariant applyProjection VIEW');
 
 // ── Track A Step 1: VIEW-preserving prune (WS-01…WS-03 / S1–S3 / E3-01) ──
@@ -204,8 +206,8 @@ fullView.prependMonolith(olderFull, {
   atLiveEdge: false,
 });
 assert(fullView.lastTimeSec() === fullTo, 'WS-02: full VIEW tip must survive prune');
-assert(fullView.firstTimeSec() <= fullFrom, 'left edge of prior VIEW retained or extended');
-assert(fullView.barCount() >= 100, 'VIEW span floor retained');
+assert(fullView.firstTimeSec() === olderFull.times[0], 'CL-05: Mutation Set (just-prepended) must survive');
+assert(fullView.barCount() === 150, 'VIEW∪Mutation → nothing eligible; may exceed TARGET');
 assert(fullView.invariantOk(), 'invariant after VIEW-preserving prune');
 
 const leftView = new ColumnarStore();
@@ -221,8 +223,8 @@ leftView.prependMonolith(olderLeft, {
   atLiveEdge: false,
 });
 assert(leftView.lastTimeSec() < tipLeft, 'tip outside VIEW may still prune (FROM_NEWEST)');
-assert(leftView.firstTimeSec() <= leftFrom, 'VIEW left retained');
-assert(leftView.barCount() === 100, 'budget target when VIEW is smaller than target');
+assert(leftView.firstTimeSec() === olderLeft.times[0], 'Mutation Set left retained');
+assert(leftView.barCount() === 100, 'budget target when VIEW∪Mutation leave eligible room');
 assert(leftView.invariantOk(), 'invariant left-VIEW prune');
 
 const bounds = ColumnarStore.logicalRangeToViewTimes(
@@ -230,5 +232,81 @@ const bounds = ColumnarStore.logicalRangeToViewTimes(
   { from: 1.2, to: 3.8 },
 );
 assert(bounds.viewFromSec === 20 && bounds.viewToSec === 40, 'logicalRangeToViewTimes maps floors');
+
+// ── Track B Step 1: Mutation Set same-operation prune guard (CL-05) ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+
+// prepend: growth → Mutation Set must not be discarded by that prune (thrash case)
+const mutPre = new ColumnarStore();
+fillStore(mutPre, 100);
+const mutPreFrom = mutPre.firstTimeSec();
+const mutPreTo = mutPre.lastTimeSec();
+const mutOlder = makeOlderChunk(50, mutPreFrom);
+mutPre.prependMonolith(mutOlder, {
+  viewFromSec: mutPreFrom,
+  viewToSec: mutPreTo,
+  focalTimeSec: mutPreFrom,
+  atLiveEdge: false,
+});
+assert(mutPre.firstTimeSec() === mutOlder.times[0], 'TB1 prepend: Mutation Set retained');
+assert(mutPre.lastTimeSec() === mutPreTo, 'TB1 prepend: VIEW tip retained');
+assert(mutPre.barCount() === 150, 'TB1 prepend: protected sets block same-op discard');
+
+// appendTick: newly introduced tip is Mutation Set — survives even when VIEW is left-only
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
+global.chartTime = (t) => Number(t);
+const mutAppend = new ColumnarStore();
+mutAppend.setTfInterval(60);
+fillStore(mutAppend, 12);
+const mutOldest = mutAppend.firstTimeSec();
+const mutViewTo = mutAppend.timesSec()[4];
+const mutTip = mutAppend.lastTimeSec();
+const newTip = mutTip + 60;
+mutAppend.appendTick({
+  time: newTip,
+  open: 1, high: 2, low: 1, close: 1.5, volume: 1,
+  plots: { line_rsx: 40, line_woz: 41 },
+}, { viewFromSec: mutOldest, viewToSec: mutViewTo });
+assert(mutAppend.lastTimeSec() === newTip, 'TB1 append: Mutation Set tip retained');
+assert(mutAppend.firstTimeSec() === mutOldest, 'TB1 append: VIEW oldest retained');
+assert(mutAppend.invariantOk(), 'TB1 append invariant');
+
+// applyProjection (preserve/growth): Mutation Set = entire applied series
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+const mutProj = new ColumnarStore();
+const bigTimes = [];
+const bigCandles = { open: [], high: [], low: [], close: [], volume: [] };
+for (let i = 0; i < 150; i++) {
+  const t = 1_800_000_000 + i * 60;
+  bigTimes.push(t);
+  bigCandles.open.push(1);
+  bigCandles.high.push(1);
+  bigCandles.low.push(1);
+  bigCandles.close.push(1);
+  bigCandles.volume.push(1);
+}
+mutProj.applyProjection({
+  times: bigTimes,
+  candles: bigCandles,
+  plots: {},
+  annotations: [],
+});
+assert(mutProj.barCount() === 150, 'TB1 soft applyProjection: Mutation Set blocks same-op prune');
+assert(mutProj.firstTimeSec() === bigTimes[0] && mutProj.lastTimeSec() === bigTimes[149], 'TB1 soft series intact');
+
+// replaceMonolith commit-paired: world replace — Mutation Set excluded; prune allowed
+const commitProj = new ColumnarStore();
+commitProj.replaceMonolith({
+  times: bigTimes,
+  candles: bigCandles,
+  plots: {},
+  annotations: [],
+}, { commitPaired: true });
+assert(commitProj.barCount() === 100, 'TB1 commitPaired: may prune without Mutation Set');
+assert(commitProj.windowMode === 'live', 'TB1 commitPaired FROM_OLDEST stays live');
+assert(commitProj.invariantOk(), 'TB1 commitPaired invariant');
 
 console.log('columnar-store_budget_test: OK');

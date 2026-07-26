@@ -100,9 +100,15 @@ class ColumnarStore {
    * Server owns projection length; FE only applies.
    *
    * Budget: preserve-paired callers must pass VIEW bounds (WS-01…WS-03).
-   * Commit-paired callers (TF / FreshLive / loadDashboard) may omit VIEW.
+   * Commit-paired callers (TF / FreshLive / loadDashboard) pass commitPaired: true
+   * (no Mutation Set — intentional world replace).
+   * Track B Step 1: non-commit growth establishes Mutation Set for same-operation prune.
    * @param {object} snapshot
-   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [options]
+   * @param {{
+   *   viewFromSec?: number|null,
+   *   viewToSec?: number|null,
+   *   commitPaired?: boolean,
+   * }} [options]
    */
   applyProjection(snapshot, options = {}) {
     const data = snapshot && typeof snapshot === 'object' ? snapshot : {};
@@ -137,13 +143,24 @@ class ColumnarStore {
       generation: data.generation != null ? Number(data.generation) : undefined,
     };
     this.windowMode = 'live';
-    this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
+    const budgetOpts = {
       viewFromSec: options.viewFromSec,
       viewToSec: options.viewToSec,
-    });
+    };
+    // Track B Step 1: preserve/growth projection — Mutation Set = newly applied series.
+    // Commit-paired world replace may prune without Mutation Set protection.
+    if (options.commitPaired !== true && times.length > 0) {
+      budgetOpts.mutationFromSec = Number(times[0]);
+      budgetOpts.mutationToSec = Number(times[times.length - 1]);
+    }
+    this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, budgetOpts);
   }
 
-  /** Full history hydrate — same atomic accept as applyProjection (legacy name). */
+  /**
+   * Full history hydrate — same atomic accept as applyProjection (legacy name).
+   * Commit-paired world replace (FreshLive / TF / loadDashboard): pass commitPaired: true
+   * so same-op budget may prune (no Mutation Set). Soft/preserve callers omit it.
+   */
   replaceMonolith(columnarJson, options = {}) {
     this.applyProjection(columnarJson, options);
   }
@@ -419,49 +436,141 @@ class ColumnarStore {
   }
 
   /**
-   * Track A (WS-01…WS-03): prune only outside VIEW. Never shrink below VIEW span.
+   * Track A + Track B Step 1: prune only outside Working Set and Mutation Set.
+   * Never remove VIEW (WS). Never remove Mutation Set in the same growth prune (CL-05).
    * @param {number} targetCount
    * @param {'oldest'|'newest'} direction
-   * @param {{ start: number, end: number }} view half-open index range
+   * @param {{ start: number, end: number }|null|undefined} view
+   * @param {{ start: number, end: number }|null|undefined} mutation
    */
-  _prunePreservingView(targetCount, direction, view) {
+  _pruneOutsideProtected(targetCount, direction, view, mutation) {
     const n = this._times.length;
-    const v0 = Math.max(0, Math.min(n, view.start));
-    const v1 = Math.max(v0, Math.min(n, view.end));
-    const viewLen = v1 - v0;
-    const keepCount = Math.max(Math.floor(Number(targetCount)) || 0, viewLen);
-    if (n <= keepCount) return;
+    if (n === 0) return;
 
-    let needDrop = n - keepCount;
-    const leftAvail = v0;
-    const rightAvail = n - v1;
-    let dropLeft = 0;
-    let dropRight = 0;
-    if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
-      dropRight = Math.min(needDrop, rightAvail);
-      needDrop -= dropRight;
-      dropLeft = Math.min(needDrop, leftAvail);
-    } else {
-      dropLeft = Math.min(needDrop, leftAvail);
-      needDrop -= dropLeft;
-      dropRight = Math.min(needDrop, rightAvail);
+    const protectedFlags = new Array(n);
+    for (let i = 0; i < n; i++) protectedFlags[i] = false;
+    const mark = (range) => {
+      if (!range) return;
+      const a = Math.max(0, Math.min(n, range.start));
+      const b = Math.max(a, Math.min(n, range.end));
+      for (let i = a; i < b; i++) protectedFlags[i] = true;
+    };
+    mark(view);
+    mark(mutation);
+
+    let protectedCount = 0;
+    for (let i = 0; i < n; i++) {
+      if (protectedFlags[i]) protectedCount += 1;
     }
-    if (dropLeft === 0 && dropRight === 0) return;
-    this._applySlice(dropLeft, n - dropRight, { droppedNewest: dropRight > 0 });
+
+    const viewLen = view ? Math.max(0, view.end - view.start) : 0;
+    const keepGoal = Math.max(Math.floor(Number(targetCount)) || 0, viewLen);
+    if (n <= keepGoal) return;
+
+    let needDrop = n - keepGoal;
+    const eligible = [];
+    for (let i = 0; i < n; i++) {
+      if (!protectedFlags[i]) eligible.push(i);
+    }
+    if (eligible.length === 0) return;
+
+    const toDrop = new Set();
+    if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+      for (let i = eligible.length - 1; i >= 0 && toDrop.size < needDrop; i--) {
+        toDrop.add(eligible[i]);
+      }
+    } else {
+      for (let i = 0; i < eligible.length && toDrop.size < needDrop; i++) {
+        toDrop.add(eligible[i]);
+      }
+    }
+    if (toDrop.size === 0) return;
+
+    const keepIdx = [];
+    for (let i = 0; i < n; i++) {
+      if (!toDrop.has(i)) keepIdx.push(i);
+    }
+    const oldLast = Number(this._times[n - 1]);
+    this._gatherIndices(keepIdx, {
+      droppedNewest: Number.isFinite(oldLast)
+        && keepIdx.length > 0
+        && Number(this._times[keepIdx[keepIdx.length - 1]]) < oldLast,
+    });
+  }
+
+  /**
+   * Keep listed indices (ascending). Contiguous → slice; else gather.
+   * @param {number[]} keepIdx
+   * @param {{ droppedNewest?: boolean }} [meta]
+   */
+  _gatherIndices(keepIdx, meta = {}) {
+    const n = this._times.length;
+    if (!Array.isArray(keepIdx) || keepIdx.length === 0) {
+      this._times = [];
+      this._candles = { open: [], high: [], low: [], close: [], volume: [] };
+      this._plots = {};
+      this._annotations = [];
+      this._annotationMap.clear();
+      this._meta = { ...this._meta, added: 0 };
+      return;
+    }
+    if (keepIdx.length === n) return;
+
+    const start = keepIdx[0];
+    const endEx = keepIdx[keepIdx.length - 1] + 1;
+    const contiguous = keepIdx.length === endEx - start
+      && keepIdx.every((v, j) => v === start + j);
+    if (contiguous) {
+      this._applySlice(start, endEx, meta);
+      return;
+    }
+
+    const pick = (arr) => keepIdx.map((i) => arr[i]);
+    this._times = pick(this._times);
+    this._candles = {
+      open: pick(this._candles.open),
+      high: pick(this._candles.high),
+      low: pick(this._candles.low),
+      close: pick(this._candles.close),
+      volume: pick(this._candles.volume),
+    };
+    const nextPlots = {};
+    for (const [id, col] of Object.entries(this._plots)) {
+      nextPlots[id] = Array.isArray(col) ? pick(col) : [];
+    }
+    this._plots = nextPlots;
+
+    const t0 = Number(this._times[0]);
+    const t1 = Number(this._times[this._times.length - 1]);
+    this._annotations = this._annotations.filter((ann) => {
+      const t = Number(ann?.time ?? ann?.Time);
+      return Number.isFinite(t) && t >= t0 && t <= t1;
+    });
+    this._rebuildAnnotationMapFromArray(this._annotations);
+    if (meta.droppedNewest === true) {
+      this.windowMode = 'history';
+    }
+    this._meta = { ...this._meta, added: this._times.length };
   }
 
   /**
    * @param {'oldest'|'newest'} direction
-   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [opts]
+   * @param {{
+   *   viewFromSec?: number|null,
+   *   viewToSec?: number|null,
+   *   mutationFromSec?: number|null,
+   *   mutationToSec?: number|null,
+   * }} [opts]
    */
   _enforceBudget(direction, opts = {}) {
     if (this._times.length <= ColumnarStore.BUDGET_HARD_CAP) return;
     const view = this._viewIndexRange(opts.viewFromSec, opts.viewToSec);
-    if (!view) {
+    const mutation = this._viewIndexRange(opts.mutationFromSec, opts.mutationToSec);
+    if (!view && !mutation) {
       this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
       return;
     }
-    this._prunePreservingView(ColumnarStore.BUDGET_TARGET, direction, view);
+    this._pruneOutsideProtected(ColumnarStore.BUDGET_TARGET, direction, view, mutation);
   }
 
   /**
@@ -607,9 +716,12 @@ class ColumnarStore {
     }
 
     if (isNewBar) {
+      // Track B Step 1: Mutation Set = the bar introduced by this growth.
       this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
         viewFromSec: options.viewFromSec,
         viewToSec: options.viewToSec,
+        mutationFromSec: time,
+        mutationToSec: time,
       });
       delta.barCount = this._times.length;
     }
@@ -702,16 +814,21 @@ class ColumnarStore {
     };
 
     // Debt #69C: direction from viewport focal (default NEWEST = safe for left-scroll history).
-    // Track A: pass VIEW time bounds so prune cannot invalidate visible bars (WS-01…WS-03).
+    // Track A: VIEW bounds — prune cannot invalidate visible bars (WS-01…WS-03).
+    // Track B Step 1: Mutation Set = bars introduced by this growth — same-op prune must not remove them.
     const direction = this.resolveBudgetPruneDirection({
       focalTimeSec: options.focalTimeSec,
       atLiveEdge: options.atLiveEdge === true,
       pruneDirection: options.pruneDirection,
       defaultDirection: ColumnarStore.PRUNE_FROM_NEWEST,
     });
+    const mutationFromSec = Number(prependTimes[0]);
+    const mutationToSec = Number(prependTimes[added - 1]);
     this._enforceBudget(direction, {
       viewFromSec: options.viewFromSec,
       viewToSec: options.viewToSec,
+      mutationFromSec,
+      mutationToSec,
     });
 
     return { added, pruneDirection: direction, windowMode: this.windowMode };
