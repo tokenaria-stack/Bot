@@ -222,8 +222,10 @@ class HydrationOrchestrator {
       const data = await deps.fetchColumnar(endTimeSec);
       if (epoch !== deps.getEpoch()) return;
       if (reqId != null && typeof deps.getReqId === 'function' && reqId !== deps.getReqId()) return;
+
+      // Wave 3: empty payload is recoverable unless server authoritatively asserts EOF.
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
-        if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
+        this._applyAuthoritativeEof(data);
         return;
       }
 
@@ -238,9 +240,9 @@ class HydrationOrchestrator {
           : null;
 
         const mergeResult = deps.mergeIntoStore(data);
+        // Wave 3: zero-overlap / no-add is recoverable — never infer EOF.
         if (!mergeResult || mergeResult.added <= 0) {
-          if (deps.setHistoryHasMore) deps.setHistoryHasMore(false);
-          console.warn('[HydrationOrchestrator] prepend stalled: zero overlap');
+          console.warn('[HydrationOrchestrator] prepend stalled: zero overlap (recoverable, not EOF)');
           return;
         }
 
@@ -256,9 +258,8 @@ class HydrationOrchestrator {
           });
         }
 
-        if (deps.setHistoryHasMore) {
-          deps.setHistoryHasMore(data.hasMore !== false);
-        }
+        // Wave 3: historyHasMore reflects EOF only after successful merge.
+        this._applyCompletionHasMore(data);
         if (typeof deps.onAfterPrepend === 'function') {
           deps.onAfterPrepend(mergeResult, addedBars);
         }
@@ -268,6 +269,7 @@ class HydrationOrchestrator {
         if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(false);
       }
     } catch (err) {
+      // Wave 3: errors are recoverable — must not masquerade as EOF.
       console.error('[HydrationOrchestrator] prepend failed:', err);
     } finally {
       this._inFlight = false;
@@ -279,8 +281,33 @@ class HydrationOrchestrator {
         this.state = HydrationState.IDLE;
       }
       // Wave 2: leaving busy → naturally consume pending (no poll/timer retry loop).
+      // Wave 3: true EOF clears pending inside _applyCompletionHasMore / _applyAuthoritativeEof.
       this.tryConsumePending();
     }
+  }
+
+  /**
+   * Wave 3 — EOF only from authoritative server hasMore === false.
+   * Clears pending left intent (protocol complete). Does not infer from empty/overlap/error.
+   * @param {object|null|undefined} data
+   */
+  _applyAuthoritativeEof(data) {
+    if (!data || data.hasMore !== false) return;
+    const deps = this._deps;
+    if (deps?.setHistoryHasMore) deps.setHistoryHasMore(false);
+    this._pendingLeftIntent = null;
+  }
+
+  /**
+   * Wave 3 — after successful merge, publish Continue vs EOF from server hasMore.
+   * @param {object} data
+   */
+  _applyCompletionHasMore(data) {
+    const deps = this._deps;
+    if (!deps?.setHistoryHasMore) return;
+    const eof = data && data.hasMore === false;
+    deps.setHistoryHasMore(!eof);
+    if (eof) this._pendingLeftIntent = null;
   }
 }
 

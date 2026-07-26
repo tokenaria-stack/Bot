@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 Wave 3 — Distinguishable history completion (Jul 2026) ✅
+
+- Invariant: every history request completes with a well-defined outcome; EOF ≠ empty/overlap/error.
+- `historyHasMore` / EOF only from authoritative `hasMore === false` (after success, or empty body with explicit EOF).
+- Zero-overlap and bare empty payload are recoverable; errors never clear EOF flag. True EOF clears Wave 2 pending.
+- TimeCamera / ChartAdapter / Boot detector unchanged. E2-03 resolved.
+
 ## Phase ADR-028 Wave 2 — Busy never loses intent (Jul 2026) ✅
 
 - Invariant: busy may delay left-history need; silent drop impossible.
