@@ -2,6 +2,7 @@
  * Debt #69A — ColumnarStore memory budget (Node).
  * Track A Step 1 — VIEW-preserving prune (WS-01…WS-03).
  * Track B Step 1 — Mutation Set survives same-operation growth prune (CL-05).
+ * Track B Step 2 — Retained Neighborhood survives across exploration growth.
  * Run: node web/columnar-store_budget_test.js
  */
 const { ColumnarStore } = require('./columnar-store.js');
@@ -308,5 +309,51 @@ commitProj.replaceMonolith({
 assert(commitProj.barCount() === 100, 'TB1 commitPaired: may prune without Mutation Set');
 assert(commitProj.windowMode === 'live', 'TB1 commitPaired FROM_OLDEST stays live');
 assert(commitProj.invariantOk(), 'TB1 commitPaired invariant');
+assert(commitProj.retainedNeighborhoodBounds() == null, 'TB2: commitPaired clears Retained Neighborhood');
+
+// ── Track B Step 2: Retained Neighborhood persists across growth (CL-03/CL-05) ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+
+const rnStore = new ColumnarStore();
+fillStore(rnStore, 100);
+const rnViewFrom = rnStore.firstTimeSec();
+const rnViewTo = rnStore.lastTimeSec();
+const chunkA = makeOlderChunk(50, rnViewFrom);
+const aFirst = chunkA.times[0];
+rnStore.prependMonolith(chunkA, {
+  viewFromSec: rnViewFrom,
+  viewToSec: rnViewTo,
+  focalTimeSec: rnViewFrom,
+  atLiveEdge: false,
+});
+assert(rnStore.firstTimeSec() === aFirst, 'TB2 after A: chunk A retained');
+const rnAfterA = rnStore.retainedNeighborhoodBounds();
+assert(rnAfterA && rnAfterA.fromSec === aFirst, 'TB2: RN absorbed Mutation A');
+
+const chunkB = makeOlderChunk(50, rnStore.firstTimeSec());
+const bFirst = chunkB.times[0];
+rnStore.prependMonolith(chunkB, {
+  viewFromSec: rnViewFrom,
+  viewToSec: rnViewTo,
+  focalTimeSec: rnViewFrom,
+  atLiveEdge: false,
+});
+// Without RN, second growth would make A eligible and often discard it (multi-op thrash).
+assert(rnStore.firstTimeSec() === bFirst, 'TB2 after B: newest left edge is B');
+assert(rnStore.timesSec().includes(aFirst), 'TB2: prior Mutation A survives later growth prune');
+assert(rnStore.barCount() === 200, 'TB2: VIEW∪RN∪Mutation leave nothing eligible');
+const rnAfterB = rnStore.retainedNeighborhoodBounds();
+assert(rnAfterB && rnAfterB.fromSec === bFirst && rnAfterB.toSec >= aFirst, 'TB2: RN expanded A∪B');
+
+// World replacement resets RN and may prune former neighborhood
+rnStore.replaceMonolith({
+  times: bigTimes,
+  candles: bigCandles,
+  plots: {},
+  annotations: [],
+}, { commitPaired: true });
+assert(rnStore.retainedNeighborhoodBounds() == null, 'TB2: world replace clears RN');
+assert(rnStore.barCount() === 100, 'TB2: after clear RN, commit-paired prune allowed');
 
 console.log('columnar-store_budget_test: OK');

@@ -4,6 +4,8 @@
  *
  * Debt #69A: bounded display cache (not a historical DB). Server owns durable history.
  * Track A / Working Set: retention may never invalidate the committed VIEW (WS-01…WS-03).
+ * Track B Step 1: Mutation Set — same-op growth prune must not discard just-grown bars.
+ * Track B Step 2: Retained Neighborhood — Lifetime fact across exploration growth (not Capacity).
  */
 class ColumnarStore {
   static get BUDGET_TARGET() {
@@ -40,6 +42,16 @@ class ColumnarStore {
      * @type {'live'|'history'}
      */
     this.windowMode = 'live';
+    /**
+     * Retained Neighborhood (Track B Step 2) — logical time interval [from, to] sec.
+     * Eagerly expanded by absorbing Mutation Sets from exploration growth.
+     * Cleared only by explicit world replacement (commit-paired / clear).
+     * Eviction policy intentionally unspecified (Capacity later). Not "everything ever loaded."
+     * @type {number|null}
+     */
+    this._rnFromSec = null;
+    /** @type {number|null} */
+    this._rnToSec = null;
   }
 
   /** Core 4.5: bind current TF interval so appendTick can detect chronology gaps. */
@@ -79,6 +91,43 @@ class ColumnarStore {
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
     this.windowMode = 'live';
+    this._clearRetainedNeighborhood();
+  }
+
+  /**
+   * Track B Step 2: logical Retained Neighborhood bounds (sec), or null if unset.
+   * @returns {{ fromSec: number, toSec: number }|null}
+   */
+  retainedNeighborhoodBounds() {
+    const a = this._rnFromSec;
+    const b = this._rnToSec;
+    if (a == null || b == null) return null;
+    if (![a, b].every(Number.isFinite) || b < a) return null;
+    return { fromSec: a, toSec: b };
+  }
+
+  _clearRetainedNeighborhood() {
+    this._rnFromSec = null;
+    this._rnToSec = null;
+  }
+
+  /**
+   * Absorb a Mutation Set time span into the Retained Neighborhood (eager expand).
+   * Hull union — logical Lifetime span, not a Capacity budget.
+   * @param {number} fromSec
+   * @param {number} toSec
+   */
+  _absorbIntoRetainedNeighborhood(fromSec, toSec) {
+    const a = Number(fromSec);
+    const b = Number(toSec);
+    if (![a, b].every(Number.isFinite) || b < a) return;
+    if (this._rnFromSec == null || this._rnToSec == null) {
+      this._rnFromSec = a;
+      this._rnToSec = b;
+      return;
+    }
+    this._rnFromSec = Math.min(this._rnFromSec, a);
+    this._rnToSec = Math.max(this._rnToSec, b);
   }
 
   seal() {
@@ -103,6 +152,7 @@ class ColumnarStore {
    * Commit-paired callers (TF / FreshLive / loadDashboard) pass commitPaired: true
    * (no Mutation Set — intentional world replace).
    * Track B Step 1: non-commit growth establishes Mutation Set for same-operation prune.
+   * Track B Step 2: absorb Mutation into Retained Neighborhood; commit-paired resets RN.
    * @param {object} snapshot
    * @param {{
    *   viewFromSec?: number|null,
@@ -147,11 +197,16 @@ class ColumnarStore {
       viewFromSec: options.viewFromSec,
       viewToSec: options.viewToSec,
     };
-    // Track B Step 1: preserve/growth projection — Mutation Set = newly applied series.
-    // Commit-paired world replace may prune without Mutation Set protection.
-    if (options.commitPaired !== true && times.length > 0) {
-      budgetOpts.mutationFromSec = Number(times[0]);
-      budgetOpts.mutationToSec = Number(times[times.length - 1]);
+    // Explicit world replacement resets Retained Neighborhood (CameraCommit / commit-paired).
+    if (options.commitPaired === true) {
+      this._clearRetainedNeighborhood();
+    } else if (times.length > 0) {
+      // Track B Step 1 + 2: Mutation Set = applied series; absorb into Retained Neighborhood.
+      const mutFrom = Number(times[0]);
+      const mutTo = Number(times[times.length - 1]);
+      budgetOpts.mutationFromSec = mutFrom;
+      budgetOpts.mutationToSec = mutTo;
+      this._absorbIntoRetainedNeighborhood(mutFrom, mutTo);
     }
     this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, budgetOpts);
   }
@@ -436,14 +491,15 @@ class ColumnarStore {
   }
 
   /**
-   * Track A + Track B Step 1: prune only outside Working Set and Mutation Set.
-   * Never remove VIEW (WS). Never remove Mutation Set in the same growth prune (CL-05).
+   * Track A + Track B: prune only outside Working Set, Mutation Set, and Retained Neighborhood.
+   * Never remove VIEW (WS). Never remove same-op Mutation (Step 1). Never remove RN (Step 2).
    * @param {number} targetCount
    * @param {'oldest'|'newest'} direction
    * @param {{ start: number, end: number }|null|undefined} view
    * @param {{ start: number, end: number }|null|undefined} mutation
+   * @param {{ start: number, end: number }|null|undefined} neighborhood
    */
-  _pruneOutsideProtected(targetCount, direction, view, mutation) {
+  _pruneOutsideProtected(targetCount, direction, view, mutation, neighborhood) {
     const n = this._times.length;
     if (n === 0) return;
 
@@ -457,11 +513,7 @@ class ColumnarStore {
     };
     mark(view);
     mark(mutation);
-
-    let protectedCount = 0;
-    for (let i = 0; i < n; i++) {
-      if (protectedFlags[i]) protectedCount += 1;
-    }
+    mark(neighborhood);
 
     const viewLen = view ? Math.max(0, view.end - view.start) : 0;
     const keepGoal = Math.max(Math.floor(Number(targetCount)) || 0, viewLen);
@@ -512,6 +564,7 @@ class ColumnarStore {
       this._annotations = [];
       this._annotationMap.clear();
       this._meta = { ...this._meta, added: 0 };
+      this._clearRetainedNeighborhood();
       return;
     }
     if (keepIdx.length === n) return;
@@ -566,11 +619,18 @@ class ColumnarStore {
     if (this._times.length <= ColumnarStore.BUDGET_HARD_CAP) return;
     const view = this._viewIndexRange(opts.viewFromSec, opts.viewToSec);
     const mutation = this._viewIndexRange(opts.mutationFromSec, opts.mutationToSec);
-    if (!view && !mutation) {
+    const neighborhood = this._viewIndexRange(this._rnFromSec, this._rnToSec);
+    if (!view && !mutation && !neighborhood) {
       this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
       return;
     }
-    this._pruneOutsideProtected(ColumnarStore.BUDGET_TARGET, direction, view, mutation);
+    this._pruneOutsideProtected(
+      ColumnarStore.BUDGET_TARGET,
+      direction,
+      view,
+      mutation,
+      neighborhood,
+    );
   }
 
   /**
@@ -717,6 +777,8 @@ class ColumnarStore {
 
     if (isNewBar) {
       // Track B Step 1: Mutation Set = the bar introduced by this growth.
+      // Track B Step 2: absorb into Retained Neighborhood before same-op pressure prune.
+      this._absorbIntoRetainedNeighborhood(time, time);
       this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
         viewFromSec: options.viewFromSec,
         viewToSec: options.viewToSec,
@@ -816,6 +878,7 @@ class ColumnarStore {
     // Debt #69C: direction from viewport focal (default NEWEST = safe for left-scroll history).
     // Track A: VIEW bounds — prune cannot invalidate visible bars (WS-01…WS-03).
     // Track B Step 1: Mutation Set = bars introduced by this growth — same-op prune must not remove them.
+    // Track B Step 2: absorb Mutation into Retained Neighborhood — survives later growth prunes.
     const direction = this.resolveBudgetPruneDirection({
       focalTimeSec: options.focalTimeSec,
       atLiveEdge: options.atLiveEdge === true,
@@ -824,6 +887,7 @@ class ColumnarStore {
     });
     const mutationFromSec = Number(prependTimes[0]);
     const mutationToSec = Number(prependTimes[added - 1]);
+    this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
     this._enforceBudget(direction, {
       viewFromSec: options.viewFromSec,
       viewToSec: options.viewToSec,

@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 2 — Retained Neighborhood (Jul 2026) ✅
+
+- Report: [`TRACK_B_STEP2.md`](TRACK_B_STEP2.md). Plan: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).
+- Law: absorb Mutation into Retained Neighborhood; protect under pressure; reset only on world replacement.
+- Lifetime **~5 / 7**; **C2 Pass**. Eviction unspecified (Capacity later). No Step 3.
+
 ## Track B Step 2 Plan — Retained Neighborhood / Neighborhood Lifetime (Jul 2026) ✅
 
 - Plan only: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).

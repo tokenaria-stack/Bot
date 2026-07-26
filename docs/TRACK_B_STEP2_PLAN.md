@@ -1,8 +1,8 @@
 # Track B — Cache Lifetime · Step 2 Plan
 
-**Status:** Plan only (not implemented). Ready for implementation when approved.  
+**Status:** Implemented — see [`TRACK_B_STEP2.md`](TRACK_B_STEP2.md).  
 **Kind:** Smallest next Lifetime step after validated Step 1.  
-**Not:** code, Step 3, constitution edits, Capacity/Emergency freeze, redesign.
+**Not:** Step 3, constitution edits, Capacity/Emergency freeze, redesign.
 
 **Frozen laws:** [`WORKING_SET_CONTRACT.md`](WORKING_SET_CONTRACT.md), [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md).  
 **Frozen gates:** [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).  
@@ -33,9 +33,11 @@ Not the objective: bigger HARD_CAP / TARGET / chunks, timers, or hysteresis.
 
 ### Step 2 law (new)
 
-> **Successful exploration growth expands the Retained Neighborhood by absorbing that operation’s Mutation Set. Under pressure, discard must not remove members of the Retained Neighborhood. The Retained Neighborhood is cleared only by intentional world replacement (commit-paired replace / explicit world-changing CameraCommit), never by a subsequent growth operation alone.**
+> **Successful exploration growth expands the Retained Neighborhood by absorbing the operation's Mutation Set. Under pressure, discard must not remove members of the Retained Neighborhood. The Retained Neighborhood persists across exploration growth and is reset only by an explicit world replacement (CameraCommit / commit-paired transition).**
 
 This is **Neighborhood Lifetime** (CL-03 category + CL-05 continuity), not a Capacity budget.
+
+**Implementation note (not Capacity):** RN is a **logical** span (hull of absorbed Mutation Sets), not “everything ever loaded.” Eviction policy remains **unspecified** — Capacity may later limit outside protected categories. Step 2 must not become a hidden Capacity implementation via unbounded “keep forever” framing without documenting that gap.
 
 ### Naming
 
@@ -234,6 +236,4 @@ Smallest Lifetime extension that makes the exploration neighborhood **cross-oper
 
 ## Stop
 
-Plan only. No code. No Step 3.
-
-**Next:** Implementation approval against this law, then implement Step 2 only and stop for validation.
+Implementation complete — report [`TRACK_B_STEP2.md`](TRACK_B_STEP2.md). Validate before Track B Step 3.
