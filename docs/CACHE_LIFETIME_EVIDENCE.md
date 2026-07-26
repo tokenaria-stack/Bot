@@ -157,6 +157,30 @@ Emergency Policy         (unspecified)
 
 ---
 
+## 8. Evidence ledger delta — Track B Step 2 validation (Jul 2026)
+
+**Source:** [`TRACK_B_STEP2_VALIDATION.md`](TRACK_B_STEP2_VALIDATION.md) (investigation only).
+
+| Evidence | Delta |
+|----------|-------|
+| Multi-op fetch→prune→refetch (E4 / C2) | **Validated closed** on covered paths |
+| RN removes Mutation Set same-op guarantee | **Not observed** |
+| RN becomes Capacity | **Disproven** (ceilings unchanged; eviction unspecified) |
+| RN monotonic until world replace | **Expected Step 2**; Capacity owns future eviction |
+| Hull protects interstitial times inside [min,max] | Documented design consequence — not a fail |
+| L2 / L7 / C4 | Still open |
+
+| Scorecard | Post Step 2 validation |
+|-----------|------------------------|
+| Lifetime L1–L7 | **5 / 7 Pass** (L1, L3–L6); L2 Partial; L7 Partial |
+| Continuity C2 | **Pass** |
+| Continuity C1 / C5 | Partial; C4 Fail |
+| Working Set | No Step 2 regression found |
+
+**Recommendation recorded:** Proceed to Track B Step 3 (no Step 2 repair).
+
+---
+
 ## Document status
 
-Evidence ledger closed for Stage E4; **deltas §6–§7** appended after Track B Steps 1–2. Guarantees live only in the frozen Contract + Acceptance documents.
+Evidence ledger closed for Stage E4; **deltas §6–§8** appended through Track B Step 2 validation. Guarantees live only in the frozen Contract + Acceptance documents.

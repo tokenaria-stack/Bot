@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 2 Validation (Jul 2026) ✅
+
+- Investigation only: [`TRACK_B_STEP2_VALIDATION.md`](TRACK_B_STEP2_VALIDATION.md).
+- Verdict: Retained Neighborhood correct; no WS/Lifetime regressions.
+- Lifetime **5 / 7 Pass**; **C2 Pass**. Monotonic RN until world replace = expected (eviction unspecified).
+- Recommendation: **Proceed to Track B Step 3** (no Step 2 repair).
+
 ## Track B Step 2 — Retained Neighborhood (Jul 2026) ✅
 
 - Report: [`TRACK_B_STEP2.md`](TRACK_B_STEP2.md). Plan: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).
