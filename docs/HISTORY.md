@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Stage E5 — Constitution Consistency Audit (Jul 2026) ✅
+
+- Docs-only audit: [`CONSTITUTION_CONSISTENCY_E5.md`](CONSTITUTION_CONSISTENCY_E5.md).
+- Cores WS-01…WS-05 / CL-01…CL-07 coherent; no hard contradictions.
+- Residuals: WS-05 wording soft tension; acceptance-doc leaks; multi-VIEW / LOD identity gaps.
+- Constitutions unchanged. No runtime / Lifetime implementation.
+
 ## Stage E4 Freeze — Cache Lifetime Contract (Jul 2026) ✅
 
 - **Frozen:** [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
