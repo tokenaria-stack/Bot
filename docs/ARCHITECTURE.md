@@ -24,6 +24,7 @@
 | `docs/CACHE_LIFETIME_CONTRACT.md` | Normative Cache Lifetime guarantees (frozen); not an ADR |
 | `docs/CACHE_LIFETIME_ACCEPTANCE.md` | Lifetime done-criteria L1–L7 / C1–C5 (frozen) |
 | `docs/CONSTITUTION_CONSISTENCY_E5.md` | Stage E5 constitutional consistency audit (docs only) |
+| `docs/TRACK_B_STEP1_PLAN.md` | Track B Lifetime Step 1 implementation plan (no code) |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |

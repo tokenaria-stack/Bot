@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 1 Plan — Cache Lifetime anti-thrash (Jul 2026) ✅
+
+- Plan only: [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
+- Objective: mutation-local neighborhood protection after growth prune (CL-05 / C2); WS untouched.
+- Honest post-step Lifetime estimate ~2–3 / 7. No code in this stage.
+
 ## Stage E5 — Constitution Consistency Audit (Jul 2026) ✅
 
 - Docs-only audit: [`CONSTITUTION_CONSISTENCY_E5.md`](CONSTITUTION_CONSISTENCY_E5.md).
