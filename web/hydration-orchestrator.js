@@ -1,6 +1,6 @@
 /**
  * HydrationOrchestrator — FSM coordinator for monolithic columnar history prepend.
- * Commands only: fetch → store/DDR merge → ChartAdapter atomic apply.
+ * Wave 2: owns a single pending left-history intent (not a queue). Busy delays; never drops.
  */
 const HydrationState = Object.freeze({
   IDLE: 'IDLE',
@@ -20,18 +20,27 @@ class HydrationOrchestrator {
     /** @type {object|null} */
     this._deps = null;
     this._inFlight = false;
+    /**
+     * Wave 2 — newest left-history need only (supersede, never accumulate).
+     * @type {{ range: { from: number, to: number }, options: object }|null}
+     */
+    this._pendingLeftIntent = null;
   }
 
   /**
    * @param {object} deps
    * @param {() => number} deps.getEpoch
-   * @param {() => boolean} deps.shouldLoad
+   * @param {() => number} [deps.getReqId]
+   * @param {(range: object, options?: object) => boolean} deps.shouldLoad
    * @param {() => number|null} deps.getAnchorEndTimeSec
-   * @param {() => string[]} deps.getSlotIds
+   * @param {() => string[]} [deps.getSlotIds]
    * @param {(endTimeSec: number) => Promise<object>} deps.fetchColumnar
-   * @param {(data: object) => { added: number, viewportRange?: object|null }} deps.mergeIntoStore
+   * @param {(data: object) => { added: number, viewportRange?: object|null }|null} deps.mergeIntoStore
    * @param {(intent: object) => void} deps.markDirty
    * @param {(tick: object) => void} deps.processTick
+   * @param {() => boolean} [deps.isRenderBusy]
+   * @param {() => boolean} [deps.isDashboardLoading]
+   * @param {() => object|null} [deps.getVisibleRange]
    */
   init(deps) {
     this._deps = deps;
@@ -47,12 +56,18 @@ class HydrationOrchestrator {
       || this._inFlight;
   }
 
+  /** @returns {boolean} */
+  hasPendingLeftIntent() {
+    return this._pendingLeftIntent != null;
+  }
+
   reset() {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
     this.wsQueue = [];
+    this._pendingLeftIntent = null;
     this.state = HydrationState.IDLE;
     this._inFlight = false;
   }
@@ -87,8 +102,73 @@ class HydrationOrchestrator {
     }
   }
 
+  /**
+   * Wave 2 — Boot detector entry. Remembers newest need; starts when idle.
+   * @param {{ from: number, to: number }} range
+   * @param {object} [options]
+   */
+  noteLeftHistoryIntent(range, options = {}) {
+    if (!this._deps || !range
+      || !Number.isFinite(range.from)
+      || !Number.isFinite(range.to)) {
+      return;
+    }
+    this._pendingLeftIntent = {
+      range: { from: range.from, to: range.to },
+      options: { ...options },
+    };
+    this.tryConsumePending();
+  }
+
+  /**
+   * Consume pending when Hydration (and paint/dashboard) are idle.
+   * Called after prepend finishes and after compositor flush — not via polling.
+   */
+  tryConsumePending() {
+    this._tryStartPending();
+  }
+
+  _canStartNow() {
+    if (!this._deps) return false;
+    if (this.isBusy() || this._inFlight) return false;
+    if (typeof this._deps.isRenderBusy === 'function' && this._deps.isRenderBusy()) return false;
+    if (typeof this._deps.isDashboardLoading === 'function' && this._deps.isDashboardLoading()) {
+      return false;
+    }
+    return true;
+  }
+
+  _tryStartPending() {
+    if (!this._deps || !this._pendingLeftIntent) return;
+    if (!this._canStartNow()) return;
+
+    const liveRange = (typeof this._deps.getVisibleRange === 'function'
+      ? this._deps.getVisibleRange()
+      : null) || this._pendingLeftIntent.range;
+    const options = this._pendingLeftIntent.options || {};
+
+    if (!this._deps.shouldLoad(liveRange, options)) {
+      // Need no longer valid — explicit cancel (not busy-drop).
+      this._pendingLeftIntent = null;
+      return;
+    }
+
+    this._pendingLeftIntent = null;
+    this.schedulePrepend(liveRange, options);
+  }
+
   schedulePrepend(range, options = {}) {
     if (!this._deps) return;
+    if (!this._canStartNow()) {
+      // Supersede into single pending intent (not a queue).
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingLeftIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
     if (options.force === true) {
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
@@ -108,7 +188,25 @@ class HydrationOrchestrator {
 
   async requestPrepend(range, options = {}) {
     const deps = this._deps;
-    if (!deps || this._inFlight) return;
+    if (!deps) return;
+    if (this._inFlight) {
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingLeftIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
+    if (!this._canStartNow()) {
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingLeftIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
     if (!deps.shouldLoad(range, options)) return;
 
     const epoch = deps.getEpoch();
@@ -146,7 +244,6 @@ class HydrationOrchestrator {
           return;
         }
 
-        // Prefer store merge count (real bars prepended); fall back to API data.added.
         const addedBars = Number(mergeResult.added) > 0
           ? Number(mergeResult.added)
           : (Number.isFinite(data.added) && data.added > 0 ? data.added : 0);
@@ -181,6 +278,8 @@ class HydrationOrchestrator {
         this.wsQueue = [];
         this.state = HydrationState.IDLE;
       }
+      // Wave 2: leaving busy → naturally consume pending (no poll/timer retry loop).
+      this.tryConsumePending();
     }
   }
 }

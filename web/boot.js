@@ -639,6 +639,8 @@
       getNavigatorResult: () => liveNavigatorResult,
       onAfterFlush: () => {
         updateBufferingOverlay();
+        // Wave 2: paint left busy → Hydration may consume pending left-history intent.
+        liveHydrationOrchestrator?.tryConsumePending?.();
       },
     });
     liveRenderScheduler = new RenderScheduler(compositor);
@@ -652,6 +654,8 @@
   function endDataUpdate() {
     window.isUpdatingData = false;
     ChartAdapter?.setLiveUpdating?.(false);
+    // Wave 2: full-hydrate busy ended — pending left-history may proceed.
+    liveHydrationOrchestrator?.tryConsumePending?.();
   }
 
   function disarmLiveHistoryScroll() {
@@ -809,8 +813,9 @@
       sealStore: () => liveColumnarStore?.seal(),
       unsealStore: () => liveColumnarStore?.unseal(),
       shouldLoad: (range, options) => {
-        if (!ChartAdapter.isInitialized('live') || window.__isDashboardLoading) return false;
-        if (window.isLoadingHistory || liveHydrationOrchestrator?.isBusy() || !window.historyHasMore) return false;
+        // Need validity only (not busy). Busy → pending inside Hydration (Wave 2).
+        if (!ChartAdapter.isInitialized('live')) return false;
+        if (!window.historyHasMore) return false;
         if (!liveHistoryScrollArmed) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
         if (options.force !== true && range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return false;
@@ -818,6 +823,9 @@
       },
       getAnchorEndTimeSec: () => liveColumnarStore?.firstTimeSec?.() ?? null,
       getSlotIds: () => resolveLiveSlotIds(),
+      isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
+      isDashboardLoading: () => !!window.__isDashboardLoading,
+      getVisibleRange: () => ChartAdapter.getVisibleLogicalRange('live'),
       fetchColumnar: (endTimeSec) => {
         const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
         return API.fetchColumnarHistory({
@@ -859,12 +867,14 @@
   }
 
   function scheduleHistoryLoad(range) {
-    if (liveColumnarStore?.isSealed?.() || window.__isDashboardLoading) return;
+    // Wave 2: Boot detects only — never retries, never owns pending.
+    // Busy must not drop: HydrationOrchestrator remembers newest left-history intent.
     if (!range || !window.historyHasMore) return;
     if (!liveHistoryScrollArmed) return;
     if (range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return;
-    if (window.isUpdatingData || liveHydrationOrchestrator?.isBusy() || liveRenderScheduler?.isBusy()) return;
-    liveHydrationOrchestrator?.schedulePrepend(range);
+    if ((liveColumnarStore?.barCount?.() ?? 0) === 0) return;
+    if (!ChartAdapter.isInitialized('live')) return;
+    liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range);
   }
 
   /**
@@ -1088,6 +1098,7 @@
         abortLiveTickBuffer();
         window.__isDashboardLoading = false;
         updateBufferingOverlay();
+        liveHydrationOrchestrator?.tryConsumePending?.();
       } else if (retrying) {
         // Keep buffer + loading flag across warmingUp retry.
         window.__isDashboardLoading = true;
@@ -1095,6 +1106,7 @@
         if (!completed) abortLiveTickBuffer();
         window.__isDashboardLoading = false;
         updateBufferingOverlay();
+        liveHydrationOrchestrator?.tryConsumePending?.();
       }
     }
   }

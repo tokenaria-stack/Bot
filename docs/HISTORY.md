@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 Wave 2 — Busy never loses intent (Jul 2026) ✅
+
+- Invariant: busy may delay left-history need; silent drop impossible.
+- Single pending left-history intent in HydrationOrchestrator (newest supersedes; not a queue).
+- Boot detects only (`noteLeftHistoryIntent`); never retries. Consume on Hydration idle + compositor `onAfterFlush` / dashboard end — no poll/rAF/setTimeout retry loops.
+- TimeCamera untouched. E2-02 resolved (busy-loss class).
+
 ## Phase ADR-028 Wave 1 — Data never changes VIEW (Jul 2026) ✅
 
 - Invariant: Store/Hydration/Boot/Compositor publish facts; only TimeCamera decides VIEW; ChartAdapter sole CameraCommit writer.
