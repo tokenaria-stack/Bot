@@ -1,7 +1,7 @@
 # Architecture (Current System)
 
 **SSOT for:** how the system works **today**.  
-**Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
+**Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), Working Set guarantees (→ `WORKING_SET_CONTRACT.md`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
 
 **Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Docs + **Debt #69A FE Memory Budget** + **Debt #81 Timeline Publish Gate**.
 
@@ -16,6 +16,8 @@
 | `.cursor/rules/jeweler-protocol.mdc` | Engineering rules (always-on) |
 | `.cursor/rules/senior-quant-architect.mdc` | Role / thinking style (always-on) |
 | `docs/ARCHITECTURE.md` | Current architecture + **Core Ownership Model** (frontend constitution) |
+| `docs/WORKING_SET_CONTRACT.md` | Normative Working Set guarantees (VIEW ↔ store ↔ paint); not an ADR |
+| `docs/WORKING_SET_ACCEPTANCE.md` | Pre-implementation done-criteria (scorecard / E3 / UX); not a plan |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |

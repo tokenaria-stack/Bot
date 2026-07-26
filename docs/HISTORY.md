@@ -8,6 +8,19 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Stage E3.5b — Working Set acceptance gate frozen (Jul 2026) ✅
+
+- [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md): done = Gate 1 (S1–S7) + Gate 2 (blocking E3) + Gate 3 (U1–U7).
+- Track name: **Implementation Track A — Working Set Compliance (#69D)** — not “Wave 4.”
+- Implementation Rule: each commit maps WS-xx / Sx / E3-xx (contract-driven, not symptom-driven).
+- Pre-implementation only; no store/paint code in this stage.
+
+## Stage E3.5 — Working Set Contract frozen (Jul 2026) ✅
+
+- Normative constitution: [`WORKING_SET_CONTRACT.md`](WORKING_SET_CONTRACT.md) (not ADR, not plan, not APIs).
+- Freezes WS-01…WS-05, P-01/P-02, ownership, out-of-contract list, acceptance scorecard.
+- Follows Stage E3 audit (runtime 0/7 vs contract). No implementation in this stage.
+
 ## Phase ADR-028 Wave 3 — Distinguishable history completion (Jul 2026) ✅
 
 - Invariant: every history request completes with a well-defined outcome; EOF ≠ empty/overlap/error.

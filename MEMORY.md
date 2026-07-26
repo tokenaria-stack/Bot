@@ -11,7 +11,9 @@ Prefer [`README.md`](README.md) as the entry point.
 1. `.cursor/rules/jeweler-protocol.mdc` — laws (always-on)
 2. `.cursor/rules/senior-quant-architect.mdc` — role + checklist + memory routing (always-on)
 3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
-4. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
+4. [`docs/WORKING_SET_CONTRACT.md`](docs/WORKING_SET_CONTRACT.md) — Working Set normative contract (VIEW ↔ store ↔ paint)
+5. [`docs/WORKING_SET_ACCEPTANCE.md`](docs/WORKING_SET_ACCEPTANCE.md) — done-criteria before compliance implementation
+6. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
 
 On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/HISTORY.md).
 
