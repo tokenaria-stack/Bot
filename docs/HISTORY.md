@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Working Set Validation Audit (post Steps 1–2) (Jul 2026) ✅
+
+- Investigation only: canvas `stage-e3-working-set-validation`.
+- WS-01…WS-04 pass on main Boot path with VIEW capture; scorecard **~5/7** (S6–S7 Partial).
+- HARD_CAP reclassified: lifetime/product on main path; conditional contract hazard if capture-null.
+- No implementation in this stage.
+
 ## Track A Step 2 — Paint contains VIEW / WS-04 (Jul 2026) ✅
 
 - [`WORKING_SET_STEP2_PAINT.md`](WORKING_SET_STEP2_PAINT.md): `extractWindow` VIEW-covering; no tip-tail amputate.
