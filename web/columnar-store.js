@@ -98,8 +98,13 @@ class ColumnarStore {
    * Accepts the columnar history response as-is (times + OHLC + plots + annotations).
    * Never truncates to prior store length. Never fabricates candles.
    * Server owns projection length; FE only applies.
+   *
+   * Budget: preserve-paired callers must pass VIEW bounds (WS-01…WS-03).
+   * Commit-paired callers (TF / FreshLive / loadDashboard) may omit VIEW.
+   * @param {object} snapshot
+   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [options]
    */
-  applyProjection(snapshot) {
+  applyProjection(snapshot, options = {}) {
     const data = snapshot && typeof snapshot === 'object' ? snapshot : {};
     const times = Array.isArray(data.times)
       ? data.times.map((t) => ColumnarStore._normTimeSec(t))
@@ -132,12 +137,15 @@ class ColumnarStore {
       generation: data.generation != null ? Number(data.generation) : undefined,
     };
     this.windowMode = 'live';
-    this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST);
+    this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
+      viewFromSec: options.viewFromSec,
+      viewToSec: options.viewToSec,
+    });
   }
 
   /** Full history hydrate — same atomic accept as applyProjection (legacy name). */
-  replaceMonolith(columnarJson) {
-    this.applyProjection(columnarJson);
+  replaceMonolith(columnarJson, options = {}) {
+    this.applyProjection(columnarJson, options);
   }
 
   /**
@@ -511,9 +519,12 @@ class ColumnarStore {
 
   /**
    * Apply live WS tick to tail bar (update) or append new bar.
+   * Preserve-paired: pass VIEW bounds so new-bar budget prune cannot invalidate VIEW.
+   * @param {object} tick
+   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [options]
    * @returns {{ candle: object, isNewBar: boolean, barCount: number, tick: object, delta: object }|null}
    */
-  appendTick(tick) {
+  appendTick(tick, options = {}) {
     if (this._sealed || !tick || typeof tick !== 'object') return null;
     const time = typeof chartTime === 'function' ? chartTime(tick.time) : null;
     if (time == null) return null;
@@ -596,7 +607,10 @@ class ColumnarStore {
     }
 
     if (isNewBar) {
-      this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST);
+      this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
+        viewFromSec: options.viewFromSec,
+        viewToSec: options.viewToSec,
+      });
       delta.barCount = this._times.length;
     }
 

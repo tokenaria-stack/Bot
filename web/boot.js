@@ -102,6 +102,24 @@
     liveColumnarStore.setTfInterval(Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0);
   }
 
+  /**
+   * Track A / WS-01…WS-03: capture committed VIEW time bounds before a preserve-paired mutation.
+   * @returns {{ viewFromSec: number, viewToSec: number }|null}
+   */
+  function captureStoreViewTimes() {
+    if (!liveColumnarStore || typeof ColumnarStore === 'undefined'
+      || typeof ColumnarStore.logicalRangeToViewTimes !== 'function') {
+      return null;
+    }
+    if (typeof ChartAdapter === 'undefined' || typeof ChartAdapter.getVisibleLogicalRange !== 'function') {
+      return null;
+    }
+    return ColumnarStore.logicalRangeToViewTimes(
+      liveColumnarStore.timesSec?.(),
+      ChartAdapter.getVisibleLogicalRange('live'),
+    );
+  }
+
   function beginLiveTickBuffer() {
     pendingLiveTicks = [];
     tickBufferActive = true;
@@ -443,14 +461,22 @@
       const viewportAnchor = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
         ? ViewportManager.capture('live')
         : null;
+      // Preserve-paired (ADR-014 restore): budget must not amputate VIEW.
+      const viewTimes = captureStoreViewTimes();
 
       beginDataUpdate();
       try {
         // B2.1: atomic ProjectionSnapshot (times + OHLC + plots). Server owns length.
         if (typeof liveColumnarStore.applyProjection === 'function') {
-          liveColumnarStore.applyProjection(columnar);
+          liveColumnarStore.applyProjection(columnar, {
+            viewFromSec: viewTimes?.viewFromSec,
+            viewToSec: viewTimes?.viewToSec,
+          });
         } else {
-          liveColumnarStore.replaceMonolith(columnar);
+          liveColumnarStore.replaceMonolith(columnar, {
+            viewFromSec: viewTimes?.viewFromSec,
+            viewToSec: viewTimes?.viewToSec,
+          });
         }
         if (!liveColumnarStore.invariantOk()) {
           console.error('[Renaissance] RSX settings sync — invariant failed', liveColumnarStore.invariantMeta());
@@ -845,14 +871,7 @@
         const focalTimeSec = (cap?.centerTimeMs != null && Number.isFinite(cap.centerTimeMs))
           ? cap.centerTimeMs / 1000
           : null;
-        // Capture VIEW times before prepend (logical indices shift after merge).
-        const viewTimes = (typeof ColumnarStore !== 'undefined'
-          && ColumnarStore.logicalRangeToViewTimes)
-          ? ColumnarStore.logicalRangeToViewTimes(
-            liveColumnarStore.timesSec?.(),
-            viewportRange,
-          )
-          : null;
+        const viewTimes = captureStoreViewTimes();
         const { added } = liveColumnarStore.prependMonolith(data, {
           focalTimeSec,
           atLiveEdge: cap?.isAtRightEdge === true,
@@ -915,7 +934,12 @@
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
     // Debt #69A: history display window must not ingest live ticks (avoids gap-heal yank-to-live).
     if (liveColumnarStore.windowMode === 'history') return false;
-    const appendResult = liveColumnarStore.appendTick(tick);
+    // Preserve-paired: capture VIEW before append so budget cannot drop visible oldest bars.
+    const viewTimes = captureStoreViewTimes();
+    const appendResult = liveColumnarStore.appendTick(tick, {
+      viewFromSec: viewTimes?.viewFromSec,
+      viewToSec: viewTimes?.viewToSec,
+    });
     if (appendResult?.gapDetected) {
       if (liveColumnarStore.windowMode === 'history') return false;
       console.warn('[Self-Healing] Time gap detected — waiting for server heal', {
@@ -1070,6 +1094,7 @@
       }
 
       // Shot 11C Atomic Swap: mutate store + ensure DDR hosts offline, then ONE full paint.
+      // Commit-paired (FreshLive / TF hydrate): intentional world replace — VIEW omit OK.
       liveColumnarStore.replaceMonolith(columnar);
       const histTimes = Array.isArray(columnar.times) ? columnar.times : [];
       const historyTipOpen = histTimes.length ? Number(histTimes[histTimes.length - 1]) : null;

@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track A Step 1 Completion — retention coverage (Jul 2026) ✅
+
+- Audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) — every `_enforceBudget` path classified.
+- Preserve-paired closed: `appendTick` + soft `applyProjection` now receive VIEW bounds (Boot `captureStoreViewTimes`).
+- Commit-paired: `loadDashboard` `replaceMonolith` documented (VIEW omit intentional).
+- Verdict: **Working Set retention layer complete.** Step 2 paint not started.
+
 ## Track A Step 1 — VIEW-preserving prune (Jul 2026) ✅
 
 - Contract: WS-01, WS-02, WS-03 · Acceptance: S1–S3 (partial) · Evidence: E3-01, E3-04, E3-05 (partial).

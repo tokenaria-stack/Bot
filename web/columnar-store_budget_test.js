@@ -146,6 +146,48 @@ assert(tip.barCount() <= 12, `appendTick enforces hard cap, got ${tip.barCount()
 assert(tip.windowMode === 'live', 'append prune keeps live');
 assert(tip.invariantOk(), 'invariant after appendTick budget');
 
+// appendTick preserve-paired: VIEW covering oldest must survive FROM_OLDEST budget
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
+const appendView = new ColumnarStore();
+global.chartTime = (t) => Number(t);
+appendView.setTfInterval(60);
+fillStore(appendView, 12);
+assert(appendView.barCount() === 12, 'at hard cap before append');
+const oldest = appendView.firstTimeSec();
+const viewTo = appendView.timesSec()[5];
+const tipSec = appendView.lastTimeSec();
+for (let i = 1; i <= 5; i++) {
+  appendView.appendTick({
+    time: tipSec + i * 60,
+    open: 1, high: 2, low: 1, close: 1.5, volume: 1,
+    plots: { line_rsx: 40, line_woz: 41 },
+  }, { viewFromSec: oldest, viewToSec: viewTo });
+}
+assert(appendView.firstTimeSec() === oldest, 'WS-02: appendTick must not prune VIEW oldest');
+assert(appendView.barCount() >= 6, 'at least VIEW span retained');
+assert(appendView.invariantOk(), 'invariant appendTick VIEW prune');
+
+// applyProjection preserve-paired: VIEW tip retained when over hard cap
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+const proj = new ColumnarStore();
+fillStore(proj, 150);
+const projFrom = proj.firstTimeSec();
+const projTo = proj.lastTimeSec();
+// Re-apply same-shaped monolith via applyProjection with full VIEW
+const snap = proj.snapshot();
+const proj2 = new ColumnarStore();
+proj2.applyProjection({
+  times: snap.times,
+  candles: snap.candles,
+  plots: snap.plots,
+  annotations: snap.annotations,
+}, { viewFromSec: projFrom, viewToSec: projTo });
+assert(proj2.lastTimeSec() === projTo, 'applyProjection preserve-paired keeps VIEW tip');
+assert(proj2.barCount() >= 100, 'VIEW floor under applyProjection');
+assert(proj2.invariantOk(), 'invariant applyProjection VIEW');
+
 // ── Track A Step 1: VIEW-preserving prune (WS-01…WS-03 / S1–S3 / E3-01) ──
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
 Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
