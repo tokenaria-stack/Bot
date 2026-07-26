@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 2 Plan — Retained Neighborhood / Neighborhood Lifetime (Jul 2026) ✅
+
+- Plan only: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).
+- Objective: multi-op fetch→prune→refetch thrash via Retained Neighborhood (not Capacity).
+- Preserves WS + Step 1 Mutation Set. No timers/hysteresis/HARD_CAP philosophy.
+- Honest post-step Lifetime estimate ~4–5 / 7. No code in this stage.
+
 ## Track B Step 1 Validation (Jul 2026) ✅
 
 - Investigation only: [`TRACK_B_STEP1_VALIDATION.md`](TRACK_B_STEP1_VALIDATION.md).

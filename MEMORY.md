@@ -28,6 +28,6 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | Forming-bar tip vs TV, **#76 ScoreNodes**, Lifetime Track B Step 2+ / Capacity |
+| NEXT | Forming-bar tip vs TV, **#76 ScoreNodes**, Lifetime Track B Step 2 (Retained Neighborhood) |
 
 Update the owning SSOT file — do not duplicate content here.
