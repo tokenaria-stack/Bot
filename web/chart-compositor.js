@@ -202,8 +202,10 @@ class ChartCompositor {
         updateLoadedCandles: false,
       });
     }
-    this._commitPrependCamera(snapshot, prependAnchor);
+    // Wave 1: publish facts only — TimeCamera decides preserve VIEW (no Compositor nav policy).
     this._observeShadowWorld(snapshot);
+    this._bindDataResolve(Array.isArray(snapshot?.times) ? snapshot.times : []);
+    this._publishPrependViewportFacts(snapshot, prependAnchor);
   }
 
   /**
@@ -300,34 +302,24 @@ class ChartCompositor {
   }
 
   /**
-   * Re-align camera so the pre-prepend left-edge time stays at logical `from`.
-   * Works when extractWindow truncates — index math cannot.
+   * Wave 1 — prepend camera facts for TimeCamera (translator only).
+   * Captures left-edge time + visibleBars before setData; does not choose VIEW.
    * @param {object} windowedSnapshot
    * @param {{ leftTimeMs: number, visibleBars: number }|null} anchor
    */
-  _commitPrependCamera(windowedSnapshot, anchor) {
+  _publishPrependViewportFacts(windowedSnapshot, anchor) {
     if (!anchor || anchor.leftTimeMs == null || !Number.isFinite(anchor.leftTimeMs)) return;
+    if (typeof TimeCamera === 'undefined' || typeof TimeCamera.proposePreserveViewport !== 'function') {
+      return;
+    }
     const times = windowedSnapshot?.times;
     if (!Array.isArray(times) || !times.length) return;
-    if (typeof ChartAdapter.setVisibleLogicalRange !== 'function') return;
-
-    const fromIdx = ChartCompositor.findIndexByTimeMs(times, anchor.leftTimeMs);
-    const visibleBars = Number.isFinite(anchor.visibleBars) && anchor.visibleBars > 0
-      ? anchor.visibleBars
-      : 80;
-    const n = times.length;
-    let from = fromIdx;
-    let to = fromIdx + visibleBars;
-    if (to > n) {
-      const over = to - n;
-      from = Math.max(0, from - over);
-      to = n;
-    }
-    if (from >= to) {
-      from = Math.max(0, n - visibleBars);
-      to = n;
-    }
-    ChartAdapter.setVisibleLogicalRange('live', { from, to }, { animate: false });
+    TimeCamera.proposePreserveViewport({
+      leftTimeMs: anchor.leftTimeMs,
+      visibleBars: anchor.visibleBars,
+      tipLogical: times.length - 1,
+      timesSec: times,
+    });
   }
 
   /**

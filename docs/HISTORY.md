@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 Wave 1 — Data never changes VIEW (Jul 2026) ✅
+
+- Invariant: Store/Hydration/Boot/Compositor publish facts; only TimeCamera decides VIEW; ChartAdapter sole CameraCommit writer.
+- Boot `maybeReturnToLiveFromHistory` no longer maps `windowMode` → `loadDashboard`/FreshLive (E2-01).
+- Prepend preserve via `TimeCamera.proposePreserveViewport` from left-time facts; Compositor no longer owns camera policy (E2-04).
+- Heal/reconnect may still FreshLive as System via TimeCamera after hydrate (E2-06 partial). Busy-intent / EOF / RESET_LIVE / perf out of scope.
+
 ## Phase ADR-028 / ADR-029 D2 — TimeCamera cutover (Jul 2026) ✅
 
 - Ownership migration: TimeCamera is sole live navigation policy owner; ViewportManager demoted to capture/translate (+ Debt #80 layout deferral helper).

@@ -352,4 +352,37 @@ test('D2 HISTORY without DataResolve does not jump to live', () => {
   assert.strictEqual(applies, 0);
 });
 
+test('Wave1 proposePreserveViewport keeps left edge via DataResolve (no FreshLive)', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => (ms === 1_700_000_050_000 ? 50 : null),
+  });
+  const tip = 200;
+  const ok = TimeCamera.proposePreserveViewport({
+    leftTimeMs: 1_700_000_050_000,
+    visibleBars: 80,
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => 1_700_000_000 + i),
+  });
+  assert.strictEqual(ok, true);
+  assert.ok(seen);
+  assert.strictEqual(seen.visibleRange.from, 50);
+  assert.strictEqual(seen.visibleRange.to, 130);
+});
+
+test('Wave1 proposePreserveViewport without DataResolve does not FreshLive', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  const ok = TimeCamera.proposePreserveViewport({
+    leftTimeMs: 1_700_000_000_000,
+    visibleBars: 80,
+    tipLogical: 100,
+  });
+  assert.strictEqual(ok, false);
+  assert.strictEqual(applies, 0);
+});
+
 console.log('time_camera_test: ALL PASS');

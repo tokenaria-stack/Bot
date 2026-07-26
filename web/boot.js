@@ -88,9 +88,6 @@
 	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
-	/** Debt #69A: throttle return-to-live hydrate after history-window prune. */
-	let lastReturnToLiveAt = 0;
-	const RETURN_TO_LIVE_COOLDOWN_MS = 2000;
 
   /** ADR-018 owner — constructed after helpers exist (see initTimelineRecovery). */
   let timelineRecovery = null;
@@ -870,20 +867,14 @@
     liveHydrationOrchestrator?.schedulePrepend(range);
   }
 
-  /** Debt #69A: if history-window tip was pruned, pinning right must hydrate from server — not scroll empty space. */
-  function maybeReturnToLiveFromHistory(range) {
-    if (!liveColumnarStore || liveColumnarStore.windowMode !== 'history') return;
-    if (window.__isDashboardLoading || liveColumnarStore.isSealed?.()) return;
-    const barCount = liveColumnarStore.barCount?.() ?? 0;
-    if (!range || barCount <= 0) return;
-    const slack = 2;
-    const atRight = range.to >= (barCount - 1 - slack);
-    if (!atRight) return;
-    const now = Date.now();
-    if (now - lastReturnToLiveAt < RETURN_TO_LIVE_COOLDOWN_MS) return;
-    lastReturnToLiveAt = now;
-    console.info('[MemoryBudget] Return to live from history window — loadDashboard()');
-    loadDashboard();
+  /**
+   * Wave 1 (ADR-028): windowMode is a Data fact only — Boot must not decide VIEW.
+   * Former path: windowMode=history + right-edge → loadDashboard() → FreshLive (E2-01).
+   * Tip rehydration without Boot→FreshLive → later wave.
+   * TODO(Wave2+): publish “live tip missing” as a loading fact; TimeCamera owns any VIEW change.
+   */
+  function maybeReturnToLiveFromHistory(_range) {
+    /* no-op — Data never changes VIEW */
   }
 
   /**

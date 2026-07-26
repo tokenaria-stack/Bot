@@ -325,6 +325,66 @@
   }
 
   /**
+   * Wave 1 — preserve visible window after left-side data growth (prepend).
+   * Owns VIEW decision; DataResolve maps leftTimeMs → logical (TimeCamera does not search bars).
+   * Never FreshLive on failure — returns false so Loading cannot smuggle navigation.
+   * @param {{
+   *   leftTimeMs: number,
+   *   visibleBars?: number,
+   *   tipLogical?: number|null,
+   *   timesSec?: number[],
+   *   barSpacing?: number|null,
+   * }} opts
+   */
+  function proposePreserveViewport(opts) {
+    if (!opts || typeof opts !== 'object') return false;
+    if (Array.isArray(opts.timesSec) && opts.timesSec.length) {
+      notedTimesSec = opts.timesSec.slice();
+    }
+    const tipIn = Number(opts.tipLogical);
+    if (Number.isFinite(tipIn) && tipIn >= 0) {
+      notedTipLogical = tipIn;
+    } else if (notedTimesSec && notedTimesSec.length) {
+      notedTipLogical = notedTimesSec.length - 1;
+    }
+
+    const leftMs = Number(opts.leftTimeMs);
+    if (!Number.isFinite(leftMs)) return false;
+
+    const fromLogical = resolveNearestLogical(leftMs);
+    if (fromLogical == null) return false;
+
+    const bars = sanitizeVisibleBars(opts.visibleBars);
+    const tip = notedTipLogical;
+    const n = Number.isFinite(tip) && tip >= 0 ? tip + 1 : null;
+
+    let from = fromLogical;
+    let to = from + bars;
+    if (n != null && to > n) {
+      const over = to - n;
+      from = Math.max(0, from - over);
+      to = n;
+    }
+    if (!(to > from)) {
+      if (n == null) return false;
+      from = Math.max(0, n - bars);
+      to = n;
+    }
+
+    const patch = {
+      visibleRange: { from, to },
+      sourceHostId: 'system',
+    };
+    if (Object.prototype.hasOwnProperty.call(opts, 'barSpacing') && Number.isFinite(opts.barSpacing)) {
+      patch.barSpacing = sanitizeBarSpacing(opts.barSpacing);
+    }
+    if (Number.isFinite(tip)) {
+      patch.rightOffset = Math.max(0, to - tip);
+    }
+    return commit(patch);
+  }
+
+  /**
    * ADR-029 Fresh LIVE — tip + healthy zoom + zero breathing room (or cold spacing-only).
    * @param {{ tipLogical?: number|null }} [opts]
    */
@@ -459,6 +519,7 @@
     commit,
     proposeFromPane,
     proposeFreshLive,
+    proposePreserveViewport,
     proposeAfterData,
     isSyncing: isSyncingNow,
     isGesturing,
