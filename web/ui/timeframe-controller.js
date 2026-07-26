@@ -162,6 +162,9 @@ const TimeframeController = (() => {
             : captured;
         }
       }
+    } else {
+      // TODO(ADR-029): same-TF click should emit NavigationIntent.RESET_LIVE via TimeCamera
+      // (Fresh LIVE). Product feature — leave existing reload behavior unchanged for now.
     }
 
     currentTf = resolved;

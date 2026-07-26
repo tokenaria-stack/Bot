@@ -617,7 +617,7 @@
       hideLegacyOscillatorSeries: noop,
       enableDDROscCutover: noop,
       destroyLiveCharts: noop,
-      syncVisibleLogicalRange: (chart, range) => chart?.timeScale()?.setVisibleLogicalRange(range),
+      syncVisibleLogicalRange: noop,
       ensureBacktestChart: () => false,
       activateSurface: () => false,
       applySimOverlay: noop,

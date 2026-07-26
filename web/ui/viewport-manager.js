@@ -1,28 +1,21 @@
 /**
- * ViewportManager — Unix-ms time-anchored capture/restore (Core 3.0 / Shot 11D).
- * tipVisible ≠ pinnedRight. Live-edge preserves visibleBars + rightOffset; never carries barSpacing.
+ * ViewportManager — ADR-028 D2 capture / translate helper only.
  *
- * Debt #80: never call setVisibleLogicalRange while the price host is 0×0 — LWC collapses
- * barSpacing to NaN (blank chart). Same class as Core 4.10 cold-boot: fall back to
- * width-independent applyOptions, then defer restore until layout exists.
+ * Allowed: capture geometry seed for TF handoff, host layout helpers, backtest legacy restore shim.
+ * Forbidden: live navigation policy, direct LWC camera writes (applyOptions/scroll/setVisible).
+ *
+ * Live navigation → TimeCamera.proposeAfterData / proposeFreshLive → CameraCommit.
  */
 (function initViewportManager(global) {
-  /** Comfortable candle width — SSOT for cold boot + live-edge / poison recovery. */
   const HEALTHY_BAR_SPACING = 6;
-  /** Above this → camera crushed all history into one screen (accordion). */
   const MAX_HEALTHY_VISIBLE_BARS = 400;
-  /** Below this → LWC crushed barSpacing (poison). */
   const MIN_HEALTHY_BAR_SPACING = 1;
-  /** Default window when recovering / right-edge restore. */
   const HEALTHY_VISIBLE_BARS = 150;
-  /** Logical slack: tip in frame does not alone mean pinned to right. */
-  const RIGHT_EDGE_SLACK = 1.5;
 
   function priceHostId(context) {
     return context === 'backtest' ? 'bt-price-chart' : 'price-chart';
   }
 
-  /** True when LWC can safely compute pixel↔logical mapping. */
   function hostHasLayout(context) {
     const el = typeof document !== 'undefined'
       ? document.getElementById(priceHostId(context))
@@ -49,31 +42,6 @@
     return [];
   }
 
-  /** Nearest index in ascending unix-seconds array for target unix-ms. */
-  function findIndexByTimeMs(timesSec, centerTimeMs) {
-    if (!timesSec.length || centerTimeMs == null || !Number.isFinite(centerTimeMs)) {
-      return 0;
-    }
-    const targetSec = centerTimeMs / 1000;
-    let lo = 0;
-    let hi = timesSec.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (Number(timesSec[mid]) < targetSec) lo = mid + 1;
-      else hi = mid;
-    }
-    if (lo > 0) {
-      const prevDelta = Math.abs(Number(timesSec[lo - 1]) - targetSec);
-      const currDelta = Math.abs(Number(timesSec[lo]) - targetSec);
-      if (prevDelta < currDelta) return lo - 1;
-    }
-    return lo;
-  }
-
-  /**
-   * Poison = accordion leftovers from fitContent / extreme zoom.
-   * @param {{ barSpacing?: number|null, visibleBars?: number, from?: number }} state
-   */
   function isPoisonCameraState(state) {
     if (!state) return true;
     if (Number.isFinite(state.from) && state.from < 0) return true;
@@ -82,62 +50,110 @@
     return false;
   }
 
-  function applyBarSpacingAll(context, barSpacing) {
-    if (barSpacing == null || !Number.isFinite(barSpacing)) return;
-    if (typeof ChartAdapter === 'undefined') return;
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      ChartAdapter.getChart(context, pane)?.timeScale()?.applyOptions({ barSpacing });
-    });
-  }
+  /**
+   * Capture navigation seed (translate LWC+store → semantic fields).
+   * Uses TimeCamera.classifyViewIntent for LIVE/HISTORY — not density branches.
+   */
+  function capture(context) {
+    const range = typeof ChartAdapter !== 'undefined'
+      ? ChartAdapter.getVisibleLogicalRange(context)
+      : null;
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
 
-  /** Core 4.10 twin: layout-safe pin to live edge (no setVisibleLogicalRange). */
-  function applyFreshCameraFallback(context) {
-    if (typeof ChartAdapter === 'undefined') return;
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      ChartAdapter.getChart(context, pane)?.timeScale()?.applyOptions({
-        barSpacing: HEALTHY_BAR_SPACING,
-        rightOffset: 0,
-      });
-    });
-  }
+    const store = storeForContext(context);
+    const times = timesSecFromStore(store);
+    if (!times.length) return null;
 
-  function _paneScrollToRight(context) {
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      ChartAdapter.getChart(context, pane)?.timeScale()?.scrollToPosition(0, false);
-    });
+    let visibleBars = range.to - range.from;
+    const tipLogical = times.length - 1;
+    const centerIndex = Math.floor((range.from + range.to) / 2);
+    const clampedIndex = Math.max(0, Math.min(tipLogical, centerIndex));
+    const centerSec = Number(times[clampedIndex]);
+    if (!Number.isFinite(centerSec)) return null;
+    const centerTimeMs = Math.floor(centerSec * 1000);
+
+    const mainChart = typeof ChartAdapter !== 'undefined'
+      ? ChartAdapter.getChart(context, 'price')
+      : null;
+    let barSpacing = mainChart?.timeScale()?.options()?.barSpacing ?? null;
+
+    if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
+      barSpacing = HEALTHY_BAR_SPACING;
+      visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
+    }
+
+    const classify = (typeof TimeCamera !== 'undefined' && TimeCamera._helpers?.classifyViewIntent)
+      ? TimeCamera._helpers.classifyViewIntent
+      : null;
+    const slack = (typeof TimeCamera !== 'undefined' && Number.isFinite(TimeCamera.SLACK))
+      ? TimeCamera.SLACK
+      : 1.5;
+    const intent = classify
+      ? classify(range.to, tipLogical, slack)
+      : (range.to >= tipLogical - slack ? 'LIVE' : 'HISTORY');
+    const rightPadding = Math.max(0, range.to - tipLogical);
+
+    return {
+      centerTimeMs,
+      visibleBars,
+      tipVisible: range.to >= tipLogical,
+      isAtRightEdge: intent === 'LIVE',
+      intent,
+      rightOffset: rightPadding,
+      rightPadding,
+      barSpacing: Number.isFinite(barSpacing) ? barSpacing : HEALTHY_BAR_SPACING,
+    };
   }
 
   /**
-   * When host is 0×0, paint via fresh fallback and restore once layout exists.
-   * One observer per host — avoids restore storms.
+   * Build TF handoff seed from capture. No TF-density branching (ADR-028).
+   * @param {object|null} captured
    */
-  function scheduleDeferredRestore(context, anchor, store) {
+  function cameraIntentForTfSwitch(captured) {
+    if (!captured || captured.centerTimeMs == null) return null;
+    return {
+      centerTimeMs: captured.centerTimeMs,
+      visibleBars: captured.visibleBars || HEALTHY_VISIBLE_BARS,
+      rightOffset: Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0,
+      rightPadding: Number.isFinite(captured.rightPadding)
+        ? captured.rightPadding
+        : (Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0),
+      barSpacing: captured.barSpacing,
+      isAtRightEdge: captured.isAtRightEdge === true || captured.intent === 'LIVE',
+      intent: captured.intent === 'HISTORY' ? 'HISTORY' : 'LIVE',
+    };
+  }
+
+  /**
+   * Debt #80 — run fn once host has layout. Does not own navigation.
+   * @param {string} context
+   * @param {() => void} fn
+   */
+  function whenHostHasLayout(context, fn) {
+    if (typeof fn !== 'function') return;
     if (typeof document === 'undefined') return;
     const host = document.getElementById(priceHostId(context));
     if (!host) return;
 
     const run = () => {
       if (!hostHasLayout(context)) return false;
-      if (host._vmDeferredRestoreRo) {
-        host._vmDeferredRestoreRo.disconnect();
-        host._vmDeferredRestoreRo = null;
+      if (host._vmDeferredNavRo) {
+        host._vmDeferredNavRo.disconnect();
+        host._vmDeferredNavRo = null;
       }
-      ViewportManager.restore(context, anchor, store);
+      try { fn(); } catch { /* */ }
       return true;
     };
 
     if (run()) return;
 
     if (typeof ResizeObserver !== 'undefined') {
-      if (host._vmDeferredRestoreRo) return;
-      const ro = new ResizeObserver(() => {
-        run();
-      });
-      host._vmDeferredRestoreRo = ro;
+      if (host._vmDeferredNavRo) return;
+      const ro = new ResizeObserver(() => { run(); });
+      host._vmDeferredNavRo = ro;
       ro.observe(host);
       return;
     }
-
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => { run(); });
@@ -146,59 +162,48 @@
   }
 
   /**
-   * Shot 11D: tip in frame ≠ pinned to live edge.
-   * Pinned = last bar visible AND logical `to` sits on the series tip (slack).
+   * @deprecated live navigation — use TimeCamera.proposeAfterData.
+   * Backtest-only temporary shim (ChartProjection).
    */
-  function isPinnedRight(range, barCount) {
-    if (!range || !Number.isFinite(barCount) || barCount <= 0) return false;
-    if (range.to < barCount - 1) return false;
-    return (barCount - range.to) <= RIGHT_EDGE_SLACK;
-  }
-
-  /**
-   * Shot 11D-FIX: Decision Router for TF-switch camera.
-   * Priority: Sticky Live Edge → Microscope (zoom IN in history) → Live Edge (zoom OUT).
-   * Returns null when capture failed — caller must use fresh camera (not synthetic restore).
-   * @param {object|null} captured from capture()
-   * @param {string} fromTf
-   * @param {string} toTf
-   */
-  function cameraIntentForTfSwitch(captured, fromTf, toTf) {
-    // No reliable camera → caller should use fresh (null anchor), not a synthetic restore.
-    if (!captured || captured.centerTimeMs == null) {
-      return null;
+  function restore(context, anchor, store) {
+    if (context === 'live') {
+      // Live path must not restore here — compositor owns TimeCamera propose.
+      return;
     }
-
-    const centerTimeMs = captured.centerTimeMs;
-    const visibleBars = captured.visibleBars || HEALTHY_VISIBLE_BARS;
-    const rightOffset = captured.rightOffset || 0;
-
-    // Priority 1 — Sticky Live Edge: tip-pinned user stays on live market regardless of zoom.
-    if (captured.isAtRightEdge === true) {
-      return { centerTimeMs, isAtRightEdge: true, visibleBars, rightOffset };
+    // Backtest compatibility shim (not live D2 surface).
+    if (!anchor || anchor.centerTimeMs == null) return;
+    if (typeof ChartAdapter === 'undefined') return;
+    const targetStore = store || storeForContext(context);
+    const times = timesSecFromStore(targetStore);
+    if (!times.length) return;
+    const tip = times.length - 1;
+    const seed = {
+      intent: anchor.isAtRightEdge ? 'LIVE' : 'HISTORY',
+      _liveEdge: !!anchor.isAtRightEdge,
+      centerTime: anchor.centerTimeMs,
+      visibleBars: anchor.visibleBars,
+      barSpacing: anchor.barSpacing,
+      rightPadding: anchor.rightOffset,
+    };
+    if (typeof TimeCamera !== 'undefined' && TimeCamera.bindDataResolve) {
+      TimeCamera.bindDataResolve({
+        nearestLogicalForTime: (ms) => {
+          if (typeof ChartCompositor !== 'undefined' && ChartCompositor.findIndexByTimeMs) {
+            return ChartCompositor.findIndexByTimeMs(times, ms);
+          }
+          return null;
+        },
+      });
     }
-
-    const intervalFn = (typeof TimeNormalizer !== 'undefined' && TimeNormalizer.getIntervalMs)
-      || (typeof getIntervalMs === 'function' ? getIntervalMs : null);
-    const fromMs = intervalFn ? Number(intervalFn(fromTf)) : NaN;
-    const toMs = intervalFn ? Number(intervalFn(toTf)) : NaN;
-    const zoomIn = Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs < fromMs;
-
-    // Priority 2 — Microscope: zoom IN while viewing historical (non-edge) window.
-    if (zoomIn) {
-      let bars = Number(captured.visibleBars) || HEALTHY_VISIBLE_BARS;
-      if (bars > MAX_HEALTHY_VISIBLE_BARS) bars = MAX_HEALTHY_VISIBLE_BARS;
-      if (bars < 50) bars = 50;
-      return {
-        centerTimeMs,
-        visibleBars: bars,
-        isAtRightEdge: false,
-        barSpacing: HEALTHY_BAR_SPACING,
-      };
+    if (typeof TimeCamera !== 'undefined' && TimeCamera.proposeAfterData) {
+      TimeCamera.observeCommittedWorld?.({ tipLogical: tip, timesSec: times });
+      TimeCamera.proposeAfterData({
+        tipLogical: tip,
+        timesSec: times,
+        seed,
+        mode: 'switch',
+      });
     }
-
-    // Priority 3 — Zoom OUT from history (or unknown weights): reset to Live Edge.
-    return { centerTimeMs, isAtRightEdge: true, visibleBars, rightOffset };
   }
 
   const ViewportManager = {
@@ -207,124 +212,9 @@
     isPoisonCameraState,
     cameraIntentForTfSwitch,
     hostHasLayout,
-
-    capture(context) {
-      const range = typeof ChartAdapter !== 'undefined'
-        ? ChartAdapter.getVisibleLogicalRange(context)
-        : null;
-      if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
-
-      const store = storeForContext(context);
-      const times = timesSecFromStore(store);
-      if (!times.length) return null;
-
-      let visibleBars = range.to - range.from;
-      const centerIndex = Math.floor((range.from + range.to) / 2);
-      const clampedIndex = Math.max(0, Math.min(times.length - 1, centerIndex));
-      const centerSec = Number(times[clampedIndex]);
-      if (!Number.isFinite(centerSec)) return null;
-      const centerTimeMs = Math.floor(centerSec * 1000);
-
-      const mainChart = typeof ChartAdapter !== 'undefined'
-        ? ChartAdapter.getChart(context, 'price')
-        : null;
-      const timeScale = mainChart?.timeScale();
-      let barSpacing = timeScale?.options()?.barSpacing ?? null;
-
-      if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
-        barSpacing = HEALTHY_BAR_SPACING;
-        visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
-      }
-
-      const tipVisible = range.to >= times.length - 1;
-      const atRightEdge = isPinnedRight(range, times.length);
-      const rightOffset = Math.max(0, range.to - (times.length - 1));
-
-      return {
-        centerTimeMs,
-        visibleBars,
-        tipVisible,
-        isAtRightEdge: atRightEdge,
-        rightOffset,
-        barSpacing: Number.isFinite(barSpacing) ? barSpacing : HEALTHY_BAR_SPACING,
-      };
-    },
-
-    restore(context, anchor, store) {
-      if (!anchor || anchor.centerTimeMs == null) return;
-      if (typeof ChartAdapter === 'undefined') return;
-
-      const targetStore = store || storeForContext(context);
-      const times = timesSecFromStore(targetStore);
-      if (!times.length) return;
-
-      const mainChart = ChartAdapter.getChart(context, 'price');
-      if (!mainChart?.timeScale) return;
-
-      // Debt #80: 0×0 host → never setVisibleLogicalRange (NaN scale / blank chart).
-      if (!hostHasLayout(context)) {
-        applyFreshCameraFallback(context);
-        scheduleDeferredRestore(context, anchor, targetStore);
-        return;
-      }
-
-      // Live Edge: healthy barSpacing (no density carry) + preserved visibleBars / rightOffset.
-      if (anchor.isAtRightEdge) {
-        applyBarSpacingAll(context, HEALTHY_BAR_SPACING);
-        const n = times.length;
-        if (typeof ChartAdapter.setVisibleLogicalRange === 'function' && n > 0) {
-          const bars = Number.isFinite(anchor.visibleBars) ? anchor.visibleBars : HEALTHY_VISIBLE_BARS;
-          const offset = Number.isFinite(anchor.rightOffset) ? anchor.rightOffset : 0;
-          const targetTo = (n - 1) + Math.max(0, offset);
-          const from = Math.max(0, targetTo - bars);
-          ChartAdapter.setVisibleLogicalRange(context, { from, to: targetTo }, { animate: false });
-        } else {
-          _paneScrollToRight(context);
-        }
-        return;
-      }
-
-      let safeAnchor = { ...anchor };
-      if (isPoisonCameraState({
-        barSpacing: anchor.barSpacing,
-        visibleBars: anchor.visibleBars,
-        from: 0,
-      })) {
-        safeAnchor.barSpacing = HEALTHY_BAR_SPACING;
-        const currentBars = Number(anchor.visibleBars) || HEALTHY_VISIBLE_BARS;
-        safeAnchor.visibleBars = Math.max(50, Math.min(currentBars, MAX_HEALTHY_VISIBLE_BARS));
-      }
-
-      const spacing = Number.isFinite(safeAnchor.barSpacing)
-        ? safeAnchor.barSpacing
-        : HEALTHY_BAR_SPACING;
-      applyBarSpacingAll(context, spacing);
-
-      const newCenterIndex = findIndexByTimeMs(times, safeAnchor.centerTimeMs);
-      const half = (Number(safeAnchor.visibleBars) || HEALTHY_VISIBLE_BARS) / 2;
-      const n = times.length;
-      let from = newCenterIndex - half;
-      let to = newCenterIndex + half;
-      if (from < 0) {
-        to -= from;
-        from = 0;
-      }
-      if (to > n) {
-        const over = to - n;
-        from = Math.max(0, from - over);
-        to = n;
-      }
-      if (from >= to) {
-        from = Math.max(0, n - (Number(safeAnchor.visibleBars) || HEALTHY_VISIBLE_BARS));
-        to = n;
-      }
-
-      if (typeof ChartAdapter.setVisibleLogicalRange === 'function') {
-        ChartAdapter.setVisibleLogicalRange(context, { from, to }, { animate: false });
-      } else {
-        mainChart.timeScale().setVisibleLogicalRange({ from, to });
-      }
-    },
+    whenHostHasLayout,
+    capture,
+    restore,
   };
 
   global.ViewportManager = ViewportManager;

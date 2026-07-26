@@ -184,9 +184,7 @@ class ChartCompositor {
         updateLoadedCandles: false,
       });
     }
-    this._commitFullCamera(intent);
-    // ADR-028 D1.5: observe committed world only AFTER production camera path returns.
-    this._observeShadowWorld(snapshot);
+    this._navigateAfterPaint(intent, snapshot);
   }
 
   _flushPrepend(storeData, snapshot, intent) {
@@ -209,10 +207,8 @@ class ChartCompositor {
   }
 
   /**
-   * ADR-028 D1.5 — publish tipLogical + seriesTimes to TimeCamera shadow.
-   * Observation only. Must run after existing production CameraCommit path.
-   * Does not change paint, ViewportManager, or CameraCommit.
-   * @param {object} snapshot windowed snapshot (same series the chart just painted)
+   * ADR-028 — publish tipLogical + seriesTimes (observation).
+   * @param {object} snapshot windowed snapshot
    */
   _observeShadowWorld(snapshot) {
     if (typeof TimeCamera === 'undefined' || typeof TimeCamera.observeCommittedWorld !== 'function') {
@@ -227,53 +223,80 @@ class ChartCompositor {
   }
 
   /**
-   * Anchor present (TF) → ViewportManager.restore (sanitized barSpacing).
-   * Fresh / cold boot → healthy defaults (never fitContent).
-   * Debt #80: restore itself refuses setVisibleLogicalRange on 0×0 hosts.
-   * @param {{ anchor?: object, viewport?: string }} intent
+   * Bind DataResolve for this painted series (compositor owns time→logical).
+   * @param {number[]} timesSec
    */
-  _commitFullCamera(intent) {
-    const anchor = intent?.anchor;
-    if (anchor?.centerTimeMs != null && typeof ViewportManager !== 'undefined') {
-      ViewportManager.restore('live', anchor, this._store);
+  _bindDataResolve(timesSec) {
+    if (typeof TimeCamera === 'undefined' || typeof TimeCamera.bindDataResolve !== 'function') return;
+    if (!Array.isArray(timesSec) || !timesSec.length) {
+      TimeCamera.bindDataResolve(null);
       return;
     }
-    if (intent?.viewport === 'fresh' || intent?.viewport == null) {
-      this._commitFreshCamera();
-      return;
-    }
-    // viewport: 'preserve' | 'restore' without usable anchor — leave camera alone (ADR-014).
+    TimeCamera.bindDataResolve({
+      nearestLogicalForTime: (centerTimeMs) => ChartCompositor.findIndexByTimeMs(timesSec, centerTimeMs),
+    });
   }
 
   /**
-   * Cold boot camera (Core 4.10): layout-independent applyOptions only.
-   * setVisibleLogicalRange (and fitContent before it, Shot 5.5x) both need a real
-   * container width to compute per-bar pixel spacing — on cold boot the DOM host can
-   * still be 0×0 when this runs, which collapses LWC's internal scale to NaN.
-   * barSpacing + rightOffset:0 need no width at all: LWC just pins bar N (the last one)
-   * to the right edge and paints backwards, so the chart renders correctly the instant
-   * the container actually gets laid out (no "Auto Scale" click required).
+   * ADR-028/029 D2 — observe → TimeCamera.propose → CameraCommit.
+   * @param {object} intent
+   * @param {object} snapshot
    */
-  _commitFreshCamera() {
-    const spacing = (typeof ViewportManager !== 'undefined'
-      && Number.isFinite(ViewportManager.HEALTHY_BAR_SPACING))
-      ? ViewportManager.HEALTHY_BAR_SPACING
-      : 6;
+  _navigateAfterPaint(intent, snapshot) {
+    const times = Array.isArray(snapshot?.times) ? snapshot.times : [];
+    if (!times.length || typeof TimeCamera === 'undefined') return;
 
-    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.commitTimeCamera === 'function') {
-      ChartAdapter.commitTimeCamera({
-        barSpacing: spacing,
-        rightOffset: 0,
-        sourceHostId: 'system',
+    this._observeShadowWorld(snapshot);
+    this._bindDataResolve(times);
+    const tipLogical = times.length - 1;
+
+    const runPropose = () => {
+      this._observeShadowWorld(snapshot);
+      this._bindDataResolve(times);
+      const viewport = intent?.viewport;
+      const anchor = intent?.anchor;
+
+      // ADR-014: preserve = no navigation write after paint.
+      if (viewport === 'preserve') return;
+
+      if (viewport === 'fresh'
+        || viewport == null
+        || !(anchor && anchor.centerTimeMs != null)) {
+        TimeCamera.proposeFreshLive({ tipLogical });
+        return;
+      }
+
+      const isHistory = anchor.intent === 'HISTORY' || anchor.isAtRightEdge === false;
+      const seed = {
+        intent: isHistory ? 'HISTORY' : 'LIVE',
+        _liveEdge: !isHistory,
+        centerTime: anchor.centerTimeMs,
+        visibleBars: anchor.visibleBars,
+        barSpacing: anchor.barSpacing,
+        rightPadding: Number.isFinite(anchor.rightPadding)
+          ? anchor.rightPadding
+          : anchor.rightOffset,
+      };
+      TimeCamera.proposeAfterData({
+        tipLogical,
+        timesSec: times,
+        seed,
+        mode: 'switch',
       });
+    };
+
+    // Debt #80: defer propose until host has layout; still via TimeCamera (no raw LWC).
+    if (typeof ViewportManager !== 'undefined'
+      && ViewportManager.hostHasLayout
+      && !ViewportManager.hostHasLayout('live')
+      && ViewportManager.whenHostHasLayout) {
+      // Spacing-only cold commit so LWC has healthy defaults before layout.
+      TimeCamera.proposeFreshLive({});
+      ViewportManager.whenHostHasLayout('live', runPropose);
       return;
     }
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      const chart = typeof ChartAdapter !== 'undefined'
-        ? ChartAdapter.getChart('live', pane)
-        : null;
-      chart?.timeScale()?.applyOptions({ barSpacing: spacing, rightOffset: 0 });
-    });
+
+    runPropose();
   }
 
   /**

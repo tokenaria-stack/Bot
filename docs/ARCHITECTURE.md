@@ -87,7 +87,7 @@ Do not invent owners outside this map. Extend only via ADR.
 | **InteractionController** | Routes semantic interaction events to controllers. Accepts no raw DOM/LWC objects. |
 | **RulerController** | Measure-tool FSM and semantic anchors. ChartAdapter projects geometry. |
 | **TimeframeController** | Active TF id + toolbar. Never moves the camera. |
-| **ViewportManager** | Capture/translate helper only (ADR-028). Not a camera owner; no direct LWC camera writes (target after Phase D). |
+| **ViewportManager** | Capture/translate helper only (ADR-028 D2). Not a camera owner; no direct LWC camera writes. |
 
 **LayoutController** allocates DOM/CSS from PaneLayout — composition/apply, not a second layout owner.
 
@@ -370,7 +370,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 1. Only `ChartAdapter` talks to Lightweight Charts.
 2. Paint reads Store through a window (`extractWindow`), not raw full store.
 3. `RenderScheduler` is the only paint initiator.
-4. Cold boot camera uses width-independent APIs only (`applyOptions` barSpacing/rightOffset) — no `setVisibleLogicalRange`/`fitContent` on 0×0 containers. **Debt #80:** `ViewportManager.restore` uses the same rule (fresh fallback + deferred restore when host has layout).
+4. Cold boot camera uses width-independent APIs only (`applyOptions` barSpacing/rightOffset) — no `setVisibleLogicalRange`/`fitContent` on 0×0 containers. **Debt #80:** compositor defers TimeCamera.propose until host has layout (no raw LWC restore).
 
 ---
 

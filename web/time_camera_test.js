@@ -286,4 +286,70 @@ test('D1 commit still applies only via bind hook (no LWC APIs on TimeCamera)', (
   assert.ok(!/applyOptions/.test(src));
 });
 
+test('D2 proposeAfterData LIVE clamps huge rightPadding and sticks to tip', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  const tip = 500;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => i),
+    seed: {
+      intent: 'LIVE',
+      visibleBars: 100,
+      barSpacing: 8,
+      rightPadding: 10_000,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  assert.ok(seen.rightOffset <= 50);
+  assert.strictEqual(seen.visibleRange.to, tip + seen.rightOffset);
+  assert.strictEqual(seen.barSpacing, 8);
+});
+
+test('D2 proposeAfterData HISTORY centers via DataResolve and never jumps to tip', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: () => 40,
+  });
+  const tip = 200;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => 1_700_000_000 + i),
+    seed: {
+      intent: 'HISTORY',
+      centerTime: 1_700_000_040_000,
+      visibleBars: 80,
+      barSpacing: 7,
+      rightPadding: 0,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  const mid = (seen.visibleRange.from + seen.visibleRange.to) / 2;
+  assert.ok(Math.abs(mid - 40) < 1);
+  assert.ok(seen.visibleRange.to < tip);
+  assert.strictEqual(seen.barSpacing, 7);
+});
+
+test('D2 HISTORY without DataResolve does not jump to live', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  const ok = TimeCamera.proposeAfterData({
+    tipLogical: 100,
+    seed: {
+      intent: 'HISTORY',
+      centerTime: 1_700_000_000_000,
+      visibleBars: 80,
+    },
+    mode: 'switch',
+  });
+  assert.strictEqual(ok, false);
+  assert.strictEqual(applies, 0);
+});
+
 console.log('time_camera_test: ALL PASS');

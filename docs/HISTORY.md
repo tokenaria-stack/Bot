@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Phase ADR-028 / ADR-029 D2 — TimeCamera cutover (Jul 2026) ✅
+
+- Ownership migration: TimeCamera is sole live navigation policy owner; ViewportManager demoted to capture/translate (+ Debt #80 layout deferral helper).
+- TF path: `capture → TF change → paint → observeCommittedWorld → propose → CameraCommit → ChartAdapter`.
+- LIVE: tip sticky + healthy zoom + clamped rightPadding. HISTORY: DataResolve centerTime → nearest logical; never jumps to live.
+- Retired: VM live restore policy, compositor direct camera fallbacks, boot `syncVisibleLogicalRange` shim. Same-TF `RESET_LIVE` not implemented (TODO only).
+
 ## Phase ADR-028 D1.5 — Shadow fidelity observe-only (Jul 2026) ✅
 
 - After production setData + CameraCommit, ChartCompositor publishes `tipLogical` + `timesSec` via `TimeCamera.observeCommittedWorld`.
