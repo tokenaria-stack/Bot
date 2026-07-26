@@ -8,6 +8,20 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Stage E4 Freeze — Cache Lifetime Contract (Jul 2026) ✅
+
+- **Frozen:** [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
+- Evidence ledger closed: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md).
+- Declaration: Working Set Contract and Cache Lifetime Contract are both frozen constitutions.
+- Capacity / Emergency still unspecified. No lifetime implementation in this stage.
+
+## Stage E4 — Cache Lifetime & Pressure Audit (Jul 2026) ✅
+
+- Investigation only: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md).
+- Proposed (unfrozen): [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
+- Finding: TARGET/HARD_CAP thrash is lifetime (P-01/P-02), not WS amputate; S6–S7 need CL layer.
+- No TARGET/HARD_CAP changes; no implementation.
+
 ## Working Set Validation Audit (post Steps 1–2) (Jul 2026) ✅
 
 - Investigation only: canvas `stage-e3-working-set-validation`.

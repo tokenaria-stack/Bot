@@ -109,16 +109,15 @@ The terminal may load, cache, replay, prune, compact, or page data, but the user
 
 ## 5. Explicitly Out Of Contract
 
-Intentionally **unspecified** here (future implementation or performance policy):
+Intentionally **unspecified** here:
 
-- Cache lifetime, hysteresis, lazy contraction, high-water marks  
-- Soft limits, hard limits, OOM strategy, FPS gates  
-- ReplayDAG cost and scheduling  
-- Transport chunk sizes  
-- LOD / downsampling  
+- Soft limits, hard limits, OOM strategy, FPS gates → **Capacity / Emergency policy** (not yet frozen)  
+- Replay cost and scheduling, transport chunk sizes, LOD / downsampling  
 - Implementation classes, APIs, timers, managers  
 
-Absence from this contract does **not** authorize violating WS-01…WS-05 or P-01/P-02.
+**Cache lifetime** (eager expand, lazy contract, discard ≠ EOF, anti-thrash) is specified in the sibling constitution [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md) — not in this document.
+
+Absence of capacity/emergency numbers here does **not** authorize violating WS-01…WS-05 or P-01/P-02.
 
 ---
 
@@ -144,4 +143,5 @@ Stage E3 baseline against this scorecard: **0 / 7** (investigation evidence; not
 
 - **Frozen** as the Working Set constitution for future store/paint work.  
 - Complements the Core Ownership Model and ADR-028/029; does not replace them.  
+- Sibling constitution: [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md) (retention beyond VIEW).  
 - Does not authorize new owners or abstractions beyond existing components satisfying this law.

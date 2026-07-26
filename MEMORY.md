@@ -12,8 +12,10 @@ Prefer [`README.md`](README.md) as the entry point.
 2. `.cursor/rules/senior-quant-architect.mdc` — role + checklist + memory routing (always-on)
 3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
 4. [`docs/WORKING_SET_CONTRACT.md`](docs/WORKING_SET_CONTRACT.md) — Working Set normative contract (VIEW ↔ store ↔ paint)
-5. [`docs/WORKING_SET_ACCEPTANCE.md`](docs/WORKING_SET_ACCEPTANCE.md) — done-criteria before compliance implementation
-6. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
+5. [`docs/WORKING_SET_ACCEPTANCE.md`](docs/WORKING_SET_ACCEPTANCE.md) — Working Set done-criteria
+6. [`docs/CACHE_LIFETIME_CONTRACT.md`](docs/CACHE_LIFETIME_CONTRACT.md) — Cache Lifetime normative contract (retention beyond VIEW)
+7. [`docs/CACHE_LIFETIME_ACCEPTANCE.md`](docs/CACHE_LIFETIME_ACCEPTANCE.md) — Lifetime done-criteria
+8. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
 
 On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/HISTORY.md).
 

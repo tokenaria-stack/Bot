@@ -1,7 +1,7 @@
 # Architecture (Current System)
 
 **SSOT for:** how the system works **today**.  
-**Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), Working Set guarantees (→ `WORKING_SET_CONTRACT.md`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
+**Not SSOT for:** engineering laws (→ `jeweler-protocol.mdc`), Working Set guarantees (→ `WORKING_SET_CONTRACT.md`), Cache Lifetime guarantees (→ `CACHE_LIFETIME_CONTRACT.md`), history (→ `HISTORY.md`), why-decisions (→ `DECISIONS.md`), backlog (→ `OPEN_DEBTS.md`).
 
 **Version:** Core 5.0 Data Plane (Phases A–G ✅) + Core 6.0/6.1 Docs + **Debt #69A FE Memory Budget** + **Debt #81 Timeline Publish Gate**.
 
@@ -20,6 +20,9 @@
 | `docs/WORKING_SET_ACCEPTANCE.md` | Pre-implementation done-criteria (scorecard / E3 / UX); not a plan |
 | `docs/WORKING_SET_STEP1_COVERAGE.md` | Step 1 retention coverage (preserve vs commit prune paths) |
 | `docs/WORKING_SET_STEP2_PAINT.md` | Step 2 paint coverage (WS-04 / extractWindow) |
+| `docs/CACHE_LIFETIME_EVIDENCE.md` | Stage E4 lifetime/pressure evidence ledger (historical) |
+| `docs/CACHE_LIFETIME_CONTRACT.md` | Normative Cache Lifetime guarantees (frozen); not an ADR |
+| `docs/CACHE_LIFETIME_ACCEPTANCE.md` | Lifetime done-criteria L1–L7 / C1–C5 (frozen) |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |
