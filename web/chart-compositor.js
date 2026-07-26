@@ -2,9 +2,11 @@
  * ChartCompositor — sole live-chart paint authority (Core 2.3).
  * Reads ColumnarStore snapshots; paints via Sliding Render Window (bounded buffer).
  * Writes to ChartAdapter only.
+ *
+ * Track A / WS-04: paint window must always contain the committed VIEW.
  */
 class ChartCompositor {
-  /** Soft RAM cap for LWC; large enough for left-scroll history, not infinite. */
+  /** Soft paint buffer size; expands when committed VIEW is larger (WS-04). */
   static get RENDER_WINDOW_LIMIT() {
     return 15000;
   }
@@ -26,41 +28,158 @@ class ChartCompositor {
   }
 
   /**
-   * Synchronous Slice Rule: same tail index range for times, candles.*, and every plots[id].
-   * @param {object} snapshot
-   * @param {number} [limit=15000]
-   * @returns {object}
+   * Resolve VIEW time bounds for paint from logical range + snapshot times.
+   * @param {number[]} timesSec
+   * @param {{ from: number, to: number }|null|undefined} range
+   * @returns {{ viewFromSec: number, viewToSec: number }|null}
    */
-  static extractWindow(snapshot, limit = 15000) {
-    if (!snapshot || !Array.isArray(snapshot.times)) return snapshot;
-    const n = snapshot.times.length;
-    if (n <= limit) return snapshot;
+  static viewTimesFromLogicalRange(timesSec, range) {
+    if (typeof ColumnarStore !== 'undefined'
+      && typeof ColumnarStore.logicalRangeToViewTimes === 'function') {
+      return ColumnarStore.logicalRangeToViewTimes(timesSec, range);
+    }
+    if (!Array.isArray(timesSec) || !timesSec.length || !range) return null;
+    if (!Number.isFinite(range.from) || !Number.isFinite(range.to) || !(range.to > range.from)) {
+      return null;
+    }
+    const n = timesSec.length;
+    let i0 = Math.floor(range.from);
+    let i1 = Math.floor(range.to);
+    if (i1 < i0) i1 = i0;
+    i0 = Math.max(0, Math.min(n - 1, i0));
+    i1 = Math.max(0, Math.min(n - 1, i1));
+    const viewFromSec = Number(timesSec[i0]);
+    const viewToSec = Number(timesSec[i1]);
+    if (![viewFromSec, viewToSec].every(Number.isFinite)) return null;
+    return { viewFromSec, viewToSec };
+  }
 
-    const start = n - limit;
+  /**
+   * Half-open index range covering [viewFromSec, viewToSec] in snapshot.times.
+   * @returns {{ start: number, end: number }|null}
+   */
+  static viewIndexRange(timesSec, viewFromSec, viewToSec) {
+    if (!Array.isArray(timesSec) || !timesSec.length) return null;
+    const a = Number(viewFromSec);
+    const b = Number(viewToSec);
+    if (![a, b].every(Number.isFinite) || b < a) return null;
+    const n = timesSec.length;
+    let start = 0;
+    while (start < n && Number(timesSec[start]) < a) start += 1;
+    let end = n;
+    while (end > start && Number(timesSec[end - 1]) > b) end -= 1;
+    if (start >= end) return null;
+    return { start, end };
+  }
+
+  /**
+   * Slice snapshot columns to [start, end). Annotations filtered by time.
+   * @param {object} snapshot
+   * @param {number} start
+   * @param {number} end exclusive
+   */
+  static sliceSnapshot(snapshot, start, end) {
+    const times = snapshot.times;
+    const n = times.length;
+    const s = Math.max(0, Math.min(n, Math.floor(Number(start)) || 0));
+    const e = Math.max(s, Math.min(n, Math.floor(Number(end)) || 0));
+    if (s === 0 && e === n) return snapshot;
+
     const candlesSrc = snapshot.candles && typeof snapshot.candles === 'object' ? snapshot.candles : {};
     const candles = {};
     for (const key of ['open', 'high', 'low', 'close', 'volume']) {
       const col = candlesSrc[key];
-      candles[key] = Array.isArray(col) ? col.slice(start) : [];
+      candles[key] = Array.isArray(col) ? col.slice(s, e) : [];
     }
 
     const plotsSrc = snapshot.plots && typeof snapshot.plots === 'object' ? snapshot.plots : {};
     const plots = {};
     for (const [id, col] of Object.entries(plotsSrc)) {
-      plots[id] = Array.isArray(col) ? col.slice(start) : [];
+      plots[id] = Array.isArray(col) ? col.slice(s, e) : [];
     }
 
+    const t0 = Number(times[s]);
+    const t1 = Number(times[e - 1]);
     const annotations = Array.isArray(snapshot.annotations)
-      ? snapshot.annotations.slice(-limit)
+      ? snapshot.annotations.filter((ann) => {
+        const t = Number(ann?.time ?? ann?.Time);
+        return Number.isFinite(t) && t >= t0 && t <= t1;
+      })
       : [];
 
     return {
       ...snapshot,
-      times: snapshot.times.slice(start),
+      times: times.slice(s, e),
       candles,
       plots,
       annotations,
     };
+  }
+
+  /**
+   * WS-04: extract a paint window that always contains the committed VIEW.
+   * Soft limit may expand when VIEW is larger. No VIEW → paint full snapshot
+   * (never tip-tail-amputate an unknown VIEW).
+   *
+   * @param {object} snapshot
+   * @param {number} [limit=15000]
+   * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [viewOpts]
+   * @returns {object}
+   */
+  static extractWindow(snapshot, limit = 15000, viewOpts = {}) {
+    if (!snapshot || !Array.isArray(snapshot.times)) return snapshot;
+    const n = snapshot.times.length;
+    if (n === 0) return snapshot;
+
+    const soft = Math.max(0, Math.floor(Number(limit)) || 0);
+    const view = ChartCompositor.viewIndexRange(
+      snapshot.times,
+      viewOpts?.viewFromSec,
+      viewOpts?.viewToSec,
+    );
+
+    if (!view) {
+      // Unknown VIEW: tip-tail would violate WS-04 if VIEW were mid-history.
+      return snapshot;
+    }
+
+    const viewLen = view.end - view.start;
+    const keep = Math.min(n, Math.max(soft, viewLen));
+    if (keep >= n) return snapshot;
+
+    let extra = keep - viewLen;
+    let leftPad = Math.min(view.start, Math.floor(extra / 2));
+    let start = view.start - leftPad;
+    let end = start + keep;
+    if (end > n) {
+      end = n;
+      start = n - keep;
+    }
+    // Hard guarantee: VIEW ⊆ [start, end)
+    if (start > view.start) start = view.start;
+    if (end < view.end) end = view.end;
+    if (end - start > n) return snapshot;
+    if (start <= 0 && end >= n) return snapshot;
+
+    return ChartCompositor.sliceSnapshot(snapshot, start, end);
+  }
+
+  /**
+   * Capture VIEW times for the current live logical range against a snapshot.
+   * @param {object} snapshot
+   * @returns {{ viewFromSec: number, viewToSec: number }|null}
+   */
+  static capturePaintViewTimes(snapshot) {
+    const times = snapshot?.times;
+    if (!Array.isArray(times) || !times.length) return null;
+    if (typeof ChartAdapter === 'undefined'
+      || typeof ChartAdapter.getVisibleLogicalRange !== 'function') {
+      return null;
+    }
+    return ChartCompositor.viewTimesFromLogicalRange(
+      times,
+      ChartAdapter.getVisibleLogicalRange('live'),
+    );
   }
 
   /**
@@ -90,9 +209,11 @@ class ChartCompositor {
     }
 
     const snapshot = this._store.snapshot();
+    const viewTimes = ChartCompositor.capturePaintViewTimes(snapshot);
     const windowedSnapshot = ChartCompositor.extractWindow(
       snapshot,
       ChartCompositor.RENDER_WINDOW_LIMIT,
+      viewTimes || {},
     );
     const storeData = ChartCompositor.snapshotToStoreData(windowedSnapshot);
 
@@ -117,9 +238,12 @@ class ChartCompositor {
       console.error('[ChartCompositor] invariant failed — skip indicators', this._store.invariantMeta());
       return;
     }
+    const raw = this._store.snapshot();
+    const viewTimes = ChartCompositor.capturePaintViewTimes(raw);
     const snapshot = ChartCompositor.extractWindow(
-      this._store.snapshot(),
+      raw,
       ChartCompositor.RENDER_WINDOW_LIMIT,
+      viewTimes || {},
     );
     ChartAdapter.setLiveUpdating(true);
     try {
@@ -157,9 +281,12 @@ class ChartCompositor {
       }
       // Tip may advance on new bars — refresh observation cache after paint (no camera policy).
       if (typeof this._store.snapshot === 'function') {
+        const raw = this._store.snapshot();
+        const viewTimes = ChartCompositor.capturePaintViewTimes(raw);
         const snap = ChartCompositor.extractWindow(
-          this._store.snapshot(),
+          raw,
           ChartCompositor.RENDER_WINDOW_LIMIT,
+          viewTimes || {},
         );
         this._observeShadowWorld(snap);
       }

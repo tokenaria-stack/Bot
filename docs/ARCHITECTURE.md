@@ -19,6 +19,7 @@
 | `docs/WORKING_SET_CONTRACT.md` | Normative Working Set guarantees (VIEW ↔ store ↔ paint); not an ADR |
 | `docs/WORKING_SET_ACCEPTANCE.md` | Pre-implementation done-criteria (scorecard / E3 / UX); not a plan |
 | `docs/WORKING_SET_STEP1_COVERAGE.md` | Step 1 retention coverage (preserve vs commit prune paths) |
+| `docs/WORKING_SET_STEP2_PAINT.md` | Step 2 paint coverage (WS-04 / extractWindow) |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
 | `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |

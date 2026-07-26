@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track A Step 2 — Paint contains VIEW / WS-04 (Jul 2026) ✅
+
+- [`WORKING_SET_STEP2_PAINT.md`](WORKING_SET_STEP2_PAINT.md): `extractWindow` VIEW-covering; no tip-tail amputate.
+- S4 pass; E3-02 resolved. Scorecard **4 / 7**. S5–S7 not in this step.
+
 ## Track A Step 1 Completion — retention coverage (Jul 2026) ✅
 
 - Audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) — every `_enforceBudget` path classified.
