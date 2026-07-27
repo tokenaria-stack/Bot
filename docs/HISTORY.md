@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Track B Step 3 Plan — Guaranteed RN lifetime / exploration≠contraction (Jul 2026) ✅
+
+- Plan only: [`TRACK_B_STEP3_PLAN.md`](TRACK_B_STEP3_PLAN.md).
+- Critical: no new Lifetime abstraction after RN; Step 3 = final Lifetime guarantee before Capacity.
+- Law draft: exploration events ≠ contraction; retention lifetime only under pressure or world replace.
+- Expected Lifetime ~6 / 7 (L2 Pass; L7 Partial). No code.
+
 ## Track B Step 2 Validation (Jul 2026) ✅
 
 - Investigation only: [`TRACK_B_STEP2_VALIDATION.md`](TRACK_B_STEP2_VALIDATION.md).
