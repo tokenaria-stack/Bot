@@ -22,9 +22,9 @@ Update this file when a debt opens, closes, or changes priority.
 | **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P5** | P1–P5 layout done. Optional later: `setHostActive` |
 | **91** | **Scale / time axis / Ruler (ADR-020)** | ✅ | Scale + bottom axis + Ruler (ADR-025) + **HH:mm datetime chrome**. Fib/drawings = future product, not blocking |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | ✅ | ADR-022: per-component `scaleContribution` → `autoscaleInfoProvider` |
-| **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C + Track A + Track B Steps 1–2** | VIEW + Mutation Set + Retained Neighborhood. Capacity / RN eviction / Lifetime Step 3+ open. |
+| **69** | **MemoryBudget / WindowPolicy** | 🟡 **69A+69C + Track A + Track B Steps 1–3** | VIEW + Mutation + RN + Lazy Contract (exploration≠contraction). Lifetime ≈6/7. |
 | **69C** | Focal-time prune (drop side farthest from viewport center) | ✅ | `pruneDirectionFromFocal` + boot passes `ViewportManager.capture` into `prependMonolith` |
-| **69D** | Full sliding viewport window + paint alignment | 🟡 partial | Track A paint + Track B Lifetime Steps 1–2 done. Remaining: Lifetime Step 3+, Capacity constitution. |
+| **69D** | Full sliding viewport window + paint alignment | 🟡 partial | Track A + Track B Lifetime Steps 1–3 done. Lifetime category model complete. |
 | **80** | `ViewportManager.restore` 0×0 width risk (`setVisibleLogicalRange`) | ✅ | D2: layout deferral via `whenHostHasLayout` → TimeCamera.propose (no raw LWC); live restore retired |
 | **81** | **Timeline Publish Gate** (reconnect heal) | ✅ | Phases A–D + P0: WS hooks, Runtime gate, forced REST@1bar, FE await `timeline_publishable`. P1/P2 (status poll / GetWindow degraded) deferred |
 | **82** | **Calendar bar boundary** (`1w`/`1M` time model) | ✅ **A1+A2** | ADR-011 Cap/align/CloseTime. A2: catch-up/gap/reconcile via `NextBarOpen`/`BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE snap deferred unless runtime proves need |

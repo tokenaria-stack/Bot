@@ -1,8 +1,8 @@
 # Track B — Cache Lifetime · Step 3 Plan
 
-**Status:** Plan only (not implemented). Ready for implementation when approved.  
+**Status:** Implemented — see [`TRACK_B_STEP3.md`](TRACK_B_STEP3.md).  
 **Kind:** Final Lifetime *guarantee* before Capacity — not a new Lifetime abstraction or layer.  
-**Not:** code, constitution edits, Capacity/Emergency freeze, redesign, Step 3 implementation.
+**Not:** constitution edits, Capacity/Emergency freeze, redesign.
 
 **Frozen laws:** [`WORKING_SET_CONTRACT.md`](WORKING_SET_CONTRACT.md), [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md).  
 **Frozen gates:** [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).  
@@ -231,6 +231,4 @@ Completes Neighborhood Lifetime: RN does not merely exist — it has a **guarant
 
 ## Stop
 
-Plan only. No code. No constitution edits. No Step 3 implementation.
-
-**Next:** Approve this law → implement Step 3 only → validate → then Capacity (or product) — do not invent further Lifetime layers.
+Implementation complete — report [`TRACK_B_STEP3.md`](TRACK_B_STEP3.md). Validate separately; do not invent further Lifetime layers.

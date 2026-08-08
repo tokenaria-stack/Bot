@@ -3,6 +3,7 @@
  * Track A Step 1 — VIEW-preserving prune (WS-01…WS-03).
  * Track B Step 1 — Mutation Set survives same-operation growth prune (CL-05).
  * Track B Step 2 — Retained Neighborhood survives across exploration growth.
+ * Track B Step 3 — Lazy Contract: exploration events must not contract RN.
  * Run: node web/columnar-store_budget_test.js
  */
 const { ColumnarStore } = require('./columnar-store.js');
@@ -355,5 +356,140 @@ rnStore.replaceMonolith({
 }, { commitPaired: true });
 assert(rnStore.retainedNeighborhoodBounds() == null, 'TB2: world replace clears RN');
 assert(rnStore.barCount() === 100, 'TB2: after clear RN, commit-paired prune allowed');
+
+// ── Track B Step 3: Lazy Contract — exploration ≠ contraction ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+
+const lazy = new ColumnarStore();
+fillStore(lazy, 100);
+const lazyViewFrom = lazy.firstTimeSec();
+const lazyViewTo = lazy.lastTimeSec();
+const lazyA = makeOlderChunk(40, lazyViewFrom);
+lazy.prependMonolith(lazyA, {
+  viewFromSec: lazyViewFrom,
+  viewToSec: lazyViewTo,
+  focalTimeSec: lazyViewFrom,
+  atLiveEdge: false,
+});
+const rnBefore = lazy.retainedNeighborhoodBounds();
+assert(rnBefore && rnBefore.fromSec === lazyA.times[0], 'TB3 setup: RN after prepend A');
+const barsBefore = lazy.barCount();
+const firstBefore = lazy.firstTimeSec();
+
+// VIEW narrowing alone — no store contraction API; RN must remain unchanged.
+const rnAfterNarrow = lazy.retainedNeighborhoodBounds();
+assert(
+  rnAfterNarrow
+    && rnAfterNarrow.fromSec === rnBefore.fromSec
+    && rnAfterNarrow.toSec === rnBefore.toSec,
+  'TB3: VIEW narrow must not contract RN',
+);
+assert(lazy.barCount() === barsBefore && lazy.firstTimeSec() === firstBefore, 'TB3: VIEW narrow does not shrink store');
+
+// Fetch completion alone (no merge) — store untouched.
+assert(
+  lazy.retainedNeighborhoodBounds().fromSec === rnBefore.fromSec
+    && lazy.barCount() === barsBefore,
+  'TB3: fetch completion alone must not contract RN',
+);
+
+// Successful prepend must not contract previously retained neighborhood.
+const lazyB = makeOlderChunk(30, lazy.firstTimeSec());
+const b0 = lazyB.times[0];
+const a0 = lazyA.times[0];
+lazy.prependMonolith(lazyB, {
+  viewFromSec: lazyViewFrom,
+  viewToSec: lazyViewTo,
+  focalTimeSec: lazyViewFrom,
+  atLiveEdge: false,
+});
+const rnAfterPrepend = lazy.retainedNeighborhoodBounds();
+assert(rnAfterPrepend.fromSec === b0, 'TB3 prepend: RN expands left');
+assert(rnAfterPrepend.toSec >= rnBefore.toSec, 'TB3 prepend: RN toSec never shrinks');
+assert(lazy.timesSec().includes(a0), 'TB3 prepend: prior RN members retained');
+
+// Successful append must not contract previously retained neighborhood.
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
+global.chartTime = (t) => Number(t);
+const lazyAppend = new ColumnarStore();
+lazyAppend.setTfInterval(60);
+fillStore(lazyAppend, 12);
+const apOldest = lazyAppend.firstTimeSec();
+const apMid = lazyAppend.timesSec()[4];
+const apTip = lazyAppend.lastTimeSec();
+// Seed RN via a left prepend under larger budget, then shrink budget for append pressure.
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 200 });
+const apOlder = makeOlderChunk(20, apOldest);
+lazyAppend.prependMonolith(apOlder, {
+  viewFromSec: apOldest,
+  viewToSec: apMid,
+  focalTimeSec: apOldest,
+  atLiveEdge: false,
+});
+const apRn = lazyAppend.retainedNeighborhoodBounds();
+const apLeft = lazyAppend.firstTimeSec();
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
+const apNew = lazyAppend.lastTimeSec() + 60;
+lazyAppend.appendTick({
+  time: apNew,
+  open: 1, high: 2, low: 1, close: 1.5, volume: 1,
+  plots: { line_rsx: 40, line_woz: 41 },
+}, { viewFromSec: apOldest, viewToSec: apMid });
+const apRnAfter = lazyAppend.retainedNeighborhoodBounds();
+assert(apRnAfter.fromSec === apRn.fromSec, 'TB3 append: RN fromSec never shrinks');
+assert(apRnAfter.toSec >= apRn.toSec, 'TB3 append: RN toSec expands or holds');
+assert(lazyAppend.timesSec().includes(apLeft), 'TB3 append: prior RN left retained');
+assert(lazyAppend.lastTimeSec() === apNew, 'TB3 append: new tip retained');
+
+// Projection merge must not contract retained neighborhood (restore omitted RN bars).
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 200 });
+const lazyProj = new ColumnarStore();
+fillStore(lazyProj, 80);
+const lpFrom = lazyProj.firstTimeSec();
+const lpTo = lazyProj.lastTimeSec();
+const lpOlder = makeOlderChunk(40, lpFrom);
+lazyProj.prependMonolith(lpOlder, {
+  viewFromSec: lpFrom,
+  viewToSec: lpTo,
+  focalTimeSec: lpFrom,
+  atLiveEdge: false,
+});
+const lpRn = lazyProj.retainedNeighborhoodBounds();
+const lpLeft = lazyProj.firstTimeSec();
+// Soft apply a tip-only projection (omits left RN) — must restore RN bars.
+const tipOnlyTimes = lazyProj.timesSec().slice(-50);
+const tipCandles = { open: [], high: [], low: [], close: [], volume: [] };
+for (let i = 0; i < tipOnlyTimes.length; i++) {
+  tipCandles.open.push(1);
+  tipCandles.high.push(1);
+  tipCandles.low.push(1);
+  tipCandles.close.push(1);
+  tipCandles.volume.push(1);
+}
+lazyProj.applyProjection({
+  times: tipOnlyTimes,
+  candles: tipCandles,
+  plots: {},
+  annotations: [],
+}, { viewFromSec: tipOnlyTimes[0], viewToSec: tipOnlyTimes[tipOnlyTimes.length - 1] });
+assert(lazyProj.timesSec().includes(lpLeft), 'TB3 soft apply: omitted RN left restored');
+const lpRnAfter = lazyProj.retainedNeighborhoodBounds();
+assert(lpRnAfter.fromSec === lpRn.fromSec, 'TB3 soft apply: RN fromSec never shrinks');
+assert(lpRnAfter.toSec >= lpRn.toSec, 'TB3 soft apply: RN toSec never shrinks');
+
+// Explicit world replacement still resets correctly.
+lazyProj.replaceMonolith({
+  times: tipOnlyTimes,
+  candles: tipCandles,
+  plots: {},
+  annotations: [],
+}, { commitPaired: true });
+assert(lazyProj.retainedNeighborhoodBounds() == null, 'TB3: world replace clears RN');
+assert(!lazyProj.timesSec().includes(lpLeft), 'TB3: world replace may drop former RN');
 
 console.log('columnar-store_budget_test: OK');

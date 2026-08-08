@@ -8,6 +8,19 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Step 1 Completion Audit — retention coverage re-verify (Aug 2026) ✅
+
+- Re-audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) (post Track B).
+- Every `_enforceBudget` path classified: Preserve / Commit / Legacy.
+- Boot preserve-paired supplies VIEW; commit-paired explicit; capture-null = residual not unclassified.
+- Verdict: **Working Set retention layer complete.** No code in this audit.
+
+## Track B Step 3 — Lazy Contract / guaranteed RN lifetime (Jul 2026) ✅
+
+- Report: [`TRACK_B_STEP3.md`](TRACK_B_STEP3.md). Plan: [`TRACK_B_STEP3_PLAN.md`](TRACK_B_STEP3_PLAN.md).
+- Law: exploration events ≠ contraction; soft projection restores omitted RN bars.
+- Lifetime **≈ 6 / 7** (L2 Pass; L7 not claimed). No validation / Step 4 in this stage.
+
 ## Track B Step 3 Plan — Guaranteed RN lifetime / exploration≠contraction (Jul 2026) ✅
 
 - Plan only: [`TRACK_B_STEP3_PLAN.md`](TRACK_B_STEP3_PLAN.md).

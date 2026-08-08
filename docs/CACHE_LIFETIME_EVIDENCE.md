@@ -181,6 +181,22 @@ Emergency Policy         (unspecified)
 
 ---
 
+## 9. Evidence ledger delta — Track B Step 3 implementation (Jul 2026)
+
+**Source:** [`TRACK_B_STEP3.md`](TRACK_B_STEP3.md).
+
+| Evidence | Delta |
+|----------|-------|
+| Exploration ≠ contraction (CL-02 / L2) | **Implemented** — soft projection restores omitted RN bars; RN bounds expand-only |
+| Soft apply amputates RN | **Closed** |
+| L7 Pass | **Not claimed** |
+
+| Scorecard | Post Step 3 implementation |
+|-----------|------------------------------|
+| Lifetime L1–L7 | **≈ 6 / 7** (L2 Pass; L7 Partial) |
+
+---
+
 ## Document status
 
-Evidence ledger closed for Stage E4; **deltas §6–§8** appended through Track B Step 2 validation. Guarantees live only in the frozen Contract + Acceptance documents.
+Evidence ledger closed for Stage E4; **deltas §6–§9** appended through Track B Step 3. Guarantees live only in the frozen Contract + Acceptance documents.

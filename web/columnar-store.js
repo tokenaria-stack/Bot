@@ -6,6 +6,8 @@
  * Track A / Working Set: retention may never invalidate the committed VIEW (WS-01…WS-03).
  * Track B Step 1: Mutation Set — same-op growth prune must not discard just-grown bars.
  * Track B Step 2: Retained Neighborhood — Lifetime fact across exploration growth (not Capacity).
+ * Track B Step 3: Lazy Contract — exploration events ≠ contraction; RN lifetime only under
+ *   pressure (existing budget trigger) or explicit world replacement.
  */
 class ColumnarStore {
   static get BUDGET_TARGET() {
@@ -43,10 +45,11 @@ class ColumnarStore {
      */
     this.windowMode = 'live';
     /**
-     * Retained Neighborhood (Track B Step 2) — logical time interval [from, to] sec.
+     * Retained Neighborhood (Track B Step 2–3) — logical time interval [from, to] sec.
      * Eagerly expanded by absorbing Mutation Sets from exploration growth.
+     * Track B Step 3 (Lazy Contract): exploration events must never contract RN.
      * Cleared only by explicit world replacement (commit-paired / clear).
-     * Eviction policy intentionally unspecified (Capacity later). Not "everything ever loaded."
+     * Eviction under pressure is Capacity-owned (existing budget trigger may drop outside RN).
      * @type {number|null}
      */
     this._rnFromSec = null;
@@ -112,8 +115,8 @@ class ColumnarStore {
   }
 
   /**
-   * Absorb a Mutation Set time span into the Retained Neighborhood (eager expand).
-   * Hull union — logical Lifetime span, not a Capacity budget.
+   * Absorb a Mutation Set time span into the Retained Neighborhood (eager expand only).
+   * Track B Step 3: never shrinks RN — exploration must not contract the neighborhood.
    * @param {number} fromSec
    * @param {number} toSec
    */
@@ -126,8 +129,142 @@ class ColumnarStore {
       this._rnToSec = b;
       return;
     }
+    // Expand-only (Lazy Contract): never raise fromSec or lower toSec.
     this._rnFromSec = Math.min(this._rnFromSec, a);
     this._rnToSec = Math.max(this._rnToSec, b);
+  }
+
+  /**
+   * Snapshot bars currently inside the Retained Neighborhood (for soft projection merge).
+   * @returns {{
+   *   times: number[],
+   *   candles: { open: number[], high: number[], low: number[], close: number[], volume: number[] },
+   *   plots: Record<string, number[]>,
+   *   annotations: object[],
+   * }|null}
+   */
+  _snapshotRetainedNeighborhoodBars() {
+    const bounds = this.retainedNeighborhoodBounds();
+    if (!bounds || this._times.length === 0) return null;
+    const times = [];
+    const open = [];
+    const high = [];
+    const low = [];
+    const close = [];
+    const volume = [];
+    const plotIds = Object.keys(this._plots);
+    const plots = {};
+    for (const id of plotIds) plots[id] = [];
+    for (let i = 0; i < this._times.length; i++) {
+      const t = Number(this._times[i]);
+      if (!Number.isFinite(t) || t < bounds.fromSec || t > bounds.toSec) continue;
+      times.push(t);
+      open.push(this._candles.open[i]);
+      high.push(this._candles.high[i]);
+      low.push(this._candles.low[i]);
+      close.push(this._candles.close[i]);
+      volume.push(this._candles.volume[i]);
+      for (const id of plotIds) {
+        const col = this._plots[id];
+        plots[id].push(Array.isArray(col) ? col[i] : ColumnarStore.plotAbsent());
+      }
+    }
+    if (times.length === 0) return null;
+    const annotations = this._annotations.filter((ann) => {
+      const t = Number(ann?.time ?? ann?.Time);
+      return Number.isFinite(t) && t >= bounds.fromSec && t <= bounds.toSec;
+    });
+    return {
+      times,
+      candles: { open, high, low, close, volume },
+      plots,
+      annotations,
+    };
+  }
+
+  /**
+   * Track B Step 3: re-insert RN bars missing after a soft projection replace.
+   * Projection merge must not amputate the Retained Neighborhood.
+   * @param {ReturnType<ColumnarStore['_snapshotRetainedNeighborhoodBars']>} snap
+   */
+  _restoreMissingRetainedBars(snap) {
+    if (!snap || !Array.isArray(snap.times) || snap.times.length === 0) return;
+    const have = new Set(this._times.map((t) => Number(t)));
+    const missingIdx = [];
+    for (let j = 0; j < snap.times.length; j++) {
+      const t = Number(snap.times[j]);
+      if (Number.isFinite(t) && !have.has(t)) missingIdx.push(j);
+    }
+    if (missingIdx.length === 0) return;
+
+    const absent = ColumnarStore.plotAbsent();
+    const entries = [];
+    for (let i = 0; i < this._times.length; i++) {
+      const plotRow = {};
+      for (const id of Object.keys(this._plots)) {
+        plotRow[id] = this._plots[id][i];
+      }
+      entries.push({
+        time: Number(this._times[i]),
+        open: this._candles.open[i],
+        high: this._candles.high[i],
+        low: this._candles.low[i],
+        close: this._candles.close[i],
+        volume: this._candles.volume[i],
+        plots: plotRow,
+      });
+    }
+    const snapPlotIds = Object.keys(snap.plots || {});
+    for (const j of missingIdx) {
+      const plotRow = {};
+      for (const id of new Set([...Object.keys(this._plots), ...snapPlotIds])) {
+        const col = snap.plots?.[id];
+        plotRow[id] = Array.isArray(col) ? col[j] : absent;
+      }
+      entries.push({
+        time: Number(snap.times[j]),
+        open: snap.candles.open[j],
+        high: snap.candles.high[j],
+        low: snap.candles.low[j],
+        close: snap.candles.close[j],
+        volume: snap.candles.volume[j],
+        plots: plotRow,
+      });
+    }
+    entries.sort((a, b) => a.time - b.time);
+
+    const allPlotIds = new Set([...Object.keys(this._plots), ...snapPlotIds]);
+    this._times = entries.map((e) => e.time);
+    this._candles = {
+      open: entries.map((e) => e.open),
+      high: entries.map((e) => e.high),
+      low: entries.map((e) => e.low),
+      close: entries.map((e) => e.close),
+      volume: entries.map((e) => e.volume),
+    };
+    const nextPlots = {};
+    for (const id of allPlotIds) {
+      nextPlots[id] = entries.map((e) => (e.plots[id] !== undefined ? e.plots[id] : absent));
+    }
+    this._plots = nextPlots;
+
+    const t0 = this._times[0];
+    const t1 = this._times[this._times.length - 1];
+    const keepAnn = this._annotations.filter((ann) => {
+      const t = Number(ann?.time ?? ann?.Time);
+      return Number.isFinite(t) && t >= t0 && t <= t1;
+    });
+    const haveAnn = new Set(keepAnn.map((a) => Number(a?.time ?? a?.Time)));
+    for (const ann of snap.annotations || []) {
+      const t = Number(ann?.time ?? ann?.Time);
+      if (Number.isFinite(t) && t >= t0 && t <= t1 && !haveAnn.has(t)) {
+        keepAnn.push(ann);
+        haveAnn.add(t);
+      }
+    }
+    this._annotations = keepAnn;
+    this._rebuildAnnotationMapFromArray(this._annotations);
+    this._meta = { ...this._meta, added: this._times.length };
   }
 
   seal() {
@@ -153,6 +290,7 @@ class ColumnarStore {
    * (no Mutation Set — intentional world replace).
    * Track B Step 1: non-commit growth establishes Mutation Set for same-operation prune.
    * Track B Step 2: absorb Mutation into Retained Neighborhood; commit-paired resets RN.
+   * Track B Step 3: soft/preserve merge must not contract RN (restore missing RN bars).
    * @param {object} snapshot
    * @param {{
    *   viewFromSec?: number|null,
@@ -166,6 +304,9 @@ class ColumnarStore {
       ? data.times.map((t) => ColumnarStore._normTimeSec(t))
       : [];
     const src = data.candles && typeof data.candles === 'object' ? data.candles : {};
+    const commitPaired = options.commitPaired === true;
+    // Lazy Contract: soft projection merge must not amputate RN — capture before replace.
+    const rnSnap = commitPaired ? null : this._snapshotRetainedNeighborhoodBars();
     this._times = times;
     this._candles = {
       open: Array.isArray(src.open) ? src.open.slice() : [],
@@ -198,16 +339,20 @@ class ColumnarStore {
       viewToSec: options.viewToSec,
     };
     // Explicit world replacement resets Retained Neighborhood (CameraCommit / commit-paired).
-    if (options.commitPaired === true) {
+    if (commitPaired) {
       this._clearRetainedNeighborhood();
-    } else if (times.length > 0) {
-      // Track B Step 1 + 2: Mutation Set = applied series; absorb into Retained Neighborhood.
-      const mutFrom = Number(times[0]);
-      const mutTo = Number(times[times.length - 1]);
-      budgetOpts.mutationFromSec = mutFrom;
-      budgetOpts.mutationToSec = mutTo;
-      this._absorbIntoRetainedNeighborhood(mutFrom, mutTo);
+    } else {
+      // Exploration merge: restore any RN bars the projection omitted, then absorb Mutation.
+      this._restoreMissingRetainedBars(rnSnap);
+      if (times.length > 0) {
+        const mutFrom = Number(times[0]);
+        const mutTo = Number(times[times.length - 1]);
+        budgetOpts.mutationFromSec = mutFrom;
+        budgetOpts.mutationToSec = mutTo;
+        this._absorbIntoRetainedNeighborhood(mutFrom, mutTo);
+      }
     }
+    // Existing HARD_CAP check = pressure trigger (Capacity-owned); must not clear RN.
     this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, budgetOpts);
   }
 
@@ -607,6 +752,9 @@ class ColumnarStore {
   }
 
   /**
+   * Pressure prune when over HARD_CAP (existing Capacity trigger — Lifetime does not define pressure).
+   * Track B Step 3: exploration growth may *invoke* this trigger, but must not clear RN;
+   * only bars outside VIEW ∪ Mutation ∪ RN are eligible.
    * @param {'oldest'|'newest'} direction
    * @param {{
    *   viewFromSec?: number|null,
@@ -776,8 +924,7 @@ class ColumnarStore {
     }
 
     if (isNewBar) {
-      // Track B Step 1: Mutation Set = the bar introduced by this growth.
-      // Track B Step 2: absorb into Retained Neighborhood before same-op pressure prune.
+      // Track B Step 1–3: Mutation Set + absorb into RN (exploration expand); pressure may drop outside RN.
       this._absorbIntoRetainedNeighborhood(time, time);
       this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, {
         viewFromSec: options.viewFromSec,
@@ -879,6 +1026,7 @@ class ColumnarStore {
     // Track A: VIEW bounds — prune cannot invalidate visible bars (WS-01…WS-03).
     // Track B Step 1: Mutation Set = bars introduced by this growth — same-op prune must not remove them.
     // Track B Step 2: absorb Mutation into Retained Neighborhood — survives later growth prunes.
+    // Track B Step 3: prepend is exploration — expands RN; must not clear/shrink RN.
     const direction = this.resolveBudgetPruneDirection({
       focalTimeSec: options.focalTimeSec,
       atLiveEdge: options.atLiveEdge === true,
