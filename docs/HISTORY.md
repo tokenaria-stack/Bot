@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Gate S5 — Pressure ≠ Navigation (Aug 2026) ✅
+
+- Report: [`WORKING_SET_S5.md`](WORKING_SET_S5.md).
+- STATUS: **PASS** — pressure/prune is not a navigation authority on live Boot.
+- Residual: capture-null (WS-01 conditional); 16k wall → next Lifetime/product gate.
+
 ## Step 1 Completion Audit — retention coverage re-verify (Aug 2026) ✅
 
 - Re-audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) (post Track B).
