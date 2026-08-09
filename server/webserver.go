@@ -1590,19 +1590,14 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fetchStartMs := fetchEndMs - intervalMs*int64(limit+market.IndicatorWarmupBars)
-	if fetchStartMs < 0 {
-		fetchStartMs = 0
-	}
-
 	rsxSettings := parseRSXSettingsFromRequest(r)
 	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
 
+	wantBars := limit + market.IndicatorWarmupBars
 	if err := data.InitDB(); err == nil {
-		candles, loadErr := exchange.LoadContinuousContractFromDB(symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs, limit+market.IndicatorWarmupBars)
+		candles, loadErr := exchange.LoadContinuousContractBeforeEnd(symbol, spec.BinanceInterval, fetchEndMs, wantBars)
 		if loadErr == nil && len(candles) > 0 {
 			klines := candlesToKlines(candles)
-			wantBars := limit + market.IndicatorWarmupBars
 			if wantBars > 0 && len(klines) > wantBars {
 				klines = klines[len(klines)-wantBars:]
 			}
@@ -1618,7 +1613,10 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 				annotations = trimAnnotations(annotations, drop, klines)
 			}
 			chartData := chartPointsFromSeries(chartCandles, oscillators)
-			hasMore := len(chartCandles) >= limit && fetchStartMs > 0
+			hasMore := false
+			if len(klines) > 0 {
+				hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, klines[0].OpenTime)
+			}
 			if err := requestCtxErr(r.Context()); err != nil {
 				return
 			}
@@ -1633,7 +1631,7 @@ func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Requ
 		log.Printf("[HistoryChunk] DB init failed: %v", err)
 	}
 
-	log.Printf("[HistoryChunk] no SQLite data for %s %s [%d..%d]", symbol, spec.BinanceInterval, fetchStartMs, fetchEndMs)
+	log.Printf("[HistoryChunk] no SQLite data for %s %s end<=%d", symbol, spec.BinanceInterval, fetchEndMs)
 	http.Error(w, "no historical data available", http.StatusServiceUnavailable)
 }
 
@@ -1845,23 +1843,20 @@ func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec Time
 		endTimeMs = time.Now().UnixMilli()
 	}
 
-	intervalMs, err := data.IntervalDurationMs(spec.BinanceInterval)
-	if err != nil {
-		log.Printf("[Dashboard] interval duration %s: %v", spec.BinanceInterval, err)
+	wantBars := limit + market.IndicatorWarmupBars
+	if wantBars <= 0 {
 		return nil
 	}
-
-	wantBars := limit + market.IndicatorWarmupBars
-	startTimeMs := endTimeMs - intervalMs*int64(wantBars)
-	if startTimeMs < 0 {
-		startTimeMs = 0
-	}
+	_ = historical // retained for call-site clarity (live vs deep-history); retrieval is count-based either way.
 
 	if err := data.InitDB(); err == nil {
 		if err := requestCtxErr(ctx); err != nil {
 			return nil
 		}
-		candles, loadErr := exchange.LoadContinuousContractFromDB(d.symbol, spec.BinanceInterval, startTimeMs, endTimeMs, wantBars)
+		// Count-based: previous N actual bars at/before end — not end-(N×interval) time span.
+		// Time-span lookback collapses to the boundary candle across archive gaps while
+		// sqliteHasBarsBefore still correctly reports older rows exist (hasMore=true).
+		candles, loadErr := exchange.LoadContinuousContractBeforeEnd(d.symbol, spec.BinanceInterval, endTimeMs, wantBars)
 		if loadErr == nil && len(candles) > 0 {
 			if err := requestCtxErr(ctx); err != nil {
 				return nil
@@ -1871,6 +1866,9 @@ func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec Time
 				klines = klines[len(klines)-wantBars:]
 			}
 			return klines
+		}
+		if loadErr != nil {
+			log.Printf("[Dashboard] LoadContinuousContractBeforeEnd %s %s: %v", d.symbol, spec.BinanceInterval, loadErr)
 		}
 	} else {
 		log.Printf("[Dashboard] SQLite init: %v", err)

@@ -142,19 +142,82 @@ class HydrationOrchestrator {
     if (!this._deps || !this._pendingLeftIntent) return;
     if (!this._canStartNow()) return;
 
+    const pending = this._pendingLeftIntent;
+    const options = pending.options || {};
     const liveRange = (typeof this._deps.getVisibleRange === 'function'
       ? this._deps.getVisibleRange()
-      : null) || this._pendingLeftIntent.range;
-    const options = this._pendingLeftIntent.options || {};
+      : null) || pending.range;
 
-    if (!this._deps.shouldLoad(liveRange, options)) {
-      // Need no longer valid — explicit cancel (not busy-drop).
+    // Post-prepend continuation: current VIEW decides (tip return cancels).
+    if (options.continuation === true) {
+      if (!this._deps.shouldLoad(liveRange, options)) {
+        this._pendingLeftIntent = null;
+        return;
+      }
       this._pendingLeftIntent = null;
+      this.schedulePrepend(liveRange, options);
       return;
     }
 
+    const liveOk = this._deps.shouldLoad(liveRange, options);
+    if (liveOk) {
+      this._pendingLeftIntent = null;
+      this.schedulePrepend(liveRange, options);
+      return;
+    }
+
+    // Preserve remaps logical from upward (≈ from + addedBars). That must not
+    // cancel a remembered left-void need that was valid when noted.
+    const pendingOk = this._deps.shouldLoad(pending.range, options);
+    if (pendingOk && this._looksLikePreserveRemap(liveRange, pending.range)) {
+      this._pendingLeftIntent = null;
+      this.schedulePrepend(pending.range, options);
+      return;
+    }
+
+    // Need no longer valid — explicit cancel (not busy-drop).
     this._pendingLeftIntent = null;
-    this.schedulePrepend(liveRange, options);
+  }
+
+  /**
+   * True when live.from jumped above pending.from in the way preserve remaps indices.
+   * @param {{ from: number, to: number }} liveRange
+   * @param {{ from: number, to: number }} pendingRange
+   */
+  _looksLikePreserveRemap(liveRange, pendingRange) {
+    if (!liveRange || !pendingRange) return false;
+    const liveFrom = Number(liveRange.from);
+    const pendingFrom = Number(pendingRange.from);
+    if (!Number.isFinite(liveFrom) || !Number.isFinite(pendingFrom)) return false;
+    return liveFrom > pendingFrom;
+  }
+
+  /**
+   * After a successful left-history prepend: if VIEW still needs older history
+   * and hasMore, re-note via Wave 2 pending (no timers / poll / second owner).
+   * Continuation policy lives in Boot (`shouldContinueLeftHistory`); without it,
+   * Hydration does not invent a second detector.
+   */
+  _noteContinuationIfNeeded() {
+    const deps = this._deps;
+    if (!deps) return;
+    if (typeof deps.shouldContinueLeftHistory !== 'function') return;
+    if (typeof deps.getHistoryHasMore === 'function' && deps.getHistoryHasMore() === false) {
+      return;
+    }
+
+    const liveRange = typeof deps.getVisibleRange === 'function'
+      ? deps.getVisibleRange()
+      : null;
+    if (!deps.shouldContinueLeftHistory(liveRange)) return;
+
+    const noteRange = liveRange
+      && Number.isFinite(liveRange.from)
+      && Number.isFinite(liveRange.to)
+      ? { from: liveRange.from, to: liveRange.to }
+      : { from: 0, to: 50 };
+
+    this.noteLeftHistoryIntent(noteRange, { continuation: true, force: true });
   }
 
   schedulePrepend(range, options = {}) {
@@ -276,6 +339,9 @@ class HydrationOrchestrator {
       if (completed) {
         this.state = HydrationState.LIVE;
         this.flushQueue();
+        // Re-note left-history need after success so preserve-remapped `from`
+        // cannot convert "still need history" into "no need".
+        this._noteContinuationIfNeeded();
       } else {
         this.wsQueue = [];
         this.state = HydrationState.IDLE;

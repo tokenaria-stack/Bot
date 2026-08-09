@@ -665,8 +665,11 @@
       getNavigatorResult: () => liveNavigatorResult,
       onAfterFlush: () => {
         updateBufferingOverlay();
-        // Wave 2: paint left busy → Hydration may consume pending left-history intent.
-        liveHydrationOrchestrator?.tryConsumePending?.();
+        // Wave 2: consume after paint idle. Scheduler clears `_busy` only AFTER
+        // flush returns, so onAfterFlush itself still sees isRenderBusy — defer
+        // one microtask so pending left-history (incl. post-prepend continuation)
+        // is not stranded until the next user note.
+        queueMicrotask(() => liveHydrationOrchestrator?.tryConsumePending?.());
       },
     });
     liveRenderScheduler = new RenderScheduler(compositor);
@@ -827,6 +830,21 @@
     return true;
   }
 
+  /**
+   * HISTORY exploration: tip not near visible right (TimeCamera LIVE/HISTORY).
+   * Used for post-prepend continuation — not for initial left-void arming.
+   */
+  function isLiveHistoryExploration(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
+    const n = liveColumnarStore?.barCount?.() ?? 0;
+    if (n <= 0) return false;
+    const tip = n - 1;
+    const slack = (typeof TimeCamera !== 'undefined' && Number.isFinite(TimeCamera.SLACK))
+      ? TimeCamera.SLACK
+      : 1.5;
+    return (Number(range.to) - tip) < -slack;
+  }
+
   function initHydrationOrchestrator() {
     if (typeof HydrationOrchestrator === 'undefined') return;
     liveHydrationOrchestrator = new HydrationOrchestrator();
@@ -838,14 +856,28 @@
       setLoadingHistory: (v) => { window.isLoadingHistory = v; },
       sealStore: () => liveColumnarStore?.seal(),
       unsealStore: () => liveColumnarStore?.unseal(),
-      shouldLoad: (range, options) => {
+      shouldLoad: (range, options = {}) => {
         // Need validity only (not busy). Busy → pending inside Hydration (Wave 2).
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!window.historyHasMore) return false;
-        if (!liveHistoryScrollArmed) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
+        // Post-prepend continuation: armed + remapped-from threshold are not gates.
+        // VIEW left-history need is tip-not-in-view (HISTORY exploration).
+        if (options.continuation === true) {
+          return isLiveHistoryExploration(range);
+        }
+        if (!liveHistoryScrollArmed) return false;
         if (options.force !== true && range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return false;
         return true;
+      },
+      shouldContinueLeftHistory: (range) => {
+        if (!window.historyHasMore) return false;
+        // Paint/preserve may not have applied yet — still continue after a successful
+        // left prepend when range is briefly unavailable.
+        if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
+          return true;
+        }
+        return isLiveHistoryExploration(range);
       },
       getAnchorEndTimeSec: () => liveColumnarStore?.firstTimeSec?.() ?? null,
       getSlotIds: () => resolveLiveSlotIds(),

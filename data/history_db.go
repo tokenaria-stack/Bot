@@ -302,6 +302,48 @@ ORDER BY open_time ASC`,
 	}
 	defer rows.Close()
 
+	return scanKlineRows(rows)
+}
+
+// LoadKlinesBeforeEnd returns at most `limit` candles with open_time <= endTimeMs,
+// ordered ascending. Count-based and gap-tolerant: a multi-day hole inside an
+// assumed N×interval span does not collapse the result to the boundary candle.
+func LoadKlinesBeforeEnd(symbol, interval string, endTimeMs int64, limit int) ([]Candle, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("LoadKlinesBeforeEnd: limit must be > 0")
+	}
+	if err := InitDB(); err != nil {
+		return nil, err
+	}
+
+	symbol = normalizeSymbol(symbol)
+	interval = strings.TrimSpace(interval)
+	endTimeMs = ensureUnixMillis(endTimeMs)
+	if endTimeMs <= 0 {
+		return nil, fmt.Errorf("LoadKlinesBeforeEnd: endTimeMs required")
+	}
+
+	rows, err := db.Query(`
+SELECT open_time, open, high, low, close, volume, close_time
+FROM (
+	SELECT open_time, open, high, low, close, volume, close_time
+	FROM historical_klines
+	WHERE symbol = ? AND interval = ? AND open_time <= ?
+	ORDER BY open_time DESC
+	LIMIT ?
+) sub
+ORDER BY open_time ASC`,
+		symbol, interval, endTimeMs, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query klines before end: %w", err)
+	}
+	defer rows.Close()
+
+	return scanKlineRows(rows)
+}
+
+func scanKlineRows(rows *sql.Rows) ([]Candle, error) {
 	out := make([]Candle, 0, 1024)
 	for rows.Next() {
 		var c Candle
@@ -313,7 +355,6 @@ ORDER BY open_time ASC`,
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate klines: %w", err)
 	}
-
 	return out, nil
 }
 

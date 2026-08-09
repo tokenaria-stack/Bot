@@ -132,17 +132,22 @@ Not found as cause: duplicate retry queues, paint soft 15k window (removed Track
 
 ## RECOMMENDATION
 
-**One next repair only — History continuation after prepend (Boot/Hydration detector):**
+**Done (later gates):** FE history continuation after prepend; server count-based history window retrieval (see FOLLOW-UP below).
 
-After a successful left-history merge (or in `shouldLoad` / pending consume), treat “still exploring left / `hasMore`” without requiring `liveRange.from < 50` when that failure is only the **preserve-remapped index**. Options (pick one in a later implement gate):
+Heal sparse flash remains a **separate** product choice (`loadDashboard` vs keepProjection soft recover).
 
-- On prepend completion, if `hasMore` and armed, re-`noteLeftHistoryIntent` using a **left-edge void** criterion (e.g. visible left near store first / `from` small **relative to left of series**, or pending preserved until user leaves left exploration); **or**
-- Stop cancelling pending when `shouldLoad(liveRange)` fails solely due to post-preserve `from ≥ threshold` while original pending was a valid left intent and `hasMore`.
+---
 
-Do **not** weaken Wave 2 busy semantics. Do **not** add poll/timers. Heal sparse flash is a **separate** product choice (`loadDashboard` vs keepProjection soft recover) — not this first repair.
+## FOLLOW-UP — History window retrieval (Aug 2026) ✅
+
+**STATUS:** PASS (server retrieval; FE continuation unchanged)
+
+**Defect:** `loadRESTKlinesFromStore` used `end - N×interval` time-span load. Across a multi-day 1m archive gap, the window contained only the boundary candle while `hasMore` stayed true (older rows exist).
+
+**Fix:** `data.LoadKlinesBeforeEnd` + `exchange.LoadContinuousContractBeforeEnd` (count-based, gap-tolerant). GetWindow / history-chunk paths call BeforeEnd. Zero-progress ≠ EOF (Wave 3 unchanged).
+
+**Proof:** `data/history_db_before_end_test.go`, `exchange/continuous_contract_before_end_test.go`, `TestLiveArchive_1mGap_BeforeEndProgress`.
 
 ---
 
 ## STOP
-
-No implementation this gate.

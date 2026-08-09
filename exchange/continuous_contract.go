@@ -44,6 +44,10 @@ func storageSymbolForSegment(symbol string, seg contractSegment) string {
 
 // LoadContinuousContractFromDB reads spot (_SPOT) and futures rows from SQLite and stitches them.
 // When limit > 0, returns at most the last limit stitched bars (ascending).
+//
+// Important: [startTimeMs, endTimeMs] is a time window. Across archive gaps, a window of
+// size N×interval may contain far fewer than N rows. Prefer LoadContinuousContractBeforeEnd
+// when the caller wants "N actual bars at/before end" (GetWindow / history prepend).
 func LoadContinuousContractFromDB(symbol, interval string, startTimeMs, endTimeMs int64, limit int) ([]Candle, error) {
 	symbol = NormalizeFuturesSymbol(symbol)
 	var merged []data.Candle
@@ -55,6 +59,46 @@ func LoadContinuousContractFromDB(symbol, interval string, startTimeMs, endTimeM
 			return nil, fmt.Errorf("load %s %s [%d..%d]: %w", storageSym, interval, seg.start, seg.end, err)
 		}
 		merged = append(merged, rows...)
+	}
+
+	out := candlesFromData(dedupeDataCandlesByOpenTime(merged))
+	return TruncateCandlesTail(out, limit), nil
+}
+
+// LoadContinuousContractBeforeEnd returns at most `limit` continuous-contract bars with
+// open_time <= endTimeMs (ascending). Count-based / gap-tolerant — does not assume
+// contiguous N×interval occupancy inside a calculated start.
+func LoadContinuousContractBeforeEnd(symbol, interval string, endTimeMs int64, limit int) ([]Candle, error) {
+	symbol = NormalizeFuturesSymbol(symbol)
+	if limit <= 0 {
+		return nil, fmt.Errorf("LoadContinuousContractBeforeEnd: limit must be > 0")
+	}
+	if endTimeMs <= 0 {
+		return nil, fmt.Errorf("LoadContinuousContractBeforeEnd: endTimeMs required")
+	}
+
+	var merged []data.Candle
+
+	if endTimeMs >= BinanceFuturesGenesisMs {
+		fut, err := data.LoadKlinesBeforeEnd(symbol, interval, endTimeMs, limit)
+		if err != nil {
+			return nil, fmt.Errorf("load futures before end: %w", err)
+		}
+		merged = fut
+		if len(merged) < limit {
+			need := limit - len(merged)
+			spot, err := data.LoadKlinesBeforeEnd(SpotStorageSymbol(symbol), interval, BinanceFuturesGenesisMs-1, need)
+			if err != nil {
+				return nil, fmt.Errorf("load spot before genesis: %w", err)
+			}
+			merged = append(spot, merged...)
+		}
+	} else {
+		spot, err := data.LoadKlinesBeforeEnd(SpotStorageSymbol(symbol), interval, endTimeMs, limit)
+		if err != nil {
+			return nil, fmt.Errorf("load spot before end: %w", err)
+		}
+		merged = spot
 	}
 
 	out := candlesFromData(dedupeDataCandlesByOpenTime(merged))
