@@ -8,6 +8,25 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## S6 Repair Plan — commit-paired ≠ TARGET wall (Aug 2026) ✅
+
+- Plan only: [`WORKING_SET_S6_REPAIR_PLAN.md`](WORKING_SET_S6_REPAIR_PLAN.md). STATUS: **READY**.
+- Root cause: commit-paired accept → legacy `_pruneToCount(TARGET)` with no protected set.
+- Minimal repair: skip TARGET/HARD_CAP truncation on commit-paired world accept only. No code yet.
+
+## Lifetime & Capacity Constitution freeze (Aug 2026) ✅
+
+- Frozen: [`LIFETIME_CAPACITY_CONSTITUTION.md`](LIFETIME_CAPACITY_CONSTITUTION.md).
+- Runtime **FAIL**: commit-paired hydrate → TARGET ≈12k = P-01 + Lifetime/Capacity violation (not excused by commit-paired).
+- Capacity **numbers** deferred; browser FPS/heap UNKNOWN. No S6 fix implemented.
+
+## Gate S6 — Lifetime / Product Boundary Audit (Aug 2026) ✅
+
+- Investigation only: [`WORKING_SET_S6.md`](WORKING_SET_S6.md).
+- STATUS: **FAIL** (P-01) — HARD_CAP/TARGET still product-visible on commit-paired truncate; preserve+RN can grow past 16k.
+- Accordion-on-narrow: **not present** (Lazy Contract). LWC/FPS at 50k–200k: **UNKNOWN**.
+- Next: Lifetime/Capacity constitution gate — do not retune HARD_CAP alone.
+
 ## Gate S5 — Pressure ≠ Navigation (Aug 2026) ✅
 
 - Report: [`WORKING_SET_S5.md`](WORKING_SET_S5.md).

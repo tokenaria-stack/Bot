@@ -339,18 +339,20 @@ class ColumnarStore {
       viewToSec: options.viewToSec,
     };
     // Explicit world replacement resets Retained Neighborhood (CameraCommit / commit-paired).
+    // S6: accept the full monolith — do NOT TARGET/HARD_CAP-truncate on commit-paired accept
+    // (P-01 / Lifetime&Capacity Rules 1, 2, 8). Preserve-paired paths still enforce budget below.
     if (commitPaired) {
       this._clearRetainedNeighborhood();
-    } else {
-      // Exploration merge: restore any RN bars the projection omitted, then absorb Mutation.
-      this._restoreMissingRetainedBars(rnSnap);
-      if (times.length > 0) {
-        const mutFrom = Number(times[0]);
-        const mutTo = Number(times[times.length - 1]);
-        budgetOpts.mutationFromSec = mutFrom;
-        budgetOpts.mutationToSec = mutTo;
-        this._absorbIntoRetainedNeighborhood(mutFrom, mutTo);
-      }
+      return;
+    }
+    // Exploration merge: restore any RN bars the projection omitted, then absorb Mutation.
+    this._restoreMissingRetainedBars(rnSnap);
+    if (times.length > 0) {
+      const mutFrom = Number(times[0]);
+      const mutTo = Number(times[times.length - 1]);
+      budgetOpts.mutationFromSec = mutFrom;
+      budgetOpts.mutationToSec = mutTo;
+      this._absorbIntoRetainedNeighborhood(mutFrom, mutTo);
     }
     // Existing HARD_CAP check = pressure trigger (Capacity-owned); must not clear RN.
     this._enforceBudget(ColumnarStore.PRUNE_FROM_OLDEST, budgetOpts);
@@ -358,8 +360,8 @@ class ColumnarStore {
 
   /**
    * Full history hydrate — same atomic accept as applyProjection (legacy name).
-   * Commit-paired world replace (FreshLive / TF / loadDashboard): pass commitPaired: true
-   * so same-op budget may prune (no Mutation Set). Soft/preserve callers omit it.
+   * Commit-paired world replace (FreshLive / TF / loadDashboard): pass commitPaired: true.
+   * S6: commit-paired accepts the full monolith (no TARGET amputate). Soft/preserve omit the flag.
    */
   replaceMonolith(columnarJson, options = {}) {
     this.applyProjection(columnarJson, options);

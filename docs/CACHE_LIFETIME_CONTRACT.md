@@ -13,10 +13,8 @@
 ```text
 Working Set Contract     →  what data must exist for VIEW
 Cache Lifetime Contract  →  when data beyond that requirement may be retained or discarded
-Capacity policy          →  engineering ceilings (intentionally unspecified here)
-Emergency policy         →  OOM / FPS brakes (intentionally unspecified here)
+Capacity / Emergency     →  principles frozen in LIFETIME_CAPACITY_CONSTITUTION.md (numeric values deferred)
 ```
-
 Cache Lifetime is **strictly subordinate** to the Working Set Contract. Nothing herein may weaken WS-01…WS-05.
 
 Product guarantees **P-01** and **P-02** are defined in the Working Set Contract. This document states the lifetime obligations required to uphold them.

@@ -98,7 +98,7 @@ Mixing these is a contract error. Current Boot keeps them distinct.
 |-----|----------------------|-------|
 | Unclassified Boot `_enforceBudget` caller | **No** — all classified | — |
 | Preserve-paired Boot without intentional VIEW wiring | **No** — closed | — |
-| Capture-null → VIEW omitted on preserve-paired | **Conditional residual** | Not missing classification; harden later if needed |
+| Capture-null → VIEW omitted on preserve-paired | **Closed SAFE** | See `WORKING_SET_CAPTURE_NULL.md` — not `_pruneToCount`; product Boot paths cannot amputate path VIEW |
 | `app.legacy.js` without VIEW | Legacy only | Not live Boot |
 | Paint / WS-04 | Out of this audit | Already addressed in Track A Step 2 |
 | Lifetime / HARD_CAP product walls | Out of this audit | Track B / later |
@@ -123,7 +123,7 @@ Mixing these is a contract error. Current Boot keeps them distinct.
 - Every `_enforceBudget` path is Preserve-paired, Commit-paired, or Legacy.  
 - Preserve-paired Boot mutations supply VIEW when capture succeeds.  
 - Commit-paired world replace is explicit (`commitPaired: true`).  
-- Residual: capture-null (conditional), not unclassified.
+- Capture-null residual: **PASS / SAFE** (`WORKING_SET_CAPTURE_NULL.md`).
 
 **Paint (WS-04) is a separate layer** and must assume only: the store satisfies the Working Set Contract — not TARGET, HARD_CAP, prune direction, or Lifetime internals.
 

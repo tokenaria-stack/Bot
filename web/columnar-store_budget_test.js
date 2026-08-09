@@ -77,14 +77,18 @@ assert(store.barCount() === 50, 'under hard cap stays intact');
 assert(store.windowMode === 'live', 'replaceMonolith sets live');
 assert(store.invariantOk(), 'invariant under cap');
 
+// Soft replace over HARD_CAP: Mutation Set covers payload → no TARGET amputate
 fillStore(store, 150);
-assert(store.barCount() === 100, `append-path replace prune to target, got ${store.barCount()}`);
-assert(store.windowMode === 'live', 'FROM_OLDEST keeps live mode');
-assert(store.invariantOk(), 'invariant after FROM_OLDEST');
+assert(store.barCount() === 150, `soft replace retains full payload, got ${store.barCount()}`);
+assert(store.windowMode === 'live', 'soft replace stays live');
+assert(store.invariantOk(), 'invariant after soft over-cap');
 assert(store.windowStartSec() === store.firstTimeSec(), 'windowStart getter');
 assert(store.windowEndSec() === store.lastTimeSec(), 'windowEnd getter');
-const firstAfterOldest = store.firstTimeSec();
-assert(firstAfterOldest === 1_700_000_000 + 50 * 60, 'dropped 50 oldest');
+
+// Commit-paired over HARD_CAP still needs a FROM_OLDEST prune path for live growth —
+// exercise via appendTick (below) and preserve-paired prepend. Soft fill leaves tip intact:
+const firstAfterSoft = store.firstTimeSec();
+assert(firstAfterSoft === 1_700_000_000, 'soft over-cap keeps oldest payload candle');
 
 // Prepend past hard cap → FROM_NEWEST → history mode (no VIEW bounds = legacy path)
 const live = new ColumnarStore();
@@ -96,7 +100,7 @@ assert(live.barCount() === 100, `prepend prune to target, got ${live.barCount()}
 assert(live.windowMode === 'history', 'FROM_NEWEST sets history mode');
 assert(live.invariantOk(), 'invariant after FROM_NEWEST');
 assert(live.lastTimeSec() < beforePrependLast, 'newest tip pruned away');
-assert(live.firstTimeSec() < firstAfterOldest, 'older history retained on left');
+assert(live.firstTimeSec() < firstAfterSoft, 'older history retained on left');
 
 // Debt #69C: focal nearer right → FROM_OLDEST (keep tip)
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
@@ -136,7 +140,7 @@ Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
 global.chartTime = (t) => Number(t);
 tip.setTfInterval(60);
 fillStore(tip, 13);
-assert(tip.barCount() === 10, 'replace defensive prune');
+assert(tip.barCount() === 13, 'soft replace retains over hard cap (Mutation)');
 tip.windowMode = 'live';
 const base = tip.lastTimeSec();
 for (let i = 1; i <= 5; i++) {
@@ -189,7 +193,7 @@ proj2.applyProjection({
   annotations: snap.annotations,
 }, { viewFromSec: projFrom, viewToSec: projTo });
 assert(proj2.lastTimeSec() === projTo, 'applyProjection preserve-paired keeps VIEW tip');
-assert(proj2.barCount() === 100, 'soft applyProjection under HARD_CAP stays intact');
+assert(proj2.barCount() === 150, 'soft applyProjection: Mutation∪VIEW retain full series over HARD_CAP');
 assert(proj2.invariantOk(), 'invariant applyProjection VIEW');
 
 // ── Track A Step 1: VIEW-preserving prune (WS-01…WS-03 / S1–S3 / E3-01) ──
@@ -299,16 +303,20 @@ mutProj.applyProjection({
 assert(mutProj.barCount() === 150, 'TB1 soft applyProjection: Mutation Set blocks same-op prune');
 assert(mutProj.firstTimeSec() === bigTimes[0] && mutProj.lastTimeSec() === bigTimes[149], 'TB1 soft series intact');
 
-// replaceMonolith commit-paired: world replace — Mutation Set excluded; prune allowed
+// replaceMonolith commit-paired: world replace — S6 accepts full monolith (no TARGET amputate)
 const commitProj = new ColumnarStore();
 commitProj.replaceMonolith({
   times: bigTimes,
   candles: bigCandles,
   plots: {},
   annotations: [],
+  hasMore: true,
 }, { commitPaired: true });
-assert(commitProj.barCount() === 100, 'TB1 commitPaired: may prune without Mutation Set');
-assert(commitProj.windowMode === 'live', 'TB1 commitPaired FROM_OLDEST stays live');
+assert(commitProj.barCount() === 150, 'S6/TB1 commitPaired: retains full payload over HARD_CAP');
+assert(commitProj.firstTimeSec() === bigTimes[0], 'S6: oldest retained = payload oldest');
+assert(commitProj.lastTimeSec() === bigTimes[149], 'S6: newest retained = payload newest');
+assert(commitProj.snapshot().meta.hasMore === true, 'S6: hasMore not forced to EOF by commit-paired accept');
+assert(commitProj.windowMode === 'live', 'TB1 commitPaired stays live');
 assert(commitProj.invariantOk(), 'TB1 commitPaired invariant');
 assert(commitProj.retainedNeighborhoodBounds() == null, 'TB2: commitPaired clears Retained Neighborhood');
 
@@ -347,15 +355,18 @@ assert(rnStore.barCount() === 200, 'TB2: VIEW∪RN∪Mutation leave nothing elig
 const rnAfterB = rnStore.retainedNeighborhoodBounds();
 assert(rnAfterB && rnAfterB.fromSec === bFirst && rnAfterB.toSec >= aFirst, 'TB2: RN expanded A∪B');
 
-// World replacement resets RN and may prune former neighborhood
+// World replacement resets RN; S6 retains full commit-paired payload (no TARGET amputate)
 rnStore.replaceMonolith({
   times: bigTimes,
   candles: bigCandles,
   plots: {},
   annotations: [],
+  hasMore: true,
 }, { commitPaired: true });
 assert(rnStore.retainedNeighborhoodBounds() == null, 'TB2: world replace clears RN');
-assert(rnStore.barCount() === 100, 'TB2: after clear RN, commit-paired prune allowed');
+assert(rnStore.barCount() === 150, 'S6/TB2: commit-paired retains full payload after RN clear');
+assert(rnStore.firstTimeSec() === bigTimes[0] && rnStore.lastTimeSec() === bigTimes[149], 'S6/TB2: series span = payload');
+assert(rnStore.snapshot().meta.hasMore === true, 'S6/TB2: hasMore unchanged (not EOF)');
 
 // ── Track B Step 3: Lazy Contract — exploration ≠ contraction ──
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
@@ -491,5 +502,71 @@ lazyProj.replaceMonolith({
 }, { commitPaired: true });
 assert(lazyProj.retainedNeighborhoodBounds() == null, 'TB3: world replace clears RN');
 assert(!lazyProj.timesSec().includes(lpLeft), 'TB3: world replace may drop former RN');
+
+// ── S6 repair: commit-paired retains N > HARD_CAP; preserve-paired pressure unchanged ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+assert(ColumnarStore.BUDGET_TARGET === 100 && ColumnarStore.BUDGET_HARD_CAP === 120,
+  'S6: HARD_CAP/TARGET numeric policy unchanged by repair (test doubles intact)');
+
+const s6N = 200; // > HARD_CAP(120)
+const s6Times = [];
+const s6Candles = { open: [], high: [], low: [], close: [], volume: [] };
+for (let i = 0; i < s6N; i++) {
+  s6Times.push(2_000_000_000 + i * 60);
+  s6Candles.open.push(1);
+  s6Candles.high.push(2);
+  s6Candles.low.push(1);
+  s6Candles.close.push(1.5);
+  s6Candles.volume.push(1);
+}
+const s6 = new ColumnarStore();
+// Seed RN so commit-paired must clear it.
+fillStore(s6, 50);
+s6.prependMonolith(makeOlderChunk(40, s6.firstTimeSec()), {
+  viewFromSec: s6.firstTimeSec(),
+  viewToSec: s6.lastTimeSec(),
+  focalTimeSec: s6.firstTimeSec(),
+  atLiveEdge: false,
+});
+assert(s6.retainedNeighborhoodBounds() != null, 'S6 setup: RN present before commit-paired');
+s6.replaceMonolith({
+  times: s6Times,
+  candles: s6Candles,
+  plots: {},
+  annotations: [],
+  hasMore: true,
+}, { commitPaired: true });
+assert(s6.barCount() === s6N, `S6: full monolith retained (${s6.barCount()} vs ${s6N})`);
+assert(s6.firstTimeSec() === s6Times[0], 'S6: oldest = payload oldest');
+assert(s6.lastTimeSec() === s6Times[s6N - 1], 'S6: newest = payload newest');
+assert(s6.snapshot().meta.hasMore === true, 'S6: hasMore stays true (not EOF)');
+assert(s6.retainedNeighborhoodBounds() == null, 'S6: RN cleared on commit-paired');
+assert(s6.windowMode === 'live', 'S6: commit-paired stays live');
+assert(s6.invariantOk(), 'S6: invariant after over-cap commit-paired');
+
+// Preserve-paired pressure still Working-Set-safe (VIEW∪Mutation∪RN; may exceed HARD_CAP)
+const s6p = new ColumnarStore();
+fillStore(s6p, 100);
+const s6pViewFrom = s6p.firstTimeSec();
+const s6pViewTo = s6p.lastTimeSec();
+const s6pA = makeOlderChunk(50, s6pViewFrom);
+const s6pAFirst = s6pA.times[0];
+s6p.prependMonolith(s6pA, {
+  viewFromSec: s6pViewFrom,
+  viewToSec: s6pViewTo,
+  focalTimeSec: s6pViewFrom,
+  atLiveEdge: false,
+});
+const s6pB = makeOlderChunk(50, s6p.firstTimeSec());
+s6p.prependMonolith(s6pB, {
+  viewFromSec: s6pViewFrom,
+  viewToSec: s6pViewTo,
+  focalTimeSec: s6pViewFrom,
+  atLiveEdge: false,
+});
+assert(s6p.barCount() === 200, 'S6: preserve-paired still retains VIEW∪RN∪Mutation over HARD_CAP');
+assert(s6p.timesSec().includes(s6pAFirst), 'S6: preserve-paired still keeps prior Mutation under RN');
+assert(s6p.barCount() > ColumnarStore.BUDGET_HARD_CAP, 'S6: preserve over-cap accordion still allowed');
 
 console.log('columnar-store_budget_test: OK');
