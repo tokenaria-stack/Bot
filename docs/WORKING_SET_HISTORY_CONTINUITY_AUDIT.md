@@ -1,0 +1,148 @@
+# Gate — History-Roam Continuity Audit
+
+**STATUS:** PASS (investigation complete; both residuals have reproducible chains)  
+**Kind:** Investigation only. No code. Track C paint not reopened.
+
+---
+
+## HISTORY-ARM
+
+### reproduction
+Live BTCUSDT 15m (`?hist-audit=1`), wheel-arm, set `from=5` (&lt; `LIVE_HISTORY_SCROLL_THRESHOLD=50`):
+
+| Step | bars | from | underThresh | grew? |
+|------|------|------|-------------|-------|
+| before | 3001 | 2850 | no | — |
+| set-left-5 | 3001 | 5 | yes | — |
+| after-chunk | 6000 | 5 | yes | +2999 |
+| hold 5s (no scroll) | 6000 | **3004** | **no** | **0** |
+| disarm + from=2 | 8999→same | 2 | yes | **0** |
+| re-arm + from=3 | 11998 | 3002 | no | +2999 |
+
+### root cause
+Two concrete Boot/Hydration gates, not a lost Wave-2 pending while busy:
+
+1. **Post-chunk logical remapping clears continuation**  
+   Successful prepend → paint → `proposePreserveViewport` remaps the same left **time** to a higher logical `from` (≈ `from + addedBars`).  
+   `scheduleHistoryLoad` / `shouldLoad` require `range.from < 50`. Remapped `from` (e.g. 3004) fails the gate.  
+   Pending was already cleared when the in-flight request started (`_pendingLeftIntent = null` before fetch).  
+   After completion, `tryConsumePending()` is a no-op (no pending). The preserve-driven range event does **not** re-note (from ≥ 50).  
+   **Result:** loading stops until the user scrolls again so `from < 50`. Holding still after a chunk does not auto-continue even with `hasMore=true`.
+
+2. **`liveHistoryScrollArmed` is wheel/pointer-only**  
+   `disarmLiveHistoryScroll` (TF / clear / prepare handoff) + programmatic range changes without wheel → `shouldLoad` / `scheduleHistoryLoad` return false even when `from < 50` (proven: disarm blocked a left-threshold range).
+
+Busy delay itself is healthy (Wave 2). The stall is **missing re-arm of left-void need after preserve remaps indices**, plus the **arm bit**.
+
+### evidence
+- `web/boot.js`: `scheduleHistoryLoad`, `shouldLoad` (`liveHistoryScrollArmed`, `from >= THRESHOLD`), `attachLiveHistoryScrollArm` (wheel/pointer only), `disarmLiveHistoryScroll`
+- `web/hydration-orchestrator.js`: clear pending on start (`_tryStartPending`); on consume, `shouldLoad(liveRange)` false → **cancel pending**; `tryConsumePending` after prepend/paint
+- `web/ui/time-camera.js`: `proposePreserveViewport` remaps by left time → new logical `from`
+- Live probe table above
+
+### affected invariant
+- Wave 2 “busy must never lose” **holds** for in-flight busy.  
+- Gap: **after success**, exploration continuation is not a remembered need — it depends on a new detector event with `from < 50`. Preserve remapping often prevents that event from qualifying.
+
+```text
+scroll left (from<50, armed)
+  → noteLeftHistoryIntent → clear pending → fetch/merge
+  → markDirty prepend → setData → proposePreserveViewport
+  → logical from ≈ oldFrom + added  (≥50)
+  → tryConsumePending: no pending
+  → rangeChange scheduleHistoryLoad: from≥50 → no-op
+  → STALL until user scrolls to from<50 again (and armed)
+```
+
+---
+
+## SPARSE-PAINT
+
+### reproduction
+Observed during Track C live runs and heal:
+
+1. **Timeline heal → full hydrate** (strongest product flash)  
+2. **Prepend paint ordering** (brief, same stack / rAF)
+
+### root cause
+
+**A — Heal recovery (primary “flash” of sparse/incomplete vs prior roam)**  
+```text
+timeline_healing / gap / WS reconnect
+  → TimelineRecovery.enter → tick buffer only (store kept)
+  → publishable / watchdog Retry
+  → onRecovered → loadDashboard()   // NOT keepProjection
+  → replaceMonolith(commitPaired) tip hydrate (~HISTORY_CHUNK_LIMIT)
+  → markDirty full viewport:fresh
+  → camera FreshLive
+```
+Roamed ~39k world is replaced by a ~3k tip monolith + fresh camera. User sees a sudden sparse tip frame (and “Synchronizing…” badge). Not missing SQLite data — **intentional world replace** on heal.
+
+**B — Prepend / large setData intermediate**  
+```text
+merge prepend → markDirty(prepend)
+  → rAF F1: applyFullData(full retained series) then proposePreserveViewport
+```
+Preserve is same turn after `setData`, but LWC may paint one frame before camera commit; large Track C full-series `setData` can be heavy. Classify as **expected short intermediate / race of paint vs camera**, not missing store bars (store already merged).
+
+**C — Lonely-candle skip** (`barCount < 2`) skips paint — only if store was cleared (heal/TF clear path), not normal prepend.
+
+### evidence
+- `web/boot.js` `initTimelineRecovery` → `onRecovered → loadDashboard`; `loadDashboard` commitPaired tip replace + `viewport:'fresh'`
+- `web/timeline-recovery.js` badge “Synchronizing live data…”
+- `web/chart-compositor.js` `_flushPrepend`: setData then preserve; lonely guard
+- `web/render-scheduler.js` prepend via double rAF F1/F2 (F2 no-op)
+
+### affected invariant
+- WS-04 / Track C: retained bars are present before paint; flash is **navigation/world-replace (heal)** or **transient LWC frame**, not a reintroduced 15k tip-window.
+- Wave 1: heal path **does** FreshLive via `loadDashboard` — Data path allowed for recovery, but it is a user-visible discontinuity after long roam.
+
+```text
+SYMPTOM: sparse/tip flash after sync
+→ trigger: publishable/reconnect/gap heal
+→ transition: loadDashboard commitPaired tip world + FreshLive
+→ layer: Boot + TimelineRecovery (not Compositor window)
+→ why invariants don’t block: recovery explicitly replaces world; keepProjection used for TF handoff only
+```
+
+---
+
+## LEGACY FOUND
+
+| Item | Role |
+|------|------|
+| `LIVE_HISTORY_SCROLL_THRESHOLD` on **logical `from`** | Fragile after preserve index shift |
+| `liveHistoryScrollArmed` wheel/pointer-only | Programmatic/CDP pan cannot load after disarm |
+| Hydration `debounceTimer` 200ms | Existing debounce (not a retry loop) |
+| `maybeReturnToLiveFromHistory` still subscribed | No-op (Wave 1) — dead listener |
+| `app.legacy.js` duplicate history-arm | Not live Boot |
+| Heal → `loadDashboard` FreshLive | Pre–keepProjection recovery; wipes roam |
+| `windowMode==='history'` blocks `appendTick` | Separate tip-ingest gate after FROM_NEWEST |
+
+Not found as cause: duplicate retry queues, paint soft 15k window (removed Track C), MemoryManager.
+
+---
+
+## TESTS
+
+- Existing: Wave 2 pending-intent, Wave 3 EOF, TimeCamera preserve, Track C paint selection — not re-run as regressions for this audit (no code).  
+- New: live CDP continuity probe (table above) — investigation only.
+
+---
+
+## RECOMMENDATION
+
+**One next repair only — History continuation after prepend (Boot/Hydration detector):**
+
+After a successful left-history merge (or in `shouldLoad` / pending consume), treat “still exploring left / `hasMore`” without requiring `liveRange.from < 50` when that failure is only the **preserve-remapped index**. Options (pick one in a later implement gate):
+
+- On prepend completion, if `hasMore` and armed, re-`noteLeftHistoryIntent` using a **left-edge void** criterion (e.g. visible left near store first / `from` small **relative to left of series**, or pending preserved until user leaves left exploration); **or**
+- Stop cancelling pending when `shouldLoad(liveRange)` fails solely due to post-preserve `from ≥ threshold` while original pending was a valid left intent and `hasMore`.
+
+Do **not** weaken Wave 2 busy semantics. Do **not** add poll/timers. Heal sparse flash is a **separate** product choice (`loadDashboard` vs keepProjection soft recover) — not this first repair.
+
+---
+
+## STOP
+
+No implementation this gate.
