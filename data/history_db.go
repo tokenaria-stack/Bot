@@ -112,6 +112,9 @@ CREATE INDEX IF NOT EXISTS idx_klines_time ON historical_klines(symbol, interval
 	if dbErr != nil {
 		return dbErr
 	}
+	if dbErr = ensureArchiveGapsTableLocked(); dbErr != nil {
+		return dbErr
+	}
 
 	logDBStatsLocked()
 	purgeLegacySecondTimestampsLocked()

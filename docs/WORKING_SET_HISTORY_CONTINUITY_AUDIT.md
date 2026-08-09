@@ -138,7 +138,25 @@ Heal sparse flash remains a **separate** product choice (`loadDashboard` vs keep
 
 ---
 
-## FOLLOW-UP — History window retrieval (Aug 2026) ✅
+## BOUNDARY AUDIT — zero overlap after continuation (Aug 2026)
+
+**STATUS:** PASS (investigation; root cause proven; no code this gate)
+
+**HEADLINE:** After the first left chunk reaches the archive gap edge, time-span retrieval returns only the boundary candle (`t == FE oldest`) → `prependMonolith` adds 0; count-based `BeforeEnd` returns 2999 mergeable older bars at the same cursor.
+
+**Proven timestamps (BTCUSDT 1m, `history.db`):**
+- Tip-hydrate window (~3000): FE oldest ≈ `1786096380` sec (`1786096380000` ms)
+- Gap edge: `1786077480000` ms
+- At gap edge, OLD `end−N×interval`: returned count **1**, oldest=newest=`1786077480000` → mergeable older **0**
+- At gap edge, NEW `BeforeEnd`: returned display **3000**, oldest `1785429300000`, newest `1786077480000` → mergeable older **2999**
+
+**FE “zero overlap” meaning:** misnomer — `prependMonolith` requires `t < store.first` (strictly older). Shared overlap candle is **not** required. Adjacent older chunks are valid.
+
+**TransportDiag `history loaded` / `tip handoff`:** `loadDashboard` full hydrate + first WS tick — **not** prepend continuation.
+
+**SQLITE_BUSY:** PersistenceQueue write contention; `PRAGMA busy_timeout=5000`; BeforeEnd reads succeed — **NOT CAUSAL**.
+
+---
 
 **STATUS:** PASS (server retrieval; FE continuation unchanged)
 
@@ -146,7 +164,19 @@ Heal sparse flash remains a **separate** product choice (`loadDashboard` vs keep
 
 **Fix:** `data.LoadKlinesBeforeEnd` + `exchange.LoadContinuousContractBeforeEnd` (count-based, gap-tolerant). GetWindow / history-chunk paths call BeforeEnd. Zero-progress ≠ EOF (Wave 3 unchanged).
 
-**Proof:** `data/history_db_before_end_test.go`, `exchange/continuous_contract_before_end_test.go`, `TestLiveArchive_1mGap_BeforeEndProgress`.
+**Proof:** `data/history_db_before_end_test.go`, `exchange/continuous_contract_before_end_test.go`, `TestLiveArchive_1mFormerGap_BeforeEndProgress`.
+
+---
+
+## ARCHIVE INTEGRITY GATE (Aug 2026)
+
+**Data:** BTCUSDT 1m hole `2026-08-01 18:34` → `2026-08-07 04:37` restored via `cmd/repair_archive_gap` (7804 bars). Binance source confirmed.
+
+**Persistence:** `PersistenceQueue` retries SQLITE_BUSY; Enqueue no longer drop-on-full; exhausted retries spill + hard log (never silent discard).
+
+**Continuity:** `archive_gaps` ledger + edge notes on persist + `NoteGapsFromOpenTimes` on BeforeEnd chunks; catch-up heals tip **and** known gaps. Tip freshness ≠ completeness (H3).
+
+**Retrieval:** live GetWindow / history-chunk = `LoadContinuousContractBeforeEnd` only.
 
 ---
 

@@ -96,7 +96,7 @@ func TestSaveKlines_UpsertOverwritesOHLCV(t *testing.T) {
 	}
 }
 
-func TestPersistenceQueue_EnqueueNonBlocking(t *testing.T) {
+func TestPersistenceQueue_EnqueuePersistsAll(t *testing.T) {
 	resetDBConnection(filepath.Join(t.TempDir(), "test_persist_q.db"))
 	if err := InitDB(); err != nil {
 		t.Fatal(err)
@@ -108,23 +108,25 @@ func TestPersistenceQueue_EnqueueNonBlocking(t *testing.T) {
 	q.Start(ctx)
 
 	open := int64(1_700_000_000_000)
-	for i := 0; i < 8; i++ {
+	const n = 8
+	for i := 0; i < n; i++ {
 		ot := open + int64(i)*60_000
-		ok := q.Enqueue("BTCUSDT", "1m", Candle{
+		if !q.Enqueue("BTCUSDT", "1m", Candle{
 			OpenTime: ot, Open: 1, High: 2, Low: 1, Close: 1.5, Volume: float64(i + 1), CloseTime: ot + 59_999,
-		})
-		if !ok && q.Dropped.Load() == 0 {
-			t.Fatal("Enqueue returned false without Dropped increment")
+		}) {
+			t.Fatal("Enqueue returned false")
 		}
 	}
-	// Allow worker to drain.
+	if q.Dropped.Load() != 0 {
+		t.Fatalf("Dropped=%d want 0", q.Dropped.Load())
+	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		got, err := LoadKlines("BTCUSDT", "1m", open, open+8*60_000, 0)
+		got, err := LoadKlines("BTCUSDT", "1m", open, open+int64(n)*60_000, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(got) >= 4 {
+		if len(got) >= n {
 			cancel()
 			return
 		}

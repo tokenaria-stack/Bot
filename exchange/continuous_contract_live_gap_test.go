@@ -9,9 +9,11 @@ import (
 	"trading_bot/data"
 )
 
-// Cheap proof against the real archive (if present): the known 1m gap near
-// open_time 1786077480000 must yield N bars via BeforeEnd, not a sole boundary.
-func TestLiveArchive_1mGap_BeforeEndProgress(t *testing.T) {
+// Against the real archive: BeforeEnd at the former Aug1–Aug7 hole boundary
+// must return ~N actual older rows (count-based). After archive repair the
+// window is continuous — time-span lookback also fills, so we no longer assert
+// span collapse here (that proof lives in TestLoadContinuousContractBeforeEnd_GapYieldsNewBars).
+func TestLiveArchive_1mFormerGap_BeforeEndProgress(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
@@ -27,24 +29,11 @@ func TestLiveArchive_1mGap_BeforeEndProgress(t *testing.T) {
 	}
 
 	const (
-		boundaryMs = int64(1_786_077_480_000) // store-left boundary from live 1m probe
+		boundaryMs = int64(1_786_077_480_000) // former gap-end candle
 		limit      = 3000
-		warmup     = 300 // market.IndicatorWarmupBars — avoid import cycle in tests
+		warmup     = 300
 	)
 	wantBars := limit + warmup
-	stepMs, err := data.IntervalDurationMs("1m")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	spanStart := boundaryMs - stepMs*int64(wantBars)
-	span, err := LoadContinuousContractFromDB("BTCUSDT", "1m", spanStart, boundaryMs, wantBars)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(span) > 5 {
-		t.Fatalf("expected time-span collapse near gap, got %d bars", len(span))
-	}
 
 	got, err := LoadContinuousContractBeforeEnd("BTCUSDT", "1m", boundaryMs, wantBars)
 	if err != nil {
@@ -61,5 +50,23 @@ func TestLiveArchive_1mGap_BeforeEndProgress(t *testing.T) {
 	}
 	if newBars < limit-1 {
 		t.Fatalf("newBars=%d — zero-progress boundary payload still present", newBars)
+	}
+
+	// Continuity through the repaired interior (Aug1 18:34 → Aug7 04:37).
+	rows, err := data.LoadKlines("BTCUSDT", "1m", 1_785_609_240_000, 1_786_077_420_000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 7800 {
+		t.Fatalf("repaired interior rows=%d want >= 7800", len(rows))
+	}
+	step, err := data.IntervalDurationMs("1m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(rows); i++ {
+		if rows[i].OpenTime-rows[i-1].OpenTime != step {
+			t.Fatalf("discontinuity at i=%d %d → %d", i, rows[i-1].OpenTime, rows[i].OpenTime)
+		}
 	}
 }

@@ -193,6 +193,7 @@ func main() {
 			frame.DAGTickFrame(),
 		)
 		if isClosed {
+			// Blocking enqueue — closed bars must never be silently dropped (archive integrity).
 			persistQ.Enqueue(symbol, tf, data.Candle{
 				OpenTime:  k.OpenTime,
 				Open:      k.Open,

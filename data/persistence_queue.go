@@ -3,12 +3,19 @@ package data
 import (
 	"context"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 const defaultPersistenceQueueCap = 4096
 const persistenceFlushBatchMax = 256
+
+const (
+	persistSaveMaxAttempts = 8
+	persistRetryBase       = 25 * time.Millisecond
+	persistRetryMaxSleep   = 2 * time.Second
+)
 
 // PersistJob is one closed bar destined for the SQLite archive.
 type PersistJob struct {
@@ -19,10 +26,23 @@ type PersistJob struct {
 
 // PersistenceQueue isolates disk I/O from the live WS/DAG hot path (Shot 9C/9E).
 // It is the sole production writer into historical_klines (via SaveKlines).
-// Enqueue never blocks the caller; a full buffer drops the job and increments Dropped.
-// AppendClosedBars blocks (for REST catch-up) until space is available or ctx cancels.
+//
+// Closed bars are never silently discarded:
+//   - Enqueue blocks until the job is accepted (no drop-on-full).
+//   - SaveKlines transient failures (SQLITE_BUSY) are retried with backoff.
+//   - After exhausting retries, jobs stay on an in-memory spill and the failure
+//     is surfaced via Failures/LastError — never reported as success.
 type PersistenceQueue struct {
-	ch      chan PersistJob
+	ch   chan PersistJob
+	save func(symbol, interval string, klines []Candle) error
+
+	spillMu sync.Mutex
+	spill   []PersistJob
+
+	Failures atomic.Uint64
+	lastErr  atomic.Value // string
+
+	// Dropped is retained for metrics compatibility; the live path no longer increments it.
 	Dropped atomic.Uint64
 }
 
@@ -31,7 +51,22 @@ func NewPersistenceQueue(buffer int) *PersistenceQueue {
 	if buffer <= 0 {
 		buffer = defaultPersistenceQueueCap
 	}
-	return &PersistenceQueue{ch: make(chan PersistJob, buffer)}
+	q := &PersistenceQueue{ch: make(chan PersistJob, buffer)}
+	q.save = SaveKlines
+	q.lastErr.Store("")
+	return q
+}
+
+// SetSaveFunc overrides the UPSERT sink (tests only).
+func (q *PersistenceQueue) SetSaveFunc(fn func(symbol, interval string, klines []Candle) error) {
+	if q == nil {
+		return
+	}
+	if fn == nil {
+		q.save = SaveKlines
+		return
+	}
+	q.save = fn
 }
 
 // Start launches the single worker that drains the queue into SaveKlines (UPSERT).
@@ -42,29 +77,34 @@ func (q *PersistenceQueue) Start(ctx context.Context) {
 	go q.worker(ctx)
 }
 
-// Enqueue offers a closed candle to the archive worker without blocking.
-// Returns false if the buffer is full (job dropped) — live loop must continue.
+// Enqueue offers a closed candle to the archive worker.
+// Blocks until the job is queued — closed market data is never silently dropped.
+// Returns false only when q is nil/uninitialized.
 func (q *PersistenceQueue) Enqueue(symbol, interval string, candle Candle) bool {
 	if q == nil || q.ch == nil {
 		return false
 	}
 	job := PersistJob{Symbol: symbol, Interval: interval, Candle: candle}
+	q.ch <- job
+	return true
+}
+
+// EnqueueContext is Enqueue with cancellation (tests / controlled shutdown).
+func (q *PersistenceQueue) EnqueueContext(ctx context.Context, symbol, interval string, candle Candle) error {
+	if q == nil || q.ch == nil {
+		return nil
+	}
+	job := PersistJob{Symbol: symbol, Interval: interval, Candle: candle}
 	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	case q.ch <- job:
-		return true
-	default:
-		q.Dropped.Add(1)
-		n := q.Dropped.Load()
-		if n == 1 || n%100 == 0 {
-			log.Printf("[PersistenceQueue] drop closed bar (buffer full) dropped=%d %s %s open=%d",
-				n, symbol, interval, candle.OpenTime)
-		}
-		return false
+		return nil
 	}
 }
 
 // AppendClosedBars enqueues real closed bars for archive write (blocking).
-// Used by SQLite tip catch-up so REST never calls SaveKlines directly (Shot 9E).
+// Used by SQLite tip/gap catch-up so REST never calls SaveKlines directly (Shot 9E).
 func (q *PersistenceQueue) AppendClosedBars(ctx context.Context, symbol, interval string, candles []Candle) error {
 	if q == nil || q.ch == nil {
 		return nil
@@ -80,6 +120,33 @@ func (q *PersistenceQueue) AppendClosedBars(ctx context.Context, symbol, interva
 	return nil
 }
 
+// FailuresCount returns how many save groups exhausted retries (still held on spill).
+func (q *PersistenceQueue) FailuresCount() uint64 {
+	if q == nil {
+		return 0
+	}
+	return q.Failures.Load()
+}
+
+// LastError returns the most recent exhausted-retry error string (empty if none).
+func (q *PersistenceQueue) LastError() string {
+	if q == nil {
+		return ""
+	}
+	v, _ := q.lastErr.Load().(string)
+	return v
+}
+
+// SpillLen reports pending spill jobs (tests / health).
+func (q *PersistenceQueue) SpillLen() int {
+	if q == nil {
+		return 0
+	}
+	q.spillMu.Lock()
+	defer q.spillMu.Unlock()
+	return len(q.spill)
+}
+
 // walCheckpointInterval paces forced WAL truncation from the sole writer:
 // between flushBatch calls no write transaction is open, so TRUNCATE can succeed.
 const walCheckpointInterval = 5 * time.Minute
@@ -88,11 +155,43 @@ func (q *PersistenceQueue) worker(ctx context.Context) {
 	log.Printf("[PersistenceQueue] worker started (cap=%d)", cap(q.ch))
 	walTicker := time.NewTicker(walCheckpointInterval)
 	defer walTicker.Stop()
+	spillBackoff := time.Duration(0)
 	for {
+		if q.SpillLen() > 0 {
+			if spillBackoff > 0 {
+				timer := time.NewTimer(spillBackoff)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					q.drainRemaining()
+					log.Printf("[PersistenceQueue] worker stopped failures=%d spill=%d",
+						q.Failures.Load(), q.SpillLen())
+					return
+				case <-timer.C:
+				}
+			}
+			before := q.SpillLen()
+			q.flushSpill()
+			if q.SpillLen() > 0 && q.SpillLen() >= before {
+				if spillBackoff == 0 {
+					spillBackoff = persistRetryBase
+				} else {
+					spillBackoff *= 2
+					if spillBackoff > persistRetryMaxSleep {
+						spillBackoff = persistRetryMaxSleep
+					}
+				}
+			} else {
+				spillBackoff = 0
+			}
+			continue
+		}
+		spillBackoff = 0
 		select {
 		case <-ctx.Done():
 			q.drainRemaining()
-			log.Printf("[PersistenceQueue] worker stopped dropped=%d", q.Dropped.Load())
+			log.Printf("[PersistenceQueue] worker stopped failures=%d spill=%d",
+				q.Failures.Load(), q.SpillLen())
 			return
 		case <-walTicker.C:
 			if err := CheckpointWAL(); err != nil {
@@ -121,26 +220,91 @@ func (q *PersistenceQueue) flushBatch(jobs []PersistJob) {
 	if len(jobs) == 0 {
 		return
 	}
-	// Group by symbol+interval for one UPSERT transaction each.
 	type key struct{ sym, iv string }
 	groups := make(map[key][]Candle, 4)
 	order := make([]key, 0, 4)
+	jobByKey := make(map[key][]PersistJob, 4)
 	for _, job := range jobs {
 		k := key{job.Symbol, job.Interval}
 		if _, ok := groups[k]; !ok {
 			order = append(order, k)
 		}
 		groups[k] = append(groups[k], job.Candle)
+		jobByKey[k] = append(jobByKey[k], job)
+	}
+	save := q.save
+	if save == nil {
+		save = SaveKlines
 	}
 	for _, k := range order {
-		if err := SaveKlines(k.sym, k.iv, groups[k]); err != nil {
-			log.Printf("[PersistenceQueue] SaveKlines %s %s n=%d: %v",
-				k.sym, k.iv, len(groups[k]), err)
+		candles := groups[k]
+		if err := q.saveWithRetry(save, k.sym, k.iv, candles); err != nil {
+			q.Failures.Add(1)
+			q.lastErr.Store(err.Error())
+			log.Printf("[PersistenceQueue] HARD SaveKlines exhausted retries %s %s n=%d: %v — re-spilling (closed bars not discarded)",
+				k.sym, k.iv, len(candles), err)
+			q.pushSpill(jobByKey[k])
+			continue
 		}
+		NotePersistEdges(k.sym, k.iv, candles)
 	}
 }
 
+func (q *PersistenceQueue) saveWithRetry(save func(string, string, []Candle) error, sym, iv string, candles []Candle) error {
+	var err error
+	sleep := persistRetryBase
+	for attempt := 1; attempt <= persistSaveMaxAttempts; attempt++ {
+		err = save(sym, iv, candles)
+		if err == nil {
+			return nil
+		}
+		if !IsTransientSQLiteError(err) {
+			return err
+		}
+		if attempt == persistSaveMaxAttempts {
+			break
+		}
+		log.Printf("[PersistenceQueue] SaveKlines busy retry %d/%d %s %s n=%d: %v",
+			attempt, persistSaveMaxAttempts, sym, iv, len(candles), err)
+		time.Sleep(sleep)
+		sleep *= 2
+		if sleep > persistRetryMaxSleep {
+			sleep = persistRetryMaxSleep
+		}
+	}
+	return err
+}
+
+func (q *PersistenceQueue) pushSpill(jobs []PersistJob) {
+	if len(jobs) == 0 {
+		return
+	}
+	q.spillMu.Lock()
+	q.spill = append(q.spill, jobs...)
+	q.spillMu.Unlock()
+}
+
+// flushSpill retries one spilled batch. Returns true if work was attempted.
+func (q *PersistenceQueue) flushSpill() bool {
+	q.spillMu.Lock()
+	if len(q.spill) == 0 {
+		q.spillMu.Unlock()
+		return false
+	}
+	n := len(q.spill)
+	if n > persistenceFlushBatchMax {
+		n = persistenceFlushBatchMax
+	}
+	batch := append([]PersistJob(nil), q.spill[:n]...)
+	q.spill = q.spill[n:]
+	q.spillMu.Unlock()
+	q.flushBatch(batch)
+	return true
+}
+
 func (q *PersistenceQueue) drainRemaining() {
+	for q.flushSpill() {
+	}
 	var jobs []PersistJob
 	for {
 		select {
@@ -152,6 +316,8 @@ func (q *PersistenceQueue) drainRemaining() {
 			}
 		default:
 			q.flushBatch(jobs)
+			for q.flushSpill() {
+			}
 			return
 		}
 	}
