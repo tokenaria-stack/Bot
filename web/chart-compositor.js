@@ -1,16 +1,12 @@
 /**
  * ChartCompositor — sole live-chart paint authority (Core 2.3).
- * Reads ColumnarStore snapshots; paints via Sliding Render Window (bounded buffer).
- * Writes to ChartAdapter only.
+ * Reads ColumnarStore snapshots; paints via ChartAdapter only.
  *
- * Track A / WS-04: paint window must always contain the committed VIEW.
+ * Track C / WS-04: paint the retained Working Set covering the committed VIEW.
+ * LWC logical indices ≡ store indices — no soft tip-window that clamps the camera.
+ * TimeCamera remains sole VIEW owner; compositor only translates times → series indices.
  */
 class ChartCompositor {
-  /** Soft paint buffer size; expands when committed VIEW is larger (WS-04). */
-  static get RENDER_WINDOW_LIMIT() {
-    return 15000;
-  }
-
   /**
    * @param {object} options
    * @param {ColumnarStore} options.store
@@ -73,95 +69,37 @@ class ChartCompositor {
   }
 
   /**
-   * Slice snapshot columns to [start, end). Annotations filtered by time.
-   * @param {object} snapshot
-   * @param {number} start
-   * @param {number} end exclusive
-   */
-  static sliceSnapshot(snapshot, start, end) {
-    const times = snapshot.times;
-    const n = times.length;
-    const s = Math.max(0, Math.min(n, Math.floor(Number(start)) || 0));
-    const e = Math.max(s, Math.min(n, Math.floor(Number(end)) || 0));
-    if (s === 0 && e === n) return snapshot;
-
-    const candlesSrc = snapshot.candles && typeof snapshot.candles === 'object' ? snapshot.candles : {};
-    const candles = {};
-    for (const key of ['open', 'high', 'low', 'close', 'volume']) {
-      const col = candlesSrc[key];
-      candles[key] = Array.isArray(col) ? col.slice(s, e) : [];
-    }
-
-    const plotsSrc = snapshot.plots && typeof snapshot.plots === 'object' ? snapshot.plots : {};
-    const plots = {};
-    for (const [id, col] of Object.entries(plotsSrc)) {
-      plots[id] = Array.isArray(col) ? col.slice(s, e) : [];
-    }
-
-    const t0 = Number(times[s]);
-    const t1 = Number(times[e - 1]);
-    const annotations = Array.isArray(snapshot.annotations)
-      ? snapshot.annotations.filter((ann) => {
-        const t = Number(ann?.time ?? ann?.Time);
-        return Number.isFinite(t) && t >= t0 && t <= t1;
-      })
-      : [];
-
-    return {
-      ...snapshot,
-      times: times.slice(s, e),
-      candles,
-      plots,
-      annotations,
-    };
-  }
-
-  /**
-   * WS-04: extract a paint window that always contains the committed VIEW.
-   * Soft limit may expand when VIEW is larger. No VIEW → paint full snapshot
-   * (never tip-tail-amputate an unknown VIEW).
+   * Track C / WS-04: series to paint for the committed VIEW.
+   * Working Set retention already holds required bars — paint the full retained
+   * snapshot so painted logical indices match store indices (no soft 15k wall).
    *
    * @param {object} snapshot
-   * @param {number} [limit=15000]
    * @param {{ viewFromSec?: number|null, viewToSec?: number|null }} [viewOpts]
    * @returns {object}
    */
-  static extractWindow(snapshot, limit = 15000, viewOpts = {}) {
+  static selectPaintSnapshot(snapshot, viewOpts = {}) {
     if (!snapshot || !Array.isArray(snapshot.times)) return snapshot;
-    const n = snapshot.times.length;
-    if (n === 0) return snapshot;
+    ChartCompositor._reportIfViewMissing(snapshot, viewOpts);
+    return snapshot;
+  }
 
-    const soft = Math.max(0, Math.floor(Number(limit)) || 0);
-    const view = ChartCompositor.viewIndexRange(
-      snapshot.times,
-      viewOpts?.viewFromSec,
-      viewOpts?.viewToSec,
-    );
-
-    if (!view) {
-      // Unknown VIEW: tip-tail would violate WS-04 if VIEW were mid-history.
-      return snapshot;
-    }
-
-    const viewLen = view.end - view.start;
-    const keep = Math.min(n, Math.max(soft, viewLen));
-    if (keep >= n) return snapshot;
-
-    let extra = keep - viewLen;
-    let leftPad = Math.min(view.start, Math.floor(extra / 2));
-    let start = view.start - leftPad;
-    let end = start + keep;
-    if (end > n) {
-      end = n;
-      start = n - keep;
-    }
-    // Hard guarantee: VIEW ⊆ [start, end)
-    if (start > view.start) start = view.start;
-    if (end < view.end) end = view.end;
-    if (end - start > n) return snapshot;
-    if (start <= 0 && end >= n) return snapshot;
-
-    return ChartCompositor.sliceSnapshot(snapshot, start, end);
+  /**
+   * Contract check: committed VIEW times must exist in the painted store.
+   * Reports failure; does not invent a camera move or nearest-snap.
+   */
+  static _reportIfViewMissing(snapshot, viewOpts = {}) {
+    const from = Number(viewOpts?.viewFromSec);
+    const to = Number(viewOpts?.viewToSec);
+    if (![from, to].every(Number.isFinite) || to < from) return;
+    const view = ChartCompositor.viewIndexRange(snapshot.times, from, to);
+    if (view) return;
+    console.error('[ChartCompositor] VIEW times absent from store — paint/data contract failure', {
+      viewFromSec: from,
+      viewToSec: to,
+      storeFirst: snapshot.times[0],
+      storeLast: snapshot.times[snapshot.times.length - 1],
+      barCount: snapshot.times.length,
+    });
   }
 
   /**
@@ -210,19 +148,15 @@ class ChartCompositor {
 
     const snapshot = this._store.snapshot();
     const viewTimes = ChartCompositor.capturePaintViewTimes(snapshot);
-    const windowedSnapshot = ChartCompositor.extractWindow(
-      snapshot,
-      ChartCompositor.RENDER_WINDOW_LIMIT,
-      viewTimes || {},
-    );
-    const storeData = ChartCompositor.snapshotToStoreData(windowedSnapshot);
+    const paintSnapshot = ChartCompositor.selectPaintSnapshot(snapshot, viewTimes || {});
+    const storeData = ChartCompositor.snapshotToStoreData(paintSnapshot);
 
     ChartAdapter.setLiveUpdating(true);
     try {
       if (intent.mode === 'prepend') {
-        this._flushPrepend(storeData, windowedSnapshot, intent);
+        this._flushPrepend(storeData, paintSnapshot, intent);
       } else {
-        this._flushFull(storeData, windowedSnapshot, intent);
+        this._flushFull(storeData, paintSnapshot, intent);
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
@@ -240,11 +174,7 @@ class ChartCompositor {
     }
     const raw = this._store.snapshot();
     const viewTimes = ChartCompositor.capturePaintViewTimes(raw);
-    const snapshot = ChartCompositor.extractWindow(
-      raw,
-      ChartCompositor.RENDER_WINDOW_LIMIT,
-      viewTimes || {},
-    );
+    const snapshot = ChartCompositor.selectPaintSnapshot(raw, viewTimes || {});
     ChartAdapter.setLiveUpdating(true);
     try {
       this._applyDdrPlots(snapshot);
@@ -283,11 +213,7 @@ class ChartCompositor {
       if (typeof this._store.snapshot === 'function') {
         const raw = this._store.snapshot();
         const viewTimes = ChartCompositor.capturePaintViewTimes(raw);
-        const snap = ChartCompositor.extractWindow(
-          raw,
-          ChartCompositor.RENDER_WINDOW_LIMIT,
-          viewTimes || {},
-        );
+        const snap = ChartCompositor.selectPaintSnapshot(raw, viewTimes || {});
         this._observeShadowWorld(snap);
       }
     } finally {
@@ -337,7 +263,7 @@ class ChartCompositor {
 
   /**
    * ADR-028 — publish tipLogical + seriesTimes (observation).
-   * @param {object} snapshot windowed snapshot
+   * @param {object} snapshot painted snapshot (store indices ≡ LWC indices)
    */
   _observeShadowWorld(snapshot) {
     if (typeof TimeCamera === 'undefined' || typeof TimeCamera.observeCommittedWorld !== 'function') {
@@ -431,15 +357,15 @@ class ChartCompositor {
   /**
    * Wave 1 — prepend camera facts for TimeCamera (translator only).
    * Captures left-edge time + visibleBars before setData; does not choose VIEW.
-   * @param {object} windowedSnapshot
+   * @param {object} paintSnapshot
    * @param {{ leftTimeMs: number, visibleBars: number }|null} anchor
    */
-  _publishPrependViewportFacts(windowedSnapshot, anchor) {
+  _publishPrependViewportFacts(paintSnapshot, anchor) {
     if (!anchor || anchor.leftTimeMs == null || !Number.isFinite(anchor.leftTimeMs)) return;
     if (typeof TimeCamera === 'undefined' || typeof TimeCamera.proposePreserveViewport !== 'function') {
       return;
     }
-    const times = windowedSnapshot?.times;
+    const times = paintSnapshot?.times;
     if (!Array.isArray(times) || !times.length) return;
     TimeCamera.proposePreserveViewport({
       leftTimeMs: anchor.leftTimeMs,

@@ -277,7 +277,7 @@ Why / rejected alternatives → `docs/DECISIONS.md` (ADR-027).
 | `prependMonolith` | `_enforceBudget(pruneDirectionFromFocal(...))` — drop side farthest from viewport center; default NEWEST if no focal |
 | `windowMode` | `live` — WS may append; `history` — set when NEWEST pruned; WS/gap must not feed store or auto-`loadDashboard` |
 | Return to live | Pin right edge while `history` → `loadDashboard()` (server tip) |
-| Paint | `extractWindow` is still tip-tail (15k). **Future 69D:** if store is mid-history, paint must follow viewport |
+| Paint | Track C: full retained snapshot (`selectPaintSnapshot`); no soft 15k tip-window |
 | Reload Dashboard | HTF clear + `store.clear()` + `loadDashboard()` (emergency, not memory manager) |
 
 ---

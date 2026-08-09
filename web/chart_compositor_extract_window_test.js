@@ -1,5 +1,6 @@
 /**
- * Track A Step 2 — WS-04 extractWindow must contain committed VIEW.
+ * Track C — paint selects the retained Working Set (full snapshot).
+ * No soft RENDER_WINDOW_LIMIT / tip-tail amputate.
  * Run: node web/chart_compositor_extract_window_test.js
  */
 const { ChartCompositor } = require('./chart-compositor.js');
@@ -38,84 +39,84 @@ function makeSnapshot(n, t0 = 1_700_000_000) {
   };
 }
 
-// Under soft limit: unchanged
+// Full retained series painted (no 15k soft wall)
 {
-  const snap = makeSnapshot(100);
-  const out = ChartCompositor.extractWindow(snap, 15000, {
-    viewFromSec: snap.times[10],
-    viewToSec: snap.times[20],
+  const snap = makeSnapshot(40000);
+  const viewFrom = snap.times[100];
+  const viewTo = snap.times[200];
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
+    viewFromSec: viewFrom,
+    viewToSec: viewTo,
   });
-  assert(out.times.length === 100, 'under limit returns full snapshot');
+  assert(out.times.length === 40000, `paint full store, got ${out.times.length}`);
+  assert(out.times[0] === snap.times[0] && out.times[39999] === snap.times[39999], 'series ends intact');
+  assert(out.times.includes(viewFrom) && out.times.includes(viewTo), 'VIEW ⊆ paint');
 }
 
-// No VIEW + over limit: must NOT tip-tail (WS-04 fail-safe → full snapshot)
-{
-  const snap = makeSnapshot(200);
-  const out = ChartCompositor.extractWindow(snap, 50, {});
-  assert(out.times.length === 200, 'no VIEW must not tip-tail amputate');
-  assert(out.times[0] === snap.times[0], 'keeps left of store');
-}
-
-// Mid-history VIEW: must include VIEW, not tip-tail
+// Mid-history VIEW: still full store (not a 50-bar tip window)
 {
   const snap = makeSnapshot(200);
   const viewFrom = snap.times[40];
   const viewTo = snap.times[60];
-  const out = ChartCompositor.extractWindow(snap, 50, {
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
     viewFromSec: viewFrom,
     viewToSec: viewTo,
   });
-  assert(out.times.includes(viewFrom), 'contains VIEW left');
-  assert(out.times.includes(viewTo), 'contains VIEW right');
-  assert(out.times[out.times.length - 1] !== snap.times[199]
-    || out.times.includes(viewFrom), 'not forced tip-only when VIEW is mid');
-  assert(out.times.length === 50, `soft window size, got ${out.times.length}`);
-  assert(out.times[0] <= viewFrom && out.times[out.times.length - 1] >= viewTo, 'VIEW ⊆ paint');
+  assert(out.times.length === 200, 'no soft truncation around mid VIEW');
+  assert(out.times.includes(viewFrom) && out.times.includes(viewTo), 'VIEW covered');
 }
 
-// VIEW larger than soft limit: expand to VIEW span
+// No VIEW opts: full snapshot
 {
   const snap = makeSnapshot(200);
-  const viewFrom = snap.times[10];
-  const viewTo = snap.times[150];
-  const out = ChartCompositor.extractWindow(snap, 50, {
-    viewFromSec: viewFrom,
-    viewToSec: viewTo,
-  });
-  assert(out.times.includes(viewFrom) && out.times.includes(viewTo), 'expanded for large VIEW');
-  assert(out.times.length >= 141, `VIEW span floor, got ${out.times.length}`);
+  const out = ChartCompositor.selectPaintSnapshot(snap, {});
+  assert(out.times.length === 200, 'no VIEW still paints full retained store');
 }
 
-// Tip VIEW still works (live edge)
+// Wide VIEW (> former soft 15k): full store, not capped
 {
-  const snap = makeSnapshot(200);
-  const viewFrom = snap.times[160];
-  const viewTo = snap.times[199];
-  const out = ChartCompositor.extractWindow(snap, 50, {
-    viewFromSec: viewFrom,
-    viewToSec: viewTo,
+  const snap = makeSnapshot(20000);
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
+    viewFromSec: snap.times[0],
+    viewToSec: snap.times[19999],
   });
-  assert(out.times[out.times.length - 1] === snap.times[199], 'tip retained for live VIEW');
-  assert(out.times.includes(viewFrom), 'left of tip VIEW retained');
+  assert(out.times.length === 20000, 'wide VIEW paints full series');
 }
 
-// Annotations follow paint window times (not tip-tail list)
+// Tip VIEW (live edge)
 {
   const snap = makeSnapshot(200);
-  const viewFrom = snap.times[40];
-  const viewTo = snap.times[60];
-  const out = ChartCompositor.extractWindow(snap, 50, {
-    viewFromSec: viewFrom,
-    viewToSec: viewTo,
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
+    viewFromSec: snap.times[160],
+    viewToSec: snap.times[199],
   });
-  const t0 = out.times[0];
-  const t1 = out.times[out.times.length - 1];
-  for (const ann of out.annotations) {
-    const t = Number(ann.time);
-    assert(t >= t0 && t <= t1, 'annotation inside paint window');
-  }
-  assert(!out.annotations.some((a) => a.text === 'R') || out.times.includes(snap.times[199]),
-    'right-tip annotation only if tip painted');
+  assert(out.times[out.times.length - 1] === snap.times[199], 'tip retained');
+  assert(out.times.length === 200, 'tip VIEW does not tip-tail-amputate left store');
+}
+
+// Annotations remain on full snapshot
+{
+  const snap = makeSnapshot(200);
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
+    viewFromSec: snap.times[40],
+    viewToSec: snap.times[60],
+  });
+  assert(out.annotations.length === 3, 'full annotation set retained with full paint');
+}
+
+// VIEW absent from store: still returns snapshot (report-only; no camera invent)
+{
+  const snap = makeSnapshot(50);
+  const errs = [];
+  const prev = console.error;
+  console.error = (...args) => { errs.push(args); };
+  const out = ChartCompositor.selectPaintSnapshot(snap, {
+    viewFromSec: 1,
+    viewToSec: 2,
+  });
+  console.error = prev;
+  assert(out.times.length === 50, 'missing VIEW still paints store (no silent clamp)');
+  assert(errs.length >= 1, 'contract failure reported');
 }
 
 console.log('chart_compositor_extract_window_test: OK');
