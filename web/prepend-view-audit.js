@@ -1,11 +1,23 @@
 /**
  * TEMPORARY P0 diagnostic — market-time VIEW immutability across prepend.
- * One record per prepend. Remove after the FAIL/PASS gate is resolved.
+ * Quiet by default. Enable console: ?debugView=1 or localStorage.DEBUG_VIEW=1
+ * Always writes window.__PREPEND_VIEW_LAST__ when active.
  * Does not change camera behavior.
  */
 (function (global) {
   'use strict';
 
+  function debugViewEnabled() {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_VIEW') === '1') {
+        return true;
+      }
+      if (typeof location !== 'undefined' && /(?:\?|&)debugView=1(?:&|$)/.test(location.search || '')) {
+        return true;
+      }
+    } catch { /* */ }
+    return false;
+  }
   let seq = 0;
   let active = null;
   let patched = false;
@@ -245,11 +257,14 @@
     if (global.__PREPEND_VIEW_LOG__.length > 20) global.__PREPEND_VIEW_LOG__.shift();
 
     if (resultTag === 'PASS') {
-      console.info(
-        `PREPEND_VIEW PASS #${result.id} left ${iso(before.leftTime)} → ${iso(flushEnd.leftTime)} `
-        + `right ${iso(before.rightTime)} → ${iso(flushEnd.rightTime)} bars +${result.addedBars}`,
-      );
+      if (debugViewEnabled()) {
+        console.info(
+          `PREPEND_VIEW PASS #${result.id} left ${iso(before.leftTime)} → ${iso(flushEnd.leftTime)} `
+          + `right ${iso(before.rightTime)} → ${iso(flushEnd.rightTime)} bars +${result.addedBars}`,
+        );
+      }
     } else if (resultTag === 'FAIL') {
+      // FAIL always logs once — P0 signal; PASS/SKIP stay quiet unless DEBUG_VIEW.
       console.warn(
         `PREPEND_VIEW FAIL #${result.id} firstBadWriter=${firstBadWriter} `
         + `firstBadPhase=${firstBadPhase} setDataCase=${result.setDataCase} `
@@ -258,7 +273,7 @@
         + `right ${iso(before?.rightTime)} → ${iso(flushEnd?.rightTime)}`,
         result,
       );
-    } else {
+    } else if (debugViewEnabled()) {
       console.info(`PREPEND_VIEW SKIP_USER_GESTURE #${result.id} bars +${result.addedBars}`);
     }
 

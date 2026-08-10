@@ -1048,6 +1048,118 @@ class ColumnarStore {
     return { added, pruneDirection: direction, windowMode: this.windowMode };
   }
 
+  /**
+   * Append newer monolith bars after the current tip (right-edge history island fill).
+   * Symmetric to prependMonolith: only times strictly after lastTimeSec are accepted.
+   * Default prune FROM_OLDEST (grow toward live; drop far-left under budget).
+   * @param {object} columnarJson
+   * @param {{
+   *   focalTimeSec?: number|null,
+   *   atLiveEdge?: boolean,
+   *   pruneDirection?: string,
+   *   viewFromSec?: number|null,
+   *   viewToSec?: number|null,
+   * }} [options]
+   * @returns {{ added: number, pruneDirection?: string, windowMode?: string }}
+   */
+  appendMonolith(columnarJson, options = {}) {
+    const data = columnarJson && typeof columnarJson === 'object' ? columnarJson : {};
+    const incomingTimes = Array.isArray(data.times) ? data.times : [];
+    if (incomingTimes.length === 0) return { added: 0 };
+
+    const tipTime = this._times.length > 0 ? Number(this._times[this._times.length - 1]) : null;
+    const existing = new Set(this._times);
+    const src = data.candles && typeof data.candles === 'object' ? data.candles : {};
+    const incomingPlots = data.plots && typeof data.plots === 'object' ? data.plots : {};
+
+    const indices = [];
+    for (let i = 0; i < incomingTimes.length; i++) {
+      const t = Number(incomingTimes[i]);
+      if (!Number.isFinite(t)) continue;
+      if (tipTime != null && t <= tipTime) continue;
+      if (existing.has(t) || existing.has(incomingTimes[i])) continue;
+      indices.push(i);
+    }
+
+    if (indices.length === 0) return { added: 0 };
+
+    const added = indices.length;
+    const appendTimes = new Array(added);
+    const appended = {
+      open: new Array(added),
+      high: new Array(added),
+      low: new Array(added),
+      close: new Array(added),
+      volume: new Array(added),
+    };
+    for (let j = 0; j < added; j++) {
+      const i = indices[j];
+      appendTimes[j] = incomingTimes[i];
+      appended.open[j] = src.open?.[i];
+      appended.high[j] = src.high?.[i];
+      appended.low[j] = src.low?.[i];
+      appended.close[j] = src.close?.[i];
+      appended.volume[j] = src.volume?.[i];
+    }
+
+    const plotIds = new Set([...Object.keys(this._plots), ...Object.keys(incomingPlots)]);
+    const mergedPlots = {};
+    for (const id of plotIds) {
+      const cur = this._plots[id] || [];
+      const inc = incomingPlots[id] || [];
+      const tail = new Array(added);
+      for (let j = 0; j < added; j++) {
+        tail[j] = inc[indices[j]];
+      }
+      mergedPlots[id] = cur.concat(tail);
+    }
+
+    const appendAnnTimes = new Set(appendTimes);
+    const keptAnn = this._annotations.filter((ann) => {
+      const t = Number(ann?.time ?? ann?.Time);
+      return Number.isFinite(t) && !appendAnnTimes.has(t);
+    });
+    const incomingAnns = Array.isArray(data.annotations) ? data.annotations : [];
+    const newAnns = incomingAnns.filter((ann) => {
+      const t = Number(ann?.time ?? ann?.Time);
+      return Number.isFinite(t) && appendAnnTimes.has(t);
+    });
+
+    this._times = this._times.concat(appendTimes);
+    this._candles = {
+      open: this._candles.open.concat(appended.open),
+      high: this._candles.high.concat(appended.high),
+      low: this._candles.low.concat(appended.low),
+      close: this._candles.close.concat(appended.close),
+      volume: this._candles.volume.concat(appended.volume),
+    };
+    this._plots = mergedPlots;
+    this._annotations = keptAnn.concat(newAnns);
+    this._rebuildAnnotationMapFromArray(this._annotations);
+    this._meta = {
+      ...this._meta,
+      added: this._times.length,
+    };
+
+    const direction = this.resolveBudgetPruneDirection({
+      focalTimeSec: options.focalTimeSec,
+      atLiveEdge: options.atLiveEdge === true,
+      pruneDirection: options.pruneDirection,
+      defaultDirection: ColumnarStore.PRUNE_FROM_OLDEST,
+    });
+    const mutationFromSec = Number(appendTimes[0]);
+    const mutationToSec = Number(appendTimes[added - 1]);
+    this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
+    this._enforceBudget(direction, {
+      viewFromSec: options.viewFromSec,
+      viewToSec: options.viewToSec,
+      mutationFromSec,
+      mutationToSec,
+    });
+
+    return { added, pruneDirection: direction, windowMode: this.windowMode };
+  }
+
   invariantOk() {
     const n = this._times.length;
     if (n === 0) return false;

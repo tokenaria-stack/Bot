@@ -107,21 +107,88 @@
 
   /**
    * Build TF handoff seed from capture. No TF-density branching (ADR-028).
+   * HISTORY → HISTORY: preserve centerTime only; use healthy default zoom for the NEW TF
+   * (do not carry the old visibleBars / old time-span into the denser TF).
    * @param {object|null} captured
    */
   function cameraIntentForTfSwitch(captured) {
     if (!captured || captured.centerTimeMs == null) return null;
+    const isHistory = captured.intent === 'HISTORY';
+    const healthyBars = (typeof TimeCamera !== 'undefined'
+      && Number.isFinite(TimeCamera.HEALTHY_VISIBLE_BARS))
+      ? TimeCamera.HEALTHY_VISIBLE_BARS
+      : HEALTHY_VISIBLE_BARS;
     return {
       centerTimeMs: captured.centerTimeMs,
-      visibleBars: captured.visibleBars || HEALTHY_VISIBLE_BARS,
+      // Microscope contract: center is sacred; new TF gets a normal viewport size.
+      visibleBars: isHistory ? healthyBars : (captured.visibleBars || healthyBars),
       rightOffset: Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0,
       rightPadding: Number.isFinite(captured.rightPadding)
         ? captured.rightPadding
         : (Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0),
-      barSpacing: captured.barSpacing,
+      barSpacing: isHistory
+        ? ((typeof TimeCamera !== 'undefined' && Number.isFinite(TimeCamera.HEALTHY_BAR_SPACING))
+          ? TimeCamera.HEALTHY_BAR_SPACING
+          : HEALTHY_BAR_SPACING)
+        : captured.barSpacing,
       isAtRightEdge: captured.isAtRightEdge === true || captured.intent === 'LIVE',
-      intent: captured.intent === 'HISTORY' ? 'HISTORY' : 'LIVE',
+      intent: isHistory ? 'HISTORY' : 'LIVE',
     };
+  }
+
+  /**
+   * HISTORY TF hydrate: API endTime so a normal chunk is centered on the captured
+   * market-time focus (not the live tip). LIVE / missing center → nowSec.
+   * @param {{
+   *   intent?: string|null,
+   *   centerTimeMs?: number|null,
+   *   nowSec: number,
+   *   limit: number,
+   *   intervalSec: number,
+   * }} opts
+   * @returns {number} unix seconds endTimeSec for BeforeEnd-style history fetch
+   */
+  function resolveHistoryTfFetchEndSec(opts) {
+    const nowSec = Number(opts?.nowSec);
+    const fallback = Number.isFinite(nowSec) && nowSec > 0
+      ? Math.floor(nowSec)
+      : Math.floor(Date.now() / 1000);
+    if (!opts || opts.intent !== 'HISTORY') return fallback;
+    const centerMs = Number(opts.centerTimeMs);
+    if (!Number.isFinite(centerMs) || centerMs <= 0) return fallback;
+    const centerSec = centerMs > 1e12 ? Math.floor(centerMs / 1000) : Math.floor(centerMs);
+    const bars = Number(opts.limit);
+    const limit = Number.isFinite(bars) && bars > 0 ? Math.floor(bars) : 3000;
+    const iv = Number(opts.intervalSec);
+    const intervalSec = Number.isFinite(iv) && iv > 0 ? Math.floor(iv) : 60;
+    const end = centerSec + Math.floor(limit / 2) * intervalSec;
+    return Math.min(end, fallback);
+  }
+
+  /**
+   * Right-edge island fill: BeforeEnd window ending ~one normal chunk after store tip.
+   * Independent of TF-switch centerTime. Returns null when tip is already at/after now.
+   * @param {{
+   *   lastTimeSec: number,
+   *   nowSec: number,
+   *   limit: number,
+   *   intervalSec: number,
+   * }} opts
+   * @returns {number|null}
+   */
+  function resolveRightHistoryFetchEndSec(opts) {
+    const nowSec = Number(opts?.nowSec);
+    const fallback = Number.isFinite(nowSec) && nowSec > 0
+      ? Math.floor(nowSec)
+      : Math.floor(Date.now() / 1000);
+    const last = Number(opts?.lastTimeSec);
+    if (!Number.isFinite(last) || last <= 0) return null;
+    if (last >= fallback) return null;
+    const bars = Number(opts?.limit);
+    const limit = Number.isFinite(bars) && bars > 0 ? Math.floor(bars) : 3000;
+    const iv = Number(opts?.intervalSec);
+    const intervalSec = Number.isFinite(iv) && iv > 0 ? Math.floor(iv) : 60;
+    return Math.min(last + limit * intervalSec, fallback);
   }
 
   /**
@@ -211,6 +278,8 @@
     HEALTHY_VISIBLE_BARS,
     isPoisonCameraState,
     cameraIntentForTfSwitch,
+    resolveHistoryTfFetchEndSec,
+    resolveRightHistoryFetchEndSec,
     hostHasLayout,
     whenHostHasLayout,
     capture,
@@ -218,4 +287,7 @@
   };
 
   global.ViewportManager = ViewportManager;
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ViewportManager;
+  }
 })(typeof window !== 'undefined' ? window : globalThis);

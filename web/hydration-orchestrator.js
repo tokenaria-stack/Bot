@@ -1,6 +1,7 @@
 /**
- * HydrationOrchestrator — FSM coordinator for monolithic columnar history prepend.
+ * HydrationOrchestrator — FSM coordinator for monolithic columnar history edge loads.
  * Wave 2: owns a single pending left-history intent (not a queue). Busy delays; never drops.
+ * Microscope island: also owns a single pending right-history intent (append toward live).
  */
 const HydrationState = Object.freeze({
   IDLE: 'IDLE',
@@ -25,6 +26,11 @@ class HydrationOrchestrator {
      * @type {{ range: { from: number, to: number }, options: object }|null}
      */
     this._pendingLeftIntent = null;
+    /**
+     * Right-edge island fill — newest right-history need only.
+     * @type {{ range: { from: number, to: number }, options: object }|null}
+     */
+    this._pendingRightIntent = null;
   }
 
   /**
@@ -36,6 +42,10 @@ class HydrationOrchestrator {
    * @param {() => string[]} [deps.getSlotIds]
    * @param {(endTimeSec: number) => Promise<object>} deps.fetchColumnar
    * @param {(data: object) => { added: number, viewportRange?: object|null }|null} deps.mergeIntoStore
+   * @param {(range: object, options?: object) => boolean} [deps.shouldLoadRight]
+   * @param {() => boolean} [deps.shouldContinueRightHistory]
+   * @param {() => number|null} [deps.getRightFetchEndSec]
+   * @param {(data: object) => { added: number, viewportRange?: object|null }|null} [deps.mergeAppendIntoStore]
    * @param {(intent: object) => void} deps.markDirty
    * @param {(tick: object) => void} deps.processTick
    * @param {() => boolean} [deps.isRenderBusy]
@@ -61,6 +71,11 @@ class HydrationOrchestrator {
     return this._pendingLeftIntent != null;
   }
 
+  /** @returns {boolean} */
+  hasPendingRightIntent() {
+    return this._pendingRightIntent != null;
+  }
+
   reset() {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -68,6 +83,7 @@ class HydrationOrchestrator {
     }
     this.wsQueue = [];
     this._pendingLeftIntent = null;
+    this._pendingRightIntent = null;
     this.state = HydrationState.IDLE;
     this._inFlight = false;
   }
@@ -78,7 +94,7 @@ class HydrationOrchestrator {
   }
 
   /**
-   * Queue live WS tick while prepend is in flight.
+   * Queue live WS tick while prepend/append is in flight.
    * @returns {boolean} true if queued (caller should skip immediate processing)
    */
   queueTick(tick) {
@@ -121,6 +137,30 @@ class HydrationOrchestrator {
   }
 
   /**
+   * Right-edge island fill — remember newest need; starts when idle.
+   * Independent of left historyHasMore / TF-switch center hydrate.
+   * @param {{ from: number, to: number }} range
+   * @param {object} [options]
+   */
+  noteRightHistoryIntent(range, options = {}) {
+    if (!this._deps || !range
+      || !Number.isFinite(range.from)
+      || !Number.isFinite(range.to)) {
+      return;
+    }
+    if (typeof this._deps.shouldLoadRight !== 'function'
+      || typeof this._deps.getRightFetchEndSec !== 'function'
+      || typeof this._deps.mergeAppendIntoStore !== 'function') {
+      return;
+    }
+    this._pendingRightIntent = {
+      range: { from: range.from, to: range.to },
+      options: { ...options },
+    };
+    this.tryConsumePending();
+  }
+
+  /**
    * Consume pending when Hydration (and paint/dashboard) are idle.
    * Called after prepend finishes and after compositor flush — not via polling.
    */
@@ -139,6 +179,20 @@ class HydrationOrchestrator {
   }
 
   _tryStartPending() {
+    if (!this._deps) return;
+    if (!this._canStartNow()) return;
+
+    // Left prepend has priority when both are pending (deeper history exploration).
+    if (this._pendingLeftIntent) {
+      this._tryStartLeftPending();
+      return;
+    }
+    if (this._pendingRightIntent) {
+      this._tryStartRightPending();
+    }
+  }
+
+  _tryStartLeftPending() {
     if (!this._deps || !this._pendingLeftIntent) return;
     if (!this._canStartNow()) return;
 
@@ -177,6 +231,39 @@ class HydrationOrchestrator {
 
     // Need no longer valid — explicit cancel (not busy-drop).
     this._pendingLeftIntent = null;
+  }
+
+  _tryStartRightPending() {
+    if (!this._deps || !this._pendingRightIntent) return;
+    if (!this._canStartNow()) return;
+    if (typeof this._deps.shouldLoadRight !== 'function') {
+      this._pendingRightIntent = null;
+      return;
+    }
+
+    const pending = this._pendingRightIntent;
+    const options = pending.options || {};
+    const liveRange = (typeof this._deps.getVisibleRange === 'function'
+      ? this._deps.getVisibleRange()
+      : null) || pending.range;
+
+    if (options.continuation === true) {
+      if (!this._deps.shouldLoadRight(liveRange, options)) {
+        this._pendingRightIntent = null;
+        return;
+      }
+      this._pendingRightIntent = null;
+      this.scheduleAppend(liveRange, options);
+      return;
+    }
+
+    if (this._deps.shouldLoadRight(liveRange, options)) {
+      this._pendingRightIntent = null;
+      this.scheduleAppend(liveRange, options);
+      return;
+    }
+
+    this._pendingRightIntent = null;
   }
 
   /**
@@ -220,6 +307,25 @@ class HydrationOrchestrator {
     this.noteLeftHistoryIntent(noteRange, { continuation: true, force: true });
   }
 
+  _noteRightContinuationIfNeeded() {
+    const deps = this._deps;
+    if (!deps) return;
+    if (typeof deps.shouldContinueRightHistory !== 'function') return;
+
+    const liveRange = typeof deps.getVisibleRange === 'function'
+      ? deps.getVisibleRange()
+      : null;
+    if (!deps.shouldContinueRightHistory(liveRange)) return;
+
+    const noteRange = liveRange
+      && Number.isFinite(liveRange.from)
+      && Number.isFinite(liveRange.to)
+      ? { from: liveRange.from, to: liveRange.to }
+      : { from: 0, to: 50 };
+
+    this.noteRightHistoryIntent(noteRange, { continuation: true, force: true });
+  }
+
   schedulePrepend(range, options = {}) {
     if (!this._deps) return;
     if (!this._canStartNow()) {
@@ -246,6 +352,34 @@ class HydrationOrchestrator {
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
       this.requestPrepend(range, options);
+    }, this.debounceMs);
+  }
+
+  scheduleAppend(range, options = {}) {
+    if (!this._deps) return;
+    if (!this._canStartNow()) {
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingRightIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
+    if (options.force === true) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      this.requestAppend(range, options);
+      return;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      this.requestAppend(range, options);
     }, this.debounceMs);
   }
 
@@ -349,6 +483,110 @@ class HydrationOrchestrator {
       }
       // Wave 2: leaving busy → naturally consume pending (no poll/timer retry loop).
       // Wave 3: true EOF clears pending inside _applyCompletionHasMore / _applyAuthoritativeEof.
+      this.tryConsumePending();
+    }
+  }
+
+  async requestAppend(range, options = {}) {
+    const deps = this._deps;
+    if (!deps) return;
+    if (typeof deps.shouldLoadRight !== 'function'
+      || typeof deps.getRightFetchEndSec !== 'function'
+      || typeof deps.mergeAppendIntoStore !== 'function') {
+      return;
+    }
+    if (this._inFlight) {
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingRightIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
+    if (!this._canStartNow()) {
+      if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
+        this._pendingRightIntent = {
+          range: { from: range.from, to: range.to },
+          options: { ...options },
+        };
+      }
+      return;
+    }
+    if (!deps.shouldLoadRight(range, options)) return;
+
+    const epoch = deps.getEpoch();
+    const reqId = typeof deps.getReqId === 'function' ? deps.getReqId() : null;
+    const endTimeSec = deps.getRightFetchEndSec();
+    if (!Number.isFinite(endTimeSec) || endTimeSec <= 0) {
+      this._pendingRightIntent = null;
+      return;
+    }
+
+    this._inFlight = true;
+    this.state = HydrationState.PREPENDING;
+    let completed = false;
+
+    try {
+      const data = await deps.fetchColumnar(endTimeSec);
+      if (epoch !== deps.getEpoch()) return;
+      if (reqId != null && typeof deps.getReqId === 'function' && reqId !== deps.getReqId()) return;
+
+      if (!data || !Array.isArray(data.times) || data.times.length === 0) {
+        // Empty right payload → stop right pending (no left EOF inference).
+        this._pendingRightIntent = null;
+        return;
+      }
+
+      this.state = HydrationState.APPLYING;
+
+      if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(true);
+      if (typeof deps.sealStore === 'function') deps.sealStore();
+
+      try {
+        const viewportRange = typeof ChartAdapter !== 'undefined'
+          ? ChartAdapter.getVisibleLogicalRange('live')
+          : null;
+
+        const mergeResult = deps.mergeAppendIntoStore(data);
+        if (!mergeResult || mergeResult.added <= 0) {
+          console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
+          this._pendingRightIntent = null;
+          return;
+        }
+
+        const addedBars = Number(mergeResult.added) > 0 ? Number(mergeResult.added) : 0;
+
+        if (typeof deps.markDirty === 'function') {
+          // Same paint+preserve path as prepend (market-time ViewportAnchor).
+          deps.markDirty({
+            mode: 'prepend',
+            addedBars,
+            viewportRange: mergeResult.viewportRange ?? viewportRange,
+            viewportAnchor: mergeResult.viewportAnchor ?? null,
+          });
+        }
+
+        if (typeof deps.onAfterAppend === 'function') {
+          deps.onAfterAppend(mergeResult, addedBars);
+        }
+        completed = true;
+      } finally {
+        if (typeof deps.unsealStore === 'function') deps.unsealStore();
+        if (typeof deps.setLoadingHistory === 'function') deps.setLoadingHistory(false);
+      }
+    } catch (err) {
+      console.error('[HydrationOrchestrator] append failed:', err);
+    } finally {
+      this._inFlight = false;
+      if (completed) {
+        this.state = HydrationState.LIVE;
+        this.flushQueue();
+        this._noteRightContinuationIfNeeded();
+      } else {
+        this.wsQueue = [];
+        this.state = HydrationState.IDLE;
+      }
       this.tryConsumePending();
     }
   }

@@ -845,6 +845,37 @@
     return (Number(range.to) - tip) < -slack;
   }
 
+  function liveTfIntervalSec() {
+    const intervalFn = typeof getIntervalMs === 'function'
+      ? getIntervalMs
+      : (typeof TimeNormalizer !== 'undefined' ? TimeNormalizer.getIntervalMs : parseTfIntervalMs);
+    const intervalMs = Number(intervalFn(window.currentTf));
+    return Number.isFinite(intervalMs) && intervalMs > 0
+      ? Math.floor(intervalMs / 1000)
+      : 60;
+  }
+
+  /** Store tip is behind wall-clock — Microscope island can extend toward live. */
+  function canExtendHistoryRight() {
+    const last = liveColumnarStore?.lastTimeSec?.();
+    if (!Number.isFinite(last) || last <= 0) return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const iv = liveTfIntervalSec();
+    return last + iv < nowSec;
+  }
+
+  /** Visible range approaching the newest loaded bar (not necessarily live tip). */
+  function isApproachingLoadedRightEdge(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
+    const n = liveColumnarStore?.barCount?.() ?? 0;
+    if (n <= 0) return false;
+    const tip = n - 1;
+    const threshold = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
+      ? LIVE_HISTORY_SCROLL_THRESHOLD
+      : 50;
+    return Number(range.to) >= tip - threshold;
+  }
+
   function initHydrationOrchestrator() {
     if (typeof HydrationOrchestrator === 'undefined') return;
     liveHydrationOrchestrator = new HydrationOrchestrator();
@@ -884,6 +915,38 @@
       isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
       isDashboardLoading: () => !!window.__isDashboardLoading,
       getVisibleRange: () => ChartAdapter.getVisibleLogicalRange('live'),
+      shouldLoadRight: (range, options = {}) => {
+        if (!ChartAdapter.isInitialized('live')) return false;
+        if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
+        if (!canExtendHistoryRight()) return false;
+        if (options.continuation === true) {
+          return isApproachingLoadedRightEdge(range);
+        }
+        if (!liveHistoryScrollArmed) return false;
+        return isApproachingLoadedRightEdge(range);
+      },
+      shouldContinueRightHistory: (range) => {
+        if (!canExtendHistoryRight()) return false;
+        if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
+          return true;
+        }
+        return isApproachingLoadedRightEdge(range);
+      },
+      getRightFetchEndSec: () => {
+        const last = liveColumnarStore?.lastTimeSec?.();
+        if (!Number.isFinite(last) || last <= 0) return null;
+        if (typeof ViewportManager === 'undefined'
+          || typeof ViewportManager.resolveRightHistoryFetchEndSec !== 'function') {
+          return null;
+        }
+        const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+        return ViewportManager.resolveRightHistoryFetchEndSec({
+          lastTimeSec: last,
+          nowSec: Math.floor(Date.now() / 1000),
+          limit,
+          intervalSec: liveTfIntervalSec(),
+        });
+      },
       fetchColumnar: (endTimeSec) => {
         const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
         return API.fetchColumnarHistory({
@@ -931,6 +994,31 @@
         }
         return { added, viewportRange, viewportAnchor };
       },
+      mergeAppendIntoStore: (data) => {
+        const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+        const cap = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
+          ? ViewportManager.capture('live')
+          : null;
+        const focalTimeSec = (cap?.centerTimeMs != null && Number.isFinite(cap.centerTimeMs))
+          ? cap.centerTimeMs / 1000
+          : null;
+        const viewTimes = captureStoreViewTimes();
+        const preSnap = typeof liveColumnarStore.snapshot === 'function'
+          ? liveColumnarStore.snapshot()
+          : null;
+        const viewportAnchor = (typeof ChartCompositor !== 'undefined'
+          && ChartCompositor.captureViewportAnchor)
+          ? ChartCompositor.captureViewportAnchor(preSnap?.times, viewportRange)
+          : null;
+        const { added } = liveColumnarStore.appendMonolith(data, {
+          focalTimeSec,
+          atLiveEdge: false,
+          viewFromSec: viewTimes?.viewFromSec,
+          viewToSec: viewTimes?.viewToSec,
+        });
+        if (added <= 0) return null;
+        return { added, viewportRange, viewportAnchor };
+      },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
       processTick: (tick) => pushLiveTickDelta(tick),
     });
@@ -956,20 +1044,32 @@
 
   function scheduleHistoryLoad(range) {
     // Wave 2: Boot detects only — never retries, never owns pending.
-    // Busy must not drop: HydrationOrchestrator remembers newest left-history intent.
-    if (!range || !window.historyHasMore) return;
-    if (!liveHistoryScrollArmed) return;
-    if (range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return;
+    // Busy must not drop: HydrationOrchestrator remembers newest left/right intent.
+    if (!range || !liveHistoryScrollArmed) return;
     if ((liveColumnarStore?.barCount?.() ?? 0) === 0) return;
     if (!ChartAdapter.isInitialized('live')) return;
-    liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range);
+
+    const threshold = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
+      ? LIVE_HISTORY_SCROLL_THRESHOLD
+      : 50;
+
+    // Left void — older history (independent of TF-switch center hydrate).
+    if (window.historyHasMore && range.from < threshold) {
+      liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range);
+      return;
+    }
+
+    // Right edge of loaded island → append toward live (not centerTime re-fetch).
+    if (canExtendHistoryRight() && isApproachingLoadedRightEdge(range)) {
+      liveHydrationOrchestrator?.noteRightHistoryIntent?.(range);
+    }
   }
 
   /**
    * Wave 1 (ADR-028): windowMode is a Data fact only — Boot must not decide VIEW.
    * Former path: windowMode=history + right-edge → loadDashboard() → FreshLive (E2-01).
    * Tip rehydration without Boot→FreshLive → later wave.
-   * TODO(Wave2+): publish “live tip missing” as a loading fact; TimeCamera owns any VIEW change.
+   * Right-edge island fill is HydrationOrchestrator.append (not FreshLive).
    */
   function maybeReturnToLiveFromHistory(_range) {
     /* no-op — Data never changes VIEW */
@@ -1125,8 +1225,30 @@
       if (!isCurrentEpoch(epoch)) return;
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
-      const endTimeSec = Math.floor(Date.now() / 1000);
       const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+      const nowSec = Math.floor(Date.now() / 1000);
+      // Microscope / HISTORY→HISTORY TF switch: hydrate a normal chunk around the
+      // captured centerTime — never Date.now() tip (that drops the focal market-time).
+      let endTimeSec = nowSec;
+      if (viewportAnchor?.intent === 'HISTORY'
+        && Number.isFinite(Number(viewportAnchor.centerTimeMs))
+        && typeof ViewportManager !== 'undefined'
+        && typeof ViewportManager.resolveHistoryTfFetchEndSec === 'function') {
+        const intervalFn = typeof getIntervalMs === 'function'
+          ? getIntervalMs
+          : (typeof TimeNormalizer !== 'undefined' ? TimeNormalizer.getIntervalMs : parseTfIntervalMs);
+        const intervalMs = Number(intervalFn(window.currentTf));
+        const intervalSec = Number.isFinite(intervalMs) && intervalMs > 0
+          ? Math.floor(intervalMs / 1000)
+          : 60;
+        endTimeSec = ViewportManager.resolveHistoryTfFetchEndSec({
+          intent: 'HISTORY',
+          centerTimeMs: viewportAnchor.centerTimeMs,
+          nowSec,
+          limit,
+          intervalSec,
+        });
+      }
 
       const [columnar, stateResult] = await Promise.all([
         API.fetchColumnarHistory({

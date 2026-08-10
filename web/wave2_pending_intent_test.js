@@ -109,6 +109,7 @@ test('boot scheduleHistoryLoad must not busy-drop (source gate)', () => {
   assert.ok(m, 'scheduleHistoryLoad missing');
   const body = m[0];
   assert.ok(/noteLeftHistoryIntent/.test(body), 'Boot must forward to noteLeftHistoryIntent');
+  assert.ok(/noteRightHistoryIntent/.test(body), 'Boot must forward right-island fill to noteRightHistoryIntent');
   assert.ok(!/isBusy\(\)/.test(body), 'Boot must not gate on isBusy (Hydration owns pending)');
   assert.ok(!/liveRenderScheduler\?\.isBusy/.test(body), 'Boot must not drop on scheduler busy');
 });

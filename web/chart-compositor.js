@@ -317,11 +317,17 @@ class ChartCompositor {
     this._bindDataResolve(times);
     const tipLogical = times.length - 1;
 
+    const viewport = intent?.viewport;
+    const anchor = intent?.anchor;
+    // HISTORY TF switch: centerTime is sacred — never let FreshLive own the VIEW.
+    const historyTfRestore = viewport === 'restore'
+      && !!anchor
+      && Number.isFinite(Number(anchor.centerTimeMs))
+      && (anchor.intent === 'HISTORY' || anchor.isAtRightEdge === false);
+
     const runPropose = () => {
       this._observeShadowWorld(snapshot);
       this._bindDataResolve(times);
-      const viewport = intent?.viewport;
-      const anchor = intent?.anchor;
 
       // ADR-014: preserve = no navigation write after paint.
       if (viewport === 'preserve') return;
@@ -329,6 +335,7 @@ class ChartCompositor {
       if (viewport === 'fresh'
         || viewport == null
         || !(anchor && anchor.centerTimeMs != null)) {
+        if (historyTfRestore) return;
         TimeCamera.proposeFreshLive({ tipLogical });
         return;
       }
@@ -344,12 +351,14 @@ class ChartCompositor {
           ? anchor.rightPadding
           : anchor.rightOffset,
       };
-      TimeCamera.proposeAfterData({
+      const ok = TimeCamera.proposeAfterData({
         tipLogical,
         timesSec: times,
         seed,
         mode: 'switch',
       });
+      // Failed HISTORY restore must not fall back to FreshLive (May → August jump).
+      if (!ok && historyTfRestore) return;
     };
 
     // Debt #80: defer propose until host has layout; still via TimeCamera (no raw LWC).
@@ -357,8 +366,10 @@ class ChartCompositor {
       && ViewportManager.hostHasLayout
       && !ViewportManager.hostHasLayout('live')
       && ViewportManager.whenHostHasLayout) {
-      // Spacing-only cold commit so LWC has healthy defaults before layout.
-      TimeCamera.proposeFreshLive({});
+      // Spacing-only cold commit — skip for HISTORY TF restore (would steal VIEW to tip).
+      if (!historyTfRestore) {
+        TimeCamera.proposeFreshLive({});
+      }
       ViewportManager.whenHostHasLayout('live', runPropose);
       return;
     }
