@@ -376,6 +376,8 @@ const SHARED_TIME_SCALE = {
 
 const BACKTEST_HISTORY_CHUNK_LIMIT = 5000;
 const LIVE_HISTORY_SCROLL_THRESHOLD = 50;
+/** P1: start edge hydrate when this fraction of the visible span remains to the loaded edge. */
+const HISTORY_EDGE_PREFETCH_FRAC = 0.25;
 const LS_RISK_SETTINGS_KEY = 'dashboard_risk_settings';
 
 const LIVE_CHART_SELECTORS = {
@@ -437,7 +439,7 @@ if (typeof window !== 'undefined') {
     LIVE_STATE_CANDLE_LIMIT, HISTORY_CHUNK_LIMIT, LIVE_POLL_CANDLE_LIMIT,
     STORE_BUDGET_TARGET, STORE_BUDGET_HARD_CAP,
     MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
-    LIVE_HISTORY_SCROLL_THRESHOLD, BACKTEST_HISTORY_CHUNK_LIMIT,
+    LIVE_HISTORY_SCROLL_THRESHOLD, HISTORY_EDGE_PREFETCH_FRAC, BACKTEST_HISTORY_CHUNK_LIMIT,
     LIVE_CHART_SELECTORS, BACKTEST_CHART_SELECTORS, PANE_STACK_CONFIG,
     defaultRsxSettings, defaultNavigatorPaneSettings, defaultRiskSettings, defaultWozduhPrefs,
     ensureChartLibraryStyles,

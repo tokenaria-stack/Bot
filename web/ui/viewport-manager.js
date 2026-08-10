@@ -192,6 +192,52 @@
   }
 
   /**
+   * P1 edge prefetch: bars of runway from viewport edge → loaded data edge.
+   * Zoom-aware: max(hardMin, ceil(visibleBars * frac)). Not "20% of store length".
+   * @param {number} visibleBars
+   * @param {number} [hardMin]
+   * @param {number} [frac]
+   * @returns {number}
+   */
+  function historyEdgePrefetchBars(visibleBars, hardMin, frac) {
+    const hard = Number(hardMin);
+    const minBars = Number.isFinite(hard) && hard > 0 ? Math.floor(hard) : 50;
+    const vb = Number(visibleBars);
+    const f = Number(frac);
+    if (!Number.isFinite(vb) || vb <= 0 || !Number.isFinite(f) || f <= 0) {
+      return minBars;
+    }
+    return Math.max(minBars, Math.ceil(vb * f));
+  }
+
+  /**
+   * True when VIEW is within prefetch runway of the loaded tip (right edge).
+   * @param {{ from: number, to: number }} range
+   * @param {number} tipLogical
+   * @param {{ hardMin?: number, frac?: number }} [opts]
+   */
+  function isWithinRightEdgePrefetch(range, tipLogical, opts = {}) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
+    const tip = Number(tipLogical);
+    if (!Number.isFinite(tip)) return false;
+    const visible = Number(range.to) - Number(range.from);
+    const runway = historyEdgePrefetchBars(visible, opts.hardMin, opts.frac);
+    return Number(range.to) >= tip - runway;
+  }
+
+  /**
+   * True when VIEW is within prefetch runway of the loaded head (left void).
+   * @param {{ from: number, to: number }} range
+   * @param {{ hardMin?: number, frac?: number }} [opts]
+   */
+  function isWithinLeftEdgePrefetch(range, opts = {}) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
+    const visible = Number(range.to) - Number(range.from);
+    const runway = historyEdgePrefetchBars(visible, opts.hardMin, opts.frac);
+    return Number(range.from) < runway;
+  }
+
+  /**
    * Debt #80 — run fn once host has layout. Does not own navigation.
    * @param {string} context
    * @param {() => void} fn
@@ -280,6 +326,9 @@
     cameraIntentForTfSwitch,
     resolveHistoryTfFetchEndSec,
     resolveRightHistoryFetchEndSec,
+    historyEdgePrefetchBars,
+    isWithinRightEdgePrefetch,
+    isWithinLeftEdgePrefetch,
     hostHasLayout,
     whenHostHasLayout,
     capture,

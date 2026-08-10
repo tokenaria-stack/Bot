@@ -250,6 +250,10 @@ class ChartCompositor {
     // Shot 7 atomic frame: setData → DDR → preserve in one stack (F2 no-op).
     if (intent.phase === 'F2') return;
 
+    if (intent?._edgeHydrate && typeof EdgeHydrateAudit !== 'undefined') {
+      EdgeHydrateAudit.markPaintStart(intent._edgeHydrate);
+    }
+
     ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
     // TEMPORARY P0: market-time VIEW audit.
     if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {

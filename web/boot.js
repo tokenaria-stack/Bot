@@ -663,8 +663,15 @@
       store: liveColumnarStore,
       shouldPaint: () => (typeof window.shouldPaintLiveChart === 'function' ? window.shouldPaintLiveChart() : true),
       getNavigatorResult: () => liveNavigatorResult,
-      onAfterFlush: () => {
+      onAfterFlush: (intent) => {
         updateBufferingOverlay();
+        // EDGE_HYDRATE: paintMs includes one rAF after setData (layout/GPU), not sync only.
+        // F2 is a no-op second RAF for prepend — do not double-complete.
+        if (intent && intent._edgeHydrate
+          && intent.phase !== 'F2'
+          && typeof EdgeHydrateAudit !== 'undefined') {
+          EdgeHydrateAudit.completeAfterPaintRaf(intent._edgeHydrate);
+        }
         // Wave 2: consume after paint idle. Scheduler clears `_busy` only AFTER
         // flush returns, so onAfterFlush itself still sees isRenderBusy — defer
         // one microtask so pending left-history (incl. post-prepend continuation)
@@ -864,16 +871,39 @@
     return last + iv < nowSec;
   }
 
-  /** Visible range approaching the newest loaded bar (not necessarily live tip). */
+  /** Visible range within zoom-aware prefetch runway of the newest loaded bar. */
   function isApproachingLoadedRightEdge(range) {
     if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
     const n = liveColumnarStore?.barCount?.() ?? 0;
     if (n <= 0) return false;
     const tip = n - 1;
-    const threshold = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
+    const hardMin = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
       ? LIVE_HISTORY_SCROLL_THRESHOLD
       : 50;
-    return Number(range.to) >= tip - threshold;
+    const frac = typeof HISTORY_EDGE_PREFETCH_FRAC !== 'undefined'
+      ? HISTORY_EDGE_PREFETCH_FRAC
+      : 0.25;
+    if (typeof ViewportManager !== 'undefined'
+      && typeof ViewportManager.isWithinRightEdgePrefetch === 'function') {
+      return ViewportManager.isWithinRightEdgePrefetch(range, tip, { hardMin, frac });
+    }
+    return Number(range.to) >= tip - hardMin;
+  }
+
+  /** Visible range within zoom-aware prefetch runway of the loaded head (left). */
+  function isApproachingLoadedLeftEdge(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
+    const hardMin = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
+      ? LIVE_HISTORY_SCROLL_THRESHOLD
+      : 50;
+    const frac = typeof HISTORY_EDGE_PREFETCH_FRAC !== 'undefined'
+      ? HISTORY_EDGE_PREFETCH_FRAC
+      : 0.25;
+    if (typeof ViewportManager !== 'undefined'
+      && typeof ViewportManager.isWithinLeftEdgePrefetch === 'function') {
+      return ViewportManager.isWithinLeftEdgePrefetch(range, { hardMin, frac });
+    }
+    return Number(range.from) < hardMin;
   }
 
   function initHydrationOrchestrator() {
@@ -898,7 +928,8 @@
           return isLiveHistoryExploration(range);
         }
         if (!liveHistoryScrollArmed) return false;
-        if (options.force !== true && range.from >= (typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined' ? LIVE_HISTORY_SCROLL_THRESHOLD : 50)) return false;
+        // Edge validity always — force only skips debounce in schedule*, not this gate.
+        if (!isApproachingLoadedLeftEdge(range)) return false;
         return true;
       },
       shouldContinueLeftHistory: (range) => {
@@ -915,6 +946,11 @@
       isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
       isDashboardLoading: () => !!window.__isDashboardLoading,
       getVisibleRange: () => ChartAdapter.getVisibleLogicalRange('live'),
+      getHydrateProbe: () => ({
+        tip: liveColumnarStore?.lastTimeSec?.() ?? null,
+        storeCount: liveColumnarStore?.barCount?.() ?? 0,
+        tf: String(window.currentTf || ''),
+      }),
       shouldLoadRight: (range, options = {}) => {
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
@@ -1045,23 +1081,21 @@
   function scheduleHistoryLoad(range) {
     // Wave 2: Boot detects only — never retries, never owns pending.
     // Busy must not drop: HydrationOrchestrator remembers newest left/right intent.
+    // P1: zoom-aware prefetch runway + force skips debounce reset-while-scrolling
+    // (does not remove debounceMs; in-flight still coalesces to one fetch).
     if (!range || !liveHistoryScrollArmed) return;
     if ((liveColumnarStore?.barCount?.() ?? 0) === 0) return;
     if (!ChartAdapter.isInitialized('live')) return;
 
-    const threshold = typeof LIVE_HISTORY_SCROLL_THRESHOLD !== 'undefined'
-      ? LIVE_HISTORY_SCROLL_THRESHOLD
-      : 50;
-
     // Left void — older history (independent of TF-switch center hydrate).
-    if (window.historyHasMore && range.from < threshold) {
-      liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range);
+    if (window.historyHasMore && isApproachingLoadedLeftEdge(range)) {
+      liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range, { force: true });
       return;
     }
 
     // Right edge of loaded island → append toward live (not centerTime re-fetch).
     if (canExtendHistoryRight() && isApproachingLoadedRightEdge(range)) {
-      liveHydrationOrchestrator?.noteRightHistoryIntent?.(range);
+      liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true });
     }
   }
 
@@ -1276,7 +1310,14 @@
 
       // Shot 11C Atomic Swap: mutate store + ensure DDR hosts offline, then ONE full paint.
       // Commit-paired (FreshLive / TF hydrate): intentional world replace — no Mutation Set.
-      liveColumnarStore.replaceMonolith(columnar, { commitPaired: true });
+      // P0: HISTORY TF island must be windowMode=history so live ticks do not gap-heal
+      // (Debt #69A). Tip-behind-live is intentional Microscope, not a transport failure.
+      const historyIsland = viewportAnchor?.intent === 'HISTORY'
+        && Number.isFinite(Number(viewportAnchor.centerTimeMs));
+      liveColumnarStore.replaceMonolith(columnar, {
+        commitPaired: true,
+        windowMode: historyIsland ? 'history' : 'live',
+      });
       const histTimes = Array.isArray(columnar.times) ? columnar.times : [];
       const historyTipOpen = histTimes.length ? Number(histTimes[histTimes.length - 1]) : null;
       handoffDiag = { historyTipOpen, waiting: true };
@@ -1284,6 +1325,7 @@
         historyTipOpen,
         timeframe: window.currentTf,
         bars: histTimes.length,
+        windowMode: liveColumnarStore.windowMode,
       });
       flushLiveTickBuffer();
       if (!liveColumnarStore.invariantOk()) {

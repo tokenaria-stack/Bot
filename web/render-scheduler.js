@@ -151,6 +151,8 @@ class RenderScheduler {
         // Keep the earliest pre-mutation anchor (user VIEW before first prepend).
         viewportAnchor: prev.viewportAnchor ?? next.viewportAnchor ?? null,
         anchor: next.anchor ?? prev.anchor ?? null,
+        // TEMP EDGE_HYDRATE: keep earliest in-flight probe across coalesce.
+        _edgeHydrate: prev._edgeHydrate ?? next._edgeHydrate ?? null,
       };
     }
     return { ...next };

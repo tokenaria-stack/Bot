@@ -333,7 +333,14 @@ class ColumnarStore {
       projectedForming: proj ? proj.projectedForming === true : undefined,
       generation: data.generation != null ? Number(data.generation) : undefined,
     };
-    this.windowMode = 'live';
+    // Debt #69A: Microscope / HISTORY island must not stay 'live' or WS gap-heal fires.
+    // Default remains 'live' (FreshLive / tip hydrate). Callers pass windowMode:'history'
+    // for intentional behind-live islands (TF-switch center hydrate).
+    if (options.windowMode === 'history' || options.windowMode === 'live') {
+      this.windowMode = options.windowMode;
+    } else {
+      this.windowMode = 'live';
+    }
     const budgetOpts = {
       viewFromSec: options.viewFromSec,
       viewToSec: options.viewToSec,
@@ -1157,7 +1164,25 @@ class ColumnarStore {
       mutationToSec,
     });
 
+    // Right-edge fill reached wall-clock tip → resume live WS ingest (Debt #69A).
+    this._maybePromoteLiveWindow();
+
     return { added, pruneDirection: direction, windowMode: this.windowMode };
+  }
+
+  /**
+   * When store tip is within ~2 bars of wall clock, HISTORY island rejoins LIVE.
+   * Does not move the camera — only restores WS eligibility.
+   */
+  _maybePromoteLiveWindow() {
+    if (this.windowMode !== 'history') return;
+    const tip = this.lastTimeSec();
+    if (!Number.isFinite(tip) || tip <= 0) return;
+    const iv = this._intervalSec > 0 ? this._intervalSec : 60;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (tip + 2 * iv >= nowSec) {
+      this.windowMode = 'live';
+    }
   }
 
   invariantOk() {
