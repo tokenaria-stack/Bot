@@ -38,6 +38,16 @@
   /** @type {null|(() => boolean)} */
   let shouldSkip = null;
 
+  /**
+   * Preserve transaction: system-owned VIEW after prepend remapping.
+   * Stale LWC/pane echoes must not overwrite until released.
+   * User gesture (wheel/pointer → releasePreserveTransaction, or non-system commit)
+   * takes ownership immediately.
+   * @type {number|null}
+   */
+  let openPreserveEpoch = null;
+  let preserveEpochSeq = 0;
+
   function emptyShadowView() {
     return {
       intent: null,
@@ -209,12 +219,29 @@
   }
 
   function markGesture() {
+    releasePreserveTransaction();
     cameraGesturing = true;
     if (gestureTimer) clearTimeout(gestureTimer);
     gestureTimer = setTimeout(() => {
       cameraGesturing = false;
       gestureTimer = null;
     }, GESTURE_MUTE_MS);
+  }
+
+  /** Open a system preserve txn; returns epoch token. */
+  function beginPreserveTransaction() {
+    preserveEpochSeq += 1;
+    openPreserveEpoch = preserveEpochSeq;
+    return openPreserveEpoch;
+  }
+
+  /** End system preserve ownership (echo consumed or user took control). */
+  function releasePreserveTransaction() {
+    openPreserveEpoch = null;
+  }
+
+  function hasOpenPreserveTransaction() {
+    return openPreserveEpoch != null;
   }
 
   function bind(hooks) {
@@ -230,6 +257,7 @@
     notedTimesSec = null;
     isSyncing = false;
     cameraGesturing = false;
+    openPreserveEpoch = null;
     if (gestureTimer) {
       clearTimeout(gestureTimer);
       gestureTimer = null;
@@ -309,6 +337,12 @@
   function proposeFromPane(hostId, visibleRange, barSpacing) {
     if (isSyncing) return false;
     if (shouldSkip && shouldSkip()) return false;
+    // Stale echo after system preserve: consume txn, do not overwrite reconstructed VIEW.
+    // Real user gestures call releasePreserveTransaction() first (wheel/pointer).
+    if (openPreserveEpoch != null) {
+      releasePreserveTransaction();
+      return false;
+    }
     if (!isFiniteLogicalRange(visibleRange)) return false;
     const patch = {
       visibleRange,
@@ -325,11 +359,13 @@
   }
 
   /**
-   * Wave 1 — preserve visible window after left-side data growth (prepend).
-   * Owns VIEW decision; DataResolve maps leftTimeMs → logical (TimeCamera does not search bars).
+   * Preserve VIEW after left-side data growth (prepend).
+   * Store time is identity; logicalOffset preserves intentional empty space (incl. from < 0).
    * Never FreshLive on failure — returns false so Loading cannot smuggle navigation.
    * @param {{
-   *   leftTimeMs: number,
+   *   anchorTimeMs?: number,
+   *   leftTimeMs?: number,
+   *   logicalOffset?: number,
    *   visibleBars?: number,
    *   tipLogical?: number|null,
    *   timesSec?: number[],
@@ -348,29 +384,30 @@
       notedTipLogical = notedTimesSec.length - 1;
     }
 
-    const leftMs = Number(opts.leftTimeMs);
-    if (!Number.isFinite(leftMs)) return false;
+    const anchorMs = Number(
+      Object.prototype.hasOwnProperty.call(opts, 'anchorTimeMs')
+        ? opts.anchorTimeMs
+        : opts.leftTimeMs,
+    );
+    if (!Number.isFinite(anchorMs)) return false;
 
-    const fromLogical = resolveNearestLogical(leftMs);
-    if (fromLogical == null) return false;
+    const anchorIndex = resolveNearestLogical(anchorMs);
+    if (anchorIndex == null) return false;
 
-    const bars = sanitizeVisibleBars(opts.visibleBars);
+    let offset = Number(opts.logicalOffset);
+    if (!Number.isFinite(offset)) offset = 0;
+
+    // Preserve path: keep the pre-prepend viewport width (incl. wide HISTORY zoom).
+    // Do NOT clamp to MAX_HEALTHY_VISIBLE_BARS — that truncates `to = from + bars` and
+    // LWC then re-expands the range, moving the left market-time edge (P0 FAIL).
+    let bars = Number(opts.visibleBars);
+    if (!Number.isFinite(bars) || bars <= 0) bars = HEALTHY_VISIBLE_BARS;
+
+    const from = anchorIndex + offset;
+    const to = from + bars;
+    if (!(to > from) || !Number.isFinite(from) || !Number.isFinite(to)) return false;
+
     const tip = notedTipLogical;
-    const n = Number.isFinite(tip) && tip >= 0 ? tip + 1 : null;
-
-    let from = fromLogical;
-    let to = from + bars;
-    if (n != null && to > n) {
-      const over = to - n;
-      from = Math.max(0, from - over);
-      to = n;
-    }
-    if (!(to > from)) {
-      if (n == null) return false;
-      from = Math.max(0, n - bars);
-      to = n;
-    }
-
     const patch = {
       visibleRange: { from, to },
       sourceHostId: 'system',
@@ -381,7 +418,11 @@
     if (Number.isFinite(tip)) {
       patch.rightOffset = Math.max(0, to - tip);
     }
-    return commit(patch);
+
+    beginPreserveTransaction();
+    const ok = commit(patch);
+    if (!ok) releasePreserveTransaction();
+    return ok;
   }
 
   /**
@@ -508,6 +549,8 @@
     shadowView = emptyShadowView();
     notedTipLogical = null;
     notedTimesSec = null;
+    openPreserveEpoch = null;
+    preserveEpochSeq = 0;
   }
 
   const TimeCamera = {
@@ -521,6 +564,9 @@
     proposeFreshLive,
     proposePreserveViewport,
     proposeAfterData,
+    beginPreserveTransaction,
+    releasePreserveTransaction,
+    hasOpenPreserveTransaction,
     isSyncing: isSyncingNow,
     isGesturing,
     getCanonical,

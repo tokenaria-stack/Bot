@@ -160,6 +160,12 @@ class ChartCompositor {
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
+      // TEMPORARY P0: close market-time audit after liveUpdating clears (sync LWC echoes).
+      if (intent.mode === 'prepend'
+        && typeof PrependViewAudit !== 'undefined'
+        && PrependViewAudit.isActive()) {
+        PrependViewAudit.endFlush();
+      }
       if (this._onAfterFlush) this._onAfterFlush(intent);
     }
   }
@@ -241,11 +247,14 @@ class ChartCompositor {
   }
 
   _flushPrepend(storeData, snapshot, intent) {
-    // Shot 7 atomic frame: capture → setData → DDR → camera in one stack (F2 no-op).
+    // Shot 7 atomic frame: setData → DDR → preserve in one stack (F2 no-op).
     if (intent.phase === 'F2') return;
 
-    const prependAnchor = ChartCompositor._captureLeftEdgeAnchor();
     ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
+    // TEMPORARY P0: market-time VIEW audit.
+    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
+      PrependViewAudit.markPhase('afterSetData');
+    }
     this._applyAnnotations(storeData);
     this._applyDdrPlots(snapshot);
     const nav = this._getNavigatorResult();
@@ -255,10 +264,13 @@ class ChartCompositor {
         updateLoadedCandles: false,
       });
     }
-    // Wave 1: publish facts only — TimeCamera decides preserve VIEW (no Compositor nav policy).
+    // Wave 1: store-time ViewportAnchor → TimeCamera preserve (no LWC coord capture).
     this._observeShadowWorld(snapshot);
     this._bindDataResolve(Array.isArray(snapshot?.times) ? snapshot.times : []);
-    this._publishPrependViewportFacts(snapshot, prependAnchor);
+    this._publishPrependViewportFacts(snapshot, intent?.viewportAnchor ?? null);
+    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
+      PrependViewAudit.markPhase('afterPreserve');
+    }
   }
 
   /**
@@ -356,64 +368,52 @@ class ChartCompositor {
 
   /**
    * Wave 1 — prepend camera facts for TimeCamera (translator only).
-   * Captures left-edge time + visibleBars before setData; does not choose VIEW.
+   * ViewportAnchor captured from store before prepend; reconstructs VIEW with void offset.
    * @param {object} paintSnapshot
-   * @param {{ leftTimeMs: number, visibleBars: number }|null} anchor
+   * @param {{ anchorTimeMs: number, logicalOffset: number, visibleBars: number }|null} viewportAnchor
    */
-  _publishPrependViewportFacts(paintSnapshot, anchor) {
-    if (!anchor || anchor.leftTimeMs == null || !Number.isFinite(anchor.leftTimeMs)) return;
+  _publishPrependViewportFacts(paintSnapshot, viewportAnchor) {
+    if (!viewportAnchor || viewportAnchor.anchorTimeMs == null
+      || !Number.isFinite(viewportAnchor.anchorTimeMs)) {
+      return;
+    }
     if (typeof TimeCamera === 'undefined' || typeof TimeCamera.proposePreserveViewport !== 'function') {
       return;
     }
     const times = paintSnapshot?.times;
     if (!Array.isArray(times) || !times.length) return;
     TimeCamera.proposePreserveViewport({
-      leftTimeMs: anchor.leftTimeMs,
-      visibleBars: anchor.visibleBars,
+      anchorTimeMs: viewportAnchor.anchorTimeMs,
+      logicalOffset: viewportAnchor.logicalOffset,
+      visibleBars: viewportAnchor.visibleBars,
       tipLogical: times.length - 1,
       timesSec: times,
     });
   }
 
   /**
-   * Left visible bar time from live LWC *before* setData (logical → pixel → time).
-   * @returns {{ leftTimeMs: number, visibleBars: number }|null}
+   * Capture ViewportAnchor from store times + committed logical VIEW (before prepend).
+   * Store time is identity; logicalOffset may be negative (intentional left void).
+   * @param {number[]} timesSec
+   * @param {{ from: number, to: number }|null|undefined} range
+   * @returns {{ anchorTimeMs: number, logicalOffset: number, visibleBars: number }|null}
    */
-  static _captureLeftEdgeAnchor() {
-    const chart = typeof ChartAdapter !== 'undefined'
-      ? ChartAdapter.getChart('live', 'price')
-      : null;
-    const ts = chart?.timeScale?.();
-    if (!ts) return null;
-    const range = ts.getVisibleLogicalRange();
-    if (!ChartCompositor._isFiniteLogicalRange(range)) return null;
-
-    const fromFloor = Math.floor(range.from);
-    const coord = typeof ts.logicalToCoordinate === 'function'
-      ? ts.logicalToCoordinate(fromFloor)
-      : null;
-    if (coord == null || !Number.isFinite(coord) || typeof ts.coordinateToTime !== 'function') {
+  static captureViewportAnchor(timesSec, range) {
+    if (!Array.isArray(timesSec) || !timesSec.length) return null;
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)
+      || !(range.to > range.from)) {
       return null;
     }
-    const time = ts.coordinateToTime(coord);
-    const leftTimeMs = ChartCompositor._timeLikeToMs(time);
-    if (leftTimeMs == null) return null;
+    const n = timesSec.length;
+    const clampedIndex = Math.max(0, Math.min(n - 1, Math.floor(range.from)));
+    const sec = Number(timesSec[clampedIndex]);
+    if (!Number.isFinite(sec)) return null;
+    const anchorTimeMs = sec > 1e12 ? Math.floor(sec) : Math.floor(sec * 1000);
     return {
-      leftTimeMs,
+      anchorTimeMs,
+      logicalOffset: range.from - clampedIndex,
       visibleBars: range.to - range.from,
     };
-  }
-
-  /** @param {unknown} time */
-  static _timeLikeToMs(time) {
-    if (time == null) return null;
-    if (typeof time === 'object' && time.timestamp != null) {
-      const n = Number(time.timestamp);
-      return Number.isFinite(n) ? (n < 1e12 ? Math.floor(n * 1000) : Math.floor(n)) : null;
-    }
-    const n = Number(time);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
   }
 
   /** Nearest index in ascending unix-seconds (or ms) array for target unix-ms. O(log n). */

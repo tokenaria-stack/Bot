@@ -904,14 +904,32 @@
           ? cap.centerTimeMs / 1000
           : null;
         const viewTimes = captureStoreViewTimes();
+        // Store-time ViewportAnchor BEFORE mutation (identity for preserve after +N).
+        const preSnap = typeof liveColumnarStore.snapshot === 'function'
+          ? liveColumnarStore.snapshot()
+          : null;
+        const viewportAnchor = (typeof ChartCompositor !== 'undefined'
+          && ChartCompositor.captureViewportAnchor)
+          ? ChartCompositor.captureViewportAnchor(preSnap?.times, viewportRange)
+          : null;
+        // TEMPORARY P0: market-time VIEW audit (before store mutation).
+        if (typeof PrependViewAudit !== 'undefined') {
+          PrependViewAudit.install();
+          PrependViewAudit.beginBeforeMerge();
+        }
         const { added } = liveColumnarStore.prependMonolith(data, {
           focalTimeSec,
           atLiveEdge: cap?.isAtRightEdge === true,
           viewFromSec: viewTimes?.viewFromSec,
           viewToSec: viewTimes?.viewToSec,
         });
-        if (added <= 0) return null;
-        return { added, viewportRange };
+        if (added <= 0) {
+          if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
+            PrependViewAudit.abort();
+          }
+          return null;
+        }
+        return { added, viewportRange, viewportAnchor };
       },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
       processTick: (tick) => pushLiveTickDelta(tick),
@@ -922,9 +940,18 @@
     const root = document.getElementById('live-chart-container');
     if (!root || root._historyScrollArmBound) return;
     root._historyScrollArmBound = true;
-    const arm = () => { liveHistoryScrollArmed = true; };
+    const arm = () => {
+      liveHistoryScrollArmed = true;
+      // User gesture takes camera ownership immediately (ends system preserve txn).
+      if (typeof TimeCamera !== 'undefined' && TimeCamera.releasePreserveTransaction) {
+        TimeCamera.releasePreserveTransaction();
+      }
+    };
     root.addEventListener('wheel', arm, { passive: true });
     root.addEventListener('pointerdown', arm, { passive: true });
+    if (typeof PrependViewAudit !== 'undefined') {
+      PrependViewAudit.attachGestureWatch();
+    }
   }
 
   function scheduleHistoryLoad(range) {

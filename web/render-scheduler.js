@@ -148,6 +148,8 @@ class RenderScheduler {
         mode: 'prepend',
         addedBars: (Number(prev.addedBars) || 0) + (Number(next.addedBars) || 0),
         viewportRange: next.viewportRange ?? prev.viewportRange ?? null,
+        // Keep the earliest pre-mutation anchor (user VIEW before first prepend).
+        viewportAnchor: prev.viewportAnchor ?? next.viewportAnchor ?? null,
         anchor: next.anchor ?? prev.anchor ?? null,
       };
     }

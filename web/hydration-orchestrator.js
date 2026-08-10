@@ -318,6 +318,7 @@ class HydrationOrchestrator {
             mode: 'prepend',
             addedBars,
             viewportRange: mergeResult.viewportRange ?? viewportRange,
+            viewportAnchor: mergeResult.viewportAnchor ?? null,
           });
         }
 
