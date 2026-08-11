@@ -160,11 +160,12 @@ const MAX_STORE_BARS = 25000;
 /** Max zoom-out (logical bars). Restored to 20k for LEFT camera diagnostic. */
 const MAX_VISIBLE_BARS = 20000;
 /**
- * TEMPORARY — Mute & Sync LEFT-prepend camera diagnostic (evidence only).
- * When true: RIGHT hydration disabled; camera writers inert during LEFT setData txn.
- * See web/left-prepend-diag.js. Remove after CASE A/B/C classified.
+ * LEFT-prepend camera diagnostic (evidence only). See web/left-prepend-diag.js.
+ * When true: RIGHT hydration disabled (isolates LEFT testing).
+ * Keep false for normal use — RIGHT/live-edge load must work.
+ * Enable via localStorage LEFT_PREPEND_DIAG=1 for ad-hoc diag without blocking RIGHT.
  */
-const LEFT_PREPEND_CAMERA_DIAG = true;
+const LEFT_PREPEND_CAMERA_DIAG = false;
 /** @deprecated aliases — map to MAX_STORE_BARS (single hard working-set). */
 const STORE_BUDGET_TARGET = MAX_STORE_BARS;
 const STORE_BUDGET_HARD_CAP = MAX_STORE_BARS;
