@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -108,6 +109,49 @@ func TestPersistenceQueue_EnqueueNeverDropsUnderPressure(t *testing.T) {
 	t.Fatal("not all closed bars persisted")
 }
 
+func TestArchiveGap_MigrateOldSchemaWithoutStatus(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "archive_gaps_legacy.db")
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = raw.Exec(`
+CREATE TABLE archive_gaps (
+    symbol TEXT NOT NULL,
+    interval TEXT NOT NULL,
+    after_open_ms INTEGER NOT NULL,
+    before_open_ms INTEGER NOT NULL,
+    PRIMARY KEY (symbol, interval, after_open_ms, before_open_ms)
+);
+INSERT INTO archive_gaps VALUES ('BTCUSDT', '15m', 1513600200000, 1567900800000);
+`)
+	_ = raw.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resetDBConnection(path)
+	if err := InitDB(); err != nil {
+		t.Fatalf("InitDB on legacy archive_gaps: %v", err)
+	}
+	gaps, err := ListArchiveGaps("BTCUSDT", "15m", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) != 1 || gaps[0].Status != ArchiveGapStatusOpen {
+		t.Fatalf("migrated gaps=%#v", gaps)
+	}
+	if err := MarkArchiveGapExhausted("BTCUSDT", "15m", 1513600200000, 1567900800000, "empty_rest"); err != nil {
+		t.Fatal(err)
+	}
+	gaps, err = ListArchiveGaps("BTCUSDT", "15m", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) != 0 {
+		t.Fatalf("exhausted should leave heal queue empty, got %#v", gaps)
+	}
+}
+
 func TestArchiveGap_RecordAndNoteFromOpens(t *testing.T) {
 	resetDBConnection(filepath.Join(t.TempDir(), "archive_gaps.db"))
 	if err := InitDB(); err != nil {
@@ -126,6 +170,9 @@ func TestArchiveGap_RecordAndNoteFromOpens(t *testing.T) {
 	if len(gaps) != 1 || gaps[0].AfterOpenMs != a || gaps[0].BeforeOpenMs != b {
 		t.Fatalf("gaps=%v", gaps)
 	}
+	if gaps[0].Status != ArchiveGapStatusOpen {
+		t.Fatalf("status=%q want open", gaps[0].Status)
+	}
 	start, end, ok, err := GapHealWindow(gaps[0])
 	if err != nil || !ok {
 		t.Fatalf("heal window ok=%v err=%v", ok, err)
@@ -141,6 +188,60 @@ func TestArchiveGap_RecordAndNoteFromOpens(t *testing.T) {
 	}
 	if len(gaps) < 2 {
 		t.Fatalf("expected additional gap from opens, got %v", gaps)
+	}
+}
+
+func TestArchiveGap_ExhaustedExcludedFromHealQueue(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "archive_gaps_exhausted.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	const step int64 = 60_000
+	a := (int64(1_700_000_000_000) / step) * step
+	b := a + 5*step
+	c := b + 5*step
+	if err := RecordArchiveGap("BTCUSDT", "1m", a, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordArchiveGap("BTCUSDT", "1m", b, c); err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkArchiveGapExhausted("BTCUSDT", "1m", a, b, "empty_rest"); err != nil {
+		t.Fatal(err)
+	}
+	gaps, err := ListArchiveGaps("BTCUSDT", "1m", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) != 1 || gaps[0].AfterOpenMs != b {
+		t.Fatalf("heal queue should only list open gap, got %#v", gaps)
+	}
+	var status, reason string
+	err = db.QueryRow(`
+SELECT status, reason FROM archive_gaps
+WHERE symbol = ? AND interval = ? AND after_open_ms = ? AND before_open_ms = ?`,
+		"BTCUSDT", "1m", a, b).Scan(&status, &reason)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != ArchiveGapStatusExhausted || reason != "empty_rest" {
+		t.Fatalf("status=%q reason=%q", status, reason)
+	}
+}
+
+func TestFuturesClampHealWindow(t *testing.T) {
+	const genesis int64 = 1_567_900_800_000 // 2019-09-08
+	_, _, ok, reason := FuturesClampHealWindow(1_513_600_200_000, 1_513_602_900_000, genesis)
+	if ok || reason != "pre_futures_genesis" {
+		t.Fatalf("pre-genesis: ok=%v reason=%q", ok, reason)
+	}
+	fs, fe, ok, reason := FuturesClampHealWindow(1_513_600_200_000, genesis+15*60_000, genesis)
+	if !ok || fs != genesis || fe != genesis+15*60_000 || reason != "" {
+		t.Fatalf("clamp: ok=%v [%d..%d] reason=%q", ok, fs, fe, reason)
+	}
+	_, _, ok, reason = FuturesClampHealWindow(1_513_600_200_000, genesis-1, genesis)
+	if ok || reason != "pre_futures_genesis" {
+		t.Fatalf("end before genesis: ok=%v reason=%q", ok, reason)
 	}
 }
 

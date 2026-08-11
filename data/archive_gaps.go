@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+const (
+	// ArchiveGapStatusOpen is eligible for catch-up heal.
+	ArchiveGapStatusOpen = "open"
+	// ArchiveGapStatusExhausted is retained for diagnostics but excluded from heal queue.
+	ArchiveGapStatusExhausted = "exhausted"
+)
+
 // ArchiveGap is a known discontinuity in historical_klines:
 // bars exist at AfterOpenMs and BeforeOpenMs, but at least one expected
 // intermediate open is missing. Tip freshness does not clear these.
@@ -15,28 +22,56 @@ type ArchiveGap struct {
 	Interval     string
 	AfterOpenMs  int64 // last present bar before the hole
 	BeforeOpenMs int64 // first present bar after the hole
+	Status       string
+	Reason       string
 }
 
 // ensureArchiveGapsTableLocked creates the gap ledger (called under InitDB lock).
+// Order is mandatory for existing DBs: CREATE (no-op if present) → ALTER ADD columns → indexes.
+// Creating an index on status before ALTER fails with "no such column: status" and aborts InitDB.
 func ensureArchiveGapsTableLocked() error {
 	if db == nil {
 		return fmt.Errorf("db not open")
 	}
-	_, err := db.Exec(`
+	// Base table. Existing DBs keep their old shape; new DBs get status/reason here.
+	if _, err := db.Exec(`
 CREATE TABLE IF NOT EXISTS archive_gaps (
     symbol TEXT NOT NULL,
     interval TEXT NOT NULL,
     after_open_ms INTEGER NOT NULL,
     before_open_ms INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    reason TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (symbol, interval, after_open_ms, before_open_ms)
-);
+)`); err != nil {
+		return err
+	}
+	// Existing DBs created before status/reason — additive migrate (ignore duplicate column).
+	for _, stmt := range []string{
+		`ALTER TABLE archive_gaps ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
+		`ALTER TABLE archive_gaps ADD COLUMN reason TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, alterErr := db.Exec(stmt); alterErr != nil {
+			msg := strings.ToLower(alterErr.Error())
+			if !strings.Contains(msg, "duplicate column") {
+				return alterErr
+			}
+		}
+	}
+	// Indexes only after columns exist on both fresh and migrated DBs.
+	if _, err := db.Exec(`
 CREATE INDEX IF NOT EXISTS idx_archive_gaps_lookup
     ON archive_gaps(symbol, interval, after_open_ms);
-`)
-	return err
+CREATE INDEX IF NOT EXISTS idx_archive_gaps_open
+    ON archive_gaps(symbol, interval, status, after_open_ms);
+`); err != nil {
+		return err
+	}
+	return nil
 }
 
-// RecordArchiveGap upserts a known internal hole. No-op when edges are invalid.
+// RecordArchiveGap upserts a known internal hole as status=open. No-op when edges are invalid.
+// Does not reopen an exhausted row (ON CONFLICT DO NOTHING).
 func RecordArchiveGap(symbol, interval string, afterOpenMs, beforeOpenMs int64) error {
 	if err := InitDB(); err != nil {
 		return err
@@ -54,10 +89,10 @@ func RecordArchiveGap(symbol, interval string, afterOpenMs, beforeOpenMs int64) 
 		return nil // contiguous or overlapping — not a hole
 	}
 	_, err = db.Exec(`
-INSERT INTO archive_gaps (symbol, interval, after_open_ms, before_open_ms)
-VALUES (?, ?, ?, ?)
+INSERT INTO archive_gaps (symbol, interval, after_open_ms, before_open_ms, status, reason)
+VALUES (?, ?, ?, ?, ?, '')
 ON CONFLICT(symbol, interval, after_open_ms, before_open_ms) DO NOTHING`,
-		symbol, interval, afterOpenMs, beforeOpenMs)
+		symbol, interval, afterOpenMs, beforeOpenMs, ArchiveGapStatusOpen)
 	return err
 }
 
@@ -75,7 +110,26 @@ WHERE symbol = ? AND interval = ? AND after_open_ms = ? AND before_open_ms = ?`,
 	return err
 }
 
-// ListArchiveGaps returns up to limit known holes for a series (oldest first).
+// MarkArchiveGapExhausted keeps the row for diagnostics but excludes it from heal catch-up.
+func MarkArchiveGapExhausted(symbol, interval string, afterOpenMs, beforeOpenMs int64, reason string) error {
+	if err := InitDB(); err != nil {
+		return err
+	}
+	symbol = normalizeSymbol(symbol)
+	interval = trimInterval(interval)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "exhausted"
+	}
+	_, err := db.Exec(`
+UPDATE archive_gaps
+SET status = ?, reason = ?
+WHERE symbol = ? AND interval = ? AND after_open_ms = ? AND before_open_ms = ?`,
+		ArchiveGapStatusExhausted, reason, symbol, interval, afterOpenMs, beforeOpenMs)
+	return err
+}
+
+// ListArchiveGaps returns up to limit open (healable) holes for a series (oldest first).
 func ListArchiveGaps(symbol, interval string, limit int) ([]ArchiveGap, error) {
 	if err := InitDB(); err != nil {
 		return nil, err
@@ -86,11 +140,11 @@ func ListArchiveGaps(symbol, interval string, limit int) ([]ArchiveGap, error) {
 	symbol = normalizeSymbol(symbol)
 	interval = trimInterval(interval)
 	rows, err := db.Query(`
-SELECT symbol, interval, after_open_ms, before_open_ms
+SELECT symbol, interval, after_open_ms, before_open_ms, status, reason
 FROM archive_gaps
-WHERE symbol = ? AND interval = ?
+WHERE symbol = ? AND interval = ? AND status = ?
 ORDER BY after_open_ms ASC
-LIMIT ?`, symbol, interval, limit)
+LIMIT ?`, symbol, interval, ArchiveGapStatusOpen, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +152,31 @@ LIMIT ?`, symbol, interval, limit)
 	out := make([]ArchiveGap, 0, limit)
 	for rows.Next() {
 		var g ArchiveGap
-		if err := rows.Scan(&g.Symbol, &g.Interval, &g.AfterOpenMs, &g.BeforeOpenMs); err != nil {
+		if err := rows.Scan(&g.Symbol, &g.Interval, &g.AfterOpenMs, &g.BeforeOpenMs, &g.Status, &g.Reason); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
 	}
 	return out, rows.Err()
+}
+
+// FuturesClampHealWindow mirrors exchange FetchClosedRange genesis clamp without importing exchange.
+// ok=false means the futures REST path cannot fetch anything useful → mark exhausted.
+func FuturesClampHealWindow(startMs, endMs, genesisMs int64) (fetchStart, fetchEnd int64, ok bool, exhaustReason string) {
+	if startMs <= 0 || endMs <= 0 || startMs > endMs {
+		return 0, 0, false, "invalid_heal_window"
+	}
+	if genesisMs > 0 && endMs < genesisMs {
+		return 0, 0, false, "pre_futures_genesis"
+	}
+	fetchStart, fetchEnd = startMs, endMs
+	if genesisMs > 0 && fetchStart < genesisMs {
+		fetchStart = genesisMs
+	}
+	if fetchStart > fetchEnd {
+		return 0, 0, false, "empty_after_genesis_clamp"
+	}
+	return fetchStart, fetchEnd, true, ""
 }
 
 // NoteGapsFromOpenTimes records discontinuities inside an ascending open_time slice.

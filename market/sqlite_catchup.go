@@ -115,7 +115,8 @@ func (m *Runtime) catchUpSQLiteArchiveTip(ctx context.Context, symbol, interval 
 }
 
 // healSQLiteArchiveGaps REST-fills known internal holes from the archive_gaps ledger.
-// Bounded work per tick — does not scan the full 1.4M-row table.
+// Only status=open rows are eligible. Pre-futures / empty-REST gaps are marked exhausted
+// (kept for diagnostics) so they no longer occupy the LIMIT queue.
 func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval string) error {
 	if m == nil || m.exchangeClient == nil {
 		return nil
@@ -151,12 +152,25 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 			_ = data.ClearArchiveGap(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 			continue
 		}
-		candles, err := m.exchangeClient.FetchClosedRangePagesExact(symbol, interval, startMs, endMs)
+
+		fetchStart, fetchEnd, eligible, reason := data.FuturesClampHealWindow(
+			startMs, endMs, exchange.BinanceFuturesGenesisMs)
+		if !eligible {
+			_ = data.MarkArchiveGapExhausted(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs, reason)
+			log.Printf("[SQLiteArchive] gap exhausted %s %s [%d..%d] reason=%s",
+				symbol, interval, startMs, endMs, reason)
+			continue
+		}
+
+		candles, err := m.exchangeClient.FetchClosedRangePagesExact(symbol, interval, fetchStart, fetchEnd)
 		if err != nil {
+			// Network / API error — keep status=open for retry.
 			return err
 		}
 		if len(candles) == 0 {
-			log.Printf("[SQLiteArchive] gap-heal empty REST %s %s [%d..%d]", symbol, interval, startMs, endMs)
+			_ = data.MarkArchiveGapExhausted(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs, "empty_rest")
+			log.Printf("[SQLiteArchive] gap exhausted %s %s [%d..%d] reason=empty_rest",
+				symbol, interval, fetchStart, fetchEnd)
 			continue
 		}
 		if err := q.AppendClosedBars(ctx, symbol, interval, exchange.CandlesToData(candles)); err != nil {
@@ -169,6 +183,12 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 		if !still {
 			_ = data.ClearArchiveGap(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 			log.Printf("[SQLiteArchive] gap healed %s %s after=%d before=%d bars=%d",
+				symbol, interval, gap.AfterOpenMs, gap.BeforeOpenMs, len(candles))
+		} else if startMs < exchange.BinanceFuturesGenesisMs {
+			// Post-genesis portion written; remaining hole is pre-futures — unhealable here.
+			_ = data.MarkArchiveGapExhausted(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs,
+				"remaining_pre_futures_genesis")
+			log.Printf("[SQLiteArchive] gap exhausted %s %s after=%d before=%d reason=remaining_pre_futures_genesis wrote=%d",
 				symbol, interval, gap.AfterOpenMs, gap.BeforeOpenMs, len(candles))
 		} else {
 			log.Printf("[SQLiteArchive] gap partial %s %s after=%d before=%d wrote=%d (will retry)",
