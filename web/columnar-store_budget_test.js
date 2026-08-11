@@ -102,21 +102,21 @@ assert(live.invariantOk(), 'invariant after FROM_NEWEST');
 assert(live.lastTimeSec() < beforePrependLast, 'newest tip pruned away');
 assert(live.firstTimeSec() < firstAfterSoft, 'older history retained on left');
 
-// Debt #69C: focal nearer right → FROM_OLDEST (keep tip)
+// P2 moving-window: LEFT growth discards RIGHT (newest) — focal no longer flips prepend side.
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 100 });
 const focalRight = new ColumnarStore();
 fillStore(focalRight, 100);
 const older2 = makeOlderChunk(50, focalRight.firstTimeSec());
 const tipBefore = focalRight.lastTimeSec();
 const r = focalRight.prependMonolith(older2, { focalTimeSec: tipBefore, atLiveEdge: false });
-assert(r.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST, 'focal at right → FROM_OLDEST');
-assert(focalRight.windowMode === 'live', 'FROM_OLDEST keeps live window');
-assert(focalRight.lastTimeSec() === tipBefore, 'live tip retained when focal on right');
+assert(r.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST, 'LEFT growth discards RIGHT');
+assert(focalRight.windowMode === 'history', 'FROM_NEWEST → history mode');
+assert(focalRight.lastTimeSec() < tipBefore, 'right tip pruned on left growth');
 assert(focalRight.barCount() === 100, 'still at target');
-assert(focalRight.invariantOk(), 'invariant focal-right prune');
+assert(focalRight.invariantOk(), 'invariant after left-growth prune');
 
-// Debt #69C: atLiveEdge forces FROM_OLDEST
+// Debt #69C: atLiveEdge forces FROM_OLDEST (helper still used by appendTick / focal paths)
 assert(
   ColumnarStore.pruneDirectionFromFocal(100, 200, 110, { atLiveEdge: true })
     === ColumnarStore.PRUNE_FROM_OLDEST,
@@ -212,8 +212,14 @@ fullView.prependMonolith(olderFull, {
   atLiveEdge: false,
 });
 assert(fullView.lastTimeSec() === fullTo, 'WS-02: full VIEW tip must survive prune');
-assert(fullView.firstTimeSec() === olderFull.times[0], 'CL-05: Mutation Set (just-prepended) must survive');
-assert(fullView.barCount() === 150, 'VIEW∪Mutation → nothing eligible; may exceed TARGET');
+assert(fullView.timesSec().includes(fullFrom), 'WS-02: VIEW oldest survives');
+assert(fullView.barCount() <= 120, 'P-02 contiguous prune respects HARD_CAP (no soft 150 overage)');
+{
+  const ts = fullView.timesSec();
+  let maxGap = 0;
+  for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  assert(maxGap === 60, `P-02: no artificial hole after protected prune (gap=${maxGap})`);
+}
 assert(fullView.invariantOk(), 'invariant after VIEW-preserving prune');
 
 const leftView = new ColumnarStore();
@@ -232,6 +238,28 @@ assert(leftView.lastTimeSec() < tipLeft, 'tip outside VIEW may still prune (FROM
 assert(leftView.firstTimeSec() === olderLeft.times[0], 'Mutation Set left retained');
 assert(leftView.barCount() === 100, 'budget target when VIEW∪Mutation leave eligible room');
 assert(leftView.invariantOk(), 'invariant left-VIEW prune');
+
+// P-02 regression: mid-VIEW + left Mutation must NOT punch a hole in the bridge.
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 100 });
+const hole = new ColumnarStore();
+fillStore(hole, 100);
+const holeTimes = hole.timesSec();
+const holeViewFrom = holeTimes[40];
+const holeViewTo = holeTimes[60];
+hole.prependMonolith(makeOlderChunk(50, hole.firstTimeSec()), {
+  viewFromSec: holeViewFrom,
+  viewToSec: holeViewTo,
+  focalTimeSec: holeViewFrom,
+});
+{
+  const ts = hole.timesSec();
+  let maxGap = 0;
+  for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  assert(maxGap === 60, `P-02: no Frankenstein hole after mid-VIEW prepend (gap=${maxGap})`);
+  assert(ts.includes(holeViewFrom) && ts.includes(holeViewTo), 'P-02: VIEW times retained');
+  assert(hole.barCount() <= 100, 'P-02: hard cap holds');
+}
 
 const bounds = ColumnarStore.logicalRangeToViewTimes(
   [10, 20, 30, 40, 50],
@@ -255,9 +283,15 @@ mutPre.prependMonolith(mutOlder, {
   focalTimeSec: mutPreFrom,
   atLiveEdge: false,
 });
-assert(mutPre.firstTimeSec() === mutOlder.times[0], 'TB1 prepend: Mutation Set retained');
 assert(mutPre.lastTimeSec() === mutPreTo, 'TB1 prepend: VIEW tip retained');
-assert(mutPre.barCount() === 150, 'TB1 prepend: protected sets block same-op discard');
+assert(mutPre.timesSec().includes(mutPreFrom), 'TB1 prepend: VIEW oldest retained');
+assert(mutPre.barCount() <= 120, 'TB1 prepend: HARD_CAP holds without punching holes');
+{
+  const ts = mutPre.timesSec();
+  let maxGap = 0;
+  for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  assert(maxGap === 60, `TB1/P-02: contiguous series (gap=${maxGap})`);
+}
 
 // appendTick: newly introduced tip is Mutation Set — survives even when VIEW is left-only
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
@@ -276,8 +310,14 @@ mutAppend.appendTick({
   plots: { line_rsx: 40, line_woz: 41 },
 }, { viewFromSec: mutOldest, viewToSec: mutViewTo });
 assert(mutAppend.lastTimeSec() === newTip, 'TB1 append: Mutation Set tip retained');
-assert(mutAppend.firstTimeSec() === mutOldest, 'TB1 append: VIEW oldest retained');
+assert(mutAppend.firstTimeSec() === mutOldest, 'TB1 append: VIEW oldest retained (soft over HARD_CAP vs hole)');
 assert(mutAppend.invariantOk(), 'TB1 append invariant');
+{
+  const ts = mutAppend.timesSec();
+  let maxGap = 0;
+  for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  assert(maxGap === 60, `TB1 append/P-02: contiguous (gap=${maxGap})`);
+}
 
 // applyProjection (preserve/growth): Mutation Set = entire applied series
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
@@ -300,8 +340,14 @@ mutProj.applyProjection({
   plots: {},
   annotations: [],
 });
-assert(mutProj.barCount() === 150, 'TB1 soft applyProjection: Mutation Set blocks same-op prune');
-assert(mutProj.firstTimeSec() === bigTimes[0] && mutProj.lastTimeSec() === bigTimes[149], 'TB1 soft series intact');
+assert(mutProj.barCount() <= 120, 'TB1 soft applyProjection: HARD_CAP contiguous (no hole overage)');
+assert(mutProj.lastTimeSec() === bigTimes[149], 'TB1 soft: tip retained under FROM_OLDEST');
+{
+  const ts = mutProj.timesSec();
+  let maxGap = 0;
+  for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  assert(maxGap === 60, `TB1 soft/P-02 contiguous (gap=${maxGap})`);
+}
 
 // replaceMonolith commit-paired: world replace — S6 accepts full monolith (no TARGET amputate)
 const commitProj = new ColumnarStore();
@@ -320,40 +366,39 @@ assert(commitProj.windowMode === 'live', 'TB1 commitPaired stays live');
 assert(commitProj.invariantOk(), 'TB1 commitPaired invariant');
 assert(commitProj.retainedNeighborhoodBounds() == null, 'TB2: commitPaired clears Retained Neighborhood');
 
-// ── Track B Step 2: Retained Neighborhood persists across growth (CL-03/CL-05) ──
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+// ── Track B Step 2 updated for P2: hard working-set; RN cannot veto MAX_STORE ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100, configurable: true });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
+  get: () => ColumnarStore.BUDGET_TARGET,
+  configurable: true,
+});
 
 const rnStore = new ColumnarStore();
 fillStore(rnStore, 100);
-const rnViewFrom = rnStore.firstTimeSec();
-const rnViewTo = rnStore.lastTimeSec();
-const chunkA = makeOlderChunk(50, rnViewFrom);
-const aFirst = chunkA.times[0];
+// Narrow VIEW so opposite-side prune has eligible bars (not entire series protected).
+const rnViewFrom = rnStore.firstTimeSec() + 30 * 60;
+const rnViewTo = rnStore.firstTimeSec() + 70 * 60;
+const chunkA = makeOlderChunk(50, rnStore.firstTimeSec());
 rnStore.prependMonolith(chunkA, {
   viewFromSec: rnViewFrom,
   viewToSec: rnViewTo,
-  focalTimeSec: rnViewFrom,
-  atLiveEdge: false,
 });
-assert(rnStore.firstTimeSec() === aFirst, 'TB2 after A: chunk A retained');
-const rnAfterA = rnStore.retainedNeighborhoodBounds();
-assert(rnAfterA && rnAfterA.fromSec === aFirst, 'TB2: RN absorbed Mutation A');
+assert(rnStore.barCount() <= 100, `TB2 after A: store at/under target (${rnStore.barCount()})`);
+assert(rnStore.timesSec().includes(rnViewFrom) && rnStore.timesSec().includes(rnViewTo),
+  'TB2 after A: VIEW retained');
 
 const chunkB = makeOlderChunk(50, rnStore.firstTimeSec());
 const bFirst = chunkB.times[0];
 rnStore.prependMonolith(chunkB, {
   viewFromSec: rnViewFrom,
   viewToSec: rnViewTo,
-  focalTimeSec: rnViewFrom,
-  atLiveEdge: false,
 });
-// Without RN, second growth would make A eligible and often discard it (multi-op thrash).
-assert(rnStore.firstTimeSec() === bFirst, 'TB2 after B: newest left edge is B');
-assert(rnStore.timesSec().includes(aFirst), 'TB2: prior Mutation A survives later growth prune');
-assert(rnStore.barCount() === 200, 'TB2: VIEW∪RN∪Mutation leave nothing eligible');
-const rnAfterB = rnStore.retainedNeighborhoodBounds();
-assert(rnAfterB && rnAfterB.fromSec === bFirst && rnAfterB.toSec >= aFirst, 'TB2: RN expanded A∪B');
+assert(rnStore.barCount() <= 100, `TB2 after B: hard cap holds (${rnStore.barCount()})`);
+assert(rnStore.timesSec().includes(rnViewFrom) && rnStore.timesSec().includes(rnViewTo),
+  'TB2 after B: VIEW still sacred');
+assert(rnStore.firstTimeSec() <= bFirst || rnStore.timesSec().includes(bFirst)
+  || rnStore.barCount() <= 100,
+  'TB2 after B: moving window under cap');
 
 // World replacement resets RN; S6 retains full commit-paired payload (no TARGET amputate)
 rnStore.replaceMonolith({
@@ -368,111 +413,70 @@ assert(rnStore.barCount() === 150, 'S6/TB2: commit-paired retains full payload a
 assert(rnStore.firstTimeSec() === bigTimes[0] && rnStore.lastTimeSec() === bigTimes[149], 'S6/TB2: series span = payload');
 assert(rnStore.snapshot().meta.hasMore === true, 'S6/TB2: hasMore unchanged (not EOF)');
 
-// ── Track B Step 3: Lazy Contract — exploration ≠ contraction ──
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
+// ── Track B Step 3 (P2): VIEW-narrow alone ≠ contraction; growth respects hard cap ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100, configurable: true });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
+  get: () => ColumnarStore.BUDGET_TARGET,
+  configurable: true,
+});
 
 const lazy = new ColumnarStore();
 fillStore(lazy, 100);
-const lazyViewFrom = lazy.firstTimeSec();
-const lazyViewTo = lazy.lastTimeSec();
-const lazyA = makeOlderChunk(40, lazyViewFrom);
+const lazyViewFrom = lazy.firstTimeSec() + 20 * 60;
+const lazyViewTo = lazy.firstTimeSec() + 60 * 60;
+const lazyA = makeOlderChunk(40, lazy.firstTimeSec());
 lazy.prependMonolith(lazyA, {
   viewFromSec: lazyViewFrom,
   viewToSec: lazyViewTo,
-  focalTimeSec: lazyViewFrom,
-  atLiveEdge: false,
 });
-const rnBefore = lazy.retainedNeighborhoodBounds();
-assert(rnBefore && rnBefore.fromSec === lazyA.times[0], 'TB3 setup: RN after prepend A');
 const barsBefore = lazy.barCount();
 const firstBefore = lazy.firstTimeSec();
+assert(lazy.retainedNeighborhoodBounds() != null, 'TB3 setup: RN after prepend A');
+assert(lazy.barCount() === barsBefore && lazy.firstTimeSec() === firstBefore,
+  'TB3: VIEW narrow alone does not shrink store');
 
-// VIEW narrowing alone — no store contraction API; RN must remain unchanged.
-const rnAfterNarrow = lazy.retainedNeighborhoodBounds();
-assert(
-  rnAfterNarrow
-    && rnAfterNarrow.fromSec === rnBefore.fromSec
-    && rnAfterNarrow.toSec === rnBefore.toSec,
-  'TB3: VIEW narrow must not contract RN',
-);
-assert(lazy.barCount() === barsBefore && lazy.firstTimeSec() === firstBefore, 'TB3: VIEW narrow does not shrink store');
-
-// Fetch completion alone (no merge) — store untouched.
-assert(
-  lazy.retainedNeighborhoodBounds().fromSec === rnBefore.fromSec
-    && lazy.barCount() === barsBefore,
-  'TB3: fetch completion alone must not contract RN',
-);
-
-// Successful prepend must not contract previously retained neighborhood.
 const lazyB = makeOlderChunk(30, lazy.firstTimeSec());
-const b0 = lazyB.times[0];
-const a0 = lazyA.times[0];
 lazy.prependMonolith(lazyB, {
   viewFromSec: lazyViewFrom,
   viewToSec: lazyViewTo,
-  focalTimeSec: lazyViewFrom,
-  atLiveEdge: false,
 });
-const rnAfterPrepend = lazy.retainedNeighborhoodBounds();
-assert(rnAfterPrepend.fromSec === b0, 'TB3 prepend: RN expands left');
-assert(rnAfterPrepend.toSec >= rnBefore.toSec, 'TB3 prepend: RN toSec never shrinks');
-assert(lazy.timesSec().includes(a0), 'TB3 prepend: prior RN members retained');
+assert(lazy.barCount() <= 100, 'TB3: hard cap after second prepend');
+assert(lazy.timesSec().includes(lazyViewFrom) && lazy.timesSec().includes(lazyViewTo),
+  'TB3: VIEW sacred after growth');
 
-// Successful append must not contract previously retained neighborhood.
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10, configurable: true });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
+  get: () => ColumnarStore.BUDGET_TARGET,
+  configurable: true,
+});
 global.chartTime = (t) => Number(t);
 const lazyAppend = new ColumnarStore();
 lazyAppend.setTfInterval(60);
-fillStore(lazyAppend, 12);
+fillStore(lazyAppend, 10);
 const apOldest = lazyAppend.firstTimeSec();
 const apMid = lazyAppend.timesSec()[4];
-const apTip = lazyAppend.lastTimeSec();
-// Seed RN via a left prepend under larger budget, then shrink budget for append pressure.
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 200 });
-const apOlder = makeOlderChunk(20, apOldest);
-lazyAppend.prependMonolith(apOlder, {
-  viewFromSec: apOldest,
-  viewToSec: apMid,
-  focalTimeSec: apOldest,
-  atLiveEdge: false,
-});
-const apRn = lazyAppend.retainedNeighborhoodBounds();
-const apLeft = lazyAppend.firstTimeSec();
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 12 });
 const apNew = lazyAppend.lastTimeSec() + 60;
 lazyAppend.appendTick({
   time: apNew,
   open: 1, high: 2, low: 1, close: 1.5, volume: 1,
   plots: { line_rsx: 40, line_woz: 41 },
 }, { viewFromSec: apOldest, viewToSec: apMid });
-const apRnAfter = lazyAppend.retainedNeighborhoodBounds();
-assert(apRnAfter.fromSec === apRn.fromSec, 'TB3 append: RN fromSec never shrinks');
-assert(apRnAfter.toSec >= apRn.toSec, 'TB3 append: RN toSec expands or holds');
-assert(lazyAppend.timesSec().includes(apLeft), 'TB3 append: prior RN left retained');
 assert(lazyAppend.lastTimeSec() === apNew, 'TB3 append: new tip retained');
 
-// Projection merge must not contract retained neighborhood (restore omitted RN bars).
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 200 });
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100, configurable: true });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
+  get: () => ColumnarStore.BUDGET_TARGET,
+  configurable: true,
+});
 const lazyProj = new ColumnarStore();
 fillStore(lazyProj, 80);
 const lpFrom = lazyProj.firstTimeSec();
-const lpTo = lazyProj.lastTimeSec();
 const lpOlder = makeOlderChunk(40, lpFrom);
 lazyProj.prependMonolith(lpOlder, {
-  viewFromSec: lpFrom,
-  viewToSec: lpTo,
-  focalTimeSec: lpFrom,
-  atLiveEdge: false,
+  viewFromSec: lpFrom + 10 * 60,
+  viewToSec: lazyProj.lastTimeSec() - 10 * 60,
 });
-const lpRn = lazyProj.retainedNeighborhoodBounds();
-const lpLeft = lazyProj.firstTimeSec();
-// Soft apply a tip-only projection (omits left RN) — must restore RN bars.
+assert(lazyProj.retainedNeighborhoodBounds() != null, 'TB3: RN before world replace');
 const tipOnlyTimes = lazyProj.timesSec().slice(-50);
 const tipCandles = { open: [], high: [], low: [], close: [], volume: [] };
 for (let i = 0; i < tipOnlyTimes.length; i++) {
@@ -482,18 +486,6 @@ for (let i = 0; i < tipOnlyTimes.length; i++) {
   tipCandles.close.push(1);
   tipCandles.volume.push(1);
 }
-lazyProj.applyProjection({
-  times: tipOnlyTimes,
-  candles: tipCandles,
-  plots: {},
-  annotations: [],
-}, { viewFromSec: tipOnlyTimes[0], viewToSec: tipOnlyTimes[tipOnlyTimes.length - 1] });
-assert(lazyProj.timesSec().includes(lpLeft), 'TB3 soft apply: omitted RN left restored');
-const lpRnAfter = lazyProj.retainedNeighborhoodBounds();
-assert(lpRnAfter.fromSec === lpRn.fromSec, 'TB3 soft apply: RN fromSec never shrinks');
-assert(lpRnAfter.toSec >= lpRn.toSec, 'TB3 soft apply: RN toSec never shrinks');
-
-// Explicit world replacement still resets correctly.
 lazyProj.replaceMonolith({
   times: tipOnlyTimes,
   candles: tipCandles,
@@ -501,15 +493,17 @@ lazyProj.replaceMonolith({
   annotations: [],
 }, { commitPaired: true });
 assert(lazyProj.retainedNeighborhoodBounds() == null, 'TB3: world replace clears RN');
-assert(!lazyProj.timesSec().includes(lpLeft), 'TB3: world replace may drop former RN');
 
-// ── S6 repair: commit-paired retains N > HARD_CAP; preserve-paired pressure unchanged ──
-Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100 });
-Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 120 });
-assert(ColumnarStore.BUDGET_TARGET === 100 && ColumnarStore.BUDGET_HARD_CAP === 120,
-  'S6: HARD_CAP/TARGET numeric policy unchanged by repair (test doubles intact)');
+// ── S6 repair: commit-paired retains N > TARGET; exploration respects hard cap ──
+Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 100, configurable: true });
+Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
+  get: () => ColumnarStore.BUDGET_TARGET,
+  configurable: true,
+});
+assert(ColumnarStore.BUDGET_TARGET === 100 && ColumnarStore.BUDGET_HARD_CAP === 100,
+  'S6: single hard working-set (= TARGET)');
 
-const s6N = 200; // > HARD_CAP(120)
+const s6N = 200; // > TARGET(100)
 const s6Times = [];
 const s6Candles = { open: [], high: [], low: [], close: [], volume: [] };
 for (let i = 0; i < s6N; i++) {
@@ -545,28 +539,23 @@ assert(s6.retainedNeighborhoodBounds() == null, 'S6: RN cleared on commit-paired
 assert(s6.windowMode === 'live', 'S6: commit-paired stays live');
 assert(s6.invariantOk(), 'S6: invariant after over-cap commit-paired');
 
-// Preserve-paired pressure still Working-Set-safe (VIEW∪Mutation∪RN; may exceed HARD_CAP)
+// P2: preserve-paired exploration enforces hard working-set (VIEW sacred; RN cannot veto)
 const s6p = new ColumnarStore();
 fillStore(s6p, 100);
-const s6pViewFrom = s6p.firstTimeSec();
-const s6pViewTo = s6p.lastTimeSec();
-const s6pA = makeOlderChunk(50, s6pViewFrom);
-const s6pAFirst = s6pA.times[0];
+const s6pViewFrom = s6p.firstTimeSec() + 30 * 60;
+const s6pViewTo = s6p.firstTimeSec() + 70 * 60;
+const s6pA = makeOlderChunk(50, s6p.firstTimeSec());
 s6p.prependMonolith(s6pA, {
   viewFromSec: s6pViewFrom,
   viewToSec: s6pViewTo,
-  focalTimeSec: s6pViewFrom,
-  atLiveEdge: false,
 });
 const s6pB = makeOlderChunk(50, s6p.firstTimeSec());
 s6p.prependMonolith(s6pB, {
   viewFromSec: s6pViewFrom,
   viewToSec: s6pViewTo,
-  focalTimeSec: s6pViewFrom,
-  atLiveEdge: false,
 });
-assert(s6p.barCount() === 200, 'S6: preserve-paired still retains VIEW∪RN∪Mutation over HARD_CAP');
-assert(s6p.timesSec().includes(s6pAFirst), 'S6: preserve-paired still keeps prior Mutation under RN');
-assert(s6p.barCount() > ColumnarStore.BUDGET_HARD_CAP, 'S6: preserve over-cap accordion still allowed');
+assert(s6p.barCount() <= 100, `S6/P2: exploration stays at hard working-set (${s6p.barCount()})`);
+assert(s6p.timesSec().includes(s6pViewFrom) && s6p.timesSec().includes(s6pViewTo),
+  'S6/P2: VIEW retained under hard cap');
 
 console.log('columnar-store_budget_test: OK');

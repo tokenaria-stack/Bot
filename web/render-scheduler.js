@@ -55,8 +55,17 @@ class RenderScheduler {
         this._compositor.flush({ ...intent, phase: 'F1' });
         requestAnimationFrame(() => {
           this._compositor.flush({ ...intent, phase: 'F2' });
-          this._busy = false;
-          this._runLoop();
+          const release = () => {
+            this._busy = false;
+            this._runLoop();
+          };
+          // LEFT prepend camera may still be in rAF — do not start the next paint yet.
+          if (mode === 'prepend'
+            && typeof this._compositor.whenPrependCameraSettled === 'function') {
+            this._compositor.whenPrependCameraSettled(release);
+          } else {
+            release();
+          }
         });
       });
       return;
@@ -144,13 +153,34 @@ class RenderScheduler {
       };
     }
     if (prev.mode === 'prepend' && next.mode === 'prepend') {
+      // Do not mix left/right edge intents — keep the newer edge's paint policy.
+      if (prev.edge && next.edge && prev.edge !== next.edge) {
+        return { ...next };
+      }
+      const tipBefore = prev.tipBefore ?? next.tipBefore ?? null;
+      const tipAfter = next.tipAfter ?? prev.tipAfter ?? null;
+      const tipBeforeN = Number(tipBefore);
+      const tipAfterN = Number(tipAfter);
+      const rightBoundaryChanged = prev.rightBoundaryChanged === true
+        || next.rightBoundaryChanged === true
+        || (Number.isFinite(tipBeforeN) && Number.isFinite(tipAfterN) && tipBeforeN !== tipAfterN);
       return {
         mode: 'prepend',
+        edge: next.edge || prev.edge || 'left',
+        // Sum of prependedCounts (NOT net store length — opposite-side prune).
         addedBars: (Number(prev.addedBars) || 0) + (Number(next.addedBars) || 0),
-        viewportRange: next.viewportRange ?? prev.viewportRange ?? null,
-        // Keep the earliest pre-mutation anchor (user VIEW before first prepend).
+        prependedCount: (Number(prev.prependedCount) || Number(prev.addedBars) || 0)
+          + (Number(next.prependedCount) || Number(next.addedBars) || 0),
+        prunedRightCount: (Number(prev.prunedRightCount) || 0) + (Number(next.prunedRightCount) || 0),
+        // Earliest pre-mutation LWC range + anchor (user VIEW before first prepend).
+        viewportRange: prev.viewportRange ?? next.viewportRange ?? null,
         viewportAnchor: prev.viewportAnchor ?? next.viewportAnchor ?? null,
         anchor: next.anchor ?? prev.anchor ?? null,
+        storeBefore: prev.storeBefore ?? next.storeBefore ?? null,
+        storeAfter: next.storeAfter ?? prev.storeAfter ?? null,
+        tipBefore,
+        tipAfter,
+        rightBoundaryChanged,
         // TEMP EDGE_HYDRATE: keep earliest in-flight probe across coalesce.
         _edgeHydrate: prev._edgeHydrate ?? next._edgeHydrate ?? null,
       };

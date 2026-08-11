@@ -151,10 +151,24 @@ const MTF_PERIOD_COLORS = (typeof ChartTheme !== 'undefined' && ChartTheme.mtfPe
 /** Fast RAM tail for /api/state; deep history comes from pre-fetch assembly. */
 const LIVE_STATE_CANDLE_LIMIT = 300;
 const HISTORY_CHUNK_LIMIT = 3000;
-/** Debt #69A: live ColumnarStore display-window budget (bars). Paint soft cap stays 15k. */
-const STORE_BUDGET_TARGET = 12000;
-const STORE_BUDGET_HARD_CAP = 16000;
-const MAX_STORE_CAPACITY = 50000;
+/**
+ * P2 working-set policy (replaces obsolete TARGET 12k / HARD_CAP 16k).
+ * MAX_STORE_BARS — in-memory ColumnarStore cap (moving window).
+ * MAX_VISIBLE_BARS — max zoom-out visible logical span (not "always show N").
+ */
+const MAX_STORE_BARS = 25000;
+/** Max zoom-out (logical bars). Restored to 20k for LEFT camera diagnostic. */
+const MAX_VISIBLE_BARS = 20000;
+/**
+ * TEMPORARY — Mute & Sync LEFT-prepend camera diagnostic (evidence only).
+ * When true: RIGHT hydration disabled; camera writers inert during LEFT setData txn.
+ * See web/left-prepend-diag.js. Remove after CASE A/B/C classified.
+ */
+const LEFT_PREPEND_CAMERA_DIAG = true;
+/** @deprecated aliases — map to MAX_STORE_BARS (single hard working-set). */
+const STORE_BUDGET_TARGET = MAX_STORE_BARS;
+const STORE_BUDGET_HARD_CAP = MAX_STORE_BARS;
+const MAX_STORE_CAPACITY = MAX_STORE_BARS;
 const STORE_PRUNE_CHUNK = 5000;
 const LIVE_POLL_CANDLE_LIMIT = 5;
 const DEFAULT_RSX_LOOKBACK = 90;
@@ -437,6 +451,7 @@ if (typeof window !== 'undefined') {
   window.CONFIG = {
     TV, SCORING_MATRIX_DEFAULTS, SCORING_MATRIX_LABELS,
     LIVE_STATE_CANDLE_LIMIT, HISTORY_CHUNK_LIMIT, LIVE_POLL_CANDLE_LIMIT,
+    MAX_STORE_BARS, MAX_VISIBLE_BARS, LEFT_PREPEND_CAMERA_DIAG,
     STORE_BUDGET_TARGET, STORE_BUDGET_HARD_CAP,
     MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
     LIVE_HISTORY_SCROLL_THRESHOLD, HISTORY_EDGE_PREFETCH_FRAC, BACKTEST_HISTORY_CHUNK_LIMIT,

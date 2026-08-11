@@ -952,6 +952,10 @@
         tf: String(window.currentTf || ''),
       }),
       shouldLoadRight: (range, options = {}) => {
+        // TEMP LEFT camera diag: isolate LEFT prepend — no RIGHT hydrate.
+        if (typeof LEFT_PREPEND_CAMERA_DIAG !== 'undefined' && LEFT_PREPEND_CAMERA_DIAG === true) {
+          return false;
+        }
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
         if (!canExtendHistoryRight()) return false;
@@ -995,7 +999,11 @@
         });
       },
       mergeIntoStore: (data) => {
-        const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+        const rawRange = ChartAdapter.getVisibleLogicalRange('live');
+        // Clone — LWC may mutate its live range object during setData.
+        const viewportRange = rawRange && Number.isFinite(rawRange.from) && Number.isFinite(rawRange.to)
+          ? { from: rawRange.from, to: rawRange.to }
+          : null;
         const cap = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
           ? ViewportManager.capture('live')
           : null;
@@ -1016,22 +1024,45 @@
           PrependViewAudit.install();
           PrependViewAudit.beginBeforeMerge();
         }
-        const { added } = liveColumnarStore.prependMonolith(data, {
+        const storeBefore = liveColumnarStore?.barCount?.() ?? 0;
+        const tipBefore = typeof liveColumnarStore?.lastTimeSec === 'function'
+          ? liveColumnarStore.lastTimeSec()
+          : null;
+        const merge = liveColumnarStore.prependMonolith(data, {
           focalTimeSec,
           atLiveEdge: cap?.isAtRightEdge === true,
           viewFromSec: viewTimes?.viewFromSec,
           viewToSec: viewTimes?.viewToSec,
         });
+        const added = Number(merge?.added) || 0;
         if (added <= 0) {
           if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
             PrependViewAudit.abort();
           }
           return null;
         }
-        return { added, viewportRange, viewportAnchor };
+        const storeAfter = liveColumnarStore?.barCount?.() ?? 0;
+        const tipAfter = typeof liveColumnarStore?.lastTimeSec === 'function'
+          ? liveColumnarStore.lastTimeSec()
+          : null;
+        return {
+          added,
+          prependedCount: merge.prependedCount ?? added,
+          prunedRightCount: merge.prunedRightCount ?? 0,
+          prunedLeftCount: merge.prunedLeftCount ?? 0,
+          tipBefore,
+          tipAfter,
+          viewportRange,
+          viewportAnchor,
+          storeBefore,
+          storeAfter,
+        };
       },
       mergeAppendIntoStore: (data) => {
-        const viewportRange = ChartAdapter.getVisibleLogicalRange('live');
+        const rawRange = ChartAdapter.getVisibleLogicalRange('live');
+        const viewportRange = rawRange && Number.isFinite(rawRange.from) && Number.isFinite(rawRange.to)
+          ? { from: rawRange.from, to: rawRange.to }
+          : null;
         const cap = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
           ? ViewportManager.capture('live')
           : null;
@@ -1094,6 +1125,9 @@
     }
 
     // Right edge of loaded island → append toward live (not centerTime re-fetch).
+    if (typeof LEFT_PREPEND_CAMERA_DIAG !== 'undefined' && LEFT_PREPEND_CAMERA_DIAG === true) {
+      return;
+    }
     if (canExtendHistoryRight() && isApproachingLoadedRightEdge(range)) {
       liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true });
     }
@@ -1409,6 +1443,11 @@
       if (!ChartAdapter.initLiveCharts()) {
         setTimeout(boot, 500);
         return;
+      }
+
+      // TEMP: LEFT Mute&Sync diagnostic — event spies (log-only) + writer hooks.
+      if (typeof LeftPrependDiag !== 'undefined') {
+        LeftPrependDiag.install();
       }
 
       // ADR-012: engine SSOT hydrates menu before first viewport paint.

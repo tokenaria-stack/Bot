@@ -16,6 +16,11 @@
   const HEALTHY_VISIBLE_BARS = 150;
   const MAX_HEALTHY_VISIBLE_BARS = 400;
   const MIN_HEALTHY_BAR_SPACING = 1;
+  /** Max user zoom-out (logical bars). Distinct from TF-switch healthy sanitize (400). */
+  const MAX_VISIBLE_LOGICAL_BARS = (typeof MAX_VISIBLE_BARS !== 'undefined'
+    && Number.isFinite(MAX_VISIBLE_BARS) && MAX_VISIBLE_BARS > 0)
+    ? MAX_VISIBLE_BARS
+    : 20000;
 
   /** @type {{ visibleRange: { from: number, to: number }|null, barSpacing: number|null, rightOffset: number|null }} */
   let canonical = {
@@ -127,15 +132,33 @@
   }
 
   function resolveNearestLogical(centerTimeMs) {
-    if (!dataResolve || typeof dataResolve.nearestLogicalForTime !== 'function') return null;
+    if (dataResolve && typeof dataResolve.nearestLogicalForTime === 'function') {
+      const t = Number(centerTimeMs);
+      if (!Number.isFinite(t)) return null;
+      try {
+        const logical = dataResolve.nearestLogicalForTime(t);
+        if (Number.isFinite(logical)) return logical;
+      } catch { /* fall through */ }
+    }
+    // Fallback: binary search on noted series (Mode B must not silently abort).
+    if (!notedTimesSec || !notedTimesSec.length) return null;
     const t = Number(centerTimeMs);
     if (!Number.isFinite(t)) return null;
-    try {
-      const logical = dataResolve.nearestLogicalForTime(t);
-      return Number.isFinite(logical) ? logical : null;
-    } catch {
-      return null;
+    const first = Number(notedTimesSec[0]);
+    const targetSec = first > 1e12 ? t : t / 1000;
+    let lo = 0;
+    let hi = notedTimesSec.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(notedTimesSec[mid]) < targetSec) lo = mid + 1;
+      else hi = mid;
     }
+    if (lo > 0) {
+      const prevDelta = Math.abs(Number(notedTimesSec[lo - 1]) - targetSec);
+      const currDelta = Math.abs(Number(notedTimesSec[lo]) - targetSec);
+      if (prevDelta < currDelta) return lo - 1;
+    }
+    return lo;
   }
 
   function snapshotShadow() {
@@ -277,18 +300,20 @@
     dataResolve = api;
   }
 
-  function commit(patch) {
+  function commit(patch, options = {}) {
     if (isSyncing) return false;
     if (!applyCommitted) return false;
     if (!patch || typeof patch !== 'object') return false;
 
+    const force = options.force === true;
     const next = snapshot();
     let dirty = false;
 
     if (Object.prototype.hasOwnProperty.call(patch, 'visibleRange')) {
       const r = cloneRange(patch.visibleRange);
       if (r) {
-        if (!next.visibleRange
+        if (force
+          || !next.visibleRange
           || next.visibleRange.from !== r.from
           || next.visibleRange.to !== r.to) {
           next.visibleRange = r;
@@ -298,14 +323,14 @@
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'barSpacing')) {
       const s = patch.barSpacing;
-      if (Number.isFinite(s) && s > 0 && next.barSpacing !== s) {
+      if (Number.isFinite(s) && s > 0 && (force || next.barSpacing !== s)) {
         next.barSpacing = s;
         dirty = true;
       }
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'rightOffset')) {
       const o = patch.rightOffset;
-      if (Number.isFinite(o) && next.rightOffset !== o) {
+      if (Number.isFinite(o) && (force || next.rightOffset !== o)) {
         next.rightOffset = o;
         dirty = true;
       }
@@ -322,6 +347,7 @@
       applyCommitted({
         ...snapshot(),
         sourceHostId,
+        rangeOnly: patch.rangeOnly === true,
       });
     } finally {
       isSyncing = false;
@@ -344,34 +370,185 @@
       return false;
     }
     if (!isFiniteLogicalRange(visibleRange)) return false;
+    const clamped = clampVisibleLogicalWidth(visibleRange, MAX_VISIBLE_LOGICAL_BARS);
     const patch = {
-      visibleRange,
+      visibleRange: clamped,
       sourceHostId: hostId || 'unknown',
     };
     if (Number.isFinite(barSpacing) && barSpacing > 0) {
       patch.barSpacing = barSpacing;
     }
-    if (notedTipLogical != null && Number.isFinite(visibleRange.to)) {
-      const pad = computeRightPadding(visibleRange.to, notedTipLogical);
+    if (notedTipLogical != null && Number.isFinite(clamped.to)) {
+      const pad = computeRightPadding(clamped.to, notedTipLogical);
       if (pad != null) patch.rightOffset = pad;
     }
     return commit(patch);
   }
 
   /**
-   * Preserve VIEW after left-side data growth (prepend).
-   * Store time is identity; logicalOffset preserves intentional empty space (incl. from < 0).
-   * Never FreshLive on failure — returns false so Loading cannot smuggle navigation.
+   * Cap zoom-out width. Keep the right edge of the range (trading-chart convention).
+   * @param {{ from: number, to: number }} range
+   * @param {number} maxBars
+   */
+  function clampVisibleLogicalWidth(range, maxBars) {
+    const from = Number(range.from);
+    const to = Number(range.to);
+    const max = Number(maxBars);
+    if (![from, to].every(Number.isFinite) || !(to > from)) return range;
+    if (!Number.isFinite(max) || max <= 0) return range;
+    const width = to - from;
+    if (width <= max) return range;
+    return { from: to - max, to };
+  }
+
+  /**
+   * Preserve VIEW after history prepend/append paint (post-setData).
+   * Sacred: market-time edges captured before mutation. Resolve against the NEW
+   * series and force-apply to LWC. Never derive shift from newLength - oldLength.
+   *
    * @param {{
    *   anchorTimeMs?: number,
    *   leftTimeMs?: number,
+   *   rightTimeMs?: number,
    *   logicalOffset?: number,
+   *   rightLogicalOffset?: number,
    *   visibleBars?: number,
    *   tipLogical?: number|null,
    *   timesSec?: number[],
    *   barSpacing?: number|null,
+   *   force?: boolean,
    * }} opts
    */
+  function barTimeToMs(secOrMs) {
+    const t = Number(secOrMs);
+    if (!Number.isFinite(t)) return null;
+    return t > 1e12 ? Math.floor(t) : Math.floor(t * 1000);
+  }
+
+  /**
+   * Mode B policy only — resolve pre-merge market times → final logical range.
+   * Does NOT write LWC. Compositor applies via forceVisibleLogicalRange (sync).
+   *
+   * B1: both edges survive → exact [from, to]
+   * B2: left survives, right evicted → left-anchored width (NOT tip snap)
+   * B3: left gone → tip-anchored width fallback
+   *
+   * @returns {{ from: number, to: number, caseId: string, targetFromMs: number, targetToMs: number }|null}
+   */
+  function resolveMarketTimePreserve(opts) {
+    if (!opts || typeof opts !== 'object') return null;
+    if (Array.isArray(opts.timesSec) && opts.timesSec.length) {
+      notedTimesSec = opts.timesSec.slice();
+    }
+    if (!notedTimesSec || !notedTimesSec.length) return null;
+
+    const tipIn = Number(opts.tipLogical);
+    if (Number.isFinite(tipIn) && tipIn >= 0) {
+      notedTipLogical = tipIn;
+    } else {
+      notedTipLogical = notedTimesSec.length - 1;
+    }
+
+    const leftMs = Number(
+      Object.prototype.hasOwnProperty.call(opts, 'leftTimeMs')
+        ? opts.leftTimeMs
+        : opts.anchorTimeMs,
+    );
+    const rightMs = Number(opts.rightTimeMs);
+    if (!Number.isFinite(leftMs) || !Number.isFinite(rightMs) || !(rightMs > leftMs)) {
+      return null;
+    }
+
+    const dataFirstMs = barTimeToMs(notedTimesSec[0]);
+    const dataLastMs = barTimeToMs(notedTimesSec[notedTimesSec.length - 1]);
+    if (dataFirstMs == null || dataLastMs == null || !(dataLastMs >= dataFirstMs)) {
+      return null;
+    }
+
+    const widthMs = rightMs - leftMs;
+    const leftOk = leftMs >= dataFirstMs && leftMs <= dataLastMs;
+    const rightOk = rightMs >= dataFirstMs && rightMs <= dataLastMs;
+
+    let targetFromMs = leftMs;
+    let targetToMs = rightMs;
+    let caseId = 'B1';
+    if (leftOk && rightOk) {
+      caseId = 'B1';
+    } else if (leftOk && !rightOk) {
+      caseId = 'B2';
+      targetFromMs = leftMs;
+      targetToMs = Math.min(leftMs + widthMs, dataLastMs);
+    } else {
+      caseId = 'B3';
+      targetToMs = dataLastMs;
+      targetFromMs = Math.max(dataFirstMs, dataLastMs - widthMs);
+    }
+    if (!(targetToMs > targetFromMs)) return null;
+
+    const fromIdx = resolveNearestLogical(targetFromMs);
+    const toIdx = resolveNearestLogical(targetToMs);
+    if (fromIdx == null || toIdx == null) return null;
+
+    let leftOff = Number(opts.logicalOffset);
+    if (!Number.isFinite(leftOff)) leftOff = 0;
+    let rightOff = Number(opts.rightLogicalOffset);
+    if (!Number.isFinite(rightOff)) rightOff = 0;
+
+    let from;
+    let to;
+    if (caseId === 'B1') {
+      from = fromIdx + leftOff;
+      to = toIdx + rightOff;
+    } else if (caseId === 'B2') {
+      from = fromIdx + leftOff;
+      to = toIdx;
+    } else {
+      from = fromIdx;
+      to = toIdx;
+    }
+
+    if (!(to > from) || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+    return { from, to, caseId, targetFromMs, targetToMs };
+  }
+
+  /**
+   * Mode B — resolve + commit canonical (tests / non-LWC). Live paint must apply
+   * via ChartAdapter.forceVisibleLogicalRange after resolve — commit-only is not
+   * authoritative during compositor liveUpdating (Mode A already learned this).
+   */
+  function proposeMarketTimePreserve(opts) {
+    const resolved = resolveMarketTimePreserve(opts);
+    if (!resolved) return false;
+
+    const tip = notedTipLogical;
+    const patch = {
+      visibleRange: { from: resolved.from, to: resolved.to },
+      sourceHostId: 'system',
+      rangeOnly: true,
+    };
+    if (Number.isFinite(tip)) {
+      patch.rightOffset = Math.max(0, resolved.to - tip);
+    }
+
+    beginPreserveTransaction();
+    const commitOpts = { force: opts?.force !== false };
+    if (typeof global !== 'undefined'
+      && global.LeftPrependDiag
+      && typeof global.LeftPrependDiag.isActive === 'function'
+      && global.LeftPrependDiag.isActive()) {
+      commitOpts.diagAuthoritative = true;
+    }
+    const ok = commit(patch, commitOpts);
+    if (!ok) releasePreserveTransaction();
+    try {
+      if (typeof global !== 'undefined' && global.__TIME_CAMERA_MARKET_PRESERVE_DEBUG__) {
+        // eslint-disable-next-line no-console
+        console.debug('[TimeCamera] proposeMarketTimePreserve', resolved);
+      }
+    } catch { /* */ }
+    return ok;
+  }
+
   function proposePreserveViewport(opts) {
     if (!opts || typeof opts !== 'object') return false;
     if (Array.isArray(opts.timesSec) && opts.timesSec.length) {
@@ -397,14 +574,23 @@
     let offset = Number(opts.logicalOffset);
     if (!Number.isFinite(offset)) offset = 0;
 
-    // Preserve path: keep the pre-prepend viewport width (incl. wide HISTORY zoom).
-    // Do NOT clamp to MAX_HEALTHY_VISIBLE_BARS — that truncates `to = from + bars` and
-    // LWC then re-expands the range, moving the left market-time edge (P0 FAIL).
-    let bars = Number(opts.visibleBars);
-    if (!Number.isFinite(bars) || bars <= 0) bars = HEALTHY_VISIBLE_BARS;
-
     const from = anchorIndex + offset;
-    const to = from + bars;
+
+    let to;
+    const rightMs = Number(opts.rightTimeMs);
+    if (Number.isFinite(rightMs)) {
+      const rightIndex = resolveNearestLogical(rightMs);
+      if (rightIndex == null) return false;
+      let rightOffset = Number(opts.rightLogicalOffset);
+      if (!Number.isFinite(rightOffset)) rightOffset = 0;
+      to = rightIndex + rightOffset;
+    } else {
+      // Preserve path: keep the pre-prepend viewport width (incl. wide HISTORY zoom).
+      let bars = Number(opts.visibleBars);
+      if (!Number.isFinite(bars) || bars <= 0) bars = HEALTHY_VISIBLE_BARS;
+      to = from + bars;
+    }
+
     if (!(to > from) || !Number.isFinite(from) || !Number.isFinite(to)) return false;
 
     const tip = notedTipLogical;
@@ -420,7 +606,7 @@
     }
 
     beginPreserveTransaction();
-    const ok = commit(patch);
+    const ok = commit(patch, { force: opts.force === true });
     if (!ok) releasePreserveTransaction();
     return ok;
   }
@@ -557,12 +743,16 @@
     SLACK,
     HEALTHY_BAR_SPACING,
     HEALTHY_VISIBLE_BARS,
+    MAX_HEALTHY_VISIBLE_BARS,
+    MAX_VISIBLE_LOGICAL_BARS,
     bind,
     unbind,
     commit,
     proposeFromPane,
     proposeFreshLive,
     proposePreserveViewport,
+    resolveMarketTimePreserve,
+    proposeMarketTimePreserve,
     proposeAfterData,
     beginPreserveTransaction,
     releasePreserveTransaction,

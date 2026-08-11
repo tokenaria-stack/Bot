@@ -376,6 +376,22 @@
   function applyCommittedCamera(state) {
     if (!_live?.charts || !state) return;
     const charts = [_live.charts.price, _live.charts.wozduh, _live.charts.rsx].filter(Boolean);
+    const applyRange = () => {
+      if (!isFiniteLogicalRange(state.visibleRange)) return;
+      const range = { from: state.visibleRange.from, to: state.visibleRange.to };
+      charts.forEach((chart) => {
+        try {
+          chart.timeScale().setVisibleLogicalRange(range);
+        } catch { /* */ }
+      });
+    };
+    // rangeOnly: LEFT prepend hard restore — pin logical indices, skip rightOffset/decoration
+    // side-effects that can fight setData's auto-shift in the same stack.
+    if (state.rangeOnly === true) {
+      applyRange();
+      return;
+    }
+    applyRange();
     const tsOpts = {};
     if (Number.isFinite(state.barSpacing) && state.barSpacing > 0) {
       tsOpts.barSpacing = state.barSpacing;
@@ -388,20 +404,11 @@
         try { chart.timeScale().applyOptions(tsOpts); } catch { /* */ }
       });
     }
-    if (isFiniteLogicalRange(state.visibleRange)) {
-      const range = { from: state.visibleRange.from, to: state.visibleRange.to };
-      charts.forEach((chart) => {
-        try {
-          chart.timeScale().setVisibleLogicalRange(range, { animate: false });
-        } catch { /* */ }
-      });
-    }
-    // ADR-025: keep overlay pinned to business times after camera move.
+    applyRange();
     refreshRulerOverlay();
-    // ADR-026: re-project empty-space peer guides after camera move.
     refreshPeerCrosshair(_live);
-    // ADR-027: grow/shrink decoration whitespace for the new visible future strip.
     refreshDecorationFromState(_live);
+    applyRange();
   }
 
   function bindTimeCamera() {
@@ -1299,25 +1306,52 @@
   /**
    * ADR-027 — candleSeries is real OHLC only (tip update invariant).
    * Future strip via TimelineDecoration, never concatenated onto candles.
+   *
+   * Paint order (no mid-paint camera):
+   *   setData → volume → Y-scale prefs → (optional decoration) → done
+   * Camera restore belongs to ChartCompositor AFTER this returns.
+   *
+   * @param {object} state
+   * @param {object[]} candles
+   * @param {{ skipDecoration?: boolean }} [paintOpts]
    */
-  function paintCandles(state, candles) {
+  function paintCandles(state, candles, paintOpts = {}) {
     if (!state?.candleSeries || !Array.isArray(candles) || !candles.length) return;
     state._realCandles = candles;
     state._lastRealCandleTime = candles[candles.length - 1]?.time ?? null;
-    // TEMPORARY P0: exact setData boundary (Case A vs B).
     if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
       PrependViewAudit.markPhase('beforeSetData');
     }
     state.candleSeries.setData(candles);
+    if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+      LeftPrependDiag.markAfterSetData();
+    }
     if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
       PrependViewAudit.markPhase('afterCandleSetData');
     }
+    // Volume always painted with candles (skipVolume was a Case #12 probe only).
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('beforeVolumeSetData');
+      }
       state.volumeSeries.setData(toVolumeBars(candles));
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('afterVolumeSetData');
+      }
     }
-    // Shot 11D-HOTFIX: re-arm Auto after setData so LWC recomputes Y on real bars, not empty canvas.
+    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
+      PrependViewAudit.markPhase('afterVolumeSetData');
+    }
+    // Y-scale only (autoScale/log). Does NOT write visibleLogicalRange.
+    // Probe name afterScaleApply is historical — X drift here is LWC reacting to setData.
     if (typeof ScaleController !== 'undefined' && typeof ScaleController.applyAll === 'function') {
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('beforeScaleApply');
+      }
       ScaleController.applyAll();
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('afterScaleApply');
+      }
     }
     if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
       PrependViewAudit.markPhase('afterScaleApply');
@@ -1325,7 +1359,15 @@
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }
-    refreshDecorationFromState(state);
+    if (paintOpts.skipDecoration !== true) {
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('beforeDecoration');
+      }
+      refreshDecorationFromState(state);
+      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
+        LeftPrependDiag.probeLogical('afterDecoration');
+      }
+    }
     refreshRulerOverlay();
   }
 
@@ -1374,7 +1416,47 @@
 
     applyFullData(context, storeData, options = {}) {
       if (context !== 'live' || !_live) return;
-      paintCandles(_live, storeData?.candles || []);
+      paintCandles(_live, storeData?.candles || [], {
+        skipDecoration: options.skipDecoration === true,
+      });
+    },
+
+    /** ADR-027 whitespace strip — call after camera settle on LEFT prepend. */
+    refreshLiveDecoration() {
+      if (!_live) return;
+      refreshDecorationFromState(_live);
+      refreshRulerOverlay();
+    },
+
+    /**
+     * Hard pin visible logical range on all live panes (no rightOffset/decoration).
+     * Used by LEFT prepend restore immediately after setData.
+     */
+    forceVisibleLogicalRange(context, range) {
+      if (context !== 'live' || !_live?.charts) return false;
+      if (!isFiniteLogicalRange(range)) return false;
+      const expected = { from: range.from, to: range.to };
+      const charts = [_live.charts.price, _live.charts.wozduh, _live.charts.rsx].filter(Boolean);
+      charts.forEach((chart) => {
+        try {
+          chart.timeScale().setVisibleLogicalRange(expected);
+        } catch { /* */ }
+      });
+      if (typeof TimeCamera !== 'undefined') {
+        if (typeof TimeCamera.beginPreserveTransaction === 'function') {
+          TimeCamera.beginPreserveTransaction();
+        }
+        TimeCamera.commit({
+          visibleRange: expected,
+          sourceHostId: 'system',
+          rangeOnly: true,
+        }, {
+          force: true,
+          // TEMP: allow this write through LeftPrependDiag mute.
+          diagForcePin: typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive(),
+        });
+      }
+      return true;
     },
 
     applyDelta(context, delta) {

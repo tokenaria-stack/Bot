@@ -235,6 +235,7 @@
       beforeMerge: before,
       beforeSetData: active.phases.beforeSetData || null,
       afterCandleSetData: active.phases.afterCandleSetData || null,
+      afterVolumeSetData: active.phases.afterVolumeSetData || null,
       afterScaleApply: active.phases.afterScaleApply || null,
       afterSetData,
       afterPreserve,
@@ -248,6 +249,8 @@
         active.phases.afterScaleApply || afterSetData,
       ),
       preserveRecovered: !!(before && afterPreserve && edgesEqual(before, afterPreserve)),
+      // NET store length delta — NOT prependedCount. At cap, +prepend − prune ⇒ 0.
+      netStoreDelta: (flushEnd?.storeBarCount ?? 0) - (before?.storeBarCount ?? 0),
       addedBars: (flushEnd?.storeBarCount ?? 0) - (before?.storeBarCount ?? 0),
     };
 
@@ -260,7 +263,8 @@
       if (debugViewEnabled()) {
         console.info(
           `PREPEND_VIEW PASS #${result.id} left ${iso(before.leftTime)} → ${iso(flushEnd.leftTime)} `
-          + `right ${iso(before.rightTime)} → ${iso(flushEnd.rightTime)} bars +${result.addedBars}`,
+          + `right ${iso(before.rightTime)} → ${iso(flushEnd.rightTime)} `
+          + `netStoreΔ ${result.netStoreDelta}`,
         );
       }
     } else if (resultTag === 'FAIL') {
@@ -270,11 +274,12 @@
         + `firstBadPhase=${firstBadPhase} setDataCase=${result.setDataCase} `
         + `preserveRecovered=${result.preserveRecovered} `
         + `left ${iso(before?.leftTime)} → ${iso(flushEnd?.leftTime)} `
-        + `right ${iso(before?.rightTime)} → ${iso(flushEnd?.rightTime)}`,
+        + `right ${iso(before?.rightTime)} → ${iso(flushEnd?.rightTime)} `
+        + `netStoreΔ ${result.netStoreDelta}`,
         result,
       );
     } else if (debugViewEnabled()) {
-      console.info(`PREPEND_VIEW SKIP_USER_GESTURE #${result.id} bars +${result.addedBars}`);
+      console.info(`PREPEND_VIEW SKIP_USER_GESTURE #${result.id} netStoreΔ ${result.netStoreDelta}`);
     }
 
     active = null;

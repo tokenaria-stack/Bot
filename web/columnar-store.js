@@ -11,15 +11,17 @@
  */
 class ColumnarStore {
   static get BUDGET_TARGET() {
+    if (typeof MAX_STORE_BARS !== 'undefined' && Number.isFinite(MAX_STORE_BARS) && MAX_STORE_BARS > 0) {
+      return MAX_STORE_BARS;
+    }
     return (typeof STORE_BUDGET_TARGET !== 'undefined' && Number.isFinite(STORE_BUDGET_TARGET))
       ? STORE_BUDGET_TARGET
-      : 12000;
+      : 25000;
   }
 
   static get BUDGET_HARD_CAP() {
-    return (typeof STORE_BUDGET_HARD_CAP !== 'undefined' && Number.isFinite(STORE_BUDGET_HARD_CAP))
-      ? STORE_BUDGET_HARD_CAP
-      : 16000;
+    // Single hard working-set (= TARGET). RN must not veto this cap.
+    return ColumnarStore.BUDGET_TARGET;
   }
 
   static get PRUNE_FROM_OLDEST() { return 'oldest'; }
@@ -647,6 +649,10 @@ class ColumnarStore {
   /**
    * Track A + Track B: prune only outside Working Set, Mutation Set, and Retained Neighborhood.
    * Never remove VIEW (WS). Never remove same-op Mutation (Step 1). Never remove RN (Step 2).
+   *
+   * P-02: keep set MUST be a contiguous slice. Scattering drops between Mutation and VIEW
+   * produces Frankenstein islands (price cliffs / empty time gaps) on the chart.
+   *
    * @param {number} targetCount
    * @param {'oldest'|'newest'} direction
    * @param {{ start: number, end: number }|null|undefined} view
@@ -657,50 +663,138 @@ class ColumnarStore {
     const n = this._times.length;
     if (n === 0) return;
 
-    const protectedFlags = new Array(n);
-    for (let i = 0; i < n; i++) protectedFlags[i] = false;
-    const mark = (range) => {
-      if (!range) return;
-      const a = Math.max(0, Math.min(n, range.start));
-      const b = Math.max(a, Math.min(n, range.end));
-      for (let i = a; i < b; i++) protectedFlags[i] = true;
-    };
-    mark(view);
-    mark(mutation);
-    mark(neighborhood);
-
     const viewLen = view ? Math.max(0, view.end - view.start) : 0;
     const keepGoal = Math.max(Math.floor(Number(targetCount)) || 0, viewLen);
     if (n <= keepGoal) return;
 
-    let needDrop = n - keepGoal;
-    const eligible = [];
-    for (let i = 0; i < n; i++) {
-      if (!protectedFlags[i]) eligible.push(i);
-    }
-    if (eligible.length === 0) return;
+    let protLo = n;
+    let protHi = 0;
+    const markSpan = (range) => {
+      if (!range) return;
+      const a = Math.max(0, Math.min(n, range.start));
+      const b = Math.max(a, Math.min(n, range.end));
+      if (a >= b) return;
+      if (a < protLo) protLo = a;
+      if (b > protHi) protHi = b;
+    };
+    markSpan(view);
+    markSpan(mutation);
+    markSpan(neighborhood);
 
-    const toDrop = new Set();
-    if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
-      for (let i = eligible.length - 1; i >= 0 && toDrop.size < needDrop; i--) {
-        toDrop.add(eligible[i]);
+    let start;
+    let end;
+    if (protLo >= protHi) {
+      if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+        start = 0;
+        end = keepGoal;
+      } else {
+        start = Math.max(0, n - keepGoal);
+        end = n;
+      }
+    } else if (protLo === 0 && protHi === n) {
+      // Entire series sits in the protected union (VIEW + Mutation + bridge).
+      const hard = ColumnarStore.BUDGET_HARD_CAP;
+      if (Number.isFinite(hard) && hard > keepGoal && n <= hard) {
+        return;
+      }
+      // Opposite-end VIEW + tip Mutation: contiguous shrink must kill one of them
+      // or punch a hole. Prefer soft overage (P-02 + WS-02) over Frankenstein.
+      if (view && mutation
+        && view.start < mutation.start
+        && mutation.end >= n
+        && (view.end - view.start) + (mutation.end - mutation.start) < n) {
+        return;
+      }
+      const forceKeep = Math.min(
+        n,
+        Math.max(keepGoal, Number.isFinite(hard) && hard > 0 ? hard : keepGoal),
+      );
+      if (direction === ColumnarStore.PRUNE_FROM_OLDEST
+        && mutation && mutation.end >= n && mutation.start >= 0
+        && !(view && view.start === 0)) {
+        start = Math.max(0, n - forceKeep);
+        end = n;
+      } else if (view && view.end > view.start && (view.end - view.start) <= forceKeep) {
+        end = Math.min(n, view.end);
+        start = end - forceKeep;
+        if (start < 0) {
+          start = 0;
+          end = forceKeep;
+        }
+      } else if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+        start = 0;
+        end = forceKeep;
+      } else {
+        start = Math.max(0, n - forceKeep);
+        end = n;
       }
     } else {
-      for (let i = 0; i < eligible.length && toDrop.size < needDrop; i++) {
-        toDrop.add(eligible[i]);
+      // Contiguous cover of the protected union (includes any bridge between
+      // Mutation and VIEW — that bridge must NOT be punched out).
+      let lo = protLo;
+      let hi = protHi;
+      let span = hi - lo;
+      if (span < keepGoal) {
+        let need = keepGoal - span;
+        if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+          const leftTake = Math.min(lo, need);
+          lo -= leftTake;
+          need -= leftTake;
+          hi = Math.min(n, hi + need);
+        } else {
+          const rightTake = Math.min(n - hi, need);
+          hi += rightTake;
+          need -= rightTake;
+          lo = Math.max(0, lo - need);
+        }
+        start = lo;
+        end = hi;
+      } else if (span > keepGoal) {
+        // Cannot keep full Mutation∪VIEW∪bridge under budget without a hole.
+        // P-02 forbids holes → contiguous window of keepGoal, anchored on VIEW (WS-02).
+        if (view && view.end > view.start && (view.end - view.start) <= keepGoal) {
+          end = Math.min(n, view.end);
+          start = end - keepGoal;
+          if (start < 0) {
+            start = 0;
+            end = keepGoal;
+          }
+          if (direction === ColumnarStore.PRUNE_FROM_NEWEST && start > 0 && mutation
+            && view) {
+            const m0 = Math.max(0, mutation.start);
+            if (m0 < start) {
+              const shift = Math.min(start - m0, n - end);
+              const nextStart = start - shift;
+              const nextEnd = end - shift;
+              // Only absorb Mutation if VIEW remains fully inside the window.
+              if (nextStart <= view.start && nextEnd >= view.end) {
+                start = nextStart;
+                end = nextEnd;
+              }
+            }
+          }
+        } else if (direction === ColumnarStore.PRUNE_FROM_NEWEST) {
+          start = lo;
+          end = lo + keepGoal;
+        } else {
+          start = hi - keepGoal;
+          end = hi;
+        }
+      } else {
+        start = lo;
+        end = hi;
       }
     }
-    if (toDrop.size === 0) return;
 
-    const keepIdx = [];
-    for (let i = 0; i < n; i++) {
-      if (!toDrop.has(i)) keepIdx.push(i);
-    }
+    start = Math.max(0, Math.min(n, start));
+    end = Math.max(start, Math.min(n, end));
+    if (end - start >= n) return;
+
     const oldLast = Number(this._times[n - 1]);
-    this._gatherIndices(keepIdx, {
+    this._applySlice(start, end, {
       droppedNewest: Number.isFinite(oldLast)
-        && keepIdx.length > 0
-        && Number(this._times[keepIdx[keepIdx.length - 1]]) < oldLast,
+        && end > start
+        && Number(this._times[end - 1]) < oldLast,
     });
   }
 
@@ -761,9 +855,9 @@ class ColumnarStore {
   }
 
   /**
-   * Pressure prune when over HARD_CAP (existing Capacity trigger — Lifetime does not define pressure).
-   * Track B Step 3: exploration growth may *invoke* this trigger, but must not clear RN;
-   * only bars outside VIEW ∪ Mutation ∪ RN are eligible.
+   * Pressure prune when over MAX_STORE / HARD_CAP.
+   * Moving-window policy: VIEW (+ same-op Mutation) is sacred; RN must not veto the
+   * hard working-set cap (otherwise island scroll grows past 25k indefinitely).
    * @param {'oldest'|'newest'} direction
    * @param {{
    *   viewFromSec?: number|null,
@@ -776,18 +870,40 @@ class ColumnarStore {
     if (this._times.length <= ColumnarStore.BUDGET_HARD_CAP) return;
     const view = this._viewIndexRange(opts.viewFromSec, opts.viewToSec);
     const mutation = this._viewIndexRange(opts.mutationFromSec, opts.mutationToSec);
-    const neighborhood = this._viewIndexRange(this._rnFromSec, this._rnToSec);
-    if (!view && !mutation && !neighborhood) {
+    if (!view && !mutation) {
       this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
+      this._clampRetainedNeighborhoodToSeries();
       return;
     }
+    // Hard cap: do not pass RN as protected — viewport remains sacred via `view`.
     this._pruneOutsideProtected(
       ColumnarStore.BUDGET_TARGET,
       direction,
       view,
       mutation,
-      neighborhood,
+      null,
     );
+    this._clampRetainedNeighborhoodToSeries();
+  }
+
+  /** After capacity prune, keep RN inside the remaining series (or clear). */
+  _clampRetainedNeighborhoodToSeries() {
+    if (this._times.length === 0) {
+      this._clearRetainedNeighborhood();
+      return;
+    }
+    if (this._rnFromSec == null || this._rnToSec == null) return;
+    const t0 = Number(this._times[0]);
+    const t1 = Number(this._times[this._times.length - 1]);
+    if (![t0, t1].every(Number.isFinite)) {
+      this._clearRetainedNeighborhood();
+      return;
+    }
+    this._rnFromSec = Math.max(this._rnFromSec, t0);
+    this._rnToSec = Math.min(this._rnToSec, t1);
+    if (!(this._rnFromSec <= this._rnToSec)) {
+      this._clearRetainedNeighborhood();
+    }
   }
 
   /**
@@ -1031,19 +1147,14 @@ class ColumnarStore {
       added: this._times.length,
     };
 
-    // Debt #69C: direction from viewport focal (default NEWEST = safe for left-scroll history).
-    // Track A: VIEW bounds — prune cannot invalidate visible bars (WS-01…WS-03).
-    // Track B Step 1: Mutation Set = bars introduced by this growth — same-op prune must not remove them.
-    // Track B Step 2: absorb Mutation into Retained Neighborhood — survives later growth prunes.
-    // Track B Step 3: prepend is exploration — expands RN; must not clear/shrink RN.
-    const direction = this.resolveBudgetPruneDirection({
-      focalTimeSec: options.focalTimeSec,
-      atLiveEdge: options.atLiveEdge === true,
-      pruneDirection: options.pruneDirection,
-      defaultDirection: ColumnarStore.PRUNE_FROM_NEWEST,
-    });
+    // Moving-window: LEFT growth discards RIGHT (newest). Explicit override allowed.
+    const direction = (options.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST
+      || options.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST)
+      ? options.pruneDirection
+      : ColumnarStore.PRUNE_FROM_NEWEST;
     const mutationFromSec = Number(prependTimes[0]);
     const mutationToSec = Number(prependTimes[added - 1]);
+    const lengthAfterPrepend = this._times.length;
     this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
     this._enforceBudget(direction, {
       viewFromSec: options.viewFromSec,
@@ -1051,14 +1162,26 @@ class ColumnarStore {
       mutationFromSec,
       mutationToSec,
     });
+    const lengthAfter = this._times.length;
+    const prunedTotal = Math.max(0, lengthAfterPrepend - lengthAfter);
+    // LEFT growth → opposite-side (RIGHT) prune under the moving-window policy.
+    const prunedRightCount = direction === ColumnarStore.PRUNE_FROM_NEWEST ? prunedTotal : 0;
+    const prunedLeftCount = direction === ColumnarStore.PRUNE_FROM_OLDEST ? prunedTotal : 0;
 
-    return { added, pruneDirection: direction, windowMode: this.windowMode };
+    return {
+      added,
+      prependedCount: added,
+      prunedLeftCount,
+      prunedRightCount,
+      pruneDirection: direction,
+      windowMode: this.windowMode,
+    };
   }
 
   /**
    * Append newer monolith bars after the current tip (right-edge history island fill).
    * Symmetric to prependMonolith: only times strictly after lastTimeSec are accepted.
-   * Default prune FROM_OLDEST (grow toward live; drop far-left under budget).
+   * Moving-window: RIGHT growth discards LEFT (oldest) under MAX_STORE.
    * @param {object} columnarJson
    * @param {{
    *   focalTimeSec?: number|null,
@@ -1148,14 +1271,14 @@ class ColumnarStore {
       added: this._times.length,
     };
 
-    const direction = this.resolveBudgetPruneDirection({
-      focalTimeSec: options.focalTimeSec,
-      atLiveEdge: options.atLiveEdge === true,
-      pruneDirection: options.pruneDirection,
-      defaultDirection: ColumnarStore.PRUNE_FROM_OLDEST,
-    });
+    // Moving-window: RIGHT growth discards LEFT (oldest). Explicit override allowed.
+    const direction = (options.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST
+      || options.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST)
+      ? options.pruneDirection
+      : ColumnarStore.PRUNE_FROM_OLDEST;
     const mutationFromSec = Number(appendTimes[0]);
     const mutationToSec = Number(appendTimes[added - 1]);
+    const lengthAfterAppend = this._times.length;
     this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
     this._enforceBudget(direction, {
       viewFromSec: options.viewFromSec,
@@ -1167,7 +1290,19 @@ class ColumnarStore {
     // Right-edge fill reached wall-clock tip → resume live WS ingest (Debt #69A).
     this._maybePromoteLiveWindow();
 
-    return { added, pruneDirection: direction, windowMode: this.windowMode };
+    const lengthAfter = this._times.length;
+    const prunedTotal = Math.max(0, lengthAfterAppend - lengthAfter);
+    const prunedLeftCount = direction === ColumnarStore.PRUNE_FROM_OLDEST ? prunedTotal : 0;
+    const prunedRightCount = direction === ColumnarStore.PRUNE_FROM_NEWEST ? prunedTotal : 0;
+
+    return {
+      added,
+      appendedCount: added,
+      prunedLeftCount,
+      prunedRightCount,
+      pruneDirection: direction,
+      windowMode: this.windowMode,
+    };
   }
 
   /**

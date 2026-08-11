@@ -11,6 +11,11 @@
   const MAX_HEALTHY_VISIBLE_BARS = 400;
   const MIN_HEALTHY_BAR_SPACING = 1;
   const HEALTHY_VISIBLE_BARS = 150;
+  /** Wide zoom is legitimate up to MAX_VISIBLE_BARS — not "poison". */
+  const MAX_CAPTURE_VISIBLE_BARS = (typeof MAX_VISIBLE_BARS !== 'undefined'
+    && Number.isFinite(MAX_VISIBLE_BARS) && MAX_VISIBLE_BARS > 0)
+    ? MAX_VISIBLE_BARS
+    : 20000;
 
   function priceHostId(context) {
     return context === 'backtest' ? 'bt-price-chart' : 'price-chart';
@@ -46,7 +51,7 @@
     if (!state) return true;
     if (Number.isFinite(state.from) && state.from < 0) return true;
     if (Number.isFinite(state.barSpacing) && state.barSpacing < MIN_HEALTHY_BAR_SPACING) return true;
-    if (Number.isFinite(state.visibleBars) && state.visibleBars > MAX_HEALTHY_VISIBLE_BARS) return true;
+    if (Number.isFinite(state.visibleBars) && state.visibleBars > MAX_CAPTURE_VISIBLE_BARS) return true;
     return false;
   }
 
@@ -79,7 +84,7 @@
 
     if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
       barSpacing = HEALTHY_BAR_SPACING;
-      visibleBars = Math.max(50, Math.min(visibleBars, MAX_HEALTHY_VISIBLE_BARS));
+      visibleBars = Math.max(50, Math.min(visibleBars, MAX_CAPTURE_VISIBLE_BARS));
     }
 
     const classify = (typeof TimeCamera !== 'undefined' && TimeCamera._helpers?.classifyViewIntent)

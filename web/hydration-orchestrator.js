@@ -475,11 +475,27 @@ class HydrationOrchestrator {
         }
 
         if (typeof deps.markDirty === 'function') {
+          const tipBefore = mergeResult.tipBefore ?? null;
+          const tipAfter = mergeResult.tipAfter ?? null;
+          const tipBeforeN = Number(tipBefore);
+          const tipAfterN = Number(tipAfter);
+          const rightBoundaryChanged = Number.isFinite(tipBeforeN)
+            && Number.isFinite(tipAfterN)
+            && tipBeforeN !== tipAfterN;
           const intent = {
             mode: 'prepend',
+            edge: 'left',
             addedBars,
             viewportRange: mergeResult.viewportRange ?? viewportRange,
             viewportAnchor: mergeResult.viewportAnchor ?? null,
+            storeBefore: mergeResult.storeBefore ?? null,
+            storeAfter: mergeResult.storeAfter ?? null,
+            prependedCount: mergeResult.prependedCount ?? addedBars,
+            prunedRightCount: mergeResult.prunedRightCount ?? 0,
+            tipBefore,
+            tipAfter,
+            // Camera contract fact (NOT a translation): tip moved in this LEFT merge.
+            rightBoundaryChanged,
           };
           if (typeof EdgeHydrateAudit !== 'undefined') {
             EdgeHydrateAudit.attachToPaintIntent(intent);
@@ -615,9 +631,12 @@ class HydrationOrchestrator {
         }
 
         if (typeof deps.markDirty === 'function') {
-          // Same paint+preserve path as prepend (market-time ViewportAnchor).
+          // Same paint path as prepend; edge:'right' → market-time preserve only
+          // (do NOT apply +addedBars index shift — right append does not move old indices
+          // unless LEFT prune, which ViewportAnchor market-time handles).
           const intent = {
             mode: 'prepend',
+            edge: 'right',
             addedBars,
             viewportRange: mergeResult.viewportRange ?? viewportRange,
             viewportAnchor: mergeResult.viewportAnchor ?? null,
