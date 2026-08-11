@@ -157,15 +157,8 @@ const HISTORY_CHUNK_LIMIT = 3000;
  * MAX_VISIBLE_BARS — max zoom-out visible logical span (not "always show N").
  */
 const MAX_STORE_BARS = 25000;
-/** Max zoom-out (logical bars). Restored to 20k for LEFT camera diagnostic. */
+/** Max zoom-out (logical bars). */
 const MAX_VISIBLE_BARS = 20000;
-/**
- * LEFT-prepend camera diagnostic (evidence only). See web/left-prepend-diag.js.
- * When true: RIGHT hydration disabled (isolates LEFT testing).
- * Keep false for normal use — RIGHT/live-edge load must work.
- * Enable via localStorage LEFT_PREPEND_DIAG=1 for ad-hoc diag without blocking RIGHT.
- */
-const LEFT_PREPEND_CAMERA_DIAG = false;
 /** @deprecated aliases — map to MAX_STORE_BARS (single hard working-set). */
 const STORE_BUDGET_TARGET = MAX_STORE_BARS;
 const STORE_BUDGET_HARD_CAP = MAX_STORE_BARS;
@@ -452,7 +445,7 @@ if (typeof window !== 'undefined') {
   window.CONFIG = {
     TV, SCORING_MATRIX_DEFAULTS, SCORING_MATRIX_LABELS,
     LIVE_STATE_CANDLE_LIMIT, HISTORY_CHUNK_LIMIT, LIVE_POLL_CANDLE_LIMIT,
-    MAX_STORE_BARS, MAX_VISIBLE_BARS, LEFT_PREPEND_CAMERA_DIAG,
+    MAX_STORE_BARS, MAX_VISIBLE_BARS,
     STORE_BUDGET_TARGET, STORE_BUDGET_HARD_CAP,
     MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
     LIVE_HISTORY_SCROLL_THRESHOLD, HISTORY_EDGE_PREFETCH_FRAC, BACKTEST_HISTORY_CHUNK_LIMIT,

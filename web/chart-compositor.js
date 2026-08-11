@@ -21,15 +21,13 @@ class ChartCompositor {
     this._getNavigatorResult = typeof options.getNavigatorResult === 'function'
       ? options.getNavigatorResult
       : () => null;
-    /** @type {number} */
-    this._prependCameraGen = 0;
     /** @type {boolean} */
     this._prependCameraPending = false;
     /** @type {Function[]} */
     this._prependCameraSettledCbs = [];
   }
 
-  /** True while LEFT-prepend camera restore rAF chain is in flight. */
+  /** True while prepend settle callbacks are waiting (RenderScheduler serialization). */
   isPrependCameraPending() {
     return this._prependCameraPending === true;
   }
@@ -192,175 +190,16 @@ class ChartCompositor {
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
-      // LEFT prepend: market-time restore already applied sync in _flushPrepend.
-      // No rAF / applyRaw / Mode A. Decoration + scheduler settle only.
-      const leftPrepend = intent.mode === 'prepend' && intent?.edge !== 'right';
-      if (leftPrepend) {
-        this._pendingLogicalRestore = null;
+      // Prepend: decoration + scheduler settle. LEFT market-time restore already ran in _flushPrepend.
+      if (intent.mode === 'prepend') {
         if (typeof ChartAdapter !== 'undefined'
           && typeof ChartAdapter.refreshLiveDecoration === 'function') {
           ChartAdapter.refreshLiveDecoration();
         }
-        if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-          PrependViewAudit.markPhase('afterPreserve');
-          PrependViewAudit.endFlush();
-        }
-        if (typeof LeftPrependDiag !== 'undefined'
-          && LeftPrependDiag.isActive
-          && LeftPrependDiag.isActive()) {
-          if (typeof LeftPrependDiag.markEndFlush === 'function') {
-            LeftPrependDiag.markEndFlush();
-          }
-          if (typeof LeftPrependDiag.releaseAndMeasureAfterRaf === 'function') {
-            LeftPrependDiag.releaseAndMeasureAfterRaf();
-          }
-        }
         this._notifyPrependCameraSettled();
-      } else if (intent.mode === 'prepend' && this._pendingLogicalRestore) {
-        const pending = this._pendingLogicalRestore;
-        this._pendingLogicalRestore = null;
-        ChartCompositor.applyRawVisibleLogicalRange(pending);
-        if (typeof ChartAdapter !== 'undefined'
-          && typeof ChartAdapter.refreshLiveDecoration === 'function') {
-          ChartAdapter.refreshLiveDecoration();
-        }
-        if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-          PrependViewAudit.markPhase('afterPreserve');
-          PrependViewAudit.endFlush();
-        }
-        if (typeof LeftPrependDiag !== 'undefined'
-          && LeftPrependDiag.isActive
-          && LeftPrependDiag.isActive()
-          && typeof LeftPrependDiag.markEndFlush === 'function') {
-          LeftPrependDiag.markEndFlush();
-        }
-        this._notifyPrependCameraSettled();
-      } else {
-        if (this._pendingLogicalRestore) {
-          ChartCompositor.applyRawVisibleLogicalRange(this._pendingLogicalRestore);
-          this._pendingLogicalRestore = null;
-        }
-        if (intent.mode === 'prepend'
-          && typeof PrependViewAudit !== 'undefined'
-          && PrependViewAudit.isActive()) {
-          PrependViewAudit.markPhase('afterPreserve');
-          PrependViewAudit.endFlush();
-        }
-        if (intent.mode === 'prepend'
-          && typeof LeftPrependDiag !== 'undefined'
-          && LeftPrependDiag.isActive
-          && LeftPrependDiag.isActive()
-          && typeof LeftPrependDiag.markEndFlush === 'function') {
-          LeftPrependDiag.markEndFlush();
-        }
-        if (intent.mode === 'prepend' && !this._prependCameraPending) {
-          this._notifyPrependCameraSettled();
-        }
       }
       if (this._onAfterFlush) this._onAfterFlush(intent);
     }
-  }
-
-  /**
-   * Emergency LEFT-prepend camera transport: raw LWC write after data txn.
-   * Must clear pathological rightOffset/barSpacing — after tip-prune setData, LWC
-   * often ignores bare setVisibleLogicalRange while rightOffset stays ≈ prunedRight.
-   * @param {{ from: number, to: number }} range
-   * @param {{ tipLogical?: number|null }} [opts]
-   */
-  static applyRawVisibleLogicalRange(range, opts = {}) {
-    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || !(range.to > range.from)) {
-      return false;
-    }
-    if (typeof ChartAdapter === 'undefined' || typeof ChartAdapter.getChart !== 'function') {
-      return false;
-    }
-    const expected = { from: range.from, to: range.to };
-    const width = expected.to - expected.from;
-    let tipLogical = Number(opts.tipLogical);
-    if (!Number.isFinite(tipLogical) || tipLogical < 0) {
-      tipLogical = NaN;
-    }
-    const rightOffset = Number.isFinite(tipLogical)
-      ? Math.max(0, expected.to - tipLogical)
-      : 0;
-    let hostWidth = 0;
-    try {
-      const host = typeof document !== 'undefined'
-        ? document.getElementById('price-chart')
-        : null;
-      hostWidth = host && host.clientWidth > 0 ? host.clientWidth : 0;
-    } catch { /* */ }
-    const barSpacing = hostWidth > 0 && width > 0 ? hostWidth / width : null;
-
-    let ok = false;
-    ['price', 'wozduh', 'rsx'].forEach((pane) => {
-      try {
-        const chart = ChartAdapter.getChart('live', pane);
-        const ts = chart?.timeScale?.();
-        if (!ts) return;
-        const scaleOpts = { rightOffset, shiftVisibleRangeOnNewBar: false };
-        if (Number.isFinite(barSpacing) && barSpacing > 0) {
-          scaleOpts.barSpacing = barSpacing;
-        }
-        if (typeof ts.applyOptions === 'function') {
-          ts.applyOptions(scaleOpts);
-        }
-        const raw = typeof ts.__rawSetVisibleLogicalRange === 'function'
-          ? ts.__rawSetVisibleLogicalRange
-          : (typeof ts.setVisibleLogicalRange === 'function'
-            ? ts.setVisibleLogicalRange.bind(ts)
-            : null);
-        if (!raw) return;
-        raw(expected);
-        // Time-based fallback when logical write is ignored in the same turn.
-        const timesSec = opts.timesSec;
-        if (Array.isArray(timesSec) && timesSec.length
-          && typeof ts.setVisibleRange === 'function'
-          && expected.from >= 0) {
-          try {
-            const cur = typeof ts.getVisibleLogicalRange === 'function'
-              ? ts.getVisibleLogicalRange()
-              : null;
-            const stuck = cur
-              && Math.abs(cur.from - expected.from) > 0.5
-              && Math.abs(cur.to - expected.to) > 0.5;
-            if (stuck) {
-              const i0 = Math.max(0, Math.min(timesSec.length - 1, Math.floor(expected.from)));
-              const i1 = Math.max(i0 + 1, Math.min(timesSec.length - 1, Math.floor(expected.to)));
-              const t0 = Number(timesSec[i0]);
-              const t1 = Number(timesSec[i1]);
-              if (Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0) {
-                ts.setVisibleRange({ from: t0, to: t1 });
-              }
-            }
-          } catch { /* */ }
-        }
-        ok = true;
-      } catch { /* */ }
-    });
-    // Keep TimeCamera canonical in lockstep — stale canonical re-applies unshifted range later.
-    if (ok && typeof TimeCamera !== 'undefined' && typeof TimeCamera.commit === 'function') {
-      try {
-        if (typeof TimeCamera.beginPreserveTransaction === 'function') {
-          TimeCamera.beginPreserveTransaction();
-        }
-        const patch = {
-          visibleRange: expected,
-          sourceHostId: 'system',
-          rangeOnly: true,
-          rightOffset,
-        };
-        if (Number.isFinite(barSpacing) && barSpacing > 0) {
-          patch.barSpacing = barSpacing;
-        }
-        TimeCamera.commit(patch, {
-          force: true,
-          diagForcePin: true,
-        });
-      } catch { /* */ }
-    }
-    return ok;
   }
 
   /**
@@ -439,111 +278,17 @@ class ChartCompositor {
     this._navigateAfterPaint(intent, snapshot);
   }
 
-  /**
-   * LEFT-prepend camera plan (pure). Mode A when tip stable OR left edge survives
-   * right-prune in index space; Mode B only when shifted left is past new tip.
-   * @param {object} intent
-   * @param {number} [timesLength]
-   * @returns {{
-   *   mode: 'logical'|'market'|'none',
-   *   shift: number,
-   *   expectedRange: { from: number, to: number }|null,
-   *   rightBoundaryChanged: boolean,
-   *   leftSurvives: boolean,
-   * }}
-   */
-  static planLeftPrependRestore(intent, timesLength = 0) {
-    const shiftRaw = Number(intent?.prependedCount);
-    const shift = (Number.isFinite(shiftRaw) && shiftRaw > 0)
-      ? shiftRaw
-      : Number(intent?.addedBars);
-    const base = intent?.viewportRange;
-    const leftEdge = intent?.edge !== 'right';
-    const leftLogicalOk = leftEdge
-      && Number.isFinite(shift) && shift > 0
-      && base
-      && Number.isFinite(base.from) && Number.isFinite(base.to)
-      && base.to > base.from;
-    const tipBeforeRaw = intent?.tipBefore;
-    const tipAfterRaw = intent?.tipAfter;
-    const tipBefore = tipBeforeRaw == null ? NaN : Number(tipBeforeRaw);
-    const tipAfter = tipAfterRaw == null ? NaN : Number(tipAfterRaw);
-    const rightBoundaryChanged = intent?.rightBoundaryChanged === true
-      || (Number.isFinite(tipBefore) && Number.isFinite(tipAfter) && tipBefore !== tipAfter);
-    const tipLogicalAfter = Number.isFinite(Number(intent?.storeAfter))
-      ? Number(intent.storeAfter) - 1
-      : (Number.isFinite(timesLength) && timesLength > 0 ? timesLength - 1 : NaN);
-    const leftSurvives = leftLogicalOk
-      && Number.isFinite(tipLogicalAfter)
-      && (base.from + shift) <= tipLogicalAfter;
-    const useLogicalMode = leftLogicalOk && (!rightBoundaryChanged || leftSurvives);
-    const useMarketMode = leftEdge
-      && rightBoundaryChanged
-      && !useLogicalMode
-      && intent?.viewportAnchor
-      && Number.isFinite(Number(intent.viewportAnchor.anchorTimeMs))
-      && Number.isFinite(Number(intent.viewportAnchor.rightTimeMs));
-    return {
-      mode: useLogicalMode ? 'logical' : (useMarketMode ? 'market' : 'none'),
-      shift: Number.isFinite(shift) ? shift : NaN,
-      expectedRange: useLogicalMode
-        ? { from: base.from + shift, to: base.to + shift }
-        : null,
-      rightBoundaryChanged,
-      leftSurvives: !!leftSurvives,
-    };
-  }
-
   _flushPrepend(storeData, snapshot, intent) {
-    // Shot 7 atomic frame: setData → camera restore → DDR (F2 no-op).
+    // Shot 7 atomic frame: setData → market-time restore (LEFT) → DDR (F2 no-op).
     if (intent.phase === 'F2') return;
 
-    if (intent?._edgeHydrate && typeof EdgeHydrateAudit !== 'undefined') {
-      EdgeHydrateAudit.markPaintStart(intent._edgeHydrate);
-    }
-
     const times = Array.isArray(snapshot?.times) ? snapshot.times : [];
-
-    // LEFT: market-time preserve only (not Mode A / prependedCount).
-    // Mid-window (#13): LWC often already correct — resolve is idempotent on times.
-    // Left boundary: LWC freezes logical indices → data slides under → infinite hydrate.
-    // Capture is intent.viewportAnchor (pre-merge); resolve against FINAL times; one force.
     const leftEdge = intent?.edge !== 'right';
-    const base = intent?.viewportRange;
-
-    // TEMP — Mute & Sync diagnostic (evidence only; no new preserve algorithm).
-    const diagOn = typeof LeftPrependDiag !== 'undefined'
-      && LeftPrependDiag.enabled()
-      && leftEdge;
-    if (diagOn) {
-      LeftPrependDiag.install();
-      const logicalBefore = (typeof LeftPrependDiag.cloneRange === 'function'
-        ? LeftPrependDiag.cloneRange(base)
-        : null)
-        || (typeof LeftPrependDiag.lwcLogical === 'function' ? LeftPrependDiag.lwcLogical() : null)
-        || (base ? { from: base.from, to: base.to } : null);
-      LeftPrependDiag.begin({
-        logicalBefore,
-        prependedCount: Number.isFinite(Number(intent?.prependedCount))
-          ? Number(intent.prependedCount)
-          : null,
-        prunedRightCount: intent?.prunedRightCount ?? 0,
-        tipBefore: intent?.tipBefore ?? null,
-        tipAfter: intent?.tipAfter ?? null,
-        storeBefore: intent?.storeBefore ?? null,
-        storeAfter: intent?.storeAfter ?? null,
-      });
-      LeftPrependDiag.mute();
-      LeftPrependDiag.setPhase('before');
-    }
 
     ChartAdapter.applyFullData('live', storeData, {
       skipAnnotations: true,
       skipDecoration: true,
     });
-    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-      PrependViewAudit.markPhase('afterSetData');
-    }
 
     this._observeShadowWorld(snapshot);
     this._bindDataResolve(times);
@@ -568,7 +313,6 @@ class ChartCompositor {
   /**
    * LEFT prepend — one sync market-time restore.
    * saved [leftTime, rightTime] → nearest indices in FINAL contiguous times → forceVisibleLogicalRange.
-   * No prependedCount, rightOffset, prunedRight, or rAF.
    */
   _applyMarketTimeViewportSync(paintSnapshot, viewportAnchor) {
     if (!viewportAnchor || viewportAnchor.anchorTimeMs == null
@@ -583,53 +327,23 @@ class ChartCompositor {
       return false;
     }
     this._bindDataResolve(times);
-    const saved = {
+    const resolved = TimeCamera.resolveMarketTimePreserve({
       leftTimeMs: viewportAnchor.anchorTimeMs,
       rightTimeMs: viewportAnchor.rightTimeMs,
       logicalOffset: viewportAnchor.logicalOffset,
       rightLogicalOffset: viewportAnchor.rightLogicalOffset,
-    };
-    const resolved = TimeCamera.resolveMarketTimePreserve({
-      leftTimeMs: saved.leftTimeMs,
-      rightTimeMs: saved.rightTimeMs,
-      logicalOffset: saved.logicalOffset,
-      rightLogicalOffset: saved.rightLogicalOffset,
       tipLogical: times.length - 1,
       timesSec: times,
     });
     if (!resolved || !Number.isFinite(resolved.from) || !Number.isFinite(resolved.to)
       || !(resolved.to > resolved.from)) {
-      try {
-        console.debug('[LEFT_MT_PRESERVE] resolve-fail', { saved, times0: times[0], timesN: times[times.length - 1] });
-      } catch { /* */ }
       return false;
     }
     if (typeof ChartAdapter.forceVisibleLogicalRange !== 'function') return false;
-    const ok = ChartAdapter.forceVisibleLogicalRange('live', {
+    return ChartAdapter.forceVisibleLogicalRange('live', {
       from: resolved.from,
       to: resolved.to,
     });
-    try {
-      const finalRange = (typeof ChartAdapter.getVisibleLogicalRange === 'function')
-        ? ChartAdapter.getVisibleLogicalRange('live')
-        : null;
-      console.debug('[LEFT_MT_PRESERVE]', {
-        saved,
-        resolved: { from: resolved.from, to: resolved.to, caseId: resolved.caseId },
-        finalLogical: finalRange,
-      });
-    } catch { /* */ }
-    if (ok && typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-      LeftPrependDiag.markAfterForcePin();
-    }
-    return ok;
-  }
-
-  /**
-   * @deprecated LEFT uses _applyMarketTimeViewportSync (sync force). Kept for tests.
-   */
-  _restoreMarketTimeViewport(paintSnapshot, viewportAnchor, intent = null) {
-    return this._applyMarketTimeViewportSync(paintSnapshot, viewportAnchor);
   }
 
   /**

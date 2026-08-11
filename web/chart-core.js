@@ -1319,54 +1319,19 @@
     if (!state?.candleSeries || !Array.isArray(candles) || !candles.length) return;
     state._realCandles = candles;
     state._lastRealCandleTime = candles[candles.length - 1]?.time ?? null;
-    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-      PrependViewAudit.markPhase('beforeSetData');
-    }
     state.candleSeries.setData(candles);
-    if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-      LeftPrependDiag.markAfterSetData();
-    }
-    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-      PrependViewAudit.markPhase('afterCandleSetData');
-    }
-    // Volume always painted with candles (skipVolume was a Case #12 probe only).
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('beforeVolumeSetData');
-      }
       state.volumeSeries.setData(toVolumeBars(candles));
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('afterVolumeSetData');
-      }
-    }
-    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-      PrependViewAudit.markPhase('afterVolumeSetData');
     }
     // Y-scale only (autoScale/log). Does NOT write visibleLogicalRange.
-    // Probe name afterScaleApply is historical — X drift here is LWC reacting to setData.
     if (typeof ScaleController !== 'undefined' && typeof ScaleController.applyAll === 'function') {
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('beforeScaleApply');
-      }
       ScaleController.applyAll();
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('afterScaleApply');
-      }
-    }
-    if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-      PrependViewAudit.markPhase('afterScaleApply');
     }
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }
     if (paintOpts.skipDecoration !== true) {
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('beforeDecoration');
-      }
       refreshDecorationFromState(state);
-      if (typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive()) {
-        LeftPrependDiag.probeLogical('afterDecoration');
-      }
     }
     refreshRulerOverlay();
   }
@@ -1452,8 +1417,6 @@
           rangeOnly: true,
         }, {
           force: true,
-          // TEMP: allow this write through LeftPrependDiag mute.
-          diagForcePin: typeof LeftPrependDiag !== 'undefined' && LeftPrependDiag.isActive(),
         });
       }
       return true;

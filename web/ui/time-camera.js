@@ -532,12 +532,6 @@
 
     beginPreserveTransaction();
     const commitOpts = { force: opts?.force !== false };
-    if (typeof global !== 'undefined'
-      && global.LeftPrependDiag
-      && typeof global.LeftPrependDiag.isActive === 'function'
-      && global.LeftPrependDiag.isActive()) {
-      commitOpts.diagAuthoritative = true;
-    }
     const ok = commit(patch, commitOpts);
     if (!ok) releasePreserveTransaction();
     try {

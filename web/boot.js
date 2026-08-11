@@ -665,13 +665,6 @@
       getNavigatorResult: () => liveNavigatorResult,
       onAfterFlush: (intent) => {
         updateBufferingOverlay();
-        // EDGE_HYDRATE: paintMs includes one rAF after setData (layout/GPU), not sync only.
-        // F2 is a no-op second RAF for prepend — do not double-complete.
-        if (intent && intent._edgeHydrate
-          && intent.phase !== 'F2'
-          && typeof EdgeHydrateAudit !== 'undefined') {
-          EdgeHydrateAudit.completeAfterPaintRaf(intent._edgeHydrate);
-        }
         // Wave 2: consume after paint idle. Scheduler clears `_busy` only AFTER
         // flush returns, so onAfterFlush itself still sees isRenderBusy — defer
         // one microtask so pending left-history (incl. post-prepend continuation)
@@ -952,10 +945,6 @@
         tf: String(window.currentTf || ''),
       }),
       shouldLoadRight: (range, options = {}) => {
-        // TEMP LEFT camera diag: isolate LEFT prepend — no RIGHT hydrate.
-        if (typeof LEFT_PREPEND_CAMERA_DIAG !== 'undefined' && LEFT_PREPEND_CAMERA_DIAG === true) {
-          return false;
-        }
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
         if (!canExtendHistoryRight()) return false;
@@ -1019,11 +1008,6 @@
           && ChartCompositor.captureViewportAnchor)
           ? ChartCompositor.captureViewportAnchor(preSnap?.times, viewportRange)
           : null;
-        // TEMPORARY P0: market-time VIEW audit (before store mutation).
-        if (typeof PrependViewAudit !== 'undefined') {
-          PrependViewAudit.install();
-          PrependViewAudit.beginBeforeMerge();
-        }
         const storeBefore = liveColumnarStore?.barCount?.() ?? 0;
         const tipBefore = typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
@@ -1036,9 +1020,6 @@
         });
         const added = Number(merge?.added) || 0;
         if (added <= 0) {
-          if (typeof PrependViewAudit !== 'undefined' && PrependViewAudit.isActive()) {
-            PrependViewAudit.abort();
-          }
           return null;
         }
         const storeAfter = liveColumnarStore?.barCount?.() ?? 0;
@@ -1104,9 +1085,6 @@
     };
     root.addEventListener('wheel', arm, { passive: true });
     root.addEventListener('pointerdown', arm, { passive: true });
-    if (typeof PrependViewAudit !== 'undefined') {
-      PrependViewAudit.attachGestureWatch();
-    }
   }
 
   function scheduleHistoryLoad(range) {
@@ -1125,9 +1103,6 @@
     }
 
     // Right edge of loaded island → append toward live (not centerTime re-fetch).
-    if (typeof LEFT_PREPEND_CAMERA_DIAG !== 'undefined' && LEFT_PREPEND_CAMERA_DIAG === true) {
-      return;
-    }
     if (canExtendHistoryRight() && isApproachingLoadedRightEdge(range)) {
       liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true });
     }
@@ -1443,11 +1418,6 @@
       if (!ChartAdapter.initLiveCharts()) {
         setTimeout(boot, 500);
         return;
-      }
-
-      // TEMP: LEFT Mute&Sync diagnostic — event spies (log-only) + writer hooks.
-      if (typeof LeftPrependDiag !== 'undefined') {
-        LeftPrependDiag.install();
       }
 
       // ADR-012: engine SSOT hydrates menu before first viewport paint.
