@@ -133,7 +133,6 @@ class HydrationOrchestrator {
       range: { from: range.from, to: range.to },
       options: { ...options },
     };
-    if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.noteIntent('LEFT');
     this.tryConsumePending();
   }
 
@@ -158,7 +157,6 @@ class HydrationOrchestrator {
       range: { from: range.from, to: range.to },
       options: { ...options },
     };
-    if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.noteIntent('RIGHT');
     this.tryConsumePending();
   }
 
@@ -416,18 +414,15 @@ class HydrationOrchestrator {
     this._inFlight = true;
     this.state = HydrationState.PREPENDING;
     let completed = false;
-    if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.markFetchStart('LEFT');
 
     try {
       const data = await deps.fetchColumnar(endTimeSec);
-      if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.markFetchEnd();
       if (epoch !== deps.getEpoch()) return;
       if (reqId != null && typeof deps.getReqId === 'function' && reqId !== deps.getReqId()) return;
 
       // Wave 3: empty payload is recoverable unless server authoritatively asserts EOF.
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         this._applyAuthoritativeEof(data);
-        if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
         return;
       }
 
@@ -441,21 +436,10 @@ class HydrationOrchestrator {
           ? ChartAdapter.getVisibleLogicalRange('live')
           : null;
 
-        if (typeof EdgeHydrateAudit !== 'undefined') {
-          const probe = typeof deps.getHydrateProbe === 'function'
-            ? (deps.getHydrateProbe() || {})
-            : {};
-          EdgeHydrateAudit.markMergeStart({
-            tipBefore: probe.tip,
-            storeBefore: probe.storeCount,
-            tf: probe.tf,
-          });
-        }
         const mergeResult = deps.mergeIntoStore(data);
         // Wave 3: zero-overlap / no-add is recoverable — never infer EOF.
         if (!mergeResult || mergeResult.added <= 0) {
           console.warn('[HydrationOrchestrator] prepend stalled: zero overlap (recoverable, not EOF)');
-          if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
           return;
         }
 
@@ -463,16 +447,6 @@ class HydrationOrchestrator {
           ? Number(mergeResult.added)
           : (Number.isFinite(data.added) && data.added > 0 ? data.added : 0);
 
-        if (typeof EdgeHydrateAudit !== 'undefined') {
-          const probe = typeof deps.getHydrateProbe === 'function'
-            ? (deps.getHydrateProbe() || {})
-            : {};
-          EdgeHydrateAudit.markMergeEnd({
-            barsAdded: addedBars,
-            tipAfter: probe.tip,
-            storeAfter: probe.storeCount,
-          });
-        }
 
         if (typeof deps.markDirty === 'function') {
           const tipBefore = mergeResult.tipBefore ?? null;
@@ -497,9 +471,6 @@ class HydrationOrchestrator {
             // Camera contract fact (NOT a translation): tip moved in this LEFT merge.
             rightBoundaryChanged,
           };
-          if (typeof EdgeHydrateAudit !== 'undefined') {
-            EdgeHydrateAudit.attachToPaintIntent(intent);
-          }
           deps.markDirty(intent);
         }
 
@@ -516,7 +487,6 @@ class HydrationOrchestrator {
     } catch (err) {
       // Wave 3: errors are recoverable — must not masquerade as EOF.
       console.error('[HydrationOrchestrator] prepend failed:', err);
-      if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
     } finally {
       this._inFlight = false;
       if (completed) {
@@ -574,18 +544,15 @@ class HydrationOrchestrator {
     this._inFlight = true;
     this.state = HydrationState.PREPENDING;
     let completed = false;
-    if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.markFetchStart('RIGHT');
 
     try {
       const data = await deps.fetchColumnar(endTimeSec);
-      if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.markFetchEnd();
       if (epoch !== deps.getEpoch()) return;
       if (reqId != null && typeof deps.getReqId === 'function' && reqId !== deps.getReqId()) return;
 
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         // Empty right payload → stop right pending (no left EOF inference).
         this._pendingRightIntent = null;
-        if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
         return;
       }
 
@@ -599,36 +566,15 @@ class HydrationOrchestrator {
           ? ChartAdapter.getVisibleLogicalRange('live')
           : null;
 
-        if (typeof EdgeHydrateAudit !== 'undefined') {
-          const probe = typeof deps.getHydrateProbe === 'function'
-            ? (deps.getHydrateProbe() || {})
-            : {};
-          EdgeHydrateAudit.markMergeStart({
-            tipBefore: probe.tip,
-            storeBefore: probe.storeCount,
-            tf: probe.tf,
-          });
-        }
         const mergeResult = deps.mergeAppendIntoStore(data);
         if (!mergeResult || mergeResult.added <= 0) {
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
           this._pendingRightIntent = null;
-          if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
           return;
         }
 
         const addedBars = Number(mergeResult.added) > 0 ? Number(mergeResult.added) : 0;
 
-        if (typeof EdgeHydrateAudit !== 'undefined') {
-          const probe = typeof deps.getHydrateProbe === 'function'
-            ? (deps.getHydrateProbe() || {})
-            : {};
-          EdgeHydrateAudit.markMergeEnd({
-            barsAdded: addedBars,
-            tipAfter: probe.tip,
-            storeAfter: probe.storeCount,
-          });
-        }
 
         if (typeof deps.markDirty === 'function') {
           // Same paint path as prepend; edge:'right' → market-time preserve only
@@ -641,9 +587,6 @@ class HydrationOrchestrator {
             viewportRange: mergeResult.viewportRange ?? viewportRange,
             viewportAnchor: mergeResult.viewportAnchor ?? null,
           };
-          if (typeof EdgeHydrateAudit !== 'undefined') {
-            EdgeHydrateAudit.attachToPaintIntent(intent);
-          }
           deps.markDirty(intent);
         }
 
@@ -657,7 +600,6 @@ class HydrationOrchestrator {
       }
     } catch (err) {
       console.error('[HydrationOrchestrator] append failed:', err);
-      if (typeof EdgeHydrateAudit !== 'undefined') EdgeHydrateAudit.abort();
     } finally {
       this._inFlight = false;
       if (completed) {
