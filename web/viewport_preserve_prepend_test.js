@@ -1,5 +1,7 @@
 /**
- * ViewportAnchor prepend preserve — focused Node tests (no MCP/LWC).
+ * Viewport market-time preserve — focused Node tests (no MCP/LWC).
+ * Aligns with current LEFT contract: capture → resolve → logical range
+ * (runtime applies via forceVisibleLogicalRange). RIGHT still uses proposePreserveViewport.
  * Run: node web/viewport_preserve_prepend_test.js
  */
 'use strict';
@@ -37,7 +39,15 @@ test('captureViewportAnchor: from < 0 preserves void offset', () => {
   assert.strictEqual(anchor.visibleBars, 150);
 });
 
-test('A: from=5.25 prepend +3000 preserves market-time + fraction', () => {
+test('findIndexByTimeMs: nearest ascending unix-sec', () => {
+  const times = timesSec(10, 1_700_000_000);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_700_000_000 * 1000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 5) * 1000), 5);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 4.6) * 1000), 5);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 4.4) * 1000), 4);
+});
+
+test('A: from=5.25 prepend +3000 preserves market-time + fraction (RIGHT propose path)', () => {
   TimeCamera._resetForTests();
   let seen = null;
   TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
@@ -50,7 +60,6 @@ test('A: from=5.25 prepend +3000 preserves market-time + fraction', () => {
   assert.ok(anchor);
 
   const newTimes = timesSec(oldN + added, 1_700_000_000 - added);
-  // After prepend, old index 5 is at index 3005; its open is still 1_700_000_005
   TimeCamera.bindDataResolve({
     nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(newTimes, ms),
   });
@@ -66,12 +75,11 @@ test('A: from=5.25 prepend +3000 preserves market-time + fraction', () => {
   assert.ok(seen);
   assert.ok(Math.abs(seen.visibleRange.from - (added + 5.25)) < 1e-9);
   assert.ok(Math.abs(seen.visibleRange.to - (added + 85.25)) < 1e-9);
-  // Same market-time under left edge: newTimes[floor(from)] ≈ anchor bar
   const leftIdx = Math.floor(seen.visibleRange.from);
   assert.strictEqual(newTimes[leftIdx], 1_700_000_000 + 5);
 });
 
-test('B: from=-50 prepend +3000 keeps void offset', () => {
+test('B: from=-50 prepend +3000 keeps void offset (RIGHT propose path)', () => {
   TimeCamera._resetForTests();
   let seen = null;
   TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
@@ -95,7 +103,6 @@ test('B: from=-50 prepend +3000 keeps void offset', () => {
     timesSec: newTimes,
   });
   assert.strictEqual(ok, true);
-  // old index 0 → new index 3000; newFrom = 3000 + (-50) = 2950
   assert.strictEqual(seen.visibleRange.from, added - 50);
   assert.strictEqual(seen.visibleRange.to, added - 50 + 150);
   assert.ok(seen.visibleRange.from < added, 'void remains left of former index-0 bar');
@@ -168,7 +175,6 @@ test('D: user gesture releases txn; subsequent proposeFromPane accepted', () => 
   });
   assert.strictEqual(TimeCamera.hasOpenPreserveTransaction(), true);
 
-  // User wheel/pointer releases ownership before range event.
   TimeCamera.releasePreserveTransaction();
   assert.strictEqual(TimeCamera.hasOpenPreserveTransaction(), false);
 
@@ -178,9 +184,8 @@ test('D: user gesture releases txn; subsequent proposeFromPane accepted', () => 
   assert.strictEqual(commits.length, 2);
 });
 
-test('P0: LEFT prepend at cap uses prependedCount logical shift (not net length)', () => {
-  // 25000 + prepend 2999 → prune right 2999 → still 25000.
-  // Net length delta = 0; camera must still shift by +2999.
+test('LEFT at 25k cap: market-time resolve preserves viewport (not net-length shift)', () => {
+  // 25000 + prepend 2999 → prune right ≈2999 → still 25000. Net length delta = 0.
   const { ColumnarStore } = require('./columnar-store.js');
   Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 25000, configurable: true });
   Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', { get: () => 25000, configurable: true });
@@ -206,8 +211,11 @@ test('P0: LEFT prepend at cap uses prependedCount logical shift (not net length)
   store.replaceMonolith(monolith(25000, start), { commitPaired: true });
 
   const range = { from: 18300.25, to: 20300.25 };
-  const leftSecBefore = store.snapshot().times[Math.floor(range.from)];
-  const rightSecBefore = store.snapshot().times[Math.floor(range.to)];
+  const preTimes = store.snapshot().times;
+  const anchor = ChartCompositor.captureViewportAnchor(preTimes, range);
+  assert.ok(anchor);
+  const leftSecBefore = preTimes[Math.floor(range.from)];
+  const rightSecBefore = preTimes[Math.floor(range.to)];
   const lengthBefore = store.barCount();
 
   const prependStart = store.firstTimeSec() - 2999 * 3600;
@@ -221,158 +229,109 @@ test('P0: LEFT prepend at cap uses prependedCount logical shift (not net length)
   assert.strictEqual(store.barCount() - lengthBefore, 0, 'net length unchanged at cap');
   assert.ok(merge.prunedRightCount >= 2990, `prunedRight≈2999 got ${merge.prunedRightCount}`);
 
-  // Production LEFT camera rule (compositor): expected = oldLogical + prependedCount.
-  const expected = {
-    from: range.from + merge.prependedCount,
-    to: range.to + merge.prependedCount,
-  };
+  const newTimes = store.snapshot().times;
+  TimeCamera._resetForTests();
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(newTimes, ms),
+  });
+
+  const resolved = TimeCamera.resolveMarketTimePreserve({
+    leftTimeMs: anchor.anchorTimeMs,
+    rightTimeMs: anchor.rightTimeMs,
+    logicalOffset: anchor.logicalOffset,
+    rightLogicalOffset: anchor.rightLogicalOffset,
+    tipLogical: newTimes.length - 1,
+    timesSec: newTimes,
+  });
+  assert.ok(resolved);
+  assert.strictEqual(resolved.caseId, 'B1');
+
   const wrongNet = {
     from: range.from + (store.barCount() - lengthBefore),
     to: range.to + (store.barCount() - lengthBefore),
   };
-  assert.notDeepStrictEqual(expected, wrongNet, 'net-length shift must differ at cap');
+  assert.notDeepStrictEqual(
+    { from: resolved.from, to: resolved.to },
+    wrongNet,
+    'market-time resolve must differ from net-length (0) shift at cap',
+  );
 
-  // Case 8 gate: tip moved under right-prune, but left survives → Mode A (not Mode B).
-  const plan = ChartCompositor.planLeftPrependRestore({
-    edge: 'left',
-    prependedCount: merge.prependedCount,
-    addedBars: merge.added,
-    viewportRange: range,
-    tipBefore: start + (25000 - 1) * 3600,
-    tipAfter: store.lastTimeSec(),
-    storeAfter: store.barCount(),
-    rightBoundaryChanged: true,
-    viewportAnchor: { anchorTimeMs: leftSecBefore * 1000, rightTimeMs: rightSecBefore * 1000 },
-  }, store.barCount());
-  assert.strictEqual(plan.mode, 'logical', 'Case 8: tip moved but left survives → Mode A');
-  assert.deepStrictEqual(plan.expectedRange, expected);
-
-  // Near-tip viewport pruned away → Mode B.
-  const prunedPlan = ChartCompositor.planLeftPrependRestore({
-    edge: 'left',
-    prependedCount: 2999,
-    viewportRange: { from: 23942, to: 24142 },
-    storeAfter: 25000,
-    rightBoundaryChanged: true,
-    tipBefore: 1,
-    tipAfter: 2,
-    viewportAnchor: { anchorTimeMs: 1, rightTimeMs: 2 },
-  }, 25000);
-  assert.strictEqual(prunedPlan.mode, 'market', 'near-tip prune → Mode B');
-
-  const newTimes = store.snapshot().times;
-  TimeCamera._resetForTests();
-  let seen = null;
-  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
-  TimeCamera.commit({
-    visibleRange: expected,
-    sourceHostId: 'system',
-    rangeOnly: true,
-  }, { force: true });
-  assert.ok(seen);
-  assert.ok(Math.abs(seen.visibleRange.from - expected.from) < 1e-9);
-  assert.ok(Math.abs(seen.visibleRange.to - expected.to) < 1e-9);
-
-  const leftIdx = Math.floor(seen.visibleRange.from);
-  const rightIdx = Math.floor(seen.visibleRange.to);
+  const leftIdx = Math.floor(resolved.from);
+  const rightIdx = Math.floor(resolved.to);
   assert.strictEqual(newTimes[leftIdx], leftSecBefore, 'left market-time preserved');
   assert.strictEqual(newTimes[rightIdx], rightSecBefore, 'right market-time preserved');
   assert.notStrictEqual(newTimes[Math.floor(wrongNet.from)], leftSecBefore,
     'net-length (0) shift leaves camera on wrong bars');
 });
 
-test('Mode B1: tip moved but old viewport fully survives → exact time restore', () => {
+test('resolve B1: both edges survive → exact time restore', () => {
   TimeCamera._resetForTests();
-  let seen = null;
-  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
-
-  // Final series after prepend+prune: tip moved left, but mid-window still present.
-  const finalTimes = timesSec(1000, 1_700_100_000); // ends at 1_700_100_000+999
+  const finalTimes = timesSec(1000, 1_700_100_000);
   const leftSec = 1_700_100_000 + 100;
   const rightSec = 1_700_100_000 + 500;
   TimeCamera.bindDataResolve({
     nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(finalTimes, ms),
   });
 
-  const ok = TimeCamera.proposeMarketTimePreserve({
+  const resolved = TimeCamera.resolveMarketTimePreserve({
     leftTimeMs: leftSec * 1000,
     rightTimeMs: rightSec * 1000,
     logicalOffset: 0.25,
     rightLogicalOffset: 0.25,
     tipLogical: finalTimes.length - 1,
     timesSec: finalTimes,
-    force: true,
   });
-  assert.strictEqual(ok, true);
-  assert.ok(seen);
-  assert.ok(Math.abs(seen.visibleRange.from - (100 + 0.25)) < 1e-9);
-  assert.ok(Math.abs(seen.visibleRange.to - (500 + 0.25)) < 1e-9);
-  assert.strictEqual(seen.rangeOnly, true);
+  assert.ok(resolved);
+  assert.strictEqual(resolved.caseId, 'B1');
+  assert.ok(Math.abs(resolved.from - (100 + 0.25)) < 1e-9);
+  assert.ok(Math.abs(resolved.to - (500 + 0.25)) < 1e-9);
 });
 
-test('Mode B2: right evicted, left survives → left-anchored width (not tip snap)', () => {
+test('resolve B2: right evicted, left survives → left-anchored width (not tip snap)', () => {
   TimeCamera._resetForTests();
-  let seen = null;
-  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
-
-  // Final tip at +799; old right +900 is past tip (evicted).
-  const finalTimes = timesSec(800, 1_700_000_000); // last = start+799
+  const finalTimes = timesSec(800, 1_700_000_000);
   const leftSec = 1_700_000_000 + 100;
-  const rightSec = 1_700_000_000 + 900; // beyond tip
-  const width = rightSec - leftSec; // 800s
+  const rightSec = 1_700_000_000 + 900;
   TimeCamera.bindDataResolve({
     nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(finalTimes, ms),
   });
 
-  const ok = TimeCamera.proposeMarketTimePreserve({
+  const resolved = TimeCamera.resolveMarketTimePreserve({
     leftTimeMs: leftSec * 1000,
     rightTimeMs: rightSec * 1000,
     logicalOffset: 0,
     tipLogical: finalTimes.length - 1,
     timesSec: finalTimes,
-    force: true,
   });
-  assert.strictEqual(ok, true);
-  assert.ok(seen);
-  // from stays at left (idx 100); to = min(left+width, tip) = tip (799)
-  assert.ok(Math.abs(seen.visibleRange.from - 100) < 1e-9);
-  assert.ok(Math.abs(seen.visibleRange.to - 799) < 1e-9);
-  // Must NOT be tip-anchored full width ending at tip from tip-width
-  // (that would be from = 799-800 = -1 → clamped to 0)
-  assert.ok(seen.visibleRange.from > 50, 'must keep left history anchor, not tip-snap');
-  void width;
+  assert.ok(resolved);
+  assert.strictEqual(resolved.caseId, 'B2');
+  assert.ok(Math.abs(resolved.from - 100) < 1e-9);
+  assert.ok(Math.abs(resolved.to - 799) < 1e-9);
+  assert.ok(resolved.from > 50, 'must keep left history anchor, not tip-snap');
 });
 
-test('Mode B3: left also gone → tip-anchored width fallback', () => {
+test('resolve B3: left also gone → tip-anchored width fallback', () => {
   TimeCamera._resetForTests();
-  let seen = null;
-  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
-
-  // Old window entirely to the right of surviving series (both edges gone).
-  const finalTimes = timesSec(500, 1_700_000_000); // last = start+499
+  const finalTimes = timesSec(500, 1_700_000_000);
   const leftSec = 1_700_000_000 + 800;
   const rightSec = 1_700_000_000 + 1200;
-  const widthSec = rightSec - leftSec; // 400
   TimeCamera.bindDataResolve({
     nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(finalTimes, ms),
   });
 
-  const ok = TimeCamera.proposeMarketTimePreserve({
+  const resolved = TimeCamera.resolveMarketTimePreserve({
     leftTimeMs: leftSec * 1000,
     rightTimeMs: rightSec * 1000,
     tipLogical: finalTimes.length - 1,
     timesSec: finalTimes,
-    force: true,
   });
-  assert.strictEqual(ok, true);
-  assert.ok(seen);
-  // tip-anchored: to = 499, from = max(0, 499-400) = 99
-  assert.ok(Math.abs(seen.visibleRange.to - 499) < 1e-9);
-  assert.ok(Math.abs(seen.visibleRange.from - 99) < 1e-9);
-  void widthSec;
+  assert.ok(resolved);
+  assert.strictEqual(resolved.caseId, 'B3');
+  assert.ok(Math.abs(resolved.to - 499) < 1e-9);
+  assert.ok(Math.abs(resolved.from - 99) < 1e-9);
 });
 
-test('Mode B resolveMarketTimePreserve returns logical range without requiring commit', () => {
+test('resolveMarketTimePreserve returns logical range without requiring commit', () => {
   TimeCamera._resetForTests();
   const finalTimes = timesSec(1000, 1_700_100_000);
   TimeCamera.bindDataResolve({

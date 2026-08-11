@@ -939,11 +939,6 @@
       isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
       isDashboardLoading: () => !!window.__isDashboardLoading,
       getVisibleRange: () => ChartAdapter.getVisibleLogicalRange('live'),
-      getHydrateProbe: () => ({
-        tip: liveColumnarStore?.lastTimeSec?.() ?? null,
-        storeCount: liveColumnarStore?.barCount?.() ?? 0,
-        tf: String(window.currentTf || ''),
-      }),
       shouldLoadRight: (range, options = {}) => {
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;

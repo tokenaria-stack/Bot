@@ -181,8 +181,6 @@ class RenderScheduler {
         tipBefore,
         tipAfter,
         rightBoundaryChanged,
-        // TEMP EDGE_HYDRATE: keep earliest in-flight probe across coalesce.
-        _edgeHydrate: prev._edgeHydrate ?? next._edgeHydrate ?? null,
       };
     }
     return { ...next };
