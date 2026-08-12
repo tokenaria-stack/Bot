@@ -263,18 +263,17 @@ ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
 	return nil
 }
 
-// LoadKlines returns cached candles for [startTime, endTime] inclusive (Unix ms).
+// LoadKlines returns cached candles for [startMs, endMs] inclusive.
+// startMs and endMs are Unix milliseconds. No unit inference or conversion
+// occurs at this database boundary (debt #83 Patch A).
 // When limit > 0, returns at most the last limit bars in that window (ascending).
-func LoadKlines(symbol, interval string, startTime, endTime int64, limit int) ([]Candle, error) {
+func LoadKlines(symbol, interval string, startMs, endMs int64, limit int) ([]Candle, error) {
 	if err := InitDB(); err != nil {
 		return nil, err
 	}
 
 	symbol = normalizeSymbol(symbol)
 	interval = strings.TrimSpace(interval)
-
-	startTime = ensureUnixMillis(startTime)
-	endTime = ensureUnixMillis(endTime)
 
 	var rows *sql.Rows
 	var err error
@@ -289,7 +288,7 @@ FROM (
 	LIMIT ?
 ) sub
 ORDER BY open_time ASC`,
-			symbol, interval, startTime, endTime, limit,
+			symbol, interval, startMs, endMs, limit,
 		)
 	} else {
 		rows, err = db.Query(`
@@ -297,7 +296,7 @@ SELECT open_time, open, high, low, close, volume, close_time
 FROM historical_klines
 WHERE symbol = ? AND interval = ? AND open_time >= ? AND open_time <= ?
 ORDER BY open_time ASC`,
-			symbol, interval, startTime, endTime,
+			symbol, interval, startMs, endMs,
 		)
 	}
 	if err != nil {
@@ -311,6 +310,8 @@ ORDER BY open_time ASC`,
 // LoadKlinesBeforeEnd returns at most `limit` candles with open_time <= endTimeMs,
 // ordered ascending. Count-based and gap-tolerant: a multi-day hole inside an
 // assumed N×interval span does not collapse the result to the boundary candle.
+// endTimeMs is Unix milliseconds. No unit inference or conversion occurs at this
+// database boundary (debt #83 Patch A).
 func LoadKlinesBeforeEnd(symbol, interval string, endTimeMs int64, limit int) ([]Candle, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("LoadKlinesBeforeEnd: limit must be > 0")
@@ -321,7 +322,6 @@ func LoadKlinesBeforeEnd(symbol, interval string, endTimeMs int64, limit int) ([
 
 	symbol = normalizeSymbol(symbol)
 	interval = strings.TrimSpace(interval)
-	endTimeMs = ensureUnixMillis(endTimeMs)
 	if endTimeMs <= 0 {
 		return nil, fmt.Errorf("LoadKlinesBeforeEnd: endTimeMs required")
 	}
