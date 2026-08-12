@@ -151,9 +151,8 @@ func TestLoadKlinesBeforeEnd_Pre2001MillisecondEnd_Unchanged(t *testing.T) {
 }
 
 // TestSaveKlines_CanonicalMillisecondOpenTimeRoundTrip: storage path must not rewrite
-// a legitimate pre-2001 ms open (same landmine as Load bounds when heuristic is shared).
+// a legitimate pre-2001 ms open (debt #83 Patch B — Save is ms-only, no unit guess).
 func TestSaveKlines_CanonicalMillisecondOpenTimeRoundTrip(t *testing.T) {
-	t.Skip("debt #83 Patch B: SaveKlines still applies ensureUnixMillis; deferred after Patch A query-bound fix")
 	resetDBConnection(filepath.Join(t.TempDir(), "ts_contract_save.db"))
 	if err := InitDB(); err != nil {
 		t.Fatal(err)
@@ -165,14 +164,22 @@ func TestSaveKlines_CanonicalMillisecondOpenTimeRoundTrip(t *testing.T) {
 	if err := SaveKlines("BTCUSDT", "1M", []Candle{row}); err != nil {
 		t.Fatal(err)
 	}
-	var stored int64
+	var storedOpen, storedClose int64
 	err := db.QueryRow(`
-SELECT open_time FROM historical_klines
-WHERE symbol = ? AND interval = ?`, "BTCUSDT", "1M").Scan(&stored)
+SELECT open_time, close_time FROM historical_klines
+WHERE symbol = ? AND interval = ?`, "BTCUSDT", "1M").Scan(&storedOpen, &storedClose)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored != ot {
-		t.Fatalf("stored open_time=%d want %d (Save must not treat pre-2001 ms as seconds)", stored, ot)
+	if storedOpen != ot || storedClose != ot+1 {
+		t.Fatalf("stored open=%d close=%d want open=%d close=%d (no ×1000)",
+			storedOpen, storedClose, ot, ot+1)
+	}
+	got, err := LoadKlines("BTCUSDT", "1M", ot, ot, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].OpenTime != ot {
+		t.Fatalf("LoadKlines after Save: %#v want open=%d", got, ot)
 	}
 }

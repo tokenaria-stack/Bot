@@ -196,16 +196,10 @@ func warnIfTimeLooksLikeSeconds(label string, ts int64) {
 	}
 }
 
-func ensureUnixMillis(ts int64) int64 {
-	if ts > 0 && ts < 1_000_000_000_000 {
-		log.Printf("[DEBUG] coercing timestamp %d from seconds to milliseconds on save", ts)
-		return ts * 1000
-	}
-	return ts
-}
-
-// SaveKlines upserts candles in a single transaction.
 // SaveKlines UPSERTs candles into historical_klines.
+// OpenTime and CloseTime must be Unix milliseconds. SaveKlines performs no unit
+// inference or conversion (debt #83 Patch B) — callers (PersistenceQueue, REST/WS
+// adapters, offline tools) are responsible for the ms contract.
 // Production runtime: call only from PersistenceQueue (Shot 9E single-writer).
 // Tests and offline tools (cmd/history_sync) may call directly.
 // ON CONFLICT updates OHLCV so a stale/partial row never blocks a fresher closed bar.
@@ -247,13 +241,11 @@ ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
 	defer stmt.Close()
 
 	for _, k := range klines {
-		openTime := ensureUnixMillis(k.OpenTime)
-		closeTime := ensureUnixMillis(k.CloseTime)
 		if _, err := stmt.Exec(
-			symbol, interval, openTime,
-			k.Open, k.High, k.Low, k.Close, k.Volume, closeTime,
+			symbol, interval, k.OpenTime,
+			k.Open, k.High, k.Low, k.Close, k.Volume, k.CloseTime,
 		); err != nil {
-			return fmt.Errorf("upsert kline open_time=%d: %w", openTime, err)
+			return fmt.Errorf("upsert kline open_time=%d: %w", k.OpenTime, err)
 		}
 	}
 
