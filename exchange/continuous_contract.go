@@ -45,11 +45,19 @@ func storageSymbolForSegment(symbol string, seg contractSegment) string {
 // LoadContinuousContractFromDB reads spot (_SPOT) and futures rows from SQLite and stitches them.
 // When limit > 0, returns at most the last limit stitched bars (ascending).
 //
+// Continuous SQLite universe left edge is BinanceSpotGenesisMs (debt #83 Patch E2).
+// Pre-spot starts are clamped; windows entirely before spot genesis return empty.
+// Futures seam (BinanceFuturesGenesisMs) is unchanged.
+//
 // Important: [startTimeMs, endTimeMs] is a time window. Across archive gaps, a window of
 // size N×interval may contain far fewer than N rows. Prefer LoadContinuousContractBeforeEnd
 // when the caller wants "N actual bars at/before end" (GetWindow / history prepend).
 func LoadContinuousContractFromDB(symbol, interval string, startTimeMs, endTimeMs int64, limit int) ([]Candle, error) {
 	symbol = NormalizeFuturesSymbol(symbol)
+	startTimeMs, endTimeMs, ok := normalizeContinuousContractRange(startTimeMs, endTimeMs)
+	if !ok {
+		return nil, nil
+	}
 	var merged []data.Candle
 
 	for _, seg := range splitRangeAtGenesis(startTimeMs, endTimeMs) {

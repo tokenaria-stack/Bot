@@ -152,6 +152,101 @@ func TestLoadContinuousContractFromDB_StitchesWithoutDuplicateAtGenesis(t *testi
 	}
 }
 
+// Debt #83 Patch E2: continuous SQLite universe left edge is BinanceSpotGenesisMs.
+func TestLoadContinuousContractFromDB_SpotGenesisClamp(t *testing.T) {
+	data.ResetDBForTest(filepath.Join(t.TempDir(), "cc_e2.db"))
+	if err := data.InitDB(); err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		symbol   = "BTCUSDT"
+		interval = "1d"
+		step     = int64(24 * 60 * 60 * 1000)
+		pre2001  = int64(730_944_000_000) // 1993-03-01 Unix ms
+	)
+
+	spotAtGenesis := data.Candle{
+		OpenTime: BinanceSpotGenesisMs, CloseTime: BinanceSpotGenesisMs + step - 1, Close: 4000,
+	}
+	spotMid := data.Candle{
+		OpenTime: BinanceSpotGenesisMs + step, CloseTime: BinanceSpotGenesisMs + 2*step - 1, Close: 4100,
+	}
+	futAtSeam := data.Candle{
+		OpenTime: BinanceFuturesGenesisMs, CloseTime: BinanceFuturesGenesisMs + step - 1, Close: 9200,
+	}
+	if err := data.SaveKlines(SpotStorageSymbol(symbol), interval, []data.Candle{spotAtGenesis, spotMid}); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.SaveKlines(symbol, interval, []data.Candle{futAtSeam}); err != nil {
+		t.Fatal(err)
+	}
+	end := BinanceFuturesGenesisMs + step - 1
+
+	t.Run("pre_genesis_start_clamps", func(t *testing.T) {
+		got, err := LoadContinuousContractFromDB(symbol, interval, pre2001, end, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 3 {
+			t.Fatalf("len=%d want 3 (spot genesis + mid + futures)", len(got))
+		}
+		if got[0].OpenTime != BinanceSpotGenesisMs {
+			t.Fatalf("first open=%d want spot genesis %d (no ×1000)", got[0].OpenTime, BinanceSpotGenesisMs)
+		}
+		if got[2].OpenTime != BinanceFuturesGenesisMs {
+			t.Fatalf("last open=%d want futures seam %d", got[2].OpenTime, BinanceFuturesGenesisMs)
+		}
+	})
+
+	t.Run("zero_start_clamps", func(t *testing.T) {
+		got, err := LoadContinuousContractFromDB(symbol, interval, 0, end, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 3 || got[0].OpenTime != BinanceSpotGenesisMs {
+			t.Fatalf("got=%v want first=%d", got, BinanceSpotGenesisMs)
+		}
+	})
+
+	t.Run("post_genesis_start_unchanged", func(t *testing.T) {
+		start := BinanceSpotGenesisMs + step
+		got, err := LoadContinuousContractFromDB(symbol, interval, start, end, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("len=%d want 2 (mid spot + futures; genesis bar excluded)", len(got))
+		}
+		if got[0].OpenTime != start {
+			t.Fatalf("first open=%d want requested start %d", got[0].OpenTime, start)
+		}
+	})
+
+	t.Run("end_before_genesis_empty", func(t *testing.T) {
+		got, err := LoadContinuousContractFromDB(symbol, interval, 0, BinanceSpotGenesisMs-1, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("got %d bars, want empty for end before spot genesis", len(got))
+		}
+	})
+
+	t.Run("exact_genesis_start_unchanged", func(t *testing.T) {
+		got, err := LoadContinuousContractFromDB(symbol, interval, BinanceSpotGenesisMs, end, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 3 {
+			t.Fatalf("len=%d want 3", len(got))
+		}
+		if got[0].OpenTime != BinanceSpotGenesisMs {
+			t.Fatalf("first open=%d want exact genesis (no off-by-one)", got[0].OpenTime)
+		}
+	})
+}
+
 func TestDedupeDataCandlesByOpenTime_PrefersLast(t *testing.T) {
 	t.Parallel()
 
