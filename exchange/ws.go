@@ -241,15 +241,8 @@ func (c *WsClient) handleKline(ctx context.Context, raw json.RawMessage) {
 	tick := WsTick{
 		Timeframe: kdata.Interval,
 		IsClosed:  kdata.IsClosed,
-		Kline: NormalizeKline(Kline{
-			OpenTime:  kdata.StartTime,
-			CloseTime: kdata.CloseTime,
-			Open:      open,
-			High:      high,
-			Low:       low,
-			Close:     closePrice,
-			Volume:    volume,
-		}),
+		// Binance WS k.t / k.T are Unix ms by API contract — no EnsureUnixMillis (#83 C1).
+		Kline: klineFromBinanceMs(kdata.StartTime, kdata.CloseTime, open, high, low, closePrice, volume),
 	}
 
 	select {

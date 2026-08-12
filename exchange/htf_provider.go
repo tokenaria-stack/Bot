@@ -120,22 +120,15 @@ func (p *HTFProvider) CleanupIdle(maxIdle time.Duration) int {
 	return removed
 }
 
-// KlinesFromCandles converts exchange candles into normalized klines.
+// KlinesFromCandles converts exchange candles (Binance REST Unix ms) into klines.
+// Timestamps are copied as-is — no magnitude-based unit inference (debt #83 C1).
 func KlinesFromCandles(candles []Candle) []Kline {
 	if len(candles) == 0 {
 		return nil
 	}
 	klines := make([]Kline, len(candles))
 	for i, c := range candles {
-		klines[i] = NormalizeKline(Kline{
-			OpenTime:  c.OpenTime,
-			CloseTime: c.CloseTime,
-			Open:      c.Open,
-			High:      c.High,
-			Low:       c.Low,
-			Close:     c.Close,
-			Volume:    c.Volume,
-		})
+		klines[i] = klineFromBinanceMs(c.OpenTime, c.CloseTime, c.Open, c.High, c.Low, c.Close, c.Volume)
 	}
 	return klines
 }

@@ -306,6 +306,8 @@ func candleFromFuturesKline(k *futures.Kline) (Candle, error) {
 		return Candle{}, fmt.Errorf("parse volume %q: %w", k.Volume, err)
 	}
 
+	// Binance futures kline OpenTime/CloseTime are Unix milliseconds by API contract.
+	// Assigned as-is — no unit inference (debt #83 C1).
 	return Candle{
 		OpenTime:  k.OpenTime,
 		Open:      open,
