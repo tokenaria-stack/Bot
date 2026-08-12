@@ -117,31 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_klines_time ON historical_klines(symbol, interval
 	}
 
 	logDBStatsLocked()
-	purgeLegacySecondTimestampsLocked()
 	return nil
-}
-
-// purgeLegacySecondTimestampsLocked removes rows stored in seconds (10-digit timestamps).
-// Binance klines use milliseconds; mixed data causes permanent cache misses.
-func purgeLegacySecondTimestampsLocked() {
-	if db == nil {
-		return
-	}
-	var legacy int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM historical_klines WHERE open_time > 0 AND open_time < 1000000000000`).Scan(&legacy); err != nil {
-		log.Printf("[DEBUG] legacy timestamp scan failed: %v", err)
-		return
-	}
-	if legacy == 0 {
-		return
-	}
-	res, err := db.Exec(`DELETE FROM historical_klines WHERE open_time > 0 AND open_time < 1000000000000`)
-	if err != nil {
-		log.Printf("[DEBUG] failed to purge legacy second timestamps: %v", err)
-		return
-	}
-	n, _ := res.RowsAffected()
-	log.Printf("[DEBUG] purged %d klines with second-based open_time (expected ms); delete history.db manually if issues persist", n)
 }
 
 func logDBStatsLocked() {
@@ -187,12 +163,6 @@ func describeTimeUnit(ts int64) string {
 		return "SECONDS — cache will miss against ms queries"
 	default:
 		return "unexpected scale"
-	}
-}
-
-func warnIfTimeLooksLikeSeconds(label string, ts int64) {
-	if ts > 0 && ts < 1_000_000_000_000 {
-		log.Printf("[DEBUG] WARNING: %s=%d looks like seconds (10 digits); expected ms (13 digits)", label, ts)
 	}
 }
 

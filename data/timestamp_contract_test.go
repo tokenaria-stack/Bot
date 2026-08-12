@@ -183,3 +183,44 @@ WHERE symbol = ? AND interval = ?`, "BTCUSDT", "1M").Scan(&storedOpen, &storedCl
 		t.Fatalf("LoadKlines after Save: %#v want open=%d", got, ot)
 	}
 }
+
+// TestInitDB_DoesNotDeletePre2001MillisecondRows: InitDB must not delete legitimate
+// Unix-ms opens below 1e12 (debt #83 Patch D — obsolete magnitude purge removed).
+func TestInitDB_DoesNotDeletePre2001MillisecondRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "init_no_purge.db")
+	resetDBConnection(path)
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	const (
+		pre2001Ms  int64 = 730_944_000_000   // 1993-03-01 ms
+		post2017Ms int64 = 1_502_928_000_000 // spot genesis-shaped
+	)
+	insertKlineRaw(t, "BTCUSDT", "1M", pre2001Ms, pre2001Ms+1)
+	insertKlineRaw(t, "BTCUSDT", "1M", post2017Ms, post2017Ms+1)
+
+	// Cold re-open: InitDB runs full init path again (same as bot restart).
+	resetDBConnection(path)
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	err := db.QueryRow(`
+SELECT COUNT(*) FROM historical_klines
+WHERE symbol = ? AND interval = ? AND open_time IN (?, ?)`,
+		"BTCUSDT", "1M", pre2001Ms, post2017Ms).Scan(&n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("after InitDB rows=%d want 2 (pre-2001 ms must survive)", n)
+	}
+	got, err := LoadKlines("BTCUSDT", "1M", pre2001Ms, pre2001Ms, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].OpenTime != pre2001Ms {
+		t.Fatalf("LoadKlines pre-2001: %#v", got)
+	}
+}
