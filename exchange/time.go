@@ -1,25 +1,26 @@
 package exchange
 
-const unixMillisThreshold int64 = 1_000_000_000_000
+// ChartTimeSec converts a canonical Unix-millisecond open time to Lightweight Charts
+// Unix seconds. Debt #83 C3: ms → sec only — no unit inference, no EnsureUnixMillis.
+// Callers must supply Unix milliseconds (REST/WS C1, Frame/Ingress C2, SQLite ms).
+func ChartTimeSec(openTimeMs int64) int64 {
+	return openTimeMs / 1000
+}
 
-// EnsureUnixMillis converts 10-digit Unix seconds to 13-digit milliseconds.
+// EnsureUnixMillis converts 10-digit Unix seconds to 13-digit milliseconds via a
+// magnitude heuristic. After #83 C1–C3 it has no production callers (ChartTimeSec
+// no longer uses it). Retained only while tests/probes still reference NormalizeKline.
+// Do not use for new code — source adapters must declare their unit explicitly.
 func EnsureUnixMillis(ts int64) int64 {
+	const unixMillisThreshold int64 = 1_000_000_000_000
 	if ts > 0 && ts < unixMillisThreshold {
 		return ts * 1000
 	}
 	return ts
 }
 
-// ChartTimeSec converts any kline open time (sec or ms) to Lightweight Charts Unix seconds.
-// This is the SSOT wire-axis transform for ChartCandle.time and ChartOscillator.time.
-func ChartTimeSec(openTime int64) int64 {
-	return EnsureUnixMillis(openTime) / 1000
-}
-
 // NormalizeKline applies EnsureUnixMillis to OpenTime/CloseTime only.
-// After debt #83 C1/C2, production REST/WS/Frame/Ingress paths no longer call this;
-// they assume canonical Unix ms. Retained for tests/probes and until ChartTimeSec
-// stops using EnsureUnixMillis (Patch C3).
+// No production callers remain after C1/C2; kept for legacy tests until cleaned up.
 func NormalizeKline(k Kline) Kline {
 	k.OpenTime = EnsureUnixMillis(k.OpenTime)
 	if k.CloseTime > 0 {

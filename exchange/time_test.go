@@ -2,17 +2,11 @@ package exchange
 
 import "testing"
 
-func TestEnsureUnixMillis(t *testing.T) {
+func TestChartTimeSec_UnixMillisecondsToSeconds(t *testing.T) {
 	t.Parallel()
-
-	sec := int64(1_700_000_040)
-	ms := int64(1_700_000_040_000)
-
-	if got := EnsureUnixMillis(sec); got != ms {
-		t.Fatalf("seconds: got %d want %d", got, ms)
-	}
-	if got := EnsureUnixMillis(ms); got != ms {
-		t.Fatalf("milliseconds passthrough: got %d want %d", got, ms)
+	const ms int64 = 1_700_000_040_000
+	if got := ChartTimeSec(ms); got != 1_700_000_040 {
+		t.Fatalf("ChartTimeSec(%d)=%d want %d", ms, got, int64(1_700_000_040))
 	}
 }
 
@@ -29,18 +23,41 @@ func TestChartTimeSec_UniquePerMinute(t *testing.T) {
 	}
 }
 
-func TestChartTimeSec_SecondsInputNotCollapsed(t *testing.T) {
+// Debt #83 C3: pre-2001 Unix ms must divide to sec — never ×1000 first (year ~25132 landmine).
+func TestChartTimeSec_Pre2001Millisecond(t *testing.T) {
 	t.Parallel()
-
-	// Without EnsureUnixMillis, 10-digit seconds / 1000 collapse to the same bar.
-	t1 := ChartTimeSec(1_700_000_040)
-	t2 := ChartTimeSec(1_700_000_100)
-	if t1 == t2 {
-		t.Fatalf("normalized chart times must not collapse: %d == %d", t1, t2)
+	const march1993Ms int64 = 730_944_000_000
+	want := march1993Ms / 1000
+	got := ChartTimeSec(march1993Ms)
+	if got != want {
+		t.Fatalf("ChartTimeSec(%d)=%d want %d (must not coerce via 1e12 heuristic)", march1993Ms, got, want)
 	}
 }
 
-// Debt #83: genuine Unix seconds at the external boundary convert exactly once.
+// Legacy: ChartTimeSec no longer accepts seconds as a compatibility input.
+// Passing seconds yields wrong chart times (sec/1000); that is a caller bug, not a feature.
+func TestChartTimeSec_DocumentedMsOnlyContract(t *testing.T) {
+	t.Parallel()
+	// Mistaken seconds input is NOT converted to ms — contract is ms-only.
+	sec := int64(1_700_000_040)
+	if got := ChartTimeSec(sec); got != sec/1000 {
+		t.Fatalf("ms-only contract: ChartTimeSec(%d)=%d want floor division %d", sec, got, sec/1000)
+	}
+}
+
+// Legacy EnsureUnixMillis tests — function is production-dead after C3; kept until test cleanup.
+func TestEnsureUnixMillis(t *testing.T) {
+	t.Parallel()
+	sec := int64(1_700_000_040)
+	ms := int64(1_700_000_040_000)
+	if got := EnsureUnixMillis(sec); got != ms {
+		t.Fatalf("seconds: got %d want %d", got, ms)
+	}
+	if got := EnsureUnixMillis(ms); got != ms {
+		t.Fatalf("milliseconds passthrough: got %d want %d", got, ms)
+	}
+}
+
 func TestEnsureUnixMillis_ConvertsGenuineSecondsExactlyOnce(t *testing.T) {
 	t.Parallel()
 	sec := int64(1_700_000_040)
@@ -53,16 +70,7 @@ func TestEnsureUnixMillis_ConvertsGenuineSecondsExactlyOnce(t *testing.T) {
 	}
 }
 
-// Debt #83: canonical Unix ms below the 1e12 magnitude threshold must not be
-// re-interpreted as seconds (1993-03-01 ms is the LoadKlines smoking gun).
 func TestEnsureUnixMillis_Pre2001CanonicalMsUnchanged(t *testing.T) {
 	t.Parallel()
-	t.Skip("debt #83 Patch B: EnsureUnixMillis magnitude heuristic left unchanged in Patch A")
-	const march1993Ms int64 = 730_944_000_000
-	if got := EnsureUnixMillis(march1993Ms); got != march1993Ms {
-		t.Fatalf("got %d want %d (ms < 1e12 must not be *1000)", got, march1993Ms)
-	}
-	if got := ChartTimeSec(march1993Ms); got != march1993Ms/1000 {
-		t.Fatalf("ChartTimeSec got %d want %d", got, march1993Ms/1000)
-	}
+	t.Skip("legacy EnsureUnixMillis still uses 1e12 heuristic; production uses ChartTimeSec ms/1000 only (C3)")
 }
