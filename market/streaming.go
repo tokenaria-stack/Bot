@@ -108,7 +108,7 @@ func splitLiveTail(klines []exchange.Kline, nowMs int64) (closed []exchange.Klin
 	if n == 0 {
 		return nil, nil
 	}
-	last := exchange.NormalizeKline(klines[n-1])
+	last := klines[n-1]
 	if !data.IsFormingCloseTime(last.CloseTime, nowMs) {
 		return klines, nil
 	}

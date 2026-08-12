@@ -150,8 +150,8 @@ func compareTipSSOT(
 
 	h := histClosed[len(histClosed)-1]
 	f := frameClosed[len(frameClosed)-1]
-	out.HistOpenTime = exchange.EnsureUnixMillis(h.OpenTime)
-	out.FrameOpenTime = exchange.EnsureUnixMillis(f.OpenTime)
+	out.HistOpenTime = h.OpenTime
+	out.FrameOpenTime = f.OpenTime
 	out.HistO, out.HistH, out.HistL, out.HistC, out.HistV = h.Open, h.High, h.Low, h.Close, h.Volume
 	out.FrameO, out.FrameH, out.FrameL, out.FrameC, out.FrameV = f.Open, f.High, f.Low, f.Close, f.Volume
 	out.OpenTimeMatch = out.HistOpenTime == out.FrameOpenTime

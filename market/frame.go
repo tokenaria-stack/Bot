@@ -223,8 +223,9 @@ func (a *Frame) UpdateKline(k exchange.Kline) {
 }
 
 // UpdateKlineTick ingests a live or historical bar; isClosed is Binance k.x (bar finalized).
+// OpenTime/CloseTime must already be Unix milliseconds (WS/REST C1 or SQLite ms).
+// Debt #83 C2: no magnitude-based unit re-guess at Frame ingest.
 func (a *Frame) UpdateKlineTick(k exchange.Kline, isClosed bool) {
-	k = exchange.NormalizeKline(k)
 	if k.CloseTime <= 0 && k.OpenTime > 0 && a.timeframe != "" {
 		if ct, err := data.BarCloseTimeMs(k.OpenTime, a.timeframe); err == nil {
 			k.CloseTime = ct

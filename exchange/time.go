@@ -17,9 +17,9 @@ func ChartTimeSec(openTime int64) int64 {
 }
 
 // NormalizeKline applies EnsureUnixMillis to OpenTime/CloseTime only.
-// It has no other responsibilities (OHLCV untouched). Debt #83: Binance REST/WS
-// source adapters must NOT use this — they already know the unit is milliseconds
-// (see klineFromBinanceMs). Internal callers (Frame/Ingress) remain until Patch C2.
+// After debt #83 C1/C2, production REST/WS/Frame/Ingress paths no longer call this;
+// they assume canonical Unix ms. Retained for tests/probes and until ChartTimeSec
+// stops using EnsureUnixMillis (Patch C3).
 func NormalizeKline(k Kline) Kline {
 	k.OpenTime = EnsureUnixMillis(k.OpenTime)
 	if k.CloseTime > 0 {

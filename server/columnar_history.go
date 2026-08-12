@@ -236,7 +236,7 @@ func (d *DashboardServer) buildProjectionContinuityDiag(
 	if len(raw) == 0 {
 		return diag
 	}
-	tip := exchange.NormalizeKline(raw[len(raw)-1])
+	tip := raw[len(raw)-1]
 	diag.FrameCurOpenSec = exchange.ChartTimeSec(tip.OpenTime)
 	if dag := frame.DAGTickFrame(); dag != nil {
 		diag.FrameCurPresent = true

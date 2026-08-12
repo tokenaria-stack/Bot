@@ -131,7 +131,6 @@ func filterKlinesUntilOpenMs(klines []exchange.Kline, endTimeMs int64) []exchang
 	}
 	out := make([]exchange.Kline, 0, len(klines))
 	for _, k := range klines {
-		k = exchange.NormalizeKline(k)
 		if k.OpenTime <= endTimeMs {
 			out = append(out, k)
 		}

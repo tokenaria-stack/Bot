@@ -63,7 +63,7 @@ func (d *DashboardServer) projectViewportFormingTip(
 		return viewportProjNone
 	}
 	nowMs := time.Now().UnixMilli()
-	tip := exchange.NormalizeKline(raw[len(raw)-1])
+	tip := raw[len(raw)-1]
 	tipSec := exchange.ChartTimeSec(tip.OpenTime)
 	forming := isFormingKline(tip, nowMs)
 	tickPlots := d.projector.BuildTickJSON(frame.DAGTickFrame())
@@ -181,7 +181,7 @@ func frameFormingTip(frame *market.Frame, nowMs int64) (exchange.Kline, bool) {
 	if len(raw) == 0 {
 		return exchange.Kline{}, false
 	}
-	tip := exchange.NormalizeKline(raw[len(raw)-1])
+	tip := raw[len(raw)-1]
 	if !isFormingKline(tip, nowMs) {
 		return exchange.Kline{}, false
 	}

@@ -132,9 +132,9 @@ func (p *IngressPipeline) AuthorityOf(openTime int64) Authority {
 }
 
 // Validate rejects malformed candles with a typed reason. No silent repair:
-// a broken bar must reach neither SQLite, nor Marker, nor DAG.
+// a broken bar must reach neither SQLite, nor Frame, nor DAG.
+// OpenTime/CloseTime must already be Unix milliseconds (debt #83 C2 — no unit guess).
 func (p *IngressPipeline) Validate(k Kline) error {
-	k = NormalizeKline(k)
 	if k.OpenTime <= 0 || (k.CloseTime > 0 && k.CloseTime <= k.OpenTime) {
 		return p.reject(RejectInvalidTime, k)
 	}
@@ -190,15 +190,15 @@ func (p *IngressPipeline) MergeCandle(existing, incoming Kline, existAuth, incAu
 }
 
 // MergeKlineSeries unions two closed-bar series by OpenTime through the
-// authority rules above. Bars are normalized (sec→ms) and validated; invalid
-// bars are dropped with a typed metric. Output is ascending by OpenTime.
+// authority rules above. Bars are validated as Unix-ms klines; invalid bars are
+// dropped with a typed metric. Output is ascending by OpenTime.
+// Debt #83 C2: no sec→ms magnitude normalization — callers supply canonical ms.
 func (p *IngressPipeline) MergeKlineSeries(primary, overlay []Kline, priAuth, overlayAuth Authority) []Kline {
 	merged := make(map[int64]Kline, len(primary)+len(overlay))
 	auth := make(map[int64]Authority, len(primary)+len(overlay))
 
 	ingest := func(series []Kline, a Authority) {
 		for _, k := range series {
-			k = NormalizeKline(k)
 			if err := p.Validate(k); err != nil {
 				continue
 			}
