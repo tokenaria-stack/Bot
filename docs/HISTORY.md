@@ -8,6 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## #83 Timestamp contract — Go A–D+E2 + FE F2/F3/F5a–F5f (Aug 2026) ✅
+
+- **PASS.** Tag: `TS_CONTRACT_CLEAN`.
+- Canonical: ingress/SQLite/Frame = Unix **ms**; wire/LWC/chart = Unix **sec**; camera/geometry = Unix **ms** via explicit `secToMs` / `msToChartSec`.
+- Go: load bounds ms-only; persist as supplied; no production `NormalizeKline` / `ensureUnixMillis`; `ChartTimeSec = ms/1000`; genesis clamp E2 on continuous-contract load (spot genesis). Calendar lookback still *computes* 1993; loaders clamp.
+- FE: no active magnitude (`1e12`) inference on the data path (F2 primitives, F3 Navigator ms→sec, F5a seconds identity, F5b sec→ms, F5c search query, F5d history fetch end, F5e ruler, F5f trendline).
+- Inactive leftover: `app.legacy.js` comments/helpers. Do **not** reopen #83 for that.
+- Frozen: chart/camera layout, SQLite schema, genesis calendar. Next work is **not** timestamp cleanup.
+
+---
+
 ## S6 Repair Plan — commit-paired ≠ TARGET wall (Aug 2026) ✅
 
 - Plan only: [`WORKING_SET_S6_REPAIR_PLAN.md`](WORKING_SET_S6_REPAIR_PLAN.md). STATUS: **READY**.

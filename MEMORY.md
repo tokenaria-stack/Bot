@@ -29,6 +29,7 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Default mode | `ENGINE_MODE=ChartOnly` |
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
-| NEXT | S6 fix gate (commit-paired ≠ TARGET wall); in-browser capacity benchmark before numeric Cap |
+| Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
+| NEXT | **#76 ScoreNodes**; **#69D**; S6 commit-paired ≠ TARGET wall |
 
 Update the owning SSOT file — do not duplicate content here.

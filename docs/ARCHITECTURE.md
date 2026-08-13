@@ -126,6 +126,7 @@ These decisions **establish** the constitution; they do not replace it:
 | **ADR-027** | Market plane vs Decoration plane |
 | **ADR-028** | Navigation / VIEW ownership (TimeCamera ViewIntent + ViewGeometry) |
 | **ADR-029** | Timeframe transition protocol (LIVE sticky + HISTORY center-anchor) |
+| **ADR-030** | Timestamp units: no magnitude inference; dual domain (ms engine / sec wire / ms camera) |
 | **Ownership Audits** | Verified implementation against the map (chart chrome; time domain) |
 
 Implementation may evolve (e.g. Primitive instead of an HTML guide; Phase D navigation cutover). Ownership does not — unless a new ADR amends this constitution.
@@ -148,6 +149,18 @@ strategy/    doc.go beacon only (Phase F purged legacy code)
 ```
 
 **Import DAG:** `exchange → market → decision → execution` (one-way).
+
+### Timestamp units (#83)
+
+No magnitude (`1e12`) inference on the active path.
+
+| Domain | Unit | Crossing |
+|--------|------|----------|
+| Ingress / SQLite / Frame / indicators | Unix **milliseconds** | canonical |
+| Wire / LWC / chart `times[]` | Unix **seconds** | Go `ChartTimeSec(ms) = ms/1000` |
+| Camera / geometry (`centerTimeMs`, store keys) | Unix **milliseconds** | FE `secToMs` / `msToChartSec` only |
+
+Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse camera geometry to seconds. Do not reopen #83 for inactive `app.legacy.js`. Tag: `TS_CONTRACT_CLEAN`.
 
 | Package | Answers | Must not |
 |---------|---------|----------|

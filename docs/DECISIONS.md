@@ -760,3 +760,18 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 
 ---
 
+## ADR-030 — Timestamp units without magnitude inference (#83)
+
+**Context:** `ts < 1e12` guessed seconds vs milliseconds. Pre-2001 Unix **ms** (`730944000000`) is still `< 1e12`, so the heuristic multiplied it into year ~25132. Dual domains (Go ms vs LWC sec vs camera ms) are real and must stay explicit.
+
+**Decision:** One unit per layer; convert only with named primitives (`ChartTimeSec`, `secToMs`, `msToChartSec`). Never inspect magnitude. Keep camera geometry in milliseconds.
+
+**Rejected:**
+- A new threshold (e.g. `1e11`) — **Reason:** same class of landmine.
+- Collapsing camera keys to seconds — **Reason:** geometry/search already keyed in ms; F5b/F5c are explicit crossings.
+- Sweeping inactive `app.legacy.js` / comments in the same pass — **Reason:** not on the live data path.
+
+**Consequences:** Debt #83 closed (`TS_CONTRACT_CLEAN`). Do not reopen for leftover comments. Chart/camera layout and SQLite remain frozen.
+
+---
+

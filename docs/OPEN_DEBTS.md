@@ -28,7 +28,6 @@ Update this file when a debt opens, closes, or changes priority.
 | **80** | `ViewportManager.restore` 0×0 width risk (`setVisibleLogicalRange`) | ✅ | D2: layout deferral via `whenHostHasLayout` → TimeCamera.propose (no raw LWC); live restore retired |
 | **81** | **Timeline Publish Gate** (reconnect heal) | ✅ | Phases A–D + P0: WS hooks, Runtime gate, forced REST@1bar, FE await `timeline_publishable`. P1/P2 (status poll / GetWindow degraded) deferred |
 | **82** | **Calendar bar boundary** (`1w`/`1M` time model) | ✅ **A1+A2** | ADR-011 Cap/align/CloseTime. A2: catch-up/gap/reconcile via `NextBarOpen`/`BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE snap deferred unless runtime proves need |
-| **83** | **Timestamp normalization** (`ensureUnixMillis`) | 🔜 | Split load-bounds vs persist; kill `ts < 1e12` heuristic; honest logs; clamp lookback to exchange genesis. Boot spam: `1M`×400 → 1993-02-01 mis-coerced. Does **not** block #82/#67 |
 
 ---
 
