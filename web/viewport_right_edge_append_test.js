@@ -106,6 +106,7 @@ async function run() {
       isDashboardLoading: () => false,
       getVisibleRange: () => ({ from: 2900, to: 2990 }),
       getAnchorEndTimeSec: () => store.firstTimeSec(),
+      getRightTipSec: () => store.lastTimeSec(),
       shouldLoad: () => false,
       shouldLoadRight: (range) => Number(range.to) >= store.barCount() - 1 - 50,
       shouldContinueRightHistory: () => false,
@@ -168,6 +169,7 @@ async function run() {
       isDashboardLoading: () => false,
       getVisibleRange: () => ({ from: 40, to: 95 }),
       getAnchorEndTimeSec: () => store.firstTimeSec(),
+      getRightTipSec: () => store.lastTimeSec(),
       shouldLoad: () => false,
       shouldLoadRight: () => true,
       shouldContinueRightHistory: () => false,
@@ -196,6 +198,155 @@ async function run() {
     orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
     await new Promise((r) => setTimeout(r, 20));
     assert.strictEqual(rightFetch, 1);
+  });
+
+  function makeTipOrch(state) {
+    const orch = new HydrationOrchestrator();
+    orch.debounceMs = 0;
+    orch.init({
+      getEpoch: () => 1,
+      getReqId: () => 1,
+      getHistoryHasMore: () => true,
+      setHistoryHasMore: () => {},
+      isRenderBusy: () => false,
+      isDashboardLoading: () => false,
+      getVisibleRange: () => ({ from: 40, to: 95 }),
+      getAnchorEndTimeSec: () => 1,
+      getRightTipSec: () => state.tip,
+      shouldLoad: () => false,
+      shouldLoadRight: () => true,
+      shouldContinueRightHistory: () => state.continueRight === true && state.fetchCount < 2,
+      getRightFetchEndSec: () => state.fetchEnd,
+      fetchColumnar: async (endTimeSec) => {
+        state.fetchCount += 1;
+        state.lastFetchedEnd = endTimeSec;
+        return {
+          times: [state.tip + 60],
+          candles: {
+            open: [1], high: [1], low: [1], close: [1], volume: [1],
+          },
+          plots: {},
+          hasMore: true,
+        };
+      },
+      mergeIntoStore: () => null,
+      mergeAppendIntoStore: () => state.merge(),
+      markDirty: () => { state.dirty += 1; },
+      processTick: () => {},
+    });
+    return orch;
+  }
+
+  await test('A. real tip advancement is success and may continue', async () => {
+    const state = {
+      tip: 100,
+      fetchEnd: 1781360100,
+      fetchCount: 0,
+      lastFetchedEnd: null,
+      dirty: 0,
+      continueRight: true,
+      merge: () => {
+        state.tip += 100;
+        return { added: 10 };
+      },
+    };
+    const orch = makeTipOrch(state);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(state.fetchCount >= 2, 'real progress may continue RIGHT');
+    assert.ok(state.tip > 100);
+    assert.ok(state.dirty >= 1, 'real progress must paint');
+    assert.strictEqual(orch.isRightTipBlocked(), false);
+  });
+
+  await test('B. added>0 but tip unchanged is zero-progress (no paint, no continue)', async () => {
+    const state = {
+      tip: 100,
+      fetchEnd: 1781360100,
+      fetchCount: 0,
+      lastFetchedEnd: null,
+      dirty: 0,
+      continueRight: true,
+      merge: () => ({ added: 3000 }),
+    };
+    const orch = makeTipOrch(state);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+    assert.strictEqual(state.tip, 100);
+    assert.strictEqual(state.dirty, 0, 'fake success must not markDirty');
+    assert.strictEqual(orch.isRightTipBlocked(), true);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1, 'blocked cursor must not refetch');
+  });
+
+  await test('C. empty merge still Fix E zero-add', async () => {
+    const state = {
+      tip: 100,
+      fetchEnd: 1781360100,
+      fetchCount: 0,
+      lastFetchedEnd: null,
+      dirty: 0,
+      continueRight: true,
+      merge: () => ({ added: 0 }),
+    };
+    const orch = makeTipOrch(state);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+    assert.strictEqual(state.dirty, 0);
+    assert.strictEqual(orch.isRightTipBlocked(), true);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+  });
+
+  await test('D. backward tip is no RIGHT progress', async () => {
+    const state = {
+      tip: 200,
+      fetchEnd: 1781360100,
+      fetchCount: 0,
+      lastFetchedEnd: null,
+      dirty: 0,
+      continueRight: true,
+      merge: () => {
+        state.tip = 100;
+        return { added: 5 };
+      },
+    };
+    const orch = makeTipOrch(state);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+    assert.strictEqual(state.dirty, 0);
+    assert.strictEqual(orch.isRightTipBlocked(), true);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+  });
+
+  await test('E. now-clamped identical RIGHT request blocked when tip did not move', async () => {
+    const nowClamped = 1781360100;
+    const state = {
+      tip: 100,
+      fetchEnd: nowClamped,
+      fetchCount: 0,
+      lastFetchedEnd: null,
+      dirty: 0,
+      continueRight: true,
+      merge: () => ({ added: 3000 }),
+    };
+    const orch = makeTipOrch(state);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.lastFetchedEnd, nowClamped);
+    assert.strictEqual(state.fetchCount, 1);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.strictEqual(state.fetchCount, 1);
+    assert.strictEqual(state.lastFetchedEnd, nowClamped);
+    assert.strictEqual(orch.isRightTipBlocked(), true);
   });
 
   console.log('All right-edge append tests passed.');

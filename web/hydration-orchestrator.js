@@ -653,10 +653,17 @@ class HydrationOrchestrator {
           : null;
 
         const mergeResult = deps.mergeAppendIntoStore(data);
-        if (!mergeResult || mergeResult.added <= 0) {
+        // Durable RIGHT progress = store tip advanced. `added` is insert count
+        // before capacity prune and must not by itself mean success (Fix G).
+        const afterTipSec = this._currentRightTipSec();
+        const tipAdvanced = tipSec != null
+          && afterTipSec != null
+          && afterTipSec > tipSec;
+        if (!mergeResult || mergeResult.added <= 0 || !tipAdvanced) {
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
           this._pendingRightIntent = null;
-          if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
+          const blockTip = afterTipSec != null ? afterTipSec : tipSec;
+          if (blockTip != null) this._zeroProgressRightTipSec = blockTip;
           return;
         }
 
