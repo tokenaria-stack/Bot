@@ -21,6 +21,11 @@ class HydrationOrchestrator {
     /** @type {object|null} */
     this._deps = null;
     this._inFlight = false;
+    /** @type {'left'|'right'|null} */
+    this._hydrateEdge = null;
+    /** Last completed edge — used with isRenderBusy to ignore prune-echo opposite notes. */
+    /** @type {'left'|'right'|null} */
+    this._lastHydrateEdge = null;
     /**
      * Wave 2 — newest left-history need only (supersede, never accumulate).
      * @type {{ range: { from: number, to: number }, options: object }|null}
@@ -86,6 +91,25 @@ class HydrationOrchestrator {
     this._pendingRightIntent = null;
     this.state = HydrationState.IDLE;
     this._inFlight = false;
+    this._hydrateEdge = null;
+    this._lastHydrateEdge = null;
+  }
+
+  /**
+   * True when an opposite-edge note would only rearm ping-pong (prune/setData echo).
+   * Same-direction pending/continuation is unchanged.
+   * @param {'left'|'right'} edge
+   */
+  _shouldIgnoreOppositeEdgeNote(edge) {
+    const other = edge === 'left' ? 'right' : 'left';
+    if (this._inFlight && this._hydrateEdge === other) return true;
+    if (this.isBusy() && this._hydrateEdge === other) return true;
+    if (this._lastHydrateEdge === other
+      && typeof this._deps?.isRenderBusy === 'function'
+      && this._deps.isRenderBusy()) {
+      return true;
+    }
+    return false;
   }
 
   /** Drop queued ticks without replay (epoch/TF abort). */
@@ -129,6 +153,7 @@ class HydrationOrchestrator {
       || !Number.isFinite(range.to)) {
       return;
     }
+    if (this._shouldIgnoreOppositeEdgeNote('left')) return;
     this._pendingLeftIntent = {
       range: { from: range.from, to: range.to },
       options: { ...options },
@@ -153,6 +178,7 @@ class HydrationOrchestrator {
       || typeof this._deps.mergeAppendIntoStore !== 'function') {
       return;
     }
+    if (this._shouldIgnoreOppositeEdgeNote('right')) return;
     this._pendingRightIntent = {
       range: { from: range.from, to: range.to },
       options: { ...options },
@@ -387,6 +413,7 @@ class HydrationOrchestrator {
     const deps = this._deps;
     if (!deps) return;
     if (this._inFlight) {
+      if (this._hydrateEdge === 'right') return;
       if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
         this._pendingLeftIntent = {
           range: { from: range.from, to: range.to },
@@ -412,6 +439,7 @@ class HydrationOrchestrator {
     if (!Number.isFinite(endTimeSec) || endTimeSec <= 0) return;
 
     this._inFlight = true;
+    this._hydrateEdge = 'left';
     this.state = HydrationState.PREPENDING;
     let completed = false;
 
@@ -488,6 +516,8 @@ class HydrationOrchestrator {
       // Wave 3: errors are recoverable — must not masquerade as EOF.
       console.error('[HydrationOrchestrator] prepend failed:', err);
     } finally {
+      if (completed) this._lastHydrateEdge = 'left';
+      this._hydrateEdge = null;
       this._inFlight = false;
       if (completed) {
         this.state = HydrationState.LIVE;
@@ -514,6 +544,7 @@ class HydrationOrchestrator {
       return;
     }
     if (this._inFlight) {
+      if (this._hydrateEdge === 'left') return;
       if (range && Number.isFinite(range.from) && Number.isFinite(range.to)) {
         this._pendingRightIntent = {
           range: { from: range.from, to: range.to },
@@ -542,6 +573,7 @@ class HydrationOrchestrator {
     }
 
     this._inFlight = true;
+    this._hydrateEdge = 'right';
     this.state = HydrationState.PREPENDING;
     let completed = false;
 
@@ -601,6 +633,8 @@ class HydrationOrchestrator {
     } catch (err) {
       console.error('[HydrationOrchestrator] append failed:', err);
     } finally {
+      if (completed) this._lastHydrateEdge = 'right';
+      this._hydrateEdge = null;
       this._inFlight = false;
       if (completed) {
         this.state = HydrationState.LIVE;

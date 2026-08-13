@@ -372,6 +372,19 @@ test('Wave1 proposePreserveViewport keeps left edge via DataResolve (no FreshLiv
   assert.strictEqual(seen.visibleRange.to, 130);
 });
 
+test('getCanonicalVisibleRange is clamped VIEW, not raw pane width', () => {
+  TimeCamera._resetForTests();
+  TimeCamera.bind({ applyCommitted: () => {} });
+  const cap = TimeCamera.MAX_VISIBLE_LOGICAL_BARS;
+  assert.strictEqual(cap, 20000);
+  TimeCamera.proposeFromPane('price', { from: 0, to: 24000 }, 1);
+  const canonical = TimeCamera.getCanonicalVisibleRange();
+  assert.ok(canonical);
+  assert.strictEqual(canonical.to - canonical.from, cap);
+  assert.strictEqual(canonical.to, 24000);
+  assert.strictEqual(canonical.from, 4000);
+});
+
 test('Wave1 proposePreserveViewport without DataResolve does not FreshLive', () => {
   TimeCamera._resetForTests();
   let applies = 0;

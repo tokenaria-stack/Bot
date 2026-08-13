@@ -110,8 +110,61 @@ test('boot scheduleHistoryLoad must not busy-drop (source gate)', () => {
   const body = m[0];
   assert.ok(/noteLeftHistoryIntent/.test(body), 'Boot must forward to noteLeftHistoryIntent');
   assert.ok(/noteRightHistoryIntent/.test(body), 'Boot must forward right-island fill to noteRightHistoryIntent');
+  assert.ok(/resolveCanonicalPrefetchView/.test(body), 'Prefetch decisions must use canonical VIEW');
+  assert.ok(!/isApproachingLoadedLeftEdge\(_raw/.test(body), 'Must not prefetch from raw LWC range arg');
   assert.ok(!/isBusy\(\)/.test(body), 'Boot must not gate on isBusy (Hydration owns pending)');
   assert.ok(!/liveRenderScheduler\?\.isBusy/.test(body), 'Boot must not drop on scheduler busy');
+});
+
+test('in-flight LEFT does not arm RIGHT from prune-echo note', async () => {
+  const orch = new HydrationOrchestrator();
+  let fetchCount = 0;
+  let renderBusy = false;
+  let releaseFetch;
+  orch.init({
+    getEpoch: () => 1,
+    getReqId: () => 1,
+    shouldLoad: () => true,
+    getAnchorEndTimeSec: () => 1000,
+    isRenderBusy: () => renderBusy,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 10, to: 80 }),
+    fetchColumnar: () => {
+      fetchCount += 1;
+      return new Promise((resolve) => {
+        releaseFetch = resolve;
+      });
+    },
+    mergeIntoStore: () => ({ added: 3 }),
+    markDirty: () => {},
+    processTick: () => {},
+    shouldLoadRight: () => true,
+    shouldContinueRightHistory: () => true,
+    getRightFetchEndSec: () => 2000,
+    mergeAppendIntoStore: () => ({ added: 3 }),
+  });
+
+  orch.noteLeftHistoryIntent({ from: 5, to: 60 }, { force: true });
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(orch.isBusy(), true);
+  assert.strictEqual(fetchCount, 1);
+
+  // Prune moved the right tip → range event notes RIGHT while LEFT is in flight.
+  orch.noteRightHistoryIntent({ from: 5, to: 60 }, { force: true });
+  assert.strictEqual(orch.hasPendingRightIntent(), false);
+
+  renderBusy = true;
+  releaseFetch({
+    times: [1, 2, 3],
+    hasMore: true,
+    candles: { open: [], high: [], low: [], close: [], volume: [] },
+  });
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+
+  orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true });
+  assert.strictEqual(orch.hasPendingRightIntent(), false);
+  assert.strictEqual(fetchCount, 1);
 });
 
 console.log('wave2_pending_intent_test: ALL PASS');

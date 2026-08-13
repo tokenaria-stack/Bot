@@ -938,7 +938,13 @@
       getSlotIds: () => resolveLiveSlotIds(),
       isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
       isDashboardLoading: () => !!window.__isDashboardLoading,
-      getVisibleRange: () => ChartAdapter.getVisibleLogicalRange('live'),
+      getVisibleRange: () => {
+        if (typeof TimeCamera !== 'undefined'
+          && typeof TimeCamera.getCanonicalVisibleRange === 'function') {
+          return TimeCamera.getCanonicalVisibleRange();
+        }
+        return null;
+      },
       shouldLoadRight: (range, options = {}) => {
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
@@ -1082,14 +1088,31 @@
     root.addEventListener('pointerdown', arm, { passive: true });
   }
 
-  function scheduleHistoryLoad(range) {
+  function resolveCanonicalPrefetchView() {
+    if (typeof TimeCamera === 'undefined') return null;
+    if (typeof TimeCamera.getCanonicalVisibleRange === 'function') {
+      return TimeCamera.getCanonicalVisibleRange();
+    }
+    const c = typeof TimeCamera.getCanonical === 'function' ? TimeCamera.getCanonical() : null;
+    const r = c && c.visibleRange;
+    if (r && Number.isFinite(r.from) && Number.isFinite(r.to) && r.to > r.from) {
+      return { from: r.from, to: r.to };
+    }
+    return null;
+  }
+
+  function scheduleHistoryLoad(_rawLwcRange) {
     // Wave 2: Boot detects only — never retries, never owns pending.
     // Busy must not drop: HydrationOrchestrator remembers newest left/right intent.
+    // Trigger = LWC range event; decision VIEW = TimeCamera canonical (clamped).
     // P1: zoom-aware prefetch runway + force skips debounce reset-while-scrolling
     // (does not remove debounceMs; in-flight still coalesces to one fetch).
-    if (!range || !liveHistoryScrollArmed) return;
+    if (!liveHistoryScrollArmed) return;
     if ((liveColumnarStore?.barCount?.() ?? 0) === 0) return;
     if (!ChartAdapter.isInitialized('live')) return;
+
+    const range = resolveCanonicalPrefetchView();
+    if (!range) return;
 
     // Left void — older history (independent of TF-switch center hydrate).
     if (window.historyHasMore && isApproachingLoadedLeftEdge(range)) {

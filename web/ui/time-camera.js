@@ -721,6 +721,11 @@
     return snapshot();
   }
 
+  /** Read-only clamped VIEW for prefetch. Null until a finite CameraCommit exists. */
+  function getCanonicalVisibleRange() {
+    return cloneRange(canonical.visibleRange);
+  }
+
   function _getShadowView() {
     return snapshotShadow();
   }
@@ -756,6 +761,7 @@
     isSyncing: isSyncingNow,
     isGesturing,
     getCanonical,
+    getCanonicalVisibleRange,
     isFiniteLogicalRange,
     observeCommittedWorld,
     noteTipLogical,
