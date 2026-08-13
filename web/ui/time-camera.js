@@ -419,10 +419,11 @@
    *   force?: boolean,
    * }} opts
    */
-  function barTimeToMs(secOrMs) {
-    const t = Number(secOrMs);
+  function barTimeToMs(sec) {
+    const t = Number(sec);
     if (!Number.isFinite(t)) return null;
-    return t > 1e12 ? Math.floor(t) : Math.floor(t * 1000);
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : global.ChartDataStore;
+    return CDS.secToMs(t);
   }
 
   /**
@@ -770,11 +771,15 @@
       clampRightPadding,
       sanitizeVisibleBars,
       sanitizeBarSpacing,
+      barTimeToMs,
     },
   };
 
   global.TimeCamera = TimeCamera;
   if (typeof module !== 'undefined' && module.exports) {
+    if (typeof global.ChartDataStore === 'undefined') {
+      global.ChartDataStore = require('../store.js').ChartDataStore;
+    }
     module.exports = TimeCamera;
   }
 })(typeof window !== 'undefined' ? window : globalThis);

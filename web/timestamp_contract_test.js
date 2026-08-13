@@ -67,4 +67,65 @@ test('F5a defaultNormalizeTime: seconds-only (no magnitude repair)', () => {
   assert.strictEqual(DDRFactory.defaultNormalizeTime(730_944_000_000), 730_944_000_000);
 });
 
+global.ChartDataStore = ChartDataStore;
+const { ChartCompositor } = require('./chart-compositor.js');
+const TimeCamera = require('./ui/time-camera.js');
+const fs = require('fs');
+
+test('F5b secToMs: 1502928000 sec → 1502928000000 ms', () => {
+  assert.strictEqual(ChartDataStore.secToMs(1_502_928_000), 1_502_928_000_000);
+});
+
+test('F5b secToMs: 730944000 sec → 730944000000 ms (pre-2001)', () => {
+  assert.strictEqual(ChartDataStore.secToMs(730_944_000), 730_944_000_000);
+});
+
+test('F5b secToMs: floors fractional seconds', () => {
+  assert.strictEqual(ChartDataStore.secToMs(1_502_928_000.9), 1_502_928_000_000);
+});
+
+test('F5b toMs / _toMs / capture / annotations / barTimeToMs delegate secToMs', () => {
+  assert.strictEqual(ChartDataStore.toMs(1_502_928_000), 1_502_928_000_000);
+  assert.strictEqual(ChartDataStore.toMs(730_944_000), 730_944_000_000);
+  assert.strictEqual(ChartDataStore.toMs(1_502_928_000.9), 1_502_928_000_000);
+
+  assert.strictEqual(ColumnarStore._toMs(1_502_928_000), 1_502_928_000_000);
+  assert.strictEqual(ColumnarStore._toMs(730_944_000), 730_944_000_000);
+  assert.strictEqual(ColumnarStore._toMs(1_502_928_000.9), 1_502_928_000_000);
+
+  const times = [730_944_000, 730_944_060];
+  const anchor = ChartCompositor.captureViewportAnchor(times, { from: 0, to: 1 });
+  assert.strictEqual(anchor.anchorTimeMs, 730_944_000_000);
+  assert.strictEqual(anchor.rightTimeMs, 730_944_060_000);
+
+  const map = ChartCompositor._annotationMapFromList([{ time: 730_944_000, text: 'X' }]);
+  assert.strictEqual(map.get(730_944_000_000).timeMs, 730_944_000_000);
+
+  assert.strictEqual(TimeCamera._helpers.barTimeToMs(1_502_928_000), 1_502_928_000_000);
+  assert.strictEqual(TimeCamera._helpers.barTimeToMs(730_944_000), 730_944_000_000);
+  assert.strictEqual(TimeCamera._helpers.barTimeToMs(1_502_928_000.9), 1_502_928_000_000);
+});
+
+test('F5b migrated helpers contain no 1e12 heuristic', () => {
+  const storeSrc = fs.readFileSync(require.resolve('./store.js'), 'utf8');
+  const toMsBody = storeSrc.match(/static toMs\(t\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!toMsBody.includes('1e12'), toMsBody);
+
+  const colSrc = fs.readFileSync(require.resolve('./columnar-store.js'), 'utf8');
+  const colBody = colSrc.match(/static _toMs\(timeLike\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!colBody.includes('1e12'), colBody);
+
+  const compSrc = fs.readFileSync(require.resolve('./chart-compositor.js'), 'utf8');
+  const capBody = compSrc.match(/static captureViewportAnchor\(timesSec, range\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!capBody.includes('1e12'), capBody);
+  const annBody = compSrc.match(/static _annotationMapFromList\(annotations\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!annBody.includes('1e12'), annBody);
+  const chartSecBody = compSrc.match(/static _chartSecToMs\(sec\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!chartSecBody.includes('1e12'), chartSecBody);
+
+  const camSrc = fs.readFileSync(require.resolve('./ui/time-camera.js'), 'utf8');
+  const barBody = camSrc.match(/function barTimeToMs\(sec\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!barBody.includes('1e12'), barBody);
+});
+
 console.log('ALL PASS');

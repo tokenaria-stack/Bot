@@ -500,15 +500,10 @@ class ChartCompositor {
       return null;
     }
     const n = timesSec.length;
-    const toMs = (sec) => {
-      const s = Number(sec);
-      if (!Number.isFinite(s)) return null;
-      return s > 1e12 ? Math.floor(s) : Math.floor(s * 1000);
-    };
     const clampedLeft = Math.max(0, Math.min(n - 1, Math.floor(range.from)));
     const clampedRight = Math.max(0, Math.min(n - 1, Math.floor(range.to)));
-    const leftMs = toMs(timesSec[clampedLeft]);
-    const rightMs = toMs(timesSec[clampedRight]);
+    const leftMs = ChartCompositor._chartSecToMs(timesSec[clampedLeft]);
+    const rightMs = ChartCompositor._chartSecToMs(timesSec[clampedRight]);
     if (leftMs == null || rightMs == null) return null;
     return {
       anchorTimeMs: leftMs,
@@ -586,14 +581,21 @@ class ChartCompositor {
     };
   }
 
+  /** Known chart seconds → geometry ms. Delegates to ChartDataStore.secToMs. */
+  static _chartSecToMs(sec) {
+    const s = Number(sec);
+    if (!Number.isFinite(s)) return null;
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : globalThis.ChartDataStore;
+    return CDS.secToMs(s);
+  }
+
   static _annotationMapFromList(annotations) {
     const map = new Map();
     if (!Array.isArray(annotations)) return map;
     for (const ann of annotations) {
       const raw = ann?.time ?? ann?.Time;
-      const n = Number(raw);
-      if (!Number.isFinite(n)) continue;
-      const ms = n > 1e12 ? Math.floor(n) : Math.floor(n * 1000);
+      const ms = ChartCompositor._chartSecToMs(raw);
+      if (ms == null) continue;
       map.set(ms, { ...ann, timeMs: ms });
     }
     return map;
@@ -605,5 +607,8 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
+  if (typeof globalThis.ChartDataStore === 'undefined') {
+    globalThis.ChartDataStore = require('./store.js').ChartDataStore;
+  }
   module.exports = { ChartCompositor };
 }

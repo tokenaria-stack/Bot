@@ -20,7 +20,7 @@ class ChartDataStore {
   static toMs(t) {
     const n = Number(t);
     if (!Number.isFinite(n) || n <= 0) return null;
-    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
+    return ChartDataStore.secToMs(n);
   }
 
   // Debt #83 F2 — explicit unit conversion. Contract is the argument name, not magnitude.

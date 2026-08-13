@@ -7,6 +7,8 @@
 'use strict';
 
 const assert = require('assert');
+const { ChartDataStore } = require('./store.js');
+global.ChartDataStore = ChartDataStore;
 const TimeCamera = require('./ui/time-camera.js');
 const { ChartCompositor } = require('./chart-compositor.js');
 

@@ -76,7 +76,8 @@ class ColumnarStore {
   static _toMs(timeLike) {
     const n = Number(timeLike);
     if (!Number.isFinite(n) || n <= 0) return null;
-    return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : globalThis.ChartDataStore;
+    return CDS.secToMs(n);
   }
 
   static _msToSec(ms) {
@@ -1379,5 +1380,8 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
+  if (typeof globalThis.ChartDataStore === 'undefined') {
+    globalThis.ChartDataStore = require('./store.js').ChartDataStore;
+  }
   module.exports = { ColumnarStore };
 }
