@@ -93,4 +93,24 @@ test('chartTime is seconds-only (no 1e12 repair)', () => {
   assert.strictEqual(chartTime(MS_PRE2001), MS_PRE2001);
 });
 
+test('F5f toChartTimeSec: seconds-only (no 1e12); mapper feeds Unix sec', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(require.resolve('./trendline_plugin.js'), 'utf8');
+  const body = src.match(/function toChartTimeSec\(raw\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!body.includes('1e12'), body);
+  assert.ok(!body.includes('/ 1000'), body);
+  assert.ok(body.includes('Math.floor(n)'), body);
+
+  const lines = mapNavigatorLinesForChart([
+    { time1: MS_POST, time2: MS_POST + 60_000, y1: 1, y2: 2, x1: 0, x2: 1 },
+  ]);
+  assert.strictEqual(lines[0].time1, SEC_POST);
+  assert.strictEqual(lines[0].time2, SEC_POST + 60);
+
+  const pre = mapNavigatorLinesForChart([
+    { time1: MS_PRE2001, time2: MS_PRE2001 + 60_000, y1: 1, y2: 2, x1: 0, x2: 1 },
+  ]);
+  assert.strictEqual(pre[0].time1, SEC_PRE2001);
+});
+
 console.log('ALL PASS');

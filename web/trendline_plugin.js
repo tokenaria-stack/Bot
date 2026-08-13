@@ -29,7 +29,7 @@
   function toChartTimeSec(raw) {
     const n = Number(raw);
     if (!Number.isFinite(n)) return null;
-    return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
+    return Math.floor(n);
   }
 
   function linePriceAtTime(t1, p1, t2, p2, t) {
