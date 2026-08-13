@@ -76,7 +76,7 @@
   function toUnixSec(t) {
     if (t == null) return null;
     if (typeof t === 'number' && Number.isFinite(t)) {
-      return t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+      return Math.floor(t);
     }
     if (typeof t === 'object' && t.timestamp != null) {
       return toUnixSec(t.timestamp);

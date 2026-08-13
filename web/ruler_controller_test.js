@@ -158,4 +158,26 @@ test('IC routes cancel + pointer; chart-core projects via logical', () => {
   assert.ok(!src.includes('ruler-guide-v') || src.includes('finite'));
 });
 
+test('F5e toUnixSec: LWC Unix seconds only (no 1e12)', () => {
+  assert.strictEqual(RulerMetrics.toUnixSec(1_502_928_000), 1_502_928_000);
+  assert.strictEqual(RulerMetrics.toUnixSec(730_944_000), 730_944_000);
+  assert.strictEqual(RulerMetrics.toUnixSec(1_502_928_000.9), 1_502_928_000);
+  assert.strictEqual(RulerMetrics.toUnixSec({ timestamp: 1_700_000_000 }), 1_700_000_000);
+  assert.strictEqual(RulerMetrics.toUnixSec({ year: 1993, month: 3, day: 1 }), null);
+  assert.strictEqual(RulerMetrics.toUnixSec(null), null);
+
+  const m = RulerMetrics.compute(
+    { logical: 0, price: 100, time: 1_502_928_000 },
+    { logical: 1, price: 101, time: 1_502_928_000 + 60 },
+    {},
+  );
+  assert.strictEqual(m.durationEstimated, false);
+  assert.strictEqual(m.durationMs, 60 * 1000);
+
+  const metricsSrc = fs.readFileSync(path.join(__dirname, 'ui/ruler-metrics.js'), 'utf8');
+  const body = metricsSrc.match(/function toUnixSec\(t\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!body.includes('1e12'), body);
+  assert.ok(!body.includes('/ 1000'), body);
+});
+
 console.log('ruler_controller_test: ALL PASS');
