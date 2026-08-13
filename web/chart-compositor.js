@@ -514,11 +514,11 @@ class ChartCompositor {
     };
   }
 
-  /** Nearest index in ascending unix-seconds (or ms) array for target unix-ms. O(log n). */
+  /** Nearest index in ascending unix-seconds array for target unix-ms. O(log n). */
   static findIndexByTimeMs(timesSec, timeMs) {
     if (!timesSec?.length || timeMs == null || !Number.isFinite(timeMs)) return 0;
-    const first = Number(timesSec[0]);
-    const targetSec = first > 1e12 ? timeMs : timeMs / 1000;
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : globalThis.ChartDataStore;
+    const targetSec = CDS.msToChartSec(timeMs);
     let lo = 0;
     let hi = timesSec.length - 1;
     while (lo < hi) {

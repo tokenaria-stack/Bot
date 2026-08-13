@@ -45,7 +45,8 @@ test('findIndexByTimeMs: nearest ascending unix-sec', () => {
   const times = timesSec(10, 1_700_000_000);
   assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_700_000_000 * 1000), 0);
   assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 5) * 1000), 5);
-  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 4.6) * 1000), 5);
+  // F5c: query is floor(ms/1000); 4.6s of leftover ms must not round to bar 5.
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 4.6) * 1000), 4);
   assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 4.4) * 1000), 4);
 });
 

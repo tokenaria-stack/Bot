@@ -128,4 +128,68 @@ test('F5b migrated helpers contain no 1e12 heuristic', () => {
   assert.ok(!barBody.includes('1e12'), barBody);
 });
 
+test('F5c findIndexByTimeMs: post-2017 ms query vs sec array', () => {
+  const times = [1_502_928_000, 1_502_928_060, 1_502_928_120];
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_928_000_000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_928_060_000), 1);
+});
+
+test('F5c findIndexByTimeMs: pre-2001 ms query vs sec array', () => {
+  const times = [730_944_000, 730_944_060, 730_944_120];
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 730_944_000_000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 730_944_060_000), 1);
+});
+
+test('F5c findIndexByTimeMs: fractional ms query floors then searches', () => {
+  const times = [1_700_000_000, 1_700_000_001, 1_700_000_002];
+  assert.strictEqual(
+    ChartDataStore.msToChartSec((1_700_000_000 + 0.6) * 1000),
+    1_700_000_000,
+  );
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 0.6) * 1000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, (1_700_000_000 + 1) * 1000), 1);
+});
+
+test('F5c findIndexByTimeMs: empty / before / after / exact / between (floored)', () => {
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs([], 1_502_928_000_000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(null, 1_502_928_000_000), 0);
+  const times = [1_502_928_000, 1_502_928_060, 1_502_928_120];
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_927_000_000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_929_000_000), 2);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_928_060_000), 1);
+  // Between bars: leftover ms floors, then nearest-of {lo-1, lo} on integer seconds.
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_928_000_000 + 20_000), 0);
+  assert.strictEqual(ChartCompositor.findIndexByTimeMs(times, 1_502_928_000_000 + 40_000), 1);
+});
+
+test('F5c resolveNearestLogical fallback: same ms→sec contract; empty stays null', () => {
+  TimeCamera._resetForTests();
+  assert.strictEqual(TimeCamera.resolveNearestLogical(1_502_928_000_000), null);
+
+  TimeCamera.observeCommittedWorld({
+    tipLogical: 2,
+    timesSec: [730_944_000, 730_944_060, 730_944_120],
+  });
+  TimeCamera.bindDataResolve(null);
+  assert.strictEqual(TimeCamera.resolveNearestLogical(730_944_000_000), 0);
+  assert.strictEqual(TimeCamera.resolveNearestLogical(730_944_060_000), 1);
+  assert.strictEqual(TimeCamera.resolveNearestLogical(730_944_120_000), 2);
+});
+
+test('F5c search helpers contain no 1e12 / array-unit / unfloored /1000', () => {
+  const compSrc = fs.readFileSync(require.resolve('./chart-compositor.js'), 'utf8');
+  const findBody = compSrc.match(/static findIndexByTimeMs\(timesSec, timeMs\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!findBody.includes('1e12'), findBody);
+  assert.ok(!findBody.includes('timesSec[0]'), findBody);
+  assert.ok(!findBody.includes('timeMs / 1000'), findBody);
+  assert.ok(findBody.includes('msToChartSec'), findBody);
+
+  const camSrc = fs.readFileSync(require.resolve('./ui/time-camera.js'), 'utf8');
+  const resolveBody = camSrc.match(/function resolveNearestLogical\(centerTimeMs\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!resolveBody.includes('1e12'), resolveBody);
+  assert.ok(!resolveBody.includes('notedTimesSec[0]'), resolveBody);
+  assert.ok(!resolveBody.includes('t / 1000'), resolveBody);
+  assert.ok(resolveBody.includes('msToChartSec'), resolveBody);
+});
+
 console.log('ALL PASS');

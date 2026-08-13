@@ -141,11 +141,12 @@
       } catch { /* fall through */ }
     }
     // Fallback: binary search on noted series (Mode B must not silently abort).
+    // Empty noted series stays null (findIndexByTimeMs would return 0).
     if (!notedTimesSec || !notedTimesSec.length) return null;
     const t = Number(centerTimeMs);
     if (!Number.isFinite(t)) return null;
-    const first = Number(notedTimesSec[0]);
-    const targetSec = first > 1e12 ? t : t / 1000;
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : global.ChartDataStore;
+    const targetSec = CDS.msToChartSec(t);
     let lo = 0;
     let hi = notedTimesSec.length - 1;
     while (lo < hi) {
