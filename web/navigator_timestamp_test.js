@@ -87,9 +87,9 @@ test('Navigator ms path does not use chartTime heuristic (pre-2001 divergence)',
   assert.notStrictEqual(lines[0].time1, chartTime(MS_PRE2001));
 });
 
-test('chartTime itself is unchanged (still heuristic)', () => {
+test('chartTime is seconds-only (no 1e12 repair)', () => {
   assert.strictEqual(chartTime(SEC_POST), SEC_POST);
-  assert.strictEqual(chartTime(MS_POST), SEC_POST);
+  assert.strictEqual(chartTime(MS_POST), MS_POST);
   assert.strictEqual(chartTime(MS_PRE2001), MS_PRE2001);
 });
 

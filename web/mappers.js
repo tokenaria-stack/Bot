@@ -121,7 +121,7 @@ function normalizeRsxSettingsFromAPI(raw, defaults = defaultRsxSettings()) {
 function chartTime(raw) {
   const t = Number(raw);
   if (!Number.isFinite(t)) return null;
-  return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+  return Math.floor(t);
 }
 
 /** Navigator DTO times are Unix ms (OpenTime). Explicit ms→sec — not chartTime(). */

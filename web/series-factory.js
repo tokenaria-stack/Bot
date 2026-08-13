@@ -33,7 +33,7 @@ class DDRFactory {
     }
     const t = Number(raw);
     if (!Number.isFinite(t)) return null;
-    return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+    return Math.floor(t);
   }
 
   async fetchManifest(url = '/api/ui/manifest') {

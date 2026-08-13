@@ -36,4 +36,35 @@ test('secToMs: floors fractional seconds', () => {
   assert.strictEqual(ChartDataStore.secToMs(1_700_000_000.9), 1_700_000_000_000);
 });
 
+const { chartTime } = require('./mappers.js');
+const { ColumnarStore } = require('./columnar-store.js');
+const { DDRFactory } = require('./series-factory.js');
+
+test('F5a chartTime: post-2017 Unix seconds unchanged', () => {
+  assert.strictEqual(chartTime(1_502_928_000), 1_502_928_000);
+});
+
+test('F5a chartTime: pre-2001 Unix seconds unchanged', () => {
+  assert.strictEqual(chartTime(730_944_000), 730_944_000);
+});
+
+test('F5a chartTime: does not repair milliseconds', () => {
+  assert.strictEqual(chartTime(1_502_928_000_000), 1_502_928_000_000);
+  assert.strictEqual(chartTime(730_944_000_000), 730_944_000_000);
+});
+
+test('F5a _normTimeSec: seconds-only (no magnitude repair)', () => {
+  assert.strictEqual(ColumnarStore._normTimeSec(1_502_928_000), 1_502_928_000);
+  assert.strictEqual(ColumnarStore._normTimeSec(730_944_000), 730_944_000);
+  assert.strictEqual(ColumnarStore._normTimeSec(1_502_928_000_000), 1_502_928_000_000);
+  assert.strictEqual(ColumnarStore._normTimeSec(730_944_000_000), 730_944_000_000);
+});
+
+test('F5a defaultNormalizeTime: seconds-only (no magnitude repair)', () => {
+  assert.strictEqual(DDRFactory.defaultNormalizeTime(1_502_928_000), 1_502_928_000);
+  assert.strictEqual(DDRFactory.defaultNormalizeTime(730_944_000), 730_944_000);
+  assert.strictEqual(DDRFactory.defaultNormalizeTime(1_502_928_000_000), 1_502_928_000_000);
+  assert.strictEqual(DDRFactory.defaultNormalizeTime(730_944_000_000), 730_944_000_000);
+});
+
 console.log('ALL PASS');

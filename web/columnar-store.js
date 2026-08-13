@@ -65,12 +65,12 @@ class ColumnarStore {
     this._intervalSec = Number.isFinite(s) && s > 0 ? s : 0;
   }
 
-  /** Same sec/ms normalization as appendTick (chartTime), safe under Node tests. */
+  /** Columnar times[] are Unix seconds (ChartTimeSec). No 1e12 unit guess. */
   static _normTimeSec(raw) {
     if (typeof chartTime === 'function') return chartTime(raw);
     const t = Number(raw);
     if (!Number.isFinite(t)) return null;
-    return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+    return Math.floor(t);
   }
 
   static _toMs(timeLike) {
