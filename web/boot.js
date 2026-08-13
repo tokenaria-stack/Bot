@@ -915,10 +915,10 @@
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!window.historyHasMore) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
-        // Post-prepend continuation: armed + remapped-from threshold are not gates.
-        // VIEW left-history need is tip-not-in-view (HISTORY exploration).
+        // Post-prepend continuation: same LEFT-edge runway as initial prefetch.
+        // Tip-outside-VIEW (HISTORY) is not sufficient — user may be in the middle.
         if (options.continuation === true) {
-          return isLiveHistoryExploration(range);
+          return isApproachingLoadedLeftEdge(range);
         }
         if (!liveHistoryScrollArmed) return false;
         // Edge validity always — force only skips debounce in schedule*, not this gate.
@@ -927,12 +927,7 @@
       },
       shouldContinueLeftHistory: (range) => {
         if (!window.historyHasMore) return false;
-        // Paint/preserve may not have applied yet — still continue after a successful
-        // left prepend when range is briefly unavailable.
-        if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
-          return true;
-        }
-        return isLiveHistoryExploration(range);
+        return isApproachingLoadedLeftEdge(range);
       },
       getAnchorEndTimeSec: () => liveColumnarStore?.firstTimeSec?.() ?? null,
       getSlotIds: () => resolveLiveSlotIds(),

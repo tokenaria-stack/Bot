@@ -1,10 +1,15 @@
 /**
  * History continuation after successful prepend.
- * Preserve remaps logical `from` upward; continuation must still be re-noted
- * and consumable via Wave 2 pending (no timers / poll / second owner).
+ * Continue LEFT only while canonical VIEW is still near the loaded left edge
+ * (same runway as prefetch). HISTORY / tip-outside-VIEW is not sufficient.
  */
 const assert = require('assert');
 const { HydrationOrchestrator } = require('./hydration-orchestrator.js');
+const ViewportManager = require('./ui/viewport-manager.js');
+
+function approachingLeft(range) {
+  return ViewportManager.isWithinLeftEdgePrefetch(range, { hardMin: 50, frac: 0.25 });
+}
 
 function test(name, fn) {
   return Promise.resolve()
@@ -48,16 +53,13 @@ function makeOrch(overrides = {}) {
       if (!hasMore) return false;
       if (!range) return false;
       if (options.continuation === true) {
-        const tip = barCount - 1;
-        return Number(range.to) < tip - 1.5;
+        return approachingLeft(range);
       }
       return range.from < 50;
     },
     shouldContinueLeftHistory: (range) => {
       if (!hasMore) return false;
-      if (!range) return true;
-      const tip = barCount - 1;
-      return Number(range.to) < tip - 1.5;
+      return approachingLeft(range);
     },
     fetchColumnar: async (...args) => {
       state.fetchCount += 1;
@@ -94,7 +96,7 @@ async function waitDebounce(ms = 250) {
 }
 
 async function run() {
-  await test('prepend → remapped from → continuation re-noted → next chunk consumed', async () => {
+  await test('A: LEFT edge + hasMore → continuation requested and next chunk consumed', async () => {
     const orch = makeOrch();
     let chunks = 0;
     orch._test.fetchImpl = async () => {
@@ -108,19 +110,14 @@ async function run() {
 
     await orch.requestPrepend({ from: 5, to: 80 }, {});
     assert.ok(orch._test.fetchCount >= 1);
-    assert.ok(orch._test.barCount > 3000);
     assert.ok(
       orch._test.notes.some((n) => n.options.continuation === true && n.options.force === true),
-      'successful prepend must re-note continuation with force (no debounce race)',
+      'VIEW still near LEFT must re-note continuation',
     );
-
-    // Preserve remaps logical from (audit: 5 → ~3004) before/while chain continues.
-    orch._test.setVisible({ from: 3004, to: 3079 });
-    // force:true may already have started chunk 2; allow debounce-free settle.
     await waitDebounce(50);
     assert.ok(
       orch._test.fetchCount >= 2,
-      `next chunk must be consumable after remapped from (got fetchCount=${orch._test.fetchCount})`,
+      `LEFT-edge continuation must consume next chunk (got fetchCount=${orch._test.fetchCount})`,
     );
     orch.reset();
   });
@@ -151,28 +148,31 @@ async function run() {
     orch.reset();
   });
 
-  await test('continuation with remapped from is consumable while paint busy then idle', async () => {
+  await test('B: historical middle (tip outside VIEW) does not continue LEFT', async () => {
     const orch = makeOrch();
-    orch._test.fetchImpl = async () => ({
-      times: [1, 2, 3],
-      hasMore: false,
-      candles: {},
-    });
-    orch._test.mergeAdded = 3;
-    orch._test.setBarCount(6000);
-    orch._test.setVisible({ from: 3004, to: 3079 });
-    orch._test.setRenderBusy(true);
-    orch.noteLeftHistoryIntent({ from: 3004, to: 3079 }, { continuation: true });
-    assert.strictEqual(orch.hasPendingLeftIntent(), true);
-
-    orch._test.setRenderBusy(false);
-    orch.tryConsumePending();
-    await waitDebounce();
-    assert.ok(orch._test.fetchCount >= 1, 'continuation must load without from < 50');
+    orch._test.setBarCount(25000);
+    // Canonical VIEW is in the historical middle (tip still outside). Initial
+    // prepend uses a left-edge request range; continuation must read live VIEW.
+    orch._test.setVisible({ from: 6000, to: 24000 });
+    await orch.requestPrepend({ from: 5, to: 80 }, {});
+    const contNotes = orch._test.notes.filter((n) => n.options.continuation === true);
+    assert.strictEqual(contNotes.length, 0, 'tip-outside-VIEW must not chain LEFT chunks');
+    assert.strictEqual(orch._test.fetchCount, 1);
+    assert.strictEqual(orch.hasPendingLeftIntent(), false);
     orch.reset();
   });
 
-  await test('continuation stops at authoritative EOF', async () => {
+  await test('C: VIEW moves rightward → LEFT continuation stops', async () => {
+    const orch = makeOrch();
+    orch._test.setBarCount(25000);
+    orch._test.setVisible({ from: 8000, to: 24000 });
+    orch.noteLeftHistoryIntent({ from: 8000, to: 24000 }, { continuation: true });
+    assert.strictEqual(orch.hasPendingLeftIntent(), false);
+    assert.strictEqual(orch._test.fetchCount, 0);
+    orch.reset();
+  });
+
+  await test('D: continuation stops at authoritative EOF', async () => {
     const orch = makeOrch();
     orch._test.fetchImpl = async () => ({
       times: [1, 2, 3],
@@ -191,7 +191,7 @@ async function run() {
   await test('continuation cancels when VIEW returns to live tip', async () => {
     const orch = makeOrch();
     orch._test.setBarCount(6000);
-    orch._test.setVisible({ from: 5900, to: 5999 }); // tip in view
+    orch._test.setVisible({ from: 5900, to: 5999 }); // tip in view, not near left
     orch.noteLeftHistoryIntent({ from: 5900, to: 5999 }, { continuation: true });
     assert.strictEqual(orch.hasPendingLeftIntent(), false);
     assert.strictEqual(orch._test.fetchCount, 0);
