@@ -1189,6 +1189,13 @@
       handoffDiag.waiting = false;
     }
     if (options.silent) return true;
+    // Render gate only (Fix F): store already ingested. VIEW intent ≠ windowMode.
+    // Same-bar ticks while looking at HISTORY must not schedule delta RAFs.
+    // New bars still paint so LWC series length stays aligned with the store.
+    // Unknown/null intent fails open (keep existing delta paint).
+    if (!shouldMarkDirtyLiveDelta(liveCameraViewIntent(), appendResult.isNewBar)) {
+      return true;
+    }
     liveRenderScheduler.markDirty({
       mode: 'delta',
       tick,
@@ -1199,6 +1206,32 @@
       },
     });
     return true;
+  }
+
+  /**
+   * TimeCamera shadow VIEW intent (LIVE | HISTORY). Null = unknown → fail open.
+   * Does not read windowMode.
+   */
+  function liveCameraViewIntent() {
+    if (typeof TimeCamera === 'undefined' || typeof TimeCamera._getShadowView !== 'function') {
+      return null;
+    }
+    try {
+      const intent = TimeCamera._getShadowView()?.intent;
+      if (intent === 'LIVE' || intent === 'HISTORY') return intent;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Delta *paint* policy after appendTick. Ingest is never gated here.
+   * @param {'LIVE'|'HISTORY'|null|undefined} viewIntent
+   * @param {boolean} isNewBar
+   */
+  function shouldMarkDirtyLiveDelta(viewIntent, isNewBar) {
+    return !(viewIntent === 'HISTORY' && isNewBar !== true);
   }
 
   /** Replay buffered ticks onto the fresh monolith (TF + projectionEpoch gated). */

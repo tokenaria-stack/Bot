@@ -135,6 +135,7 @@ function mockStore(snapshot) {
   return {
     snapCalls: () => snapCalls,
     barCount: () => snapshot.times.length,
+    timesSec: () => snapshot.times,
     invariantOk: () => true,
     invariantMeta: () => ({}),
     snapshot() {
@@ -189,6 +190,47 @@ function mockStore(snapshot) {
   assert(f1Builds === 1 && f1Snaps === 1, 'F1 builds store data once');
   assert(builds === 1, 'F2 full must not call snapshotToStoreData again');
   assert(store.snapCalls() === 1, 'F2 full must not snapshot again');
+}
+
+{
+  const snap = makeSnapshot(50);
+  const store = mockStore(snap);
+  let deltaCalls = 0;
+  let fullPaints = 0;
+  let ddrTicks = 0;
+  let observed = null;
+  stubAdapter({
+    applyDelta(_ctx, delta) {
+      deltaCalls += 1;
+      assert(delta && delta.candle, 'delta carries one candle');
+      assert(delta.barCount === 50, 'delta barCount is store length');
+    },
+    applyFullData() { fullPaints += 1; },
+  });
+  global.TimeCamera = {
+    observeCommittedWorld(world) { observed = world; },
+  };
+  global.window = global.window || global;
+  global.window.DDRFactory = {
+    cutoverActive: true,
+    updateTick() { ddrTicks += 1; },
+  };
+  const compositor = new ChartCompositor({ store, onAfterFlush: () => {} });
+  compositor.flush({
+    mode: 'delta',
+    delta: {
+      candle: { time: snap.times[49], open: 1, high: 2, low: 1, close: 1.5 },
+      barCount: 50,
+    },
+    tick: { time: snap.times[49], plots: { line_rsx: 50 } },
+  });
+  assert(store.snapCalls() === 0, 'delta must not call store.snapshot');
+  assert(deltaCalls === 1, 'delta uses applyDelta');
+  assert(fullPaints === 0, 'delta must not applyFullData / setData');
+  assert(ddrTicks === 1, 'delta still updates DDR from the tick');
+  assert(observed, 'delta still observes TimeCamera');
+  assert(observed.tipLogical === 49, 'tipLogical = barCount - 1');
+  assert(observed.timesSec === snap.times, 'timesSec is live store times, not a snapshot clone');
 }
 
 console.log('chart_compositor_extract_window_test: OK');

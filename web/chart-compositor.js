@@ -260,12 +260,14 @@ class ChartCompositor {
           barCount: delta.barCount ?? this._store.barCount(),
         });
       }
-      // Tip may advance on new bars — refresh observation cache after paint (no camera policy).
-      if (typeof this._store.snapshot === 'function') {
-        const raw = this._store.snapshot();
-        const viewTimes = ChartCompositor.capturePaintViewTimes(raw);
-        const snap = ChartCompositor.selectPaintSnapshot(raw, viewTimes || {});
-        this._observeShadowWorld(snap);
+      // Tip may advance on new bars — observe without cloning OHLC/plots/annotations.
+      const n = typeof this._store.barCount === 'function' ? this._store.barCount() : 0;
+      const timesSec = typeof this._store.timesSec === 'function' ? this._store.timesSec() : null;
+      if (n > 0 && Array.isArray(timesSec) && timesSec.length) {
+        this._observeShadowWorld({
+          times: timesSec,
+          tipLogical: n - 1,
+        });
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
@@ -389,7 +391,7 @@ class ChartCompositor {
 
   /**
    * ADR-028 — publish tipLogical + seriesTimes (observation).
-   * @param {object} snapshot painted snapshot (store indices ≡ LWC indices)
+   * @param {{ times?: number[], tipLogical?: number }} snapshot
    */
   _observeShadowWorld(snapshot) {
     if (typeof TimeCamera === 'undefined' || typeof TimeCamera.observeCommittedWorld !== 'function') {
@@ -397,8 +399,10 @@ class ChartCompositor {
     }
     const times = Array.isArray(snapshot?.times) ? snapshot.times : null;
     if (!times || !times.length) return;
+    const tipRaw = Number(snapshot?.tipLogical);
+    const tipLogical = Number.isFinite(tipRaw) ? tipRaw : times.length - 1;
     TimeCamera.observeCommittedWorld({
-      tipLogical: times.length - 1,
+      tipLogical,
       timesSec: times,
     });
   }
