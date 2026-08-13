@@ -39,7 +39,7 @@ test('resolveHistoryTfFetchEndSec: normal 1m chunk centered on HISTORY focus', (
   assert.ok(centerSec > firstSec && centerSec <= end, 'center inside hydrated window');
 });
 
-test('resolveHistoryTfFetchEndSec: LIVE / missing center → nowSec', () => {
+test('resolveHistoryTfFetchEndSec: LIVE / missing / invalid center → nowSec', () => {
   assert.strictEqual(ViewportManager.resolveHistoryTfFetchEndSec({
     intent: 'LIVE',
     centerTimeMs: CENTER_MS,
@@ -50,6 +50,27 @@ test('resolveHistoryTfFetchEndSec: LIVE / missing center → nowSec', () => {
   assert.strictEqual(ViewportManager.resolveHistoryTfFetchEndSec({
     intent: 'HISTORY',
     centerTimeMs: null,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec: 60,
+  }), NOW_SEC);
+  assert.strictEqual(ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: NaN,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec: 60,
+  }), NOW_SEC);
+  assert.strictEqual(ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: 0,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec: 60,
+  }), NOW_SEC);
+  assert.strictEqual(ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: -1,
     nowSec: NOW_SEC,
     limit: 3000,
     intervalSec: 60,
@@ -166,6 +187,39 @@ test('fresh viewport still allows FreshLive (LIVE init)', () => {
   TimeCamera.proposeFreshLive = origFresh;
 
   assert.ok(freshCalls >= 1, 'legitimate LIVE fresh path must still call FreshLive');
+});
+
+test('F5d resolveHistoryTfFetchEndSec: 1993 ms is milliseconds not seconds', () => {
+  const end = ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: 730_944_000_000,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec: 60,
+  });
+  // 730944000 + floor(3000/2)*60 = 731034000 (below NOW_SEC, so not clamped)
+  assert.strictEqual(end, 730_944_000 + Math.floor(3000 / 2) * 60);
+  assert.strictEqual(end, 731_034_000);
+});
+
+test('F5d resolveHistoryTfFetchEndSec: fractional ms floors via msToChartSec', () => {
+  const end = ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: 1_502_928_000_500,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec: 60,
+  });
+  assert.strictEqual(end, 1_502_928_000 + Math.floor(3000 / 2) * 60);
+});
+
+test('F5d resolveHistoryTfFetchEndSec: no 1e12 magnitude branch', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(require.resolve('./ui/viewport-manager.js'), 'utf8');
+  const body = src.match(/function resolveHistoryTfFetchEndSec\(opts\) \{[\s\S]*?\n  \}/)[0];
+  assert.ok(!body.includes('1e12'), body);
+  assert.ok(!body.includes('centerMs / 1000'), body);
+  assert.ok(body.includes('msToChartSec'), body);
 });
 
 console.log('All HISTORY TF switch tests passed.');

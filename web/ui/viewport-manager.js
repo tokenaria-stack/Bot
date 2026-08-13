@@ -161,7 +161,8 @@
     if (!opts || opts.intent !== 'HISTORY') return fallback;
     const centerMs = Number(opts.centerTimeMs);
     if (!Number.isFinite(centerMs) || centerMs <= 0) return fallback;
-    const centerSec = centerMs > 1e12 ? Math.floor(centerMs / 1000) : Math.floor(centerMs);
+    const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : global.ChartDataStore;
+    const centerSec = CDS.msToChartSec(centerMs);
     const bars = Number(opts.limit);
     const limit = Number.isFinite(bars) && bars > 0 ? Math.floor(bars) : 3000;
     const iv = Number(opts.intervalSec);
@@ -342,6 +343,9 @@
 
   global.ViewportManager = ViewportManager;
   if (typeof module !== 'undefined' && module.exports) {
+    if (typeof global.ChartDataStore === 'undefined') {
+      global.ChartDataStore = require('../store.js').ChartDataStore;
+    }
     module.exports = ViewportManager;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
