@@ -124,6 +124,13 @@ function chartTime(raw) {
   return t >= 1e12 ? Math.floor(t / 1000) : Math.floor(t);
 }
 
+/** Navigator DTO times are Unix ms (OpenTime). Explicit ms→sec — not chartTime(). */
+function navigatorMsToChartSec(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return ChartDataStore.msToChartSec(n);
+}
+
 function isWarmupOscValue(value) {
   return value == null || !Number.isFinite(value) || value === 0 || value === 50;
 }
@@ -350,8 +357,8 @@ function navigatorBarIndexToTime(index, candles) {
 
 function mapNavigatorBackgroundZones(zones) {
   return (zones || []).map((zone) => {
-    const time1 = chartTime(zone.startTime);
-    const time2 = chartTime(zone.endTime);
+    const time1 = navigatorMsToChartSec(zone.startTime);
+    const time2 = navigatorMsToChartSec(zone.endTime);
     if (time1 == null || time2 == null) return null;
     return {
       startTime: Math.floor(time1),
@@ -370,7 +377,7 @@ function navigatorBarColorMap(barColors, candles) {
   if (Array.isArray(barColors)) {
     barColors.forEach((entry) => {
       if (!entry?.color) return;
-      const t = chartTime(entry.time)
+      const t = navigatorMsToChartSec(entry.time)
         ?? navigatorBarIndexToTime(entry.index, candles);
       if (t != null) colorByTime.set(t, entry.color);
     });
@@ -379,7 +386,7 @@ function navigatorBarColorMap(barColors, candles) {
 
   if (typeof barColors === 'object') {
     Object.entries(barColors).forEach(([rawTime, color]) => {
-      const t = chartTime(rawTime);
+      const t = navigatorMsToChartSec(rawTime);
       if (t != null && color) colorByTime.set(t, color);
     });
   }
@@ -402,8 +409,8 @@ function barSlopeFromLine(line) {
 function mapNavigatorLinesForChart(lines, candles) {
   const minTime = candles?.length ? chartTime(candles[0].time) : null;
   return (lines || []).map((line) => {
-    let time1 = chartTime(line.time1);
-    let time2 = chartTime(line.time2);
+    let time1 = navigatorMsToChartSec(line.time1);
+    let time2 = navigatorMsToChartSec(line.time2);
     if (time1 == null) time1 = navigatorBarIndexToTime(line.x1, candles);
     if (time2 == null) time2 = navigatorBarIndexToTime(line.x2, candles);
     if (time1 == null || time2 == null) return null;
@@ -530,6 +537,7 @@ if (typeof window !== 'undefined') {
     mapNavigatorBackgroundZones,
     navigatorBarColorMap,
     navigatorBarIndexToTime,
+    navigatorMsToChartSec,
     normalizeStrategyMatrix,
     normalizeStrategyThresholds,
     normalizeRsxSettingsFromAPI,
@@ -540,5 +548,16 @@ if (typeof window !== 'undefined') {
     buildSpikeMarkers,
     buildSpikeMarkersFromGrid,
     buildWozduhMarkersFromGrid,
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    chartTime,
+    navigatorMsToChartSec,
+    mapNavigatorLinesForChart,
+    mapNavigatorBackgroundZones,
+    navigatorBarColorMap,
+    navigatorBarIndexToTime,
   };
 }

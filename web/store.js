@@ -23,8 +23,16 @@ class ChartDataStore {
     return n < 1e12 ? Math.floor(n * 1000) : Math.floor(n);
   }
 
+  // Debt #83 F2 — explicit unit conversion. Contract is the argument name, not magnitude.
+  // Do not use these to guess sec vs ms. chartTime() remains dual-unit until F3 (Navigator).
+  /** Unix milliseconds → Unix seconds (Lightweight Charts / wire). No 1e12 heuristic. */
   static msToChartSec(ms) {
-    return Math.floor(ms / 1000);
+    return Math.floor(Number(ms) / 1000);
+  }
+
+  /** Unix seconds → Unix milliseconds (camera / store keys). No 1e12 heuristic. */
+  static secToMs(sec) {
+    return Math.floor(Number(sec)) * 1000;
   }
 
   static _snapMs(timeLike, tf) {
@@ -566,4 +574,8 @@ const backtestStore = (function () {
 if (typeof window !== 'undefined') {
   window.ChartDataStore = ChartDataStore;
   window.backtestStore = backtestStore;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { ChartDataStore };
 }

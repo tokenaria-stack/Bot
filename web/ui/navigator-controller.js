@@ -870,7 +870,7 @@ const NavigatorController = (() => {
     const filtered = filterNavigatorMarkersByHHLL(navigatorData?.markers, pane);
     const markers = [];
     filtered.forEach((m) => {
-      const time = chartTime(m.time) ?? navigatorBarIndexToTime(m.index, candles);
+      const time = navigatorMsToChartSec(m.time) ?? navigatorBarIndexToTime(m.index, candles);
       if (time == null) return;
       const type = String(m.type || m.text || '').trim();
       if (type === 'HH') {
