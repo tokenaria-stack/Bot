@@ -915,6 +915,7 @@
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!window.historyHasMore) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
+        if (liveHydrationOrchestrator?.isLeftHeadBlocked?.()) return false;
         // Post-prepend continuation: same LEFT-edge runway as initial prefetch.
         // Tip-outside-VIEW (HISTORY) is not sufficient — user may be in the middle.
         if (options.continuation === true) {
@@ -927,9 +928,11 @@
       },
       shouldContinueLeftHistory: (range) => {
         if (!window.historyHasMore) return false;
+        if (liveHydrationOrchestrator?.isLeftHeadBlocked?.()) return false;
         return isApproachingLoadedLeftEdge(range);
       },
       getAnchorEndTimeSec: () => liveColumnarStore?.firstTimeSec?.() ?? null,
+      getRightTipSec: () => liveColumnarStore?.lastTimeSec?.() ?? null,
       getSlotIds: () => resolveLiveSlotIds(),
       isRenderBusy: () => !!(liveRenderScheduler?.isBusy?.() || window.isUpdatingData),
       isDashboardLoading: () => !!window.__isDashboardLoading,
@@ -944,6 +947,7 @@
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
         if (!canExtendHistoryRight()) return false;
+        if (liveHydrationOrchestrator?.isRightTipBlocked?.()) return false;
         if (options.continuation === true) {
           return isApproachingLoadedRightEdge(range);
         }
@@ -952,6 +956,7 @@
       },
       shouldContinueRightHistory: (range) => {
         if (!canExtendHistoryRight()) return false;
+        if (liveHydrationOrchestrator?.isRightTipBlocked?.()) return false;
         if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
           return true;
         }

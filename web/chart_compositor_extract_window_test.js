@@ -119,4 +119,76 @@ function makeSnapshot(n, t0 = 1_700_000_000) {
   assert(errs.length >= 1, 'contract failure reported');
 }
 
+function stubAdapter(extra = {}) {
+  global.ChartAdapter = {
+    setLiveUpdating() {},
+    applyFullData() {},
+    applyLiveAnnotationLayer() {},
+    refreshLiveDecoration() {},
+    getVisibleLogicalRange() { return null; },
+    ...extra,
+  };
+}
+
+function mockStore(snapshot) {
+  let snapCalls = 0;
+  return {
+    snapCalls: () => snapCalls,
+    barCount: () => snapshot.times.length,
+    invariantOk: () => true,
+    invariantMeta: () => ({}),
+    snapshot() {
+      snapCalls += 1;
+      return snapshot;
+    },
+  };
+}
+
+{
+  stubAdapter();
+  const origBuild = ChartCompositor.snapshotToStoreData;
+  let builds = 0;
+  ChartCompositor.snapshotToStoreData = function wrappedSnapshotToStoreData(...args) {
+    builds += 1;
+    return origBuild.apply(this, args);
+  };
+  const store = mockStore(makeSnapshot(200));
+  let afterFlush = 0;
+  let deco = 0;
+  global.ChartAdapter.refreshLiveDecoration = () => { deco += 1; };
+  const compositor = new ChartCompositor({
+    store,
+    onAfterFlush: () => { afterFlush += 1; },
+  });
+  compositor.flush({ mode: 'prepend', phase: 'F2', edge: 'left' });
+  ChartCompositor.snapshotToStoreData = origBuild;
+  assert(store.snapCalls() === 0, 'F2 prepend must not snapshot the store');
+  assert(builds === 0, 'F2 prepend must not rebuild snapshotToStoreData');
+  assert(deco === 1, 'F2 prepend still refreshes decoration');
+  assert(afterFlush === 1, 'F2 prepend still calls onAfterFlush');
+}
+
+{
+  stubAdapter();
+  const origBuild = ChartCompositor.snapshotToStoreData;
+  let builds = 0;
+  ChartCompositor.snapshotToStoreData = function wrappedSnapshotToStoreData(...args) {
+    builds += 1;
+    return origBuild.apply(this, args);
+  };
+  const store = mockStore(makeSnapshot(50));
+  let paints = 0;
+  global.ChartAdapter.applyFullData = () => { paints += 1; };
+  const compositor = new ChartCompositor({ store, onAfterFlush: () => {} });
+  compositor.flush({ mode: 'full', phase: 'F1', viewport: 'preserve' });
+  const f1Builds = builds;
+  const f1Snaps = store.snapCalls();
+  compositor.flush({ mode: 'full', phase: 'F2', viewport: 'preserve' });
+  ChartCompositor.snapshotToStoreData = origBuild;
+  assert(paints === 1, 'F1 is the only full setData paint');
+  assert(f1Builds === 1 && f1Snaps === 1, 'F1 builds store data once');
+  assert(builds === 1, 'F2 full must not call snapshotToStoreData again');
+  assert(store.snapCalls() === 1, 'F2 full must not snapshot again');
+}
+
 console.log('chart_compositor_extract_window_test: OK');

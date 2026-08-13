@@ -36,6 +36,10 @@ class HydrationOrchestrator {
      * @type {{ range: { from: number, to: number }, options: object }|null}
      */
     this._pendingRightIntent = null;
+    /** LEFT store head (firstTimeSec) that returned added<=0. */
+    this._zeroProgressLeftHeadSec = null;
+    /** RIGHT store tip (lastTimeSec) that returned added<=0. */
+    this._zeroProgressRightTipSec = null;
   }
 
   /**
@@ -93,6 +97,34 @@ class HydrationOrchestrator {
     this._inFlight = false;
     this._hydrateEdge = null;
     this._lastHydrateEdge = null;
+    this._zeroProgressLeftHeadSec = null;
+    this._zeroProgressRightTipSec = null;
+  }
+
+  _currentLeftHeadSec() {
+    const t = Number(this._deps?.getAnchorEndTimeSec?.());
+    return Number.isFinite(t) && t > 0 ? t : null;
+  }
+
+  _currentRightTipSec() {
+    const t = Number(this._deps?.getRightTipSec?.());
+    return Number.isFinite(t) && t > 0 ? t : null;
+  }
+
+  /** True when LEFT fetch at the current store head already added 0 bars. */
+  isLeftHeadBlocked() {
+    const head = this._currentLeftHeadSec();
+    return head != null
+      && this._zeroProgressLeftHeadSec != null
+      && head === this._zeroProgressLeftHeadSec;
+  }
+
+  /** True when RIGHT fetch at the current store tip already added 0 bars. */
+  isRightTipBlocked() {
+    const tip = this._currentRightTipSec();
+    return tip != null
+      && this._zeroProgressRightTipSec != null
+      && tip === this._zeroProgressRightTipSec;
   }
 
   /**
@@ -154,6 +186,7 @@ class HydrationOrchestrator {
       return;
     }
     if (this._shouldIgnoreOppositeEdgeNote('left')) return;
+    if (this.isLeftHeadBlocked()) return;
     this._pendingLeftIntent = {
       range: { from: range.from, to: range.to },
       options: { ...options },
@@ -179,6 +212,7 @@ class HydrationOrchestrator {
       return;
     }
     if (this._shouldIgnoreOppositeEdgeNote('right')) return;
+    if (this.isRightTipBlocked()) return;
     this._pendingRightIntent = {
       range: { from: range.from, to: range.to },
       options: { ...options },
@@ -221,6 +255,10 @@ class HydrationOrchestrator {
   _tryStartLeftPending() {
     if (!this._deps || !this._pendingLeftIntent) return;
     if (!this._canStartNow()) return;
+    if (this.isLeftHeadBlocked()) {
+      this._pendingLeftIntent = null;
+      return;
+    }
 
     const pending = this._pendingLeftIntent;
     const options = pending.options || {};
@@ -262,6 +300,10 @@ class HydrationOrchestrator {
   _tryStartRightPending() {
     if (!this._deps || !this._pendingRightIntent) return;
     if (!this._canStartNow()) return;
+    if (this.isRightTipBlocked()) {
+      this._pendingRightIntent = null;
+      return;
+    }
     if (typeof this._deps.shouldLoadRight !== 'function') {
       this._pendingRightIntent = null;
       return;
@@ -437,6 +479,7 @@ class HydrationOrchestrator {
     const reqId = typeof deps.getReqId === 'function' ? deps.getReqId() : null;
     const endTimeSec = deps.getAnchorEndTimeSec();
     if (!Number.isFinite(endTimeSec) || endTimeSec <= 0) return;
+    if (this.isLeftHeadBlocked()) return;
 
     this._inFlight = true;
     this._hydrateEdge = 'left';
@@ -451,6 +494,10 @@ class HydrationOrchestrator {
       // Wave 3: empty payload is recoverable unless server authoritatively asserts EOF.
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         this._applyAuthoritativeEof(data);
+        if (!(data && data.hasMore === false)) {
+          this._zeroProgressLeftHeadSec = endTimeSec;
+          this._pendingLeftIntent = null;
+        }
         return;
       }
 
@@ -468,8 +515,12 @@ class HydrationOrchestrator {
         // Wave 3: zero-overlap / no-add is recoverable — never infer EOF.
         if (!mergeResult || mergeResult.added <= 0) {
           console.warn('[HydrationOrchestrator] prepend stalled: zero overlap (recoverable, not EOF)');
+          this._zeroProgressLeftHeadSec = endTimeSec;
+          this._pendingLeftIntent = null;
           return;
         }
+
+        this._zeroProgressLeftHeadSec = null;
 
         const addedBars = Number(mergeResult.added) > 0
           ? Number(mergeResult.added)
@@ -563,6 +614,7 @@ class HydrationOrchestrator {
       return;
     }
     if (!deps.shouldLoadRight(range, options)) return;
+    if (this.isRightTipBlocked()) return;
 
     const epoch = deps.getEpoch();
     const reqId = typeof deps.getReqId === 'function' ? deps.getReqId() : null;
@@ -571,6 +623,7 @@ class HydrationOrchestrator {
       this._pendingRightIntent = null;
       return;
     }
+    const tipSec = this._currentRightTipSec();
 
     this._inFlight = true;
     this._hydrateEdge = 'right';
@@ -585,6 +638,7 @@ class HydrationOrchestrator {
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         // Empty right payload → stop right pending (no left EOF inference).
         this._pendingRightIntent = null;
+        if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
         return;
       }
 
@@ -602,8 +656,11 @@ class HydrationOrchestrator {
         if (!mergeResult || mergeResult.added <= 0) {
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
           this._pendingRightIntent = null;
+          if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
           return;
         }
+
+        this._zeroProgressRightTipSec = null;
 
         const addedBars = Number(mergeResult.added) > 0 ? Number(mergeResult.added) : 0;
 

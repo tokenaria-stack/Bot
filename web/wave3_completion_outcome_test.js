@@ -13,18 +13,21 @@ function test(name, fn) {
 function makeOrch(overrides = {}) {
   const orch = new HydrationOrchestrator();
   let hasMore = true;
+  let headSec = 1000;
   const state = {
     hasMore: () => hasMore,
     setHasMore: (v) => { hasMore = !!v; },
     fetchCount: 0,
     fetchImpl: async () => ({ times: [1, 2], hasMore: true }),
     mergeImpl: () => ({ added: 2 }),
+    setHead: (v) => { headSec = v; },
+    head: () => headSec,
   };
   orch.init({
     getEpoch: () => 1,
     getReqId: () => 1,
     shouldLoad: () => true,
-    getAnchorEndTimeSec: () => 1000,
+    getAnchorEndTimeSec: () => headSec,
     isRenderBusy: () => false,
     isDashboardLoading: () => false,
     getVisibleRange: () => ({ from: 5, to: 50 }),
@@ -98,6 +101,48 @@ async function run() {
     assert.strictEqual(orch._test.hasMoreFlag, true);
   });
 
+  await test('A: zero-add blocks identical retry at the same head', async () => {
+    const orch = makeOrch();
+    orch._test.mergeImpl = () => ({ added: 0 });
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    assert.strictEqual(orch._test.fetchCount, 1);
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    assert.strictEqual(orch._test.fetchCount, 1, 'same head must not refetch');
+    assert.strictEqual(orch.isLeftHeadBlocked(), true);
+  });
+
+  await test('B: new head clears the zero-progress block', async () => {
+    const orch = makeOrch();
+    orch._test.mergeImpl = () => ({ added: 0 });
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    assert.strictEqual(orch._test.fetchCount, 1);
+
+    orch._test.setHead(900);
+    orch._test.mergeImpl = () => ({ added: 3 });
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    assert.strictEqual(orch._test.fetchCount, 2, 'moved head must be fetchable');
+    assert.strictEqual(orch.isLeftHeadBlocked(), false);
+  });
+
+  await test('C: range echo cannot replay the stalled cursor', async () => {
+    const orch = makeOrch();
+    orch._test.mergeImpl = () => ({ added: 0 });
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    orch.noteLeftHistoryIntent({ from: 2, to: 41 }, { force: true });
+    orch.tryConsumePending();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.strictEqual(orch._test.fetchCount, 1);
+    assert.strictEqual(orch.hasPendingLeftIntent(), false);
+  });
+
+  await test('D: zero-add is not EOF', async () => {
+    const orch = makeOrch();
+    orch._test.hasMoreFlag = true;
+    orch._test.mergeImpl = () => ({ added: 0 });
+    await orch.requestPrepend({ from: 1, to: 40 }, {});
+    assert.strictEqual(orch._test.hasMoreFlag, true);
+  });
+
   await test('recoverable overlap preserves ability to note pending (Wave 2)', async () => {
     const orch = makeOrch();
     orch._test.hasMoreFlag = true;
@@ -106,8 +151,9 @@ async function run() {
     await orch.requestPrepend({ from: 1, to: 40 }, {});
     assert.strictEqual(orch._test.hasMoreFlag, true);
     orch.noteLeftHistoryIntent({ from: 2, to: 41 });
-    // render not busy — may schedule; at least pending or start allowed
-    assert.ok(orch.hasPendingLeftIntent() || orch._test.fetchCount >= 1);
+    // Same head after zero-add: do not re-arm fetch (Fix E). hasMore still true.
+    assert.strictEqual(orch.hasPendingLeftIntent(), false);
+    assert.strictEqual(orch._test.fetchCount, 1);
   });
 
   await test('source gate: zero-overlap branch must not call setHistoryHasMore(false)', () => {

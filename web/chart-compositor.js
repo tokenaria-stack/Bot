@@ -176,6 +176,12 @@ class ChartCompositor {
       return;
     }
 
+    // F2: paint+camera already committed on F1. Do not snapshot / columnarToCandles again.
+    if (intent.phase === 'F2') {
+      this._settleAfterFullPrependPaint(intent);
+      return;
+    }
+
     const snapshot = this._store.snapshot();
     const viewTimes = ChartCompositor.capturePaintViewTimes(snapshot);
     const paintSnapshot = ChartCompositor.selectPaintSnapshot(snapshot, viewTimes || {});
@@ -190,16 +196,23 @@ class ChartCompositor {
       }
     } finally {
       ChartAdapter.setLiveUpdating(false);
-      // Prepend: decoration + scheduler settle. LEFT market-time restore already ran in _flushPrepend.
-      if (intent.mode === 'prepend') {
-        if (typeof ChartAdapter !== 'undefined'
-          && typeof ChartAdapter.refreshLiveDecoration === 'function') {
-          ChartAdapter.refreshLiveDecoration();
-        }
-        this._notifyPrependCameraSettled();
-      }
-      if (this._onAfterFlush) this._onAfterFlush(intent);
+      this._settleAfterFullPrependPaint(intent);
     }
+  }
+
+  /**
+   * Post-paint settle for full/prepend (F1 after paint, F2 without rebuilding store data).
+   * Decoration / onAfterFlush / prepend-camera notify — not a second setData.
+   */
+  _settleAfterFullPrependPaint(intent) {
+    if (intent.mode === 'prepend') {
+      if (typeof ChartAdapter !== 'undefined'
+        && typeof ChartAdapter.refreshLiveDecoration === 'function') {
+        ChartAdapter.refreshLiveDecoration();
+      }
+      this._notifyPrependCameraSettled();
+    }
+    if (this._onAfterFlush) this._onAfterFlush(intent);
   }
 
   /**
