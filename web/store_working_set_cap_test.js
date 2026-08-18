@@ -127,7 +127,7 @@ test('proposeFromPane clamps visible width to MAX_VISIBLE_LOGICAL_BARS', () => {
   let seen = null;
   TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
   const max = TimeCamera.MAX_VISIBLE_LOGICAL_BARS;
-  assert.ok(Number.isFinite(max) && max >= 20000, `MAX_VISIBLE_LOGICAL_BARS >= 20000, got ${max}`);
+  assert.ok(Number.isFinite(max) && max >= 9000, `MAX_VISIBLE_LOGICAL_BARS >= 9000, got ${max}`);
   TimeCamera.proposeFromPane('price-chart', { from: 0, to: max + 5000 }, 6);
   assert.ok(seen);
   const w = seen.visibleRange.to - seen.visibleRange.from;

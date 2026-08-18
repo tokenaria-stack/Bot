@@ -158,7 +158,7 @@ const HISTORY_CHUNK_LIMIT = 3000;
  */
 const MAX_STORE_BARS = 25000;
 /** Max zoom-out (logical bars). */
-const MAX_VISIBLE_BARS = 20000;
+const MAX_VISIBLE_BARS = 9000;
 /** @deprecated aliases — map to MAX_STORE_BARS (single hard working-set). */
 const STORE_BUDGET_TARGET = MAX_STORE_BARS;
 const STORE_BUDGET_HARD_CAP = MAX_STORE_BARS;

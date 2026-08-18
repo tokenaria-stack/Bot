@@ -83,8 +83,8 @@ test('prefetch runway uses TimeCamera canonical width, not raw LWC width over ca
   const canonical = TimeCamera.getCanonicalVisibleRange();
   const rawWidth = 24000;
   const canonicalWidth = canonical.to - canonical.from;
-  assert.strictEqual(canonicalWidth, 20000);
-  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25), 5000);
+  assert.strictEqual(canonicalWidth, 9000);
+  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25), 2250);
   assert.notStrictEqual(
     ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25),
     ViewportManager.historyEdgePrefetchBars(rawWidth, 50, 0.25),
@@ -95,10 +95,10 @@ test('prefetch runway uses canonical width when already below cap', () => {
   const TimeCamera = require('./ui/time-camera.js');
   TimeCamera._resetForTests();
   TimeCamera.bind({ applyCommitted: () => {} });
-  TimeCamera.proposeFromPane('price', { from: 100, to: 18100 }, 1);
+  TimeCamera.proposeFromPane('price', { from: 100, to: 4100 }, 1);
   const canonical = TimeCamera.getCanonicalVisibleRange();
-  assert.strictEqual(canonical.to - canonical.from, 18000);
-  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(18000, 50, 0.25), 4500);
+  assert.strictEqual(canonical.to - canonical.from, 4000);
+  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(4000, 50, 0.25), 1000);
 });
 
 console.log('history_edge_prefetch_test: ALL PASS');

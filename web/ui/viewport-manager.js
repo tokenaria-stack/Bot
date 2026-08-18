@@ -15,7 +15,7 @@
   const MAX_CAPTURE_VISIBLE_BARS = (typeof MAX_VISIBLE_BARS !== 'undefined'
     && Number.isFinite(MAX_VISIBLE_BARS) && MAX_VISIBLE_BARS > 0)
     ? MAX_VISIBLE_BARS
-    : 20000;
+    : 9000;
 
   function priceHostId(context) {
     return context === 'backtest' ? 'bt-price-chart' : 'price-chart';
