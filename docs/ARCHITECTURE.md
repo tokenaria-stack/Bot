@@ -24,23 +24,18 @@ Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining l
 
 | Document | Owns |
 |----------|------|
-| `.cursor/rules/jeweler-protocol.mdc` | Engineering rules (always-on) |
+| `.cursor/rules/jeweler-protocol.mdc` | Engineering laws (always-on) |
 | `.cursor/rules/senior-quant-architect.mdc` | Role / thinking style (always-on) |
-| `docs/ARCHITECTURE.md` | Current architecture + **Core Ownership Model** (frontend constitution) |
-| `docs/WORKING_SET_CONTRACT.md` | Normative Working Set guarantees (VIEW ↔ store ↔ paint); not an ADR |
-| `docs/WORKING_SET_ACCEPTANCE.md` | Pre-implementation done-criteria (scorecard / E3 / UX); not a plan |
-| `docs/WORKING_SET_STEP1_COVERAGE.md` | Step 1 retention coverage (preserve vs commit prune paths) |
-| `docs/WORKING_SET_STEP2_PAINT.md` | Step 2 paint coverage (WS-04 / extractWindow) |
-| `docs/CACHE_LIFETIME_EVIDENCE.md` | Stage E4 lifetime/pressure evidence ledger (historical) |
-| `docs/CACHE_LIFETIME_CONTRACT.md` | Normative Cache Lifetime guarantees (frozen); not an ADR |
-| `docs/CACHE_LIFETIME_ACCEPTANCE.md` | Lifetime done-criteria L1–L7 / C1–C5 (frozen) |
-| `docs/CONSTITUTION_CONSISTENCY_E5.md` | Stage E5 constitutional consistency audit (docs only) |
-| `docs/TRACK_B_STEP1_PLAN.md` | Track B Lifetime Step 1 implementation plan (no code) |
+| `docs/ARCHITECTURE.md` | Current architecture + **Core Ownership Model** |
+| `docs/WORKING_SET_CONTRACT.md` | Working Set law (VIEW ↔ store ↔ paint) |
+| `docs/CACHE_LIFETIME_CONTRACT.md` | Cache Lifetime law (CL-01…CL-07) |
 | `docs/OPEN_DEBTS.md` | Open backlog / NEXT |
 | `docs/HISTORY.md` | Completed phases (on request) |
-| `docs/DECISIONS.md` | Why key choices were made (ADR-lite) |
-| `MEMORY.md` | Index only — no content duplication (never rebuild as encyclopedia) |
+| `docs/DECISIONS.md` | Why key choices were made (on request) |
+| `docs/PINE_INDICATOR_SOURCES.md` | Pine/TV indicator source notes |
+| `MEMORY.md` | Index only |
 | `README.md` | Landing: what / build / links |
+| `docs/archive/` | Closed Track B / S5–S6 / acceptance **process** files (not default reading) |
 
 Memory-update routing (user: «сохрани в памяти» / «update MEMORY»): see Role
 `.cursor/rules/senior-quant-architect.mdc` → section **When user says "save / update memory"**.

@@ -5,7 +5,7 @@
 **Not:** implementation, numeric tuning, ADR, manager design, or a re-investigation of S6.
 
 **Assumes frozen:** ADR-028 / ADR-029, [`WORKING_SET_CONTRACT.md`](WORKING_SET_CONTRACT.md), [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md) (CL-01…CL-07 detail).  
-**Evidence:** [`WORKING_SET_S6.md`](WORKING_SET_S6.md), Track B Steps 1–3, Gate S5 PASS.  
+**Evidence:** [`WORKING_SET_S6.md`](archive/WORKING_SET_S6.md), Track B Steps 1–3, Gate S5 PASS.  
 **Runtime:** **FAIL** against this constitution until the Current Violation is closed.
 
 ---

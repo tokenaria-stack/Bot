@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DOC-1 — archive closed process paperwork (Aug 2026) ✅
+
+- Moved Track B plans/validations, Working Set scorecards/S5–S6 audits, and Cache Lifetime acceptance/evidence into [`docs/archive/`](archive/README.md).
+- Law unchanged: `WORKING_SET_CONTRACT.md`, `CACHE_LIFETIME_CONTRACT.md`. Chronicle links below now point at `archive/`.
+
+---
+
 ## Chart / camera / hydration freeze — `CHART_FROZEN` (Aug 2026) ✅
 
 - Chapter **closed**. Local annotated tag: `CHART_FROZEN`.
@@ -32,7 +39,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## S6 Repair Plan — commit-paired ≠ TARGET wall (Aug 2026) ✅
 
-- Plan only: [`WORKING_SET_S6_REPAIR_PLAN.md`](WORKING_SET_S6_REPAIR_PLAN.md). STATUS: **READY**.
+- Plan only: [`WORKING_SET_S6_REPAIR_PLAN.md`](archive/WORKING_SET_S6_REPAIR_PLAN.md). STATUS: **READY**.
 - Root cause: commit-paired accept → legacy `_pruneToCount(TARGET)` with no protected set.
 - Minimal repair: skip TARGET/HARD_CAP truncation on commit-paired world accept only. No code yet.
 
@@ -44,96 +51,96 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## Gate S6 — Lifetime / Product Boundary Audit (Aug 2026) ✅
 
-- Investigation only: [`WORKING_SET_S6.md`](WORKING_SET_S6.md).
+- Investigation only: [`WORKING_SET_S6.md`](archive/WORKING_SET_S6.md).
 - STATUS: **FAIL** (P-01) — HARD_CAP/TARGET still product-visible on commit-paired truncate; preserve+RN can grow past 16k.
 - Accordion-on-narrow: **not present** (Lazy Contract). LWC/FPS at 50k–200k: **UNKNOWN**.
 - Next: Lifetime/Capacity constitution gate — do not retune HARD_CAP alone.
 
 ## Gate S5 — Pressure ≠ Navigation (Aug 2026) ✅
 
-- Report: [`WORKING_SET_S5.md`](WORKING_SET_S5.md).
+- Report: [`WORKING_SET_S5.md`](archive/WORKING_SET_S5.md).
 - STATUS: **PASS** — pressure/prune is not a navigation authority on live Boot.
 - Residual: capture-null (WS-01 conditional); 16k wall → next Lifetime/product gate.
 
 ## Step 1 Completion Audit — retention coverage re-verify (Aug 2026) ✅
 
-- Re-audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) (post Track B).
+- Re-audit: [`WORKING_SET_STEP1_COVERAGE.md`](archive/WORKING_SET_STEP1_COVERAGE.md) (post Track B).
 - Every `_enforceBudget` path classified: Preserve / Commit / Legacy.
 - Boot preserve-paired supplies VIEW; commit-paired explicit; capture-null = residual not unclassified.
 - Verdict: **Working Set retention layer complete.** No code in this audit.
 
 ## Track B Step 3 — Lazy Contract / guaranteed RN lifetime (Jul 2026) ✅
 
-- Report: [`TRACK_B_STEP3.md`](TRACK_B_STEP3.md). Plan: [`TRACK_B_STEP3_PLAN.md`](TRACK_B_STEP3_PLAN.md).
+- Report: [`TRACK_B_STEP3.md`](archive/TRACK_B_STEP3.md). Plan: [`TRACK_B_STEP3_PLAN.md`](archive/TRACK_B_STEP3_PLAN.md).
 - Law: exploration events ≠ contraction; soft projection restores omitted RN bars.
 - Lifetime **≈ 6 / 7** (L2 Pass; L7 not claimed). No validation / Step 4 in this stage.
 
 ## Track B Step 3 Plan — Guaranteed RN lifetime / exploration≠contraction (Jul 2026) ✅
 
-- Plan only: [`TRACK_B_STEP3_PLAN.md`](TRACK_B_STEP3_PLAN.md).
+- Plan only: [`TRACK_B_STEP3_PLAN.md`](archive/TRACK_B_STEP3_PLAN.md).
 - Critical: no new Lifetime abstraction after RN; Step 3 = final Lifetime guarantee before Capacity.
 - Law draft: exploration events ≠ contraction; retention lifetime only under pressure or world replace.
 - Expected Lifetime ~6 / 7 (L2 Pass; L7 Partial). No code.
 
 ## Track B Step 2 Validation (Jul 2026) ✅
 
-- Investigation only: [`TRACK_B_STEP2_VALIDATION.md`](TRACK_B_STEP2_VALIDATION.md).
+- Investigation only: [`TRACK_B_STEP2_VALIDATION.md`](archive/TRACK_B_STEP2_VALIDATION.md).
 - Verdict: Retained Neighborhood correct; no WS/Lifetime regressions.
 - Lifetime **5 / 7 Pass**; **C2 Pass**. Monotonic RN until world replace = expected (eviction unspecified).
 - Recommendation: **Proceed to Track B Step 3** (no Step 2 repair).
 
 ## Track B Step 2 — Retained Neighborhood (Jul 2026) ✅
 
-- Report: [`TRACK_B_STEP2.md`](TRACK_B_STEP2.md). Plan: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).
+- Report: [`TRACK_B_STEP2.md`](archive/TRACK_B_STEP2.md). Plan: [`TRACK_B_STEP2_PLAN.md`](archive/TRACK_B_STEP2_PLAN.md).
 - Law: absorb Mutation into Retained Neighborhood; protect under pressure; reset only on world replacement.
 - Lifetime **~5 / 7**; **C2 Pass**. Eviction unspecified (Capacity later). No Step 3.
 
 ## Track B Step 2 Plan — Retained Neighborhood / Neighborhood Lifetime (Jul 2026) ✅
 
-- Plan only: [`TRACK_B_STEP2_PLAN.md`](TRACK_B_STEP2_PLAN.md).
+- Plan only: [`TRACK_B_STEP2_PLAN.md`](archive/TRACK_B_STEP2_PLAN.md).
 - Objective: multi-op fetch→prune→refetch thrash via Retained Neighborhood (not Capacity).
 - Preserves WS + Step 1 Mutation Set. No timers/hysteresis/HARD_CAP philosophy.
 - Honest post-step Lifetime estimate ~4–5 / 7. No code in this stage.
 
 ## Track B Step 1 Validation (Jul 2026) ✅
 
-- Investigation only: [`TRACK_B_STEP1_VALIDATION.md`](TRACK_B_STEP1_VALIDATION.md).
+- Investigation only: [`TRACK_B_STEP1_VALIDATION.md`](archive/TRACK_B_STEP1_VALIDATION.md).
 - Verdict: Mutation Set law correct; no WS/Lifetime regressions introduced.
 - Lifetime **3 / 7 Pass**; CL-05 / C2 Partial (same-op only).
 - Recommendation: **Proceed to Track B Step 2** (no Step 1 repair).
-- Evidence delta: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md) §6.
+- Evidence delta: [`CACHE_LIFETIME_EVIDENCE.md`](archive/CACHE_LIFETIME_EVIDENCE.md) §6.
 
 ## Track B Step 1 — Mutation Set same-op prune guard (Jul 2026) ✅
 
-- Report: [`TRACK_B_STEP1.md`](TRACK_B_STEP1.md). Plan: [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
+- Report: [`TRACK_B_STEP1.md`](archive/TRACK_B_STEP1.md). Plan: [`TRACK_B_STEP1_PLAN.md`](archive/TRACK_B_STEP1_PLAN.md).
 - Law: successful growth establishes Mutation Set; same-op prune must not remove it.
 - Paths: prepend / append new bar / soft applyProjection protected; commit-paired replace excluded.
 - Lifetime headline **~2–3 / 7**. No Capacity / Camera / Paint ownership changes.
 
 ## Track B Step 1 Plan — Cache Lifetime anti-thrash (Jul 2026) ✅
 
-- Plan only (superseded by implementation above): [`TRACK_B_STEP1_PLAN.md`](TRACK_B_STEP1_PLAN.md).
+- Plan only (superseded by implementation above): [`TRACK_B_STEP1_PLAN.md`](archive/TRACK_B_STEP1_PLAN.md).
 - Objective: mutation-local neighborhood protection after growth prune (CL-05 / C2); WS untouched.
 - Honest post-step Lifetime estimate ~2–3 / 7.
 
 ## Stage E5 — Constitution Consistency Audit (Jul 2026) ✅
 
-- Docs-only audit: [`CONSTITUTION_CONSISTENCY_E5.md`](CONSTITUTION_CONSISTENCY_E5.md).
+- Docs-only audit: [`CONSTITUTION_CONSISTENCY_E5.md`](archive/CONSTITUTION_CONSISTENCY_E5.md).
 - Cores WS-01…WS-05 / CL-01…CL-07 coherent; no hard contradictions.
 - Residuals: WS-05 wording soft tension; acceptance-doc leaks; multi-VIEW / LOD identity gaps.
 - Constitutions unchanged. No runtime / Lifetime implementation.
 
 ## Stage E4 Freeze — Cache Lifetime Contract (Jul 2026) ✅
 
-- **Frozen:** [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
-- Evidence ledger closed: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md).
+- **Frozen:** [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](archive/CACHE_LIFETIME_ACCEPTANCE.md).
+- Evidence ledger closed: [`CACHE_LIFETIME_EVIDENCE.md`](archive/CACHE_LIFETIME_EVIDENCE.md).
 - Declaration: Working Set Contract and Cache Lifetime Contract are both frozen constitutions.
 - Capacity / Emergency still unspecified. No lifetime implementation in this stage.
 
 ## Stage E4 — Cache Lifetime & Pressure Audit (Jul 2026) ✅
 
-- Investigation only: [`CACHE_LIFETIME_EVIDENCE.md`](CACHE_LIFETIME_EVIDENCE.md).
-- Proposed (unfrozen): [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
+- Investigation only: [`CACHE_LIFETIME_EVIDENCE.md`](archive/CACHE_LIFETIME_EVIDENCE.md).
+- Proposed (unfrozen): [`CACHE_LIFETIME_CONTRACT.md`](CACHE_LIFETIME_CONTRACT.md), [`CACHE_LIFETIME_ACCEPTANCE.md`](archive/CACHE_LIFETIME_ACCEPTANCE.md).
 - Finding: TARGET/HARD_CAP thrash is lifetime (P-01/P-02), not WS amputate; S6–S7 need CL layer.
 - No TARGET/HARD_CAP changes; no implementation.
 
@@ -146,12 +153,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## Track A Step 2 — Paint contains VIEW / WS-04 (Jul 2026) ✅
 
-- [`WORKING_SET_STEP2_PAINT.md`](WORKING_SET_STEP2_PAINT.md): `extractWindow` VIEW-covering; no tip-tail amputate.
+- [`WORKING_SET_STEP2_PAINT.md`](archive/WORKING_SET_STEP2_PAINT.md): `extractWindow` VIEW-covering; no tip-tail amputate.
 - S4 pass; E3-02 resolved. Scorecard **4 / 7**. S5–S7 not in this step.
 
 ## Track A Step 1 Completion — retention coverage (Jul 2026) ✅
 
-- Audit: [`WORKING_SET_STEP1_COVERAGE.md`](WORKING_SET_STEP1_COVERAGE.md) — every `_enforceBudget` path classified.
+- Audit: [`WORKING_SET_STEP1_COVERAGE.md`](archive/WORKING_SET_STEP1_COVERAGE.md) — every `_enforceBudget` path classified.
 - Preserve-paired closed: `appendTick` + soft `applyProjection` now receive VIEW bounds (Boot `captureStoreViewTimes`).
 - Commit-paired: `loadDashboard` `replaceMonolith` documented (VIEW omit intentional).
 - Verdict: **Working Set retention layer complete.** Step 2 paint not started.
@@ -165,7 +172,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## Stage E3.5b — Working Set acceptance gate frozen (Jul 2026) ✅
 
-- [`WORKING_SET_ACCEPTANCE.md`](WORKING_SET_ACCEPTANCE.md): done = Gate 1 (S1–S7) + Gate 2 (blocking E3) + Gate 3 (U1–U7).
+- [`WORKING_SET_ACCEPTANCE.md`](archive/WORKING_SET_ACCEPTANCE.md): done = Gate 1 (S1–S7) + Gate 2 (blocking E3) + Gate 3 (U1–U7).
 - Track name: **Implementation Track A — Working Set Compliance (#69D)** — not “Wave 4.”
 - Implementation Rule: each commit maps WS-xx / Sx / E3-xx (contract-driven, not symptom-driven).
 - Pre-implementation only; no store/paint code in this stage.

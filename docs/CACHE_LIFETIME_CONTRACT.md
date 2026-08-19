@@ -136,7 +136,7 @@ Absence of numbers here does **not** authorize violations of CL-01…CL-07 or of
 
 ## 6. Acceptance
 
-Objective checks: [`CACHE_LIFETIME_ACCEPTANCE.md`](CACHE_LIFETIME_ACCEPTANCE.md).
+Objective checks: [`CACHE_LIFETIME_ACCEPTANCE.md`](archive/CACHE_LIFETIME_ACCEPTANCE.md).
 
 Working Set scorecard items **S6** and **S7** require obedience to this contract in addition to WS-01…WS-05.
 

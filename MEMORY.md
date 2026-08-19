@@ -22,7 +22,7 @@ On request / only when the task needs them:
 - [`docs/HISTORY.md`](docs/HISTORY.md) — completed phases
 - [`docs/WORKING_SET_CONTRACT.md`](docs/WORKING_SET_CONTRACT.md) — VIEW ↔ store ↔ paint law
 - [`docs/CACHE_LIFETIME_CONTRACT.md`](docs/CACHE_LIFETIME_CONTRACT.md) — lifetime law
-- Other `docs/WORKING_SET_*`, `TRACK_B_*`, acceptance/evidence files — closed step artifacts, not default reading
+- Other closed `WORKING_SET_*` / `TRACK_B_*` / acceptance/evidence files — [`docs/archive/`](docs/archive/) (not default reading)
 
 ## Snapshot
 
