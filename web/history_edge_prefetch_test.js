@@ -83,8 +83,8 @@ test('prefetch runway uses TimeCamera canonical width, not raw LWC width over ca
   const canonical = TimeCamera.getCanonicalVisibleRange();
   const rawWidth = 24000;
   const canonicalWidth = canonical.to - canonical.from;
-  assert.strictEqual(canonicalWidth, 9000);
-  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25), 2250);
+  assert.strictEqual(canonicalWidth, 5000);
+  assert.strictEqual(ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25), 1250);
   assert.notStrictEqual(
     ViewportManager.historyEdgePrefetchBars(canonicalWidth, 50, 0.25),
     ViewportManager.historyEdgePrefetchBars(rawWidth, 50, 0.25),

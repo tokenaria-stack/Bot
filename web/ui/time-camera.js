@@ -20,7 +20,7 @@
   const MAX_VISIBLE_LOGICAL_BARS = (typeof MAX_VISIBLE_BARS !== 'undefined'
     && Number.isFinite(MAX_VISIBLE_BARS) && MAX_VISIBLE_BARS > 0)
     ? MAX_VISIBLE_BARS
-    : 9000;
+    : 5000;
 
   /** @type {{ visibleRange: { from: number, to: number }|null, barSpacing: number|null, rightOffset: number|null }} */
   let canonical = {

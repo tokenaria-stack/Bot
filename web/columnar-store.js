@@ -16,7 +16,7 @@ class ColumnarStore {
     }
     return (typeof STORE_BUDGET_TARGET !== 'undefined' && Number.isFinite(STORE_BUDGET_TARGET))
       ? STORE_BUDGET_TARGET
-      : 25000;
+      : 9000;
   }
 
   static get BUDGET_HARD_CAP() {
@@ -858,7 +858,7 @@ class ColumnarStore {
   /**
    * Pressure prune when over MAX_STORE / HARD_CAP.
    * Moving-window policy: VIEW (+ same-op Mutation) is sacred; RN must not veto the
-   * hard working-set cap (otherwise island scroll grows past 25k indefinitely).
+   * hard working-set cap (otherwise island scroll grows past the cap indefinitely).
    * @param {'oldest'|'newest'} direction
    * @param {{
    *   viewFromSec?: number|null,

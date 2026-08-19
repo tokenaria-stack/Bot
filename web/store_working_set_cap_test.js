@@ -5,8 +5,18 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { ColumnarStore } = require('./columnar-store.js');
 const TimeCamera = require('./ui/time-camera.js');
+
+test('production contract: 9k store cap, 5k visible cap', () => {
+  const cfg = fs.readFileSync(path.join(__dirname, 'config.js'), 'utf8');
+  assert.ok(/const MAX_STORE_BARS = 9000/.test(cfg), 'MAX_STORE_BARS = 9000');
+  assert.ok(/const MAX_VISIBLE_BARS = 5000/.test(cfg), 'MAX_VISIBLE_BARS = 5000');
+  const storeSrc = fs.readFileSync(path.join(__dirname, 'columnar-store.js'), 'utf8');
+  assert.ok(/: 9000;/.test(storeSrc), 'ColumnarStore unconfigured fallback matches 9k');
+});
 
 function test(name, fn) {
   fn();
@@ -127,7 +137,7 @@ test('proposeFromPane clamps visible width to MAX_VISIBLE_LOGICAL_BARS', () => {
   let seen = null;
   TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
   const max = TimeCamera.MAX_VISIBLE_LOGICAL_BARS;
-  assert.ok(Number.isFinite(max) && max >= 9000, `MAX_VISIBLE_LOGICAL_BARS >= 9000, got ${max}`);
+  assert.ok(Number.isFinite(max) && max === 5000, `MAX_VISIBLE_LOGICAL_BARS === 5000, got ${max}`);
   TimeCamera.proposeFromPane('price-chart', { from: 0, to: max + 5000 }, 6);
   assert.ok(seen);
   const w = seen.visibleRange.to - seen.visibleRange.from;

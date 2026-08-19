@@ -156,9 +156,9 @@ const HISTORY_CHUNK_LIMIT = 3000;
  * MAX_STORE_BARS — in-memory ColumnarStore cap (moving window).
  * MAX_VISIBLE_BARS — max zoom-out visible logical span (not "always show N").
  */
-const MAX_STORE_BARS = 25000;
+const MAX_STORE_BARS = 9000;
 /** Max zoom-out (logical bars). */
-const MAX_VISIBLE_BARS = 9000;
+const MAX_VISIBLE_BARS = 5000;
 /** @deprecated aliases — map to MAX_STORE_BARS (single hard working-set). */
 const STORE_BUDGET_TARGET = MAX_STORE_BARS;
 const STORE_BUDGET_HARD_CAP = MAX_STORE_BARS;
