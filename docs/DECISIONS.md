@@ -23,6 +23,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SQLITE-2 — no autostart MCP on `history.db`
+
+**Context:** SQLITE-1: `wal_checkpoint(TRUNCATE)` `busy` is concurrent GetWindow **or** a second process on the same file. Project MCP `sqlite-history` opened `history.db` for the whole Cursor session.
+
+**Decision:** Default `.cursor/mcp.json` has no servers. Enable MCP only when the user asks or when SQLITE diagnosis requires it. Recipe in `.cursor/mcp.json.example`.
+
+**Rejected:**
+- Keep sqlite MCP always on for agent convenience — **Reason:** pins WAL; hides whether the bot itself leaks readers.
+- WAL pragma / timeout “fixes” while MCP still autostarts — **Reason:** treats a second-process pin as an engine bug.
+
+**Consequences:** Remaining WAL busy logs after MCP-off are in-process history GETs. Do not hide the log.
+
+---
+
 ## ADR-001 — Authority instead of Revision / CandleSource FSM
 
 **Context:** Multiple merge copies and volume drift (SQLite vs REST). Need one trust model for competing bar updates.

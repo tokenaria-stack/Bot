@@ -84,8 +84,9 @@ func InitDB() error {
 		`PRAGMA synchronous=NORMAL`,
 		// Serialize writers under load (REST catch-up + PersistenceQueue) without failing busy.
 		`PRAGMA busy_timeout=5000`,
-		// Cap WAL growth: passive checkpoint every ~1000 pages. Long-lived catch-up
-		// readers can still starve it — PersistenceQueue calls CheckpointWAL(TRUNCATE).
+		// Cap WAL growth: passive checkpoint every ~1000 pages. Concurrent GetWindow
+		// and any second process on history.db (MCP sqlite-history) starve TRUNCATE —
+		// PersistenceQueue retries CheckpointWAL. Do not autostart MCP on this file.
 		`PRAGMA wal_autocheckpoint=1000`,
 	} {
 		if _, dbErr = db.Exec(pragma); dbErr != nil {
@@ -494,8 +495,8 @@ func normalizeSymbol(symbol string) string {
 }
 
 // CheckpointWAL forces a wal_checkpoint(TRUNCATE) to reclaim disk held by the
-// WAL file. Passive autocheckpoints are starved by long-lived catch-up readers,
-// letting history.db-wal grow unbounded for the whole process uptime.
+// WAL file. Passive autocheckpoints are starved by concurrent readers (GetWindow)
+// or a second process on history.db (opt-in MCP sqlite-history — not autostart).
 // Called periodically from the PersistenceQueue worker (sole production writer).
 func CheckpointWAL() error {
 	if err := InitDB(); err != nil {

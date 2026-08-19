@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SQLITE-2 — MCP off by default (Aug 2026) ✅
+
+- `.cursor/mcp.json` is empty. `sqlite-history` must not autostart on `history.db` (WAL pin).
+- Opt-in copy from `.cursor/mcp.json.example` only on user request or SQLITE diagnosis; disable after.
+- No WAL pragma change.
+
+---
+
 ## SQLITE-1 — WAL reader lifetime audit (Aug 2026) ✅
 
 - Audit only. No WAL pragma change. No SQLITE-2 fix.

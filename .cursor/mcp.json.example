@@ -1,12 +1,11 @@
 {
   "mcpServers": {
     "sqlite-history": {
-      "command": "npx",
+      "command": "/opt/homebrew/bin/uvx",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-sqlite",
+        "mcp-server-sqlite",
         "--db-path",
-        "${workspaceFolder}/history.db"
+        "/Users/ilmaru/trading_bot/history.db"
       ]
     },
     "github": {
@@ -21,16 +20,6 @@
       ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
-      }
-    },
-    "puppeteer": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-puppeteer"
-      ],
-      "env": {
-        "PUPPETEER_LAUNCH_OPTIONS": "{\"headless\":true,\"defaultViewport\":{\"width\":1600,\"height\":900}}"
       }
     }
   }

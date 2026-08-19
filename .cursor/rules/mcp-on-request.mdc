@@ -1,0 +1,14 @@
+---
+description: Project MCP is opt-in — never autostart sqlite-history on history.db
+alwaysApply: true
+---
+
+# MCP on request (SQLITE-2)
+
+`.cursor/mcp.json` must stay `{ "mcpServers": {} }` unless the user explicitly asks to enable a server, or a live SQLite/WAL diagnosis cannot proceed without it.
+
+- **NEVER** add `sqlite-history` / `mcp-server-sqlite` (or any client that opens `history.db`) to autostart. That process pins WAL and blocks `wal_checkpoint(TRUNCATE)`.
+- **NEVER** “helpfully” restore MCP from `.cursor/mcp.json.example` at session start.
+- Copy a server from `.cursor/mcp.json.example` only when the user asks, or when SQLITE diagnosis requires querying the archive and the user agrees.
+- After diagnosis: remove the server from `.cursor/mcp.json` again (empty `mcpServers`). GitHub MCP is the same rule — not on by default.
+- Built-in Cursor browser MCP is unrelated; do not confuse it with `history.db`.

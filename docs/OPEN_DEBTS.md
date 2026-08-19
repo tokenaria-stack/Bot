@@ -18,7 +18,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
-2. SQLite/WAL — **SQLITE-1 audit ✅** (findings below). **SQLITE-2 not started** (no pragma / no code until asked)  
+2. SQLite/WAL — **SQLITE-1 audit ✅** + **SQLITE-2 ✅** (MCP off by default; no WAL pragma change)  
 3. TF-switch UX: same market time at same screen X  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
@@ -71,7 +71,17 @@ Log: `[WAL] checkpoint blocked by readers (frames=N checkpointed=N) — will ret
 
 **Out-of-process (likely persistent pin):** `.cursor/mcp.json` `sqlite-history` → `mcp-server-sqlite --db-path …/history.db`. Second process on the **same file** for the whole Cursor session. Python sqlite often leaves a deferred read txn open after SELECT. That alone can make **every** 5-minute TRUNCATE log `busy`. Repair tools (`cmd/repair_*`, `history_sync`) same class if run while the bot is up.
 
-**Verdict:** log cadence matching chart use = overlapping GetWindow (expected). Log every ~5 min while idle in Cursor = MCP (or idle pool is innocent; MCP is not). SQLITE-2 should prove which with `PRAGMA wal_checkpoint` busy + process list — not pragma guessing.
+**Verdict:** log cadence matching chart use = overlapping GetWindow (expected). Log every ~5 min while idle in Cursor = MCP (or idle pool is innocent; MCP is not). SQLITE-2 removed autostart MCP (see below). Do not hide the WAL log; do not retune pragmas unless GetWindow-only busy remains after MCP-off.
+
+---
+
+## SQLITE-2 — stop autostart MCP on `history.db` (Aug 2026) ✅
+
+**Fix:** empty `.cursor/mcp.json` (`mcpServers: {}`). Recipe lives in `.cursor/mcp.json.example`. Agents: `.cursor/rules/mcp-on-request.mdc`.
+
+Enable `sqlite-history` only when the user asks, or when a WAL/archive diagnosis cannot proceed without it — then remove it again. GitHub MCP is the same (not autostart). No `PRAGMA` / `busy_timeout` change.
+
+At SQLITE-2 apply time, `lsof` showed only the bot `main` on `history.db`; no `mcp-server-sqlite` process. Remaining `[WAL] checkpoint blocked` after this is in-process GetWindow (expected overlap with the 5-minute ticker).
 
 ---
 
