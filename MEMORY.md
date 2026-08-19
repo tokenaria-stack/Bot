@@ -30,6 +30,7 @@ On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/H
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
-| NEXT | **#76 ScoreNodes**; **#69D**; S6 commit-paired ≠ TARGET wall |
+| Chart | **Frozen** — tag `CHART_FROZEN` (store 9k / visible 5k / chunk 3k / prefetch 25%) |
+| NEXT | Dead-code cleanup → SQLite/WAL readers → TF-switch screen-X → later LOD → **#76 ScoreNodes** |
 
 Update the owning SSOT file — do not duplicate content here.

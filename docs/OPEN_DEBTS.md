@@ -7,6 +7,26 @@ Update this file when a debt opens, closes, or changes priority.
 
 ---
 
+## Chart freeze
+
+**Status:** Frozen (tag `CHART_FROZEN`). Caps: store **9000** / visible **5000** / chunk **3000** / prefetch **25%**. Fix C–G kept. Patch 2 not active.
+
+Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, chunk/prefetch/caps, or tick throttling unless a real regression appears.
+
+**After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
+
+**NEXT order (do not start inside this freeze):**
+
+1. Dead-code / legacy cleanup  
+2. SQLite/WAL reader audit + fix  
+3. TF-switch UX: same market time at same screen X  
+4. Later: indicator paint reduction / LOD  
+5. Then: ScoreNodes / clean strategy + indicator rebuild  
+
+S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
+
+---
+
 ## NEXT (priority)
 
 | # | Debt | Status | Notes |

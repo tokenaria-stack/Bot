@@ -8,6 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## Chart / camera / hydration freeze — `CHART_FROZEN` (Aug 2026) ✅
+
+- Chapter **closed**. Local annotated tag: `CHART_FROZEN`.
+- Frozen runtime: store **9000**, visible **5000**, chunk **3000**, prefetch **25%**. Pressure-only contiguous collector unchanged.
+- Fix C–G retained. Patch 2 live-delta 250 ms throttle **rolled back / not active**. Live ingest full-rate.
+- Known remaining: LWC live-edge `[Violation]` RAF cost — accepted. Future speed = reduce painted indicator series / LOD, not camera/hydration.
+- Out of scope until a real regression: TimeCamera, LEFT/RIGHT hydration redesign, RenderScheduler, render-window, chunk/prefetch/cap experiments, tick throttle, indicator LOD, SQLite/WAL, timestamps, microscope, RAF micro-opts.
+- Next chapters (not this freeze): prove-dead cleanup → SQLite/WAL reader audit → TF-switch same market time at same screen X → later LOD → ScoreNodes. S6 / Working Set lifetime **not** reopened here.
+
+---
+
 ## #83 Timestamp contract — Go A–D+E2 + FE F2/F3/F5a–F5f (Aug 2026) ✅
 
 - **PASS.** Tag: `TS_CONTRACT_CLEAN`.

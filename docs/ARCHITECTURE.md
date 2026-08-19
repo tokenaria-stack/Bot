@@ -7,6 +7,17 @@
 
 **Default mode:** `ENGINE_MODE=ChartOnly`. Trading stack re-enters only with new `decision/` strategies + `ENGINE_MODE=live`.
 
+**Chart freeze (tag `CHART_FROZEN`):** camera / hydration / working-store **closed**. Runtime caps (experiment frozen, not a new collector):
+
+```text
+MAX_STORE_BARS             = 9000
+MAX_VISIBLE_BARS           = 5000
+HISTORY_CHUNK_LIMIT        = 3000
+HISTORY_EDGE_PREFETCH_FRAC = 0.25
+```
+
+Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining live `[Violation]` RAF cost is accepted; later speed work is fewer painted indicator series, not more camera logic. Do not reopen TimeCamera, LEFT/RIGHT hydration, RenderScheduler, cap/chunk/prefetch, or tick throttling unless a real regression appears.
+
 ---
 
 ## SSOT map

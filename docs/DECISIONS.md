@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## Chart freeze — stop camera/cap/RAF experiments (`CHART_FROZEN`)
+
+**Context:** HISTORY/LEFT/RIGHT and Fix C–G are stable. Store 9k / visible 5k is an acceptable live experiment. Remaining tick `[Violation]` logs are LWC paint cost.
+
+**Decision:** Freeze chart/camera/hydration. Keep 9k/5k/3k/25%. Live ingest full-rate. Patch 2 stays rolled back.
+
+**Rejected:**
+- Further cap / chunk / prefetch knobs — **Reason:** 15k/12k already A/B’d; 9k feels good; more knobs are not a freeze.
+- Live-delta 250 ms throttle (Patch 2) — **Reason:** desyncs indicator paint from the tape; does not silence Chrome violations.
+- Eager off-screen chunk LRU — **Reason:** fights prefetch, holes, tip-drop.
+- Hiding `[Violation]` or WAL pragmas as “fixes” — **Reason:** hides evidence.
+
+**Consequences:** Next work is prove-dead cleanup, then SQLite/WAL reader audit, then TF-switch same-X. Indicator LOD and ScoreNodes later. S6 not reopened here.
+
+---
+
 ## ADR-001 — Authority instead of Revision / CandleSource FSM
 
 **Context:** Multiple merge copies and volume drift (SQLite vs REST). Need one trust model for competing bar updates.
