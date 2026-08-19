@@ -193,6 +193,7 @@ Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second p
 - NEVER create a second data pipeline "temporary" beside Ingress / `Runtime.routeTick`.
 - NEVER mutate closed bars in place; repair via Authority + Grace + ops tools.
 - NEVER autostart MCP (or any second process) that opens `history.db`. `sqlite-history` is opt-in only (user request or WAL diagnosis). Empty `.cursor/mcp.json` is the default.
+- NEVER pool multiple SQLite connections on `history.db` (`MaxOpenConns`/`MaxIdleConns` > 1). Idle handles pin WAL TRUNCATE.
 
 ---
 

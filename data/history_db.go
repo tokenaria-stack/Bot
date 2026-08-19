@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -69,24 +68,20 @@ func InitDB() error {
 	if dbErr != nil {
 		return dbErr
 	}
-	// WAL allows concurrent readers; pool size tracks CPU count for parallel boot SELECTs.
-	maxConns := runtime.NumCPU()
-	if maxConns < 4 {
-		maxConns = 4
-	}
-	if maxConns > 16 {
-		maxConns = 16
-	}
-	db.SetMaxOpenConns(maxConns)
+	// SQLite WAL TRUNCATE cannot restart the log while any other connection exists.
+	// Go's default MaxIdleConns=2 keeps idle handles after parallel boot / GetWindow,
+	// so wal_checkpoint(TRUNCATE) stays busy every PersistenceQueue tick. One conn
+	// serializes boot SELECTs; in-flight GetWindow can still busy a tick (logged).
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	for _, pragma := range []string{
 		`PRAGMA journal_mode=WAL`,
 		`PRAGMA synchronous=NORMAL`,
 		// Serialize writers under load (REST catch-up + PersistenceQueue) without failing busy.
 		`PRAGMA busy_timeout=5000`,
-		// Cap WAL growth: passive checkpoint every ~1000 pages. Concurrent GetWindow
-		// and any second process on history.db (MCP sqlite-history) starve TRUNCATE —
-		// PersistenceQueue retries CheckpointWAL. Do not autostart MCP on this file.
+		// Cap WAL growth: passive checkpoint every ~1000 pages. In-flight GetWindow
+		// or a second process on history.db (opt-in MCP) can still starve one tick.
 		`PRAGMA wal_autocheckpoint=1000`,
 	} {
 		if _, dbErr = db.Exec(pragma); dbErr != nil {
@@ -495,19 +490,29 @@ func normalizeSymbol(symbol string) string {
 }
 
 // CheckpointWAL forces a wal_checkpoint(TRUNCATE) to reclaim disk held by the
-// WAL file. Passive autocheckpoints are starved by concurrent readers (GetWindow)
-// or a second process on history.db (opt-in MCP sqlite-history — not autostart).
-// Called periodically from the PersistenceQueue worker (sole production writer).
+// WAL file. Called periodically from the PersistenceQueue worker (sole production writer).
 func CheckpointWAL() error {
-	if err := InitDB(); err != nil {
+	busy, logFrames, checkpointed, err := checkpointWALTruncate()
+	if err != nil {
 		return err
 	}
-	var busy, logFrames, checkpointed int
-	if err := db.QueryRow(`PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
-		return fmt.Errorf("wal_checkpoint(TRUNCATE): %w", err)
-	}
 	if busy != 0 {
-		log.Printf("[WAL] checkpoint blocked by readers (frames=%d checkpointed=%d) — will retry next tick", logFrames, checkpointed)
+		st := sql.DBStats{}
+		if db != nil {
+			st = db.Stats()
+		}
+		log.Printf("[WAL] checkpoint blocked by readers (frames=%d checkpointed=%d open=%d in_use=%d idle=%d) — will retry next tick",
+			logFrames, checkpointed, st.OpenConnections, st.InUse, st.Idle)
 	}
 	return nil
+}
+
+func checkpointWALTruncate() (busy, logFrames, checkpointed int, err error) {
+	if err = InitDB(); err != nil {
+		return 0, 0, 0, err
+	}
+	if err = db.QueryRow(`PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+		return 0, 0, 0, fmt.Errorf("wal_checkpoint(TRUNCATE): %w", err)
+	}
+	return busy, logFrames, checkpointed, nil
 }

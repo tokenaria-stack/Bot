@@ -18,7 +18,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
-2. SQLite/WAL — **SQLITE-1 audit ✅** + **SQLITE-2 ✅** (MCP off by default; no WAL pragma change)  
+2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX: same market time at same screen X  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
@@ -81,7 +81,17 @@ Log: `[WAL] checkpoint blocked by readers (frames=N checkpointed=N) — will ret
 
 Enable `sqlite-history` only when the user asks, or when a WAL/archive diagnosis cannot proceed without it — then remove it again. GitHub MCP is the same (not autostart). No `PRAGMA` / `busy_timeout` change.
 
-At SQLITE-2 apply time, `lsof` showed only the bot `main` on `history.db`; no `mcp-server-sqlite` process. Remaining `[WAL] checkpoint blocked` after this is in-process GetWindow (expected overlap with the 5-minute ticker).
+At SQLITE-2 apply time, `lsof` showed only the bot `main` on `history.db`; no `mcp-server-sqlite` process.
+
+---
+
+## SQLITE-2b — idle pool pins WAL TRUNCATE (Aug 2026) ✅
+
+Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (`20:11:29` then `20:16:29`, frames=checkpointed). That is the ticker, not overlapping GetWindow.
+
+**Cause:** `SetMaxOpenConns(CPU)` + Go default `MaxIdleConns=2`. Idle sqlite handles stay open after parallel Frame boot. `wal_checkpoint(TRUNCATE)` cannot restart WAL while any other connection exists — so every tick logged busy even with no history GET.
+
+**Fix:** `SetMaxOpenConns(1)` + `SetMaxIdleConns(1)`. Boot SELECTs serialize. Busy log kept; if it still fires, include `open/in_use/idle` (in-flight GetWindow or a second process). No pragma change. Test: `TestCheckpointWAL_TruncateAfterParallelReads`.
 
 ---
 

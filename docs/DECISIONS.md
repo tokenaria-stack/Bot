@@ -37,6 +37,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SQLITE-2b — one SQLite connection (idle pool pins TRUNCATE)
+
+**Context:** After SQLITE-2 (MCP off), WAL busy still logged every 5 minutes with `frames=checkpointed`. Go `sql.DB` default idle=2 plus `MaxOpenConns=CPU` left extra sqlite handles open after parallel boot.
+
+**Decision:** `SetMaxOpenConns(1)` and `SetMaxIdleConns(1)` on `history.db`.
+
+**Rejected:**
+- WAL pragma / timeout changes — **Reason:** did not address the extra connections.
+- Dropping the busy log — **Reason:** still valid for in-flight GetWindow or a second process.
+
+**Consequences:** Frame boot SELECTs serialize. Occasional busy during `/api/history` is expected; constant 5-minute busy is not.
+
+---
+
 ## ADR-001 — Authority instead of Revision / CandleSource FSM
 
 **Context:** Multiple merge copies and volume drift (SQLite vs REST). Need one trust model for competing bar updates.

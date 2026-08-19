@@ -406,7 +406,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 
 | Piece | Role |
 |-------|------|
-| `data/history_db.go` | SQLite kline cache |
+| `data/history_db.go` | SQLite kline cache; **one** `sql.DB` conn (`SetMaxOpenConns(1)`) so WAL TRUNCATE can run |
 | `data/persistence_queue.go` | Async sole runtime UPSERT + periodic WAL checkpoint |
 | `market` catch-up / gap-fill | Enqueue closed bars; never sync-write from Frame hot path |
 | `cmd/repair_volumes` | Ops healer for stuck volumes (run with bot stopped) |

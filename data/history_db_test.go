@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -190,5 +191,51 @@ func TestCacheCompletenessThreshold(t *testing.T) {
 	have := 98
 	if float64(have) < float64(expected)*0.98 {
 		t.Fatalf("should be incomplete: have=%d expected=%d", have, expected)
+	}
+}
+
+func TestCheckpointWAL_TruncateAfterParallelReads(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "wal_truncate.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+
+	rows := make([]Candle, 32)
+	for i := range rows {
+		ot := int64(1_700_000_000_000 + int64(i)*60_000)
+		rows[i] = Candle{
+			OpenTime: ot, Open: 100, High: 101, Low: 99, Close: 100.5,
+			Volume: 1, CloseTime: ot + 59_999,
+		}
+	}
+	if err := SaveKlines("BTCUSDT", "1m", rows); err != nil {
+		t.Fatal(err)
+	}
+
+	start, end := rows[0].OpenTime, rows[len(rows)-1].OpenTime
+	errCh := make(chan error, 8)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := LoadKlines("BTCUSDT", "1m", start, end, 0)
+			errCh <- err
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("LoadKlines: %v", err)
+		}
+	}
+
+	busy, _, _, err := checkpointWALTruncate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if busy != 0 {
+		t.Fatalf("wal_checkpoint(TRUNCATE) busy=%d after idle reads; pool must not pin WAL", busy)
 	}
 }

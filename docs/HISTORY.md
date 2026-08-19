@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SQLITE-2b — single SQLite connection (Aug 2026) ✅
+
+- Idle `database/sql` handles (default 2 idle after boot) blocked `wal_checkpoint(TRUNCATE)` every 5 minutes after MCP-off.
+- Fix: `SetMaxOpenConns(1)` / `SetMaxIdleConns(1)`. No pragma change.
+
+---
+
 ## SQLITE-2 — MCP off by default (Aug 2026) ✅
 
 - `.cursor/mcp.json` is empty. `sqlite-history` must not autostart on `history.db` (WAL pin).
