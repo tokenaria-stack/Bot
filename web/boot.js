@@ -830,21 +830,6 @@
     return true;
   }
 
-  /**
-   * HISTORY exploration: tip not near visible right (TimeCamera LIVE/HISTORY).
-   * Used for post-prepend continuation — not for initial left-void arming.
-   */
-  function isLiveHistoryExploration(range) {
-    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return false;
-    const n = liveColumnarStore?.barCount?.() ?? 0;
-    if (n <= 0) return false;
-    const tip = n - 1;
-    const slack = (typeof TimeCamera !== 'undefined' && Number.isFinite(TimeCamera.SLACK))
-      ? TimeCamera.SLACK
-      : 1.5;
-    return (Number(range.to) - tip) < -slack;
-  }
-
   function liveTfIntervalSec() {
     const intervalFn = typeof getIntervalMs === 'function'
       ? getIntervalMs

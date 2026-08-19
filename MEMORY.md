@@ -8,17 +8,21 @@ Prefer [`README.md`](README.md) as the entry point.
 
 ## Read order
 
-1. `.cursor/rules/jeweler-protocol.mdc` — laws (always-on)
-2. `.cursor/rules/senior-quant-architect.mdc` — role + checklist + memory routing (always-on)
-3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
-4. [`docs/WORKING_SET_CONTRACT.md`](docs/WORKING_SET_CONTRACT.md) — Working Set normative contract (VIEW ↔ store ↔ paint)
-5. [`docs/WORKING_SET_ACCEPTANCE.md`](docs/WORKING_SET_ACCEPTANCE.md) — Working Set done-criteria
-6. [`docs/CACHE_LIFETIME_CONTRACT.md`](docs/CACHE_LIFETIME_CONTRACT.md) — Cache Lifetime normative contract (CL-01…CL-07)
-7. [`docs/LIFETIME_CAPACITY_CONSTITUTION.md`](docs/LIFETIME_CAPACITY_CONSTITUTION.md) — Lifetime + Capacity freeze (S6); Capacity numbers deferred
-8. [`docs/CACHE_LIFETIME_ACCEPTANCE.md`](docs/CACHE_LIFETIME_ACCEPTANCE.md) — Lifetime done-criteria
-9. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
+Default (always / start here):
 
-On request: [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/HISTORY.md`](docs/HISTORY.md).
+1. `.cursor/rules/jeweler-protocol.mdc` — laws
+2. `.cursor/rules/senior-quant-architect.mdc` — role + memory routing
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current system
+4. [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md) — NEXT / backlog
+5. This file — snapshot pointers only
+
+On request / only when the task needs them:
+
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — why a choice exists
+- [`docs/HISTORY.md`](docs/HISTORY.md) — completed phases
+- [`docs/WORKING_SET_CONTRACT.md`](docs/WORKING_SET_CONTRACT.md) — VIEW ↔ store ↔ paint law
+- [`docs/CACHE_LIFETIME_CONTRACT.md`](docs/CACHE_LIFETIME_CONTRACT.md) — lifetime law
+- Other `docs/WORKING_SET_*`, `TRACK_B_*`, acceptance/evidence files — closed step artifacts, not default reading
 
 ## Snapshot
 
