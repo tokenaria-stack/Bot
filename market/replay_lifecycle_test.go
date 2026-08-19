@@ -17,20 +17,20 @@ func synthClosedPrefix(n int, step, nowMs int64) []exchange.Kline {
 	for i := 0; i < n; i++ {
 		ot := base + int64(i)*step
 		p := 100 + math.Sin(float64(i)*0.2)*5
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: p, High: p + 1.5, Low: p - 1.5, Close: p + 0.3, Volume: 10,
-		})
+		}
 	}
 	return closed
 }
 
 func synthFormingTip(afterClosed exchange.Kline, step, nowMs int64) exchange.Kline {
 	ot := afterClosed.OpenTime + step
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: ot, CloseTime: nowMs + 40_000,
 		Open: 110, High: 116, Low: 108, Close: 114.5, Volume: 55,
-	})
+	}
 	if !data.IsFormingCloseTime(forming.CloseTime, nowMs) {
 		forming.CloseTime = nowMs + 40_000
 	}
@@ -58,18 +58,18 @@ func withEngineMode(t *testing.T, mode EngineMode) {
 func TestSplitLiveTail_CalendarNotLastBarHeuristic(t *testing.T) {
 	now := int64(1_700_000_000_000)
 	step := int64(60_000)
-	closedA := exchange.NormalizeKline(exchange.Kline{
+	closedA := exchange.Kline{
 		OpenTime: now - 2*step, CloseTime: now - step - 1,
 		Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-	})
-	closedB := exchange.NormalizeKline(exchange.Kline{
+	}
+	closedB := exchange.Kline{
 		OpenTime: now - step, CloseTime: now - 1,
 		Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-	})
-	forming := exchange.NormalizeKline(exchange.Kline{
+	}
+	forming := exchange.Kline{
 		OpenTime: now, CloseTime: now + step - 1,
 		Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-	})
+	}
 
 	c, f := splitLiveTail([]exchange.Kline{closedA, closedB}, now)
 	if f != nil || len(c) != 2 {
@@ -86,9 +86,9 @@ func TestSplitLiveTail_CalendarNotLastBarHeuristic(t *testing.T) {
 		t.Fatalf("sole forming: closed=%d forming=%v", len(c), f != nil)
 	}
 
-	unknown := exchange.NormalizeKline(exchange.Kline{
+	unknown := exchange.Kline{
 		OpenTime: now, CloseTime: 0, Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-	})
+	}
 	c, f = splitLiveTail([]exchange.Kline{closedA, unknown}, now)
 	if f != nil || len(c) != 2 {
 		t.Fatalf("CloseTime=0 must stay closed: closed=%d forming=%v", len(c), f != nil)

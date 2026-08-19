@@ -34,11 +34,11 @@ func TestProjectViewportFormingTip_OverwriteSameOpen(t *testing.T) {
 	closed := make([]exchange.Kline, nClosed)
 	for i := 0; i < nClosed; i++ {
 		ot := capEnd - int64(nClosed-1-i)*step
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 100 + float64(i), High: 101 + float64(i), Low: 99 + float64(i),
 			Close: 100.5 + float64(i), Volume: 10,
-		})
+		}
 	}
 
 	// Cap tip still "forming" on Frame (CloseTime in future) — same open as Cap last-closed.
@@ -127,17 +127,17 @@ func TestProjectViewportFormingTip_SeedsLiveEdge(t *testing.T) {
 	closed := make([]exchange.Kline, nClosed)
 	for i := 0; i < nClosed; i++ {
 		ot := capEnd - int64(nClosed-1-i)*step
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 100 + float64(i), High: 101 + float64(i), Low: 99 + float64(i),
 			Close: 100.5 + float64(i), Volume: 10,
-		})
+		}
 	}
 	formingOT := capEnd + step
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: formingOT + step - 1,
 		Open: 140, High: 145, Low: 138, Close: 142, Volume: 50,
-	})
+	}
 	if forming.CloseTime < nowMs {
 		// Ensure still forming relative to wall clock.
 		forming.CloseTime = nowMs + 30_000
@@ -206,17 +206,17 @@ func TestProjectViewportFormingTip_SkipsDeepHistory(t *testing.T) {
 	closed := make([]exchange.Kline, 20)
 	for i := range closed {
 		ot := base + int64(i)*step
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-		})
+		}
 	}
 	nowMs := time.Now().UnixMilli()
 	formingOT := resolveClosedBarBoundary(0, "1m") + step
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: nowMs + 60_000,
 		Open: 10, High: 11, Low: 9, Close: 10.5, Volume: 2,
-	})
+	}
 	frame := market.NewFrame(append(append([]exchange.Kline{}, closed...), forming), "1m", market.ChaosConfig{})
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()

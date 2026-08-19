@@ -21,10 +21,10 @@ func TestCompareTipSSOT_Match(t *testing.T) {
 	base := int64(1_700_000_000_000)
 	mk := func(i int, close float64) exchange.Kline {
 		ot := base + int64(i)*step
-		return exchange.NormalizeKline(exchange.Kline{
+		return exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: close, High: close + 1, Low: close - 1, Close: close, Volume: float64(i + 1),
-		})
+		}
 	}
 	hist := make([]exchange.Kline, 50)
 	for i := range hist {
@@ -52,10 +52,10 @@ func TestCompareTipSSOT_OHLCMismatch(t *testing.T) {
 	base := int64(1_700_000_000_000)
 	mk := func(i int, close float64) exchange.Kline {
 		ot := base + int64(i)*step
-		return exchange.NormalizeKline(exchange.Kline{
+		return exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: close, High: close + 1, Low: close - 1, Close: close, Volume: 1,
-		})
+		}
 	}
 	hist := []exchange.Kline{mk(0, 100), mk(1, 101), mk(2, 102)}
 	frameK := []exchange.Kline{mk(0, 100), mk(1, 101), mk(2, 999)} // close mutated
@@ -66,7 +66,7 @@ func TestCompareTipSSOT_OHLCMismatch(t *testing.T) {
 	if res.Verdict != "DATA_PLANE_OHLC_MISMATCH" || res.OK {
 		t.Fatalf("want OHLC mismatch, got %+v", res)
 	}
-	if math.Abs(res.DeltaC- (102-999)) > tipSSOTProbeEps {
+	if math.Abs(res.DeltaC-(102-999)) > tipSSOTProbeEps {
 		t.Fatalf("deltaC=%.6f", res.DeltaC)
 	}
 }

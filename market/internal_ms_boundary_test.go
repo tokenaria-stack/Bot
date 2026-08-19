@@ -43,7 +43,7 @@ func TestMergeKlineSeries_PreservesPre2001MillisecondOpen(t *testing.T) {
 }
 
 func TestCandlesToKlinesStyle_SQLiteMsUnchanged(t *testing.T) {
-	// Mirrors main/server candlesToKlines assign-only after C2 (no NormalizeKline).
+	// Mirrors main/server candlesToKlines assign-only after C2 (canonical Unix ms).
 	data.ResetDBForTest(filepath.Join(t.TempDir(), "c2_candles.db"))
 	if err := data.InitDB(); err != nil {
 		t.Fatal(err)

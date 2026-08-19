@@ -44,33 +44,3 @@ func TestChartTimeSec_DocumentedMsOnlyContract(t *testing.T) {
 		t.Fatalf("ms-only contract: ChartTimeSec(%d)=%d want floor division %d", sec, got, sec/1000)
 	}
 }
-
-// Legacy EnsureUnixMillis tests — function is production-dead after C3; kept until test cleanup.
-func TestEnsureUnixMillis(t *testing.T) {
-	t.Parallel()
-	sec := int64(1_700_000_040)
-	ms := int64(1_700_000_040_000)
-	if got := EnsureUnixMillis(sec); got != ms {
-		t.Fatalf("seconds: got %d want %d", got, ms)
-	}
-	if got := EnsureUnixMillis(ms); got != ms {
-		t.Fatalf("milliseconds passthrough: got %d want %d", got, ms)
-	}
-}
-
-func TestEnsureUnixMillis_ConvertsGenuineSecondsExactlyOnce(t *testing.T) {
-	t.Parallel()
-	sec := int64(1_700_000_040)
-	ms := EnsureUnixMillis(sec)
-	if ms != sec*1000 {
-		t.Fatalf("first convert: got %d want %d", ms, sec*1000)
-	}
-	if again := EnsureUnixMillis(ms); again != ms {
-		t.Fatalf("second pass must be idempotent: got %d want %d", again, ms)
-	}
-}
-
-func TestEnsureUnixMillis_Pre2001CanonicalMsUnchanged(t *testing.T) {
-	t.Parallel()
-	t.Skip("legacy EnsureUnixMillis still uses 1e12 heuristic; production uses ChartTimeSec ms/1000 only (C3)")
-}

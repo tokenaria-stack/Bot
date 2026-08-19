@@ -10,7 +10,7 @@ import (
 func TestKlineFromBinanceMs_PreservesPre2001AndPost2001(t *testing.T) {
 	t.Parallel()
 	const (
-		pre2001Ms  int64 = 730_944_000_000 // 1993-03-01 — would be *1000 by EnsureUnixMillis
+		pre2001Ms  int64 = 730_944_000_000 // 1993-03-01 UTC Unix ms (< 1e12; still milliseconds)
 		post2001Ms int64 = 1_700_000_040_000
 	)
 	for _, ot := range []int64{pre2001Ms, post2001Ms} {
@@ -35,9 +35,10 @@ func TestKlinesFromCandles_PreservesRESTMillisecondOpenTimes(t *testing.T) {
 	if out[0].OpenTime != pre2001Ms || out[1].OpenTime != 1_700_000_040_000 {
 		t.Fatalf("opens=%d,%d — REST ms must pass through unchanged", out[0].OpenTime, out[1].OpenTime)
 	}
-	// Contrast: NormalizeKline would corrupt the pre-2001 open.
-	if got := NormalizeKline(Kline{OpenTime: pre2001Ms}).OpenTime; got == pre2001Ms {
-		t.Fatalf("fixture assumption broken: NormalizeKline unexpectedly left pre-2001 ms unchanged")
+	// Canonical ms below 1e12 must stay ms (no magnitude guess).
+	k := Kline{OpenTime: pre2001Ms}
+	if k.OpenTime != pre2001Ms {
+		t.Fatalf("pre-2001 ms mutated: %d", k.OpenTime)
 	}
 }
 

@@ -8,8 +8,7 @@ import (
 
 // Debt #83 — timestamp contract tests (design phase).
 // These encode the intended API: LoadKlines / LoadKlinesBeforeEnd take Unix ms
-// and must not re-guess units via ts < 1e12. Production still applies ensureUnixMillis
-// on bounds today; the known-bug cases below must fail until the surgical fix lands.
+// and must not re-guess units via ts < 1e12.
 
 const (
 	pre2001MsMarch1993 int64 = 730_944_000_000 // 1993-03-01 UTC; ms but < 1e12

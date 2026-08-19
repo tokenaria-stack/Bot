@@ -38,7 +38,7 @@ func TestTimelinePublishGate_UnpublishableBuffersTicks(t *testing.T) {
 	tick := exchange.WsTick{
 		Timeframe: "1m",
 		IsClosed:  false,
-		Kline: exchange.NormalizeKline(exchange.Kline{
+		Kline: exchange.Kline{
 			OpenTime:  nextOpen,
 			CloseTime: nextOpen + 59_999,
 			Open:      last.Close,
@@ -46,7 +46,7 @@ func TestTimelinePublishGate_UnpublishableBuffersTicks(t *testing.T) {
 			Low:       last.Close - 0.1,
 			Close:     last.Close,
 			Volume:    1,
-		}),
+		},
 	}
 	rt.routeTick(tick)
 	if calls.Load() != 0 {
@@ -92,7 +92,7 @@ func TestTimelinePublishGate_IngestTipGapUnpublishes(t *testing.T) {
 	tick := exchange.WsTick{
 		Timeframe: "1m",
 		IsClosed:  true,
-		Kline: exchange.NormalizeKline(exchange.Kline{
+		Kline: exchange.Kline{
 			OpenTime:  gapOpen,
 			CloseTime: gapOpen + 59_999,
 			Open:      last.Close,
@@ -100,7 +100,7 @@ func TestTimelinePublishGate_IngestTipGapUnpublishes(t *testing.T) {
 			Low:       last.Close,
 			Close:     last.Close,
 			Volume:    1,
-		}),
+		},
 	}
 	rt.routeTick(tick)
 	if rt.IsTimelinePublishable() {

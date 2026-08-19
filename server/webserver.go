@@ -1956,7 +1956,7 @@ func (d *DashboardServer) liveHistoryHasMore(symbol, interval string, klines []e
 func dataCandlesToKlines(rows []data.Candle) []exchange.Kline {
 	out := make([]exchange.Kline, len(rows))
 	for i, c := range rows {
-		// SQLite open_time is Unix ms. Debt #83 C2: no NormalizeKline.
+		// SQLite open_time is Unix ms. Debt #83 C2: assign-only, no unit inference.
 		out[i] = exchange.Kline{
 			OpenTime:  c.OpenTime,
 			CloseTime: c.CloseTime,
@@ -2189,7 +2189,7 @@ func buildNavigatorsFromSeries(
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {
 	klines := make([]exchange.Kline, len(candles))
 	for i, c := range candles {
-		// REST/SQLite candles are Unix ms. Debt #83 C2: no NormalizeKline.
+		// REST/SQLite candles are Unix ms. Debt #83 C2: assign-only, no unit inference.
 		klines[i] = exchange.Kline{
 			OpenTime:  c.OpenTime,
 			CloseTime: c.CloseTime,

@@ -14,8 +14,8 @@ import (
 	"trading_bot/data"
 	"trading_bot/domain"
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 	"trading_bot/ui_config"
 )
 
@@ -64,8 +64,8 @@ func TestGoldenAudit(t *testing.T) {
 	sqliteK := candlesToNormKlines(sqliteCandles)
 	sqliteTip := sqliteK[len(sqliteK)-1]
 
-	rsxCfg := strategy.NormalizeRSXSettings(strategy.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
-	histA := strategy.ReplayDAGKlines(sqliteK, rsxCfg)
+	rsxCfg := market.NormalizeRSXSettings(market.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
+	histA := market.ReplayDAGKlines(sqliteK, rsxCfg)
 	if histA == nil || histA.Count() < 1 {
 		t.Fatal("ReplayDAGKlines(SQLite) produced empty history")
 	}
@@ -90,7 +90,7 @@ func TestGoldenAudit(t *testing.T) {
 		"plots":     map[string]float64{"line_rsx": plotsA["line_rsx"][0]},
 	}
 
-	// ── Path B: Live / Binance REST (Marker boot emulation) ─────────────────
+	// ── Path B: Live / Binance REST (Frame boot emulation) ─────────────────
 	rest, err := exchange.NewBinanceExchange("", "", false)
 	if err != nil {
 		t.Fatalf("NewBinanceExchange: %v", err)
@@ -108,7 +108,7 @@ func TestGoldenAudit(t *testing.T) {
 	binanceK := candlesToNormKlines(binanceCandles)
 	binanceTip := binanceK[len(binanceK)-1]
 
-	histB := strategy.ReplayDAGKlines(binanceK, rsxCfg)
+	histB := market.ReplayDAGKlines(binanceK, rsxCfg)
 	if histB == nil || histB.Count() < 1 {
 		t.Fatal("ReplayDAGKlines(Binance) produced empty history")
 	}
@@ -184,7 +184,7 @@ func TestGoldenAudit(t *testing.T) {
 func candlesToNormKlines(candles []exchange.Candle) []exchange.Kline {
 	out := make([]exchange.Kline, len(candles))
 	for i, c := range candles {
-		out[i] = exchange.NormalizeKline(exchange.Kline{
+		out[i] = exchange.Kline{
 			OpenTime:  c.OpenTime,
 			CloseTime: c.CloseTime,
 			Open:      c.Open,
@@ -192,7 +192,7 @@ func candlesToNormKlines(candles []exchange.Candle) []exchange.Kline {
 			Low:       c.Low,
 			Close:     c.Close,
 			Volume:    c.Volume,
-		})
+		}
 	}
 	return out
 }

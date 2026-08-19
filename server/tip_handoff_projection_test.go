@@ -99,7 +99,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 	if len(frameClosed) == 0 {
 		t.Fatal("frame no closed tip")
 	}
-	frameTipOT := exchange.EnsureUnixMillis(frameClosed[len(frameClosed)-1].OpenTime)
+	frameTipOT := frameClosed[len(frameClosed)-1].OpenTime
 	frameTipSec := exchange.ChartTimeSec(frameTipOT)
 
 	dag := frame.DAGTickFrame()
@@ -135,7 +135,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 	// Case B: Forming tip on Frame → Viewport seeds it (ADR-010 Model 2); first WS = OVERWRITE.
 	last := frameClosed[len(frameClosed)-1]
 	nextOT := last.OpenTime + stepMs
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime:  nextOT,
 		CloseTime: time.Now().UnixMilli() + 45_000, // still forming
 		Open:      last.Close,
@@ -143,7 +143,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 		Low:       last.Close - 5,
 		Close:     last.Close + 3,
 		Volume:    50,
-	})
+	}
 	frame.UpdateKlineTick(forming, false)
 	dag2 := frame.DAGTickFrame()
 	formingRSX := dag2.Get(core.SlotJurikRSX)

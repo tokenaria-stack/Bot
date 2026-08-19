@@ -250,7 +250,7 @@ func main() {
 func candlesToKlines(candles []exchange.Candle) []exchange.Kline {
 	klines := make([]exchange.Kline, len(candles))
 	for i, c := range candles {
-		// Candle OpenTime/CloseTime are Unix ms (REST/SQLite). Debt #83 C2: no NormalizeKline.
+		// Candle OpenTime/CloseTime are Unix ms (REST/SQLite). Debt #83 C2: assign-only.
 		klines[i] = exchange.Kline{
 			OpenTime:  c.OpenTime,
 			CloseTime: c.CloseTime,

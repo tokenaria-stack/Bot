@@ -41,23 +41,23 @@ func TestTimelineHeal_B3_OneBarGapFilledBeforePublish(t *testing.T) {
 	for i := 0; i < n; i++ {
 		ot := base + int64(i)*step
 		p := 100.0 + float64(i)*0.1
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: p, High: p + 1, Low: p - 1, Close: p + 0.2, Volume: 10,
-		})
+		}
 	}
 	capTip := closed[n-1]
 	missingOT := capTip.OpenTime + step
 	formingOT := capTip.OpenTime + 2*step
 
-	missingBar := exchange.NormalizeKline(exchange.Kline{
+	missingBar := exchange.Kline{
 		OpenTime: missingOT, CloseTime: missingOT + step - 1,
 		Open: 105, High: 106, Low: 104, Close: 105.5, Volume: 20,
-	})
-	forming := exchange.NormalizeKline(exchange.Kline{
+	}
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: formingOT + step - 1,
 		Open: 110, High: 112, Low: 109, Close: 111, Volume: 40,
-	})
+	}
 
 	frame := NewFrame(append([]exchange.Kline{}, closed...), "1m", testChaos())
 	rt := NewRuntime(map[string]*Frame{"1m": frame}, nil, nil, true, false, "BTCUSDT", "1m")
@@ -109,10 +109,10 @@ func TestTimelineHeal_B3_NBarGapFilled(t *testing.T) {
 	base = (base / step) * step
 	for i := 0; i < n; i++ {
 		ot := base + int64(i)*step
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 5,
-		})
+		}
 	}
 	capTip := closed[n-1]
 	gapN := 3
@@ -126,10 +126,10 @@ func TestTimelineHeal_B3_NBarGapFilled(t *testing.T) {
 			Open: 100, High: 101, Low: 99, Close: 100.2, Volume: 5,
 		}
 	}
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: formingOT + step - 1,
 		Open: 110, High: 111, Low: 109, Close: 110.5, Volume: 8,
-	})
+	}
 
 	frame := NewFrame(append([]exchange.Kline{}, closed...), "1m", testChaos())
 	rt := NewRuntime(map[string]*Frame{"1m": frame}, nil, nil, true, false, "BTCUSDT", "1m")
@@ -156,10 +156,10 @@ func TestTimelineHeal_B3_NoPendingUnchangedContiguous(t *testing.T) {
 	klines := make([]exchange.Kline, 40)
 	for i := range klines {
 		ot := base + int64(i)*step
-		klines[i] = exchange.NormalizeKline(exchange.Kline{
+		klines[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 5,
-		})
+		}
 	}
 	frame := NewFrame(klines, "1m", testChaos())
 	rt := NewRuntime(map[string]*Frame{"1m": frame}, nil, nil, true, false, "BTCUSDT", "1m")
@@ -182,17 +182,17 @@ func TestTimelineHeal_B3_EmptyFillBlocksPublish(t *testing.T) {
 	klines := make([]exchange.Kline, 20)
 	for i := range klines {
 		ot := base + int64(i)*step
-		klines[i] = exchange.NormalizeKline(exchange.Kline{
+		klines[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-		})
+		}
 	}
 	capTip := klines[len(klines)-1]
 	formingOT := capTip.OpenTime + 2*step
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: formingOT + step - 1,
 		Open: 1, High: 2, Low: 0.5, Close: 1.5, Volume: 1,
-	})
+	}
 
 	frame := NewFrame(klines, "1m", testChaos())
 	rt := NewRuntime(map[string]*Frame{"1m": frame}, nil, nil, true, false, "BTCUSDT", "1m")

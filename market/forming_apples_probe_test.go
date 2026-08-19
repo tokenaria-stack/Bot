@@ -121,24 +121,24 @@ func buildFormingTickSequence(final exchange.Kline) []formingTickOHLC {
 	ot, ct := final.OpenTime, final.CloseTime
 	o := final.Open
 	seq := []formingTickOHLC{
-		{"t01_open", exchange.NormalizeKline(exchange.Kline{
+		{"t01_open", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: o, Low: o, Close: o, Volume: final.Volume * 0.05,
-		})},
-		{"t02_up", exchange.NormalizeKline(exchange.Kline{
+		}},
+		{"t02_up", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: o + 0.4, Low: o - 0.1, Close: o + 0.25, Volume: final.Volume * 0.15,
-		})},
-		{"t03_spike", exchange.NormalizeKline(exchange.Kline{
+		}},
+		{"t03_spike", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: final.High + 2.0, Low: final.Low - 2.0, Close: o + 0.1, Volume: final.Volume * 0.35,
-		})},
-		{"t04_pull", exchange.NormalizeKline(exchange.Kline{
+		}},
+		{"t04_pull", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: final.High + 2.0, Low: final.Low - 2.0, Close: o - 0.3, Volume: final.Volume * 0.55,
-		})},
-		{"t05_mid", exchange.NormalizeKline(exchange.Kline{
+		}},
+		{"t05_mid", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: math.Max(final.High, o+0.5), Low: math.Min(final.Low, o-0.5), Close: (final.High + final.Low) / 2, Volume: final.Volume * 0.75,
-		})},
-		{"t06_near", exchange.NormalizeKline(exchange.Kline{
+		}},
+		{"t06_near", exchange.Kline{
 			OpenTime: ot, CloseTime: ct, Open: o, High: final.High, Low: final.Low, Close: final.Close + 0.05, Volume: final.Volume * 0.9,
-		})},
+		}},
 		{"t07_final_ohlc", final},
 	}
 	return seq

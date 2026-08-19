@@ -26,14 +26,14 @@ func TestProbe_TimelineHealFlush_PendingJumpCreatesHole(t *testing.T) {
 	for i := 0; i < n; i++ {
 		ot := base + int64(i)*step
 		p := 100.0 + float64(i)*0.1
-		closed[i] = exchange.NormalizeKline(exchange.Kline{
+		closed[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + step - 1,
 			Open: p, High: p + 1, Low: p - 1, Close: p + 0.2, Volume: 10,
-		})
+		}
 	}
 	capTip := closed[n-1]
-	missingOT := capTip.OpenTime + step      // 14:04 — never in Frame or pending
-	formingOT := capTip.OpenTime + 2*step    // 14:05 — only pending tip
+	missingOT := capTip.OpenTime + step   // 14:04 — never in Frame or pending
+	formingOT := capTip.OpenTime + 2*step // 14:05 — only pending tip
 
 	frame := NewFrame(append([]exchange.Kline{}, closed...), "1m", testChaos())
 	rt := NewRuntime(map[string]*Frame{"1m": frame}, nil, nil, true, false, "BTCUSDT", "1m")
@@ -45,10 +45,10 @@ func TestProbe_TimelineHealFlush_PendingJumpCreatesHole(t *testing.T) {
 	}
 
 	// Reconnect window: only forming tip enqueued (Binance does not replay missed 14:04).
-	forming := exchange.NormalizeKline(exchange.Kline{
+	forming := exchange.Kline{
 		OpenTime: formingOT, CloseTime: formingOT + step - 1,
 		Open: 110, High: 112, Low: 109, Close: 111, Volume: 40,
-	})
+	}
 	rt.enqueuePendingTick(exchange.WsTick{
 		Timeframe: "1m",
 		IsClosed:  false,

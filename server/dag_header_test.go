@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/decision"
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 	"trading_bot/ui_config"
 )
 
@@ -26,7 +27,7 @@ func TestDagHeaderFromFrame(t *testing.T) {
 		t.Fatalf("signal %+v", h)
 	}
 
-	state := &MarketState{Factors: map[string]strategy.ScoreFactor{"x": {}}}
+	state := &MarketState{Factors: map[string]decision.ScoreFactor{"x": {}}}
 	applyDAGHeaderToMarketState(state, h)
 	if state.Jurik != 55.5 {
 		t.Fatalf("state.Jurik=%v", state.Jurik)
@@ -34,12 +35,12 @@ func TestDagHeaderFromFrame(t *testing.T) {
 }
 
 func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
-	prev := strategy.GetEngineMode()
-	t.Cleanup(func() { strategy.SetEngineMode(prev) })
-	strategy.SetEngineMode(strategy.EngineModeChartOnly)
+	prev := market.GetEngineMode()
+	t.Cleanup(func() { market.SetEngineMode(prev) })
+	market.SetEngineMode(market.EngineModeChartOnly)
 
 	marker := newTestDAGMarker(80)
-	state := &MarketState{Factors: map[string]strategy.ScoreFactor{"legacy": {}}}
+	state := &MarketState{Factors: map[string]decision.ScoreFactor{"legacy": {}}}
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
 		t.Fatal(err)
@@ -76,9 +77,9 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 }
 
 func TestEnrichFromDAG_LiveUsesSlotTotalScore(t *testing.T) {
-	prev := strategy.GetEngineMode()
-	t.Cleanup(func() { strategy.SetEngineMode(prev) })
-	strategy.SetEngineMode(strategy.EngineModeLive)
+	prev := market.GetEngineMode()
+	t.Cleanup(func() { market.SetEngineMode(prev) })
+	market.SetEngineMode(market.EngineModeLive)
 
 	marker := newTestDAGMarker(80)
 	state := &MarketState{}
@@ -99,16 +100,16 @@ func TestEnrichFromDAG_LiveUsesSlotTotalScore(t *testing.T) {
 	}
 }
 
-func newTestDAGMarker(n int) *strategy.Marker {
+func newTestDAGMarker(n int) *market.Frame {
 	klines := make([]exchange.Kline, n)
 	base := int64(1_700_000_000_000)
 	for i := range klines {
 		ot := base + int64(i)*60_000
 		px := 100.0 + float64(i)*0.1
-		klines[i] = exchange.NormalizeKline(exchange.Kline{
+		klines[i] = exchange.Kline{
 			OpenTime: ot, CloseTime: ot + 59_999,
 			Open: px, High: px + 1, Low: px - 1, Close: px + 0.5, Volume: 10,
-		})
+		}
 	}
-	return strategy.NewMarker(klines, nil, "1m", "test", strategy.ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
+	return market.NewFrame(klines, "1m", market.ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 }
