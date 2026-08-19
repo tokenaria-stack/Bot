@@ -7,12 +7,12 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 )
 
 // buildOHLCChartFromKlines materializes price candles without indicator replay (Order Flow SSOT).
-func buildOHLCChartFromKlines(klines []exchange.Kline) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
+func buildOHLCChartFromKlines(klines []exchange.Kline) ([]ChartCandle, []ChartOscillator, []market.ChartAnnotation) {
 	if len(klines) == 0 {
 		return nil, nil, nil
 	}
@@ -32,8 +32,8 @@ func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 	klines []exchange.Kline,
 	trim int,
 	interval string,
-	settings strategy.RSXSettings,
-) ([]ChartCandle, []ChartOscillator, []strategy.ChartAnnotation) {
+	settings market.RSXSettings,
+) ([]ChartCandle, []ChartOscillator, []market.ChartAnnotation) {
 	_ = interval
 	if len(klines) == 0 {
 		return nil, nil, nil
@@ -67,13 +67,13 @@ func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 	}
 
 	times := columnarTimesFromKlines(display)
-	hist := strategy.ReplayDAGKlines(klines, settings)
+	hist := market.ReplayDAGKlines(klines, settings)
 	oscillators := dagOscillatorsFromHistory(hist, times)
 	annotations := dagAnnotationsFromHistory(d, hist, times)
 	return candles, oscillators, annotations
 }
 
-func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times []int64) []strategy.ChartAnnotation {
+func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times []int64) []market.ChartAnnotation {
 	if d == nil || d.projector == nil {
 		return nil
 	}
@@ -81,13 +81,13 @@ func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times 
 	return strategyAnnotationsFromWire(wireAnns)
 }
 
-func strategyAnnotationsFromWire(anns []wire.Annotation) []strategy.ChartAnnotation {
+func strategyAnnotationsFromWire(anns []wire.Annotation) []market.ChartAnnotation {
 	if len(anns) == 0 {
 		return nil
 	}
-	out := make([]strategy.ChartAnnotation, len(anns))
+	out := make([]market.ChartAnnotation, len(anns))
 	for i, a := range anns {
-		out[i] = strategy.ChartAnnotation{
+		out[i] = market.ChartAnnotation{
 			Time:     a.Time,
 			Pane:     a.Pane,
 			Label:    a.Label,

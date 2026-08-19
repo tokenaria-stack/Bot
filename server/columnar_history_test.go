@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"trading_bot/exchange"
+	"trading_bot/market"
 	"trading_bot/server/wire"
-	"trading_bot/strategy"
 	"trading_bot/ui_config"
 )
 
@@ -50,7 +50,7 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	}
 	d := &DashboardServer{projector: wire.NewProjector(reg)}
 
-	klines := make([]exchange.Kline, strategy.IndicatorWarmupBars+50)
+	klines := make([]exchange.Kline, market.IndicatorWarmupBars+50)
 	base := int64(1_700_000_000_000)
 	for i := range klines {
 		price := 50000.0 + float64(i)
@@ -70,8 +70,8 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 		context.Background(),
 		klines,
 		50,
-		strategy.IndicatorWarmupBars,
-		strategy.GetRSXSettings(),
+		market.IndicatorWarmupBars,
+		market.GetRSXSettings(),
 		[]string{"line_rsx", "woz_fast"},
 		false,
 		"1m",
@@ -86,8 +86,8 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	if resp.Added != 50 {
 		t.Fatalf("added = %d want 50", resp.Added)
 	}
-	if resp.WarmupDropped != strategy.IndicatorWarmupBars {
-		t.Fatalf("warmupDropped = %d want %d", resp.WarmupDropped, strategy.IndicatorWarmupBars)
+	if resp.WarmupDropped != market.IndicatorWarmupBars {
+		t.Fatalf("warmupDropped = %d want %d", resp.WarmupDropped, market.IndicatorWarmupBars)
 	}
 	if resp.Annotations == nil {
 		t.Fatal("annotations must be non-nil slice")
@@ -174,7 +174,7 @@ func TestBuildColumnarHistoryPayload_stripsFormingTip(t *testing.T) {
 	}
 	d := &DashboardServer{projector: wire.NewProjector(reg)}
 
-	nBars := strategy.IndicatorWarmupBars + 10
+	nBars := market.IndicatorWarmupBars + 10
 	klines := make([]exchange.Kline, nBars)
 	// Place the series so the last bar is still open relative to wall clock.
 	nowMs := time.Now().UnixMilli()
@@ -198,8 +198,8 @@ func TestBuildColumnarHistoryPayload_stripsFormingTip(t *testing.T) {
 		context.Background(),
 		klines,
 		10,
-		strategy.IndicatorWarmupBars,
-		strategy.GetRSXSettings(),
+		market.IndicatorWarmupBars,
+		market.GetRSXSettings(),
 		[]string{"line_rsx"},
 		false,
 		"1m",

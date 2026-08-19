@@ -1,7 +1,7 @@
 package indicators
 
 // DataBus is the read-only series registry for stateless scanners.
-// Implementations (e.g. strategy.Marker) own aligned per-bar indicator history.
+// Implementations (e.g. market.Frame) own aligned per-bar indicator history.
 // Series accessors must return zero-copy views; callers must not mutate returned slices.
 type DataBus interface {
 	JurikSeries() []float64

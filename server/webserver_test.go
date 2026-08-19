@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"trading_bot/exchange"
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 func TestHistoryEndTimeToMs(t *testing.T) {
@@ -23,7 +23,7 @@ func TestHistoryEndTimeToMs(t *testing.T) {
 func TestBuildHistoryChartSeriesTrimmed(t *testing.T) {
 	t.Parallel()
 
-	klines := make([]exchange.Kline, strategy.IndicatorWarmupBars+100)
+	klines := make([]exchange.Kline, market.IndicatorWarmupBars+100)
 	base := int64(1_700_000_000_000)
 	for i := range klines {
 		price := 50000.0 + float64(i)
@@ -38,7 +38,7 @@ func TestBuildHistoryChartSeriesTrimmed(t *testing.T) {
 	}
 
 	d := &DashboardServer{}
-	candles, oscillators, _ := d.buildHistoryChartSeriesTrimmed(context.Background(), klines, strategy.IndicatorWarmupBars, "1m", strategy.GetRSXSettings())
+	candles, oscillators, _ := d.buildHistoryChartSeriesTrimmed(context.Background(), klines, market.IndicatorWarmupBars, "1m", market.GetRSXSettings())
 	if len(candles) != 100 {
 		t.Fatalf("candles len = %d, want 100", len(candles))
 	}
@@ -50,7 +50,7 @@ func TestBuildHistoryChartSeriesTrimmed(t *testing.T) {
 	}
 
 	shortKlines := klines[:80]
-	shortCandles, shortOsc, _ := d.buildHistoryChartSeriesTrimmed(context.Background(), shortKlines, 100, "1m", strategy.GetRSXSettings())
+	shortCandles, shortOsc, _ := d.buildHistoryChartSeriesTrimmed(context.Background(), shortKlines, 100, "1m", market.GetRSXSettings())
 	if len(shortCandles) != 80 {
 		t.Fatalf("short candles len = %d, want 80", len(shortCandles))
 	}
@@ -76,7 +76,7 @@ func TestBuildNavigatorsFromSeries(t *testing.T) {
 		}
 	}
 
-	rsx, woz := strategy.ExtractDAGNavigatorSeries(klines, strategy.GetRSXSettings())
+	rsx, woz := market.ExtractDAGNavigatorSeries(klines, market.GetRSXSettings())
 	if len(rsx) == 0 {
 		t.Fatal("expected DAG navigator series")
 	}
@@ -94,7 +94,7 @@ func TestBuildNavigatorsFromSeries(t *testing.T) {
 func TestParseRSXSettingsFromRequest(t *testing.T) {
 	t.Parallel()
 
-	base := strategy.GetRSXSettings()
+	base := market.GetRSXSettings()
 	req, err := http.NewRequest(http.MethodGet, "/api/history/chunk?rsx_length=21&rsx_signal_length=5&rsx_source=hlc3&rsx_method=fractal&rsx_pivot_radius=4&min_price_delta_ratio=0.001&min_osc_delta=1.5&rsx_div_lookback=120", nil)
 	if err != nil {
 		t.Fatal(err)

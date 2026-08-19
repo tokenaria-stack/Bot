@@ -15,7 +15,7 @@ package indicators
 //
 // Batch helpers (*Values functions) replay historical series through streaming
 // structs for backtesting and ChiefAnalyst warm-up. They must not be used on
-// the live tick path once Layer 2 streaming wiring is complete.
+// the live tick path once streaming streaming wiring is complete.
 //
 // Rules:
 //   - No go-talib or external TA dependencies in this package.

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 func TestHandleBacktestRun_NoExchangeClient(t *testing.T) {
@@ -39,17 +39,17 @@ func TestHandleBacktestRun_MethodNotAllowed(t *testing.T) {
 }
 
 func TestBacktestResultFromStrategy_Convert(t *testing.T) {
-	run := &strategy.BacktestRunResult{
+	run := &market.BacktestRunResult{
 		TotalTrades: 1,
 		WinRate:     100,
 		NetProfit:   2.5,
-		Trades: []strategy.BacktestTradeResult{
+		Trades: []market.BacktestTradeResult{
 			{Time: 1700003600, EntryTime: 1700000000, Side: "LONG", EntryPrice: 100, ExitPrice: 102, PnL: 2, Duration: "1h"},
 		},
-		EquityCurve: []strategy.BacktestEquityPoint{
+		EquityCurve: []market.BacktestEquityPoint{
 			{Time: 1700000000, Value: 10000},
 		},
-		ChartData: []strategy.BacktestChartPoint{
+		ChartData: []market.BacktestChartPoint{
 			{Time: 1700000000, Open: 99, High: 101, Low: 98, Close: 100, RSX: 55, RsiVolFast: 40, RsiVolSlow: 35},
 		},
 	}
@@ -68,8 +68,8 @@ func TestBacktestResultFromStrategy_Convert(t *testing.T) {
 		t.Fatalf("entryTime = %d, want 1700000000", result.Trades[0].EntryTime)
 	}
 
-	simRun := &strategy.BacktestRunResult{
-		SimData: []strategy.BacktestSimPoint{
+	simRun := &market.BacktestRunResult{
+		SimData: []market.BacktestSimPoint{
 			{Time: 1700000000, RSX: 60, RsiVolFast: 41, Marker: "S"},
 		},
 	}

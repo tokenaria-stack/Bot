@@ -6,7 +6,7 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/core/nodes"
-	"trading_bot/strategy"
+	"trading_bot/market"
 )
 
 const wozduhParityEps = 1e-6
@@ -25,7 +25,7 @@ func volCrossCode(marker string) float64 {
 func TestWozduh_GoldenParity(t *testing.T) {
 	t.Parallel()
 
-	falcon := strategy.NewFalconEngine()
+	falcon := market.NewFalconEngine()
 	bus := core.NewBus(256)
 	node := nodes.NewWozduhNode()
 	node.Init(bus)
