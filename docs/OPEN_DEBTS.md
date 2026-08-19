@@ -17,8 +17,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **NEXT order (do not start inside this freeze):**
 
-1. Dead-code / legacy cleanup  
-2. SQLite/WAL reader audit + fix  
+1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
+2. SQLite/WAL — **SQLITE-1 audit ✅** (findings below). **SQLITE-2 not started** (no pragma / no code until asked)  
 3. TF-switch UX: same market time at same screen X  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
@@ -48,6 +48,30 @@ S6 / Working Set lifetime remains a later debt — **not** reopened by this free
 | **80** | `ViewportManager.restore` 0×0 width risk (`setVisibleLogicalRange`) | ✅ | D2: layout deferral via `whenHostHasLayout` → TimeCamera.propose (no raw LWC); live restore retired |
 | **81** | **Timeline Publish Gate** (reconnect heal) | ✅ | Phases A–D + P0: WS hooks, Runtime gate, forced REST@1bar, FE await `timeline_publishable`. P1/P2 (status poll / GetWindow degraded) deferred |
 | **82** | **Calendar bar boundary** (`1w`/`1M` time model) | ✅ **A1+A2** | ADR-011 Cap/align/CloseTime. A2: catch-up/gap/reconcile via `NextBarOpen`/`BarStepsBetween`; `intervalSkipsKlineGapFill` removed. FE snap deferred unless runtime proves need |
+
+---
+
+## SQLITE-1 — WAL reader lifetime (audit only, Aug 2026) ✅
+
+Log: `[WAL] checkpoint blocked by readers (frames=N checkpointed=N) — will retry next tick`.
+
+**Mechanism:** `PersistenceQueue` calls `PRAGMA wal_checkpoint(TRUNCATE)` every **5 minutes**. `busy≠0` means another SQLite connection still has a snapshot (in-process pool or another process). Passive `wal_autocheckpoint=1000` is starved the same way. **Do not hide the log. Do not tune WAL pragmas in SQLITE-2 until the readers are classified in a live run.**
+
+**In-process readers (request-scoped, `defer rows.Close()` — no held `*sql.Rows` / `Begin` on the read path):**
+
+| Path | When | Duration |
+|------|------|----------|
+| `GetWindow` → `LoadContinuousContractBeforeEnd` → `LoadKlinesBeforeEnd` | `/api/history` LEFT/prefetch/TF hydrate | Query + scan (~chunk size) |
+| `sqliteHasBarsBefore` / `liveHistoryHasMore` → `QueryKlineCacheBounds` | After every GetWindow | `COUNT(*)` then `MIN/MAX` per futures+spot — **table scan class**, two round-trips |
+| `LoadRAMHistoryFromDB` → `LoadContinuousContractFromDB` (`limit=0` window) | Parallel Frame **boot** only | Large range scan; many TFs at once (`SetMaxOpenConns` = CPU 4–16) |
+| Catch-up / gap heal | Every **5 min** (same cadence as checkpoint) | Short `QueryRow` / `ListArchiveGaps`; REST does **not** hold SQLite |
+| `SaveKlines` write tx | Persist worker | Same goroutine as checkpoint, but HTTP `NoteGapsFromOpenTimes` can write from GetWindow |
+
+**Not a lifetime leak in Go:** no stored iterators; comments blaming “long-lived catch-up readers” are stale — catch-up does not keep `Rows` open across REST.
+
+**Out-of-process (likely persistent pin):** `.cursor/mcp.json` `sqlite-history` → `mcp-server-sqlite --db-path …/history.db`. Second process on the **same file** for the whole Cursor session. Python sqlite often leaves a deferred read txn open after SELECT. That alone can make **every** 5-minute TRUNCATE log `busy`. Repair tools (`cmd/repair_*`, `history_sync`) same class if run while the bot is up.
+
+**Verdict:** log cadence matching chart use = overlapping GetWindow (expected). Log every ~5 min while idle in Cursor = MCP (or idle pool is innocent; MCP is not). SQLITE-2 should prove which with `PRAGMA wal_checkpoint` busy + process list — not pragma guessing.
 
 ---
 

@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SQLITE-1 — WAL reader lifetime audit (Aug 2026) ✅
+
+- Audit only. No WAL pragma change. No SQLITE-2 fix.
+- Go `data` readers close `Rows`; checkpoint `busy` is concurrent GetWindow / boot / `QueryKlineCacheBounds`, plus out-of-process `mcp-server-sqlite` on `history.db`.
+- Findings: [`docs/OPEN_DEBTS.md`](OPEN_DEBTS.md) SQLITE-1 section.
+
+---
+
 ## DOC-1 — archive closed process paperwork (Aug 2026) ✅
 
 - Moved Track B plans/validations, Working Set scorecards/S5–S6 audits, and Cache Lifetime acceptance/evidence into [`docs/archive/`](archive/README.md).
