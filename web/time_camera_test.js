@@ -286,7 +286,74 @@ test('D1 commit still applies only via bind hook (no LWC APIs on TimeCamera)', (
   assert.ok(!/applyOptions/.test(src));
 });
 
-test('D2 proposeAfterData LIVE clamps huge rightPadding and sticks to tip', () => {
+test('D2 proposeAfterData LIVE keeps bar count, spacing, and pad (no 50–400 / pad-50)', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  const tip = 800;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => i),
+    seed: {
+      intent: 'LIVE',
+      visibleBars: 220,
+      barSpacing: 8,
+      rightPadding: 4,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  assert.strictEqual(seen.barSpacing, 8);
+  assert.strictEqual(seen.rightOffset, 4);
+  assert.strictEqual(seen.visibleRange.to, tip + 4);
+  assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, 220);
+});
+
+test('D2 proposeAfterData LIVE keeps zoom-in under 50 bars', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  const tip = 100;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => i),
+    seed: {
+      intent: 'LIVE',
+      visibleBars: 20,
+      barSpacing: 12,
+      rightPadding: 0,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, 20);
+  assert.strictEqual(seen.rightOffset, 0);
+  assert.strictEqual(seen.visibleRange.to, tip);
+});
+
+test('D2 proposeAfterData LIVE keeps zoom-out 2000 bars (not 400)', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  const tip = 4000;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => i),
+    seed: {
+      intent: 'LIVE',
+      visibleBars: 2000,
+      barSpacing: 3,
+      rightPadding: 2,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, 2000);
+  assert.strictEqual(seen.rightOffset, 2);
+  assert.strictEqual(seen.barSpacing, 3);
+});
+
+test('D2 proposeAfterData LIVE preserves huge pad; width uses MAX_VISIBLE_LOGICAL_BARS', () => {
   TimeCamera._resetForTests();
   let seen = null;
   TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
@@ -303,9 +370,33 @@ test('D2 proposeAfterData LIVE clamps huge rightPadding and sticks to tip', () =
     mode: 'switch',
   });
   assert.ok(seen);
-  assert.ok(seen.rightOffset <= 50);
-  assert.strictEqual(seen.visibleRange.to, tip + seen.rightOffset);
+  assert.strictEqual(seen.rightOffset, 10_000);
+  assert.strictEqual(seen.visibleRange.to, tip + 10_000);
+  assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, 100);
   assert.strictEqual(seen.barSpacing, 8);
+});
+
+test('D2 proposeAfterData LIVE width 8000 clamps to MAX_VISIBLE_LOGICAL_BARS, keeps to', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+  const tip = 100;
+  const max = TimeCamera.MAX_VISIBLE_LOGICAL_BARS;
+  TimeCamera.proposeAfterData({
+    tipLogical: tip,
+    timesSec: Array.from({ length: tip + 1 }, (_, i) => i),
+    seed: {
+      intent: 'LIVE',
+      visibleBars: 8000,
+      barSpacing: 2,
+      rightPadding: 5,
+    },
+    mode: 'switch',
+  });
+  assert.ok(seen);
+  assert.strictEqual(seen.visibleRange.to, tip + 5);
+  assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, max);
+  assert.strictEqual(seen.rightOffset, 5);
 });
 
 test('D2 proposeAfterData HISTORY centers via DataResolve and never jumps to tip', () => {

@@ -92,6 +92,35 @@ test('cameraIntentForTfSwitch HISTORY: healthy bars, sacred center', () => {
   assert.notStrictEqual(seed.visibleBars, 2992);
 });
 
+test('cameraIntentForTfSwitch LIVE: keeps visibleBars and spacing', () => {
+  const seed = ViewportManager.cameraIntentForTfSwitch({
+    centerTimeMs: CENTER_MS,
+    visibleBars: 220,
+    intent: 'LIVE',
+    isAtRightEdge: true,
+    rightOffset: 4,
+    rightPadding: 4,
+    barSpacing: 8,
+  });
+  assert.strictEqual(seed.intent, 'LIVE');
+  assert.strictEqual(seed.visibleBars, 220);
+  assert.strictEqual(seed.barSpacing, 8);
+  assert.strictEqual(seed.rightPadding, 4);
+});
+
+test('isPoisonCameraState: from < 0 is not poison', () => {
+  assert.strictEqual(ViewportManager.isPoisonCameraState({
+    from: -12,
+    barSpacing: 8,
+    visibleBars: 100,
+  }), false);
+  assert.strictEqual(ViewportManager.isPoisonCameraState({
+    from: 0,
+    barSpacing: 0.5,
+    visibleBars: 100,
+  }), true);
+});
+
 test('proposeAfterData HISTORY restores center inside hydrated 1m chunk', () => {
   TimeCamera._resetForTests();
   let seen = null;
@@ -187,6 +216,45 @@ test('fresh viewport still allows FreshLive (LIVE init)', () => {
   TimeCamera.proposeFreshLive = origFresh;
 
   assert.ok(freshCalls >= 1, 'legitimate LIVE fresh path must still call FreshLive');
+});
+
+test('LIVE restore: layout defer must NOT FreshLive', () => {
+  TimeCamera._resetForTests();
+  let freshCalls = 0;
+  const origFresh = TimeCamera.proposeFreshLive.bind(TimeCamera);
+  TimeCamera.proposeFreshLive = (...args) => {
+    freshCalls += 1;
+    return origFresh(...args);
+  };
+  TimeCamera.bind({ applyCommitted: () => {} });
+
+  const tipStart = Math.floor(Date.UTC(2026, 7, 1) / 1000);
+  const tipTimes = Array.from({ length: 400 }, (_, i) => tipStart + i * 60);
+  const origHL = ViewportManager.hostHasLayout;
+  const origWhen = ViewportManager.whenHostHasLayout;
+  ViewportManager.hostHasLayout = () => false;
+  ViewportManager.whenHostHasLayout = () => {};
+
+  const cc = Object.create(ChartCompositor.prototype);
+  cc._observeShadowWorld = () => {};
+  cc._bindDataResolve = () => {};
+  cc._navigateAfterPaint({
+    viewport: 'restore',
+    anchor: {
+      intent: 'LIVE',
+      isAtRightEdge: true,
+      visibleBars: 220,
+      barSpacing: 8,
+      rightPadding: 4,
+      centerTimeMs: CENTER_MS,
+    },
+  }, { times: tipTimes });
+
+  ViewportManager.hostHasLayout = origHL;
+  ViewportManager.whenHostHasLayout = origWhen;
+  TimeCamera.proposeFreshLive = origFresh;
+
+  assert.strictEqual(freshCalls, 0, 'FreshLive must not steal LIVE TF restore');
 });
 
 test('F5d resolveHistoryTfFetchEndSec: 1993 ms is milliseconds not seconds', () => {

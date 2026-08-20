@@ -437,11 +437,16 @@ class ChartCompositor {
 
     const viewport = intent?.viewport;
     const anchor = intent?.anchor;
-    // HISTORY TF switch: centerTime is sacred — never let FreshLive own the VIEW.
+    // HISTORY TF: centerTime sacred. LIVE TF: keep bar count / spacing / pad — no FreshLive.
     const historyTfRestore = viewport === 'restore'
       && !!anchor
       && Number.isFinite(Number(anchor.centerTimeMs))
       && (anchor.intent === 'HISTORY' || anchor.isAtRightEdge === false);
+    const liveTfRestore = viewport === 'restore'
+      && !!anchor
+      && (anchor.intent === 'LIVE' || anchor.isAtRightEdge === true)
+      && Number.isFinite(Number(anchor.visibleBars))
+      && Number(anchor.visibleBars) > 0;
 
     const runPropose = () => {
       this._observeShadowWorld(snapshot);
@@ -452,7 +457,7 @@ class ChartCompositor {
 
       if (viewport === 'fresh'
         || viewport == null
-        || !(anchor && anchor.centerTimeMs != null)) {
+        || !(anchor && (historyTfRestore || liveTfRestore || anchor.centerTimeMs != null))) {
         if (historyTfRestore) return;
         TimeCamera.proposeFreshLive({ tipLogical });
         return;
@@ -484,8 +489,7 @@ class ChartCompositor {
       && ViewportManager.hostHasLayout
       && !ViewportManager.hostHasLayout('live')
       && ViewportManager.whenHostHasLayout) {
-      // Spacing-only cold commit — skip for HISTORY TF restore (would steal VIEW to tip).
-      if (!historyTfRestore) {
+      if (!historyTfRestore && !liveTfRestore) {
         TimeCamera.proposeFreshLive({});
       }
       ViewportManager.whenHostHasLayout('live', runPropose);

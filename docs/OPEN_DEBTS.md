@@ -19,7 +19,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
-3. TF-switch UX — **TF-1 product ✅** (not implemented): LIVE keeps **visible bar count + tip screen X** (bar pad × spacing). Not Mode B. Not default zoom.  
+3. TF-switch UX — **TF-1 phase 1 ✅** (LIVE: keep bar count + pad + spacing; width cap = `MAX_VISIBLE_BARS` only). HISTORY microscope unchanged.  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
 
@@ -117,7 +117,7 @@ Poison only: NaN / non-finite / spacing &lt; 1 / bars ≤ 0. Hard cap bars at `M
 
 **Cleanups in the same change:** one CameraCommit after paint (no FreshLive-then-restore); LIVE TF must not call `proposeFreshLive` when capture succeeded.
 
-**Not:** Mode B left/right times; default `HEALTHY_*` zoom; per-TF branches; Crosshair redesign.
+**Phase 1 (done):** LIVE `proposeAfterData` no longer uses `sanitizeVisibleBars` (50–400) or `clampRightPadding`. Window width uses the same `clampVisibleLogicalWidth` as wheel zoom (`MAX_VISIBLE_BARS`). Capture: `from < 0` is not poison; over-wide capture clamps bars to 5000 without resetting spacing. Compositor: no layout-defer FreshLive when LIVE restore seed is valid. HISTORY microscope unchanged.
 
 ---
 

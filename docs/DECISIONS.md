@@ -770,10 +770,11 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 
 ### LIVE propose
 
-- Stick to new series tip.
-- Preserve healthy breathing room: `rightPadding = min(saved, min(50, max(5, floor(visibleBars / 4))))`.
-- Keep healthy `barSpacing` (poison → healthy default 6).
-- Never carry unbounded future void across TF density change.
+- Stick to **new** series tip (`to = newTip + pad`).
+- Keep captured `visibleBars`, `barSpacing`, and `rightPadding` in **bars** (same pixel X if spacing unchanged).
+- Window width: same `clampVisibleLogicalWidth` as wheel zoom (`MAX_VISIBLE_BARS` / 5000). Not 50–400. Not pad-50.
+- Poison spacing only (&lt; min) → healthy 6. `from < 0` is not poison.
+- Missing/invalid capture → Fresh LIVE. Valid LIVE seed → no layout-defer FreshLive.
 
 ### HISTORY propose
 

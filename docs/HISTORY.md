@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TF-1 phase 1 — LIVE TF restore (Aug 2026) ✅
+
+- LIVE switch keeps `visibleBars`, `barSpacing`, `rightPadding`. Width cap = `MAX_VISIBLE_BARS` via `clampVisibleLogicalWidth` (same as wheel).
+- Dropped LIVE 50–400 / pad-50. Capture `from < 0` is not poison. No FreshLive on valid LIVE layout-defer.
+- HISTORY microscope unchanged.
+
+---
+
 ## SQLITE-2b — single SQLite connection (Aug 2026) ✅
 
 - Idle `database/sql` handles (default 2 idle after boot) blocked `wal_checkpoint(TRUNCATE)` every 5 minutes after MCP-off.

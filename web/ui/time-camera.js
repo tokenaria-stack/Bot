@@ -16,7 +16,7 @@
   const HEALTHY_VISIBLE_BARS = 150;
   const MAX_HEALTHY_VISIBLE_BARS = 400;
   const MIN_HEALTHY_BAR_SPACING = 1;
-  /** Max user zoom-out (logical bars). Distinct from TF-switch healthy sanitize (400). */
+  /** Max zoom-out (logical bars). Gesture + LIVE TF restore — one wall (`MAX_VISIBLE_BARS`). */
   const MAX_VISIBLE_LOGICAL_BARS = (typeof MAX_VISIBLE_BARS !== 'undefined'
     && Number.isFinite(MAX_VISIBLE_BARS) && MAX_VISIBLE_BARS > 0)
     ? MAX_VISIBLE_BARS
@@ -663,16 +663,22 @@
 
     if (intent === 'LIVE') {
       if (!Number.isFinite(tip)) return proposeFreshLive({});
-      const bars = sanitizeVisibleBars(seed.visibleBars);
-      const spacing = sanitizeBarSpacing(seed.barSpacing);
+      const bars = Number(seed.visibleBars);
+      if (!Number.isFinite(bars) || bars <= 0) {
+        return proposeFreshLive({ tipLogical: tip });
+      }
+      let spacing = Number(seed.barSpacing);
+      if (!Number.isFinite(spacing) || spacing < MIN_HEALTHY_BAR_SPACING) {
+        spacing = HEALTHY_BAR_SPACING;
+      }
       let pad = Number(seed.rightPadding);
       if (!Number.isFinite(pad)) pad = Number(seed.rightOffset);
-      if (!Number.isFinite(pad)) pad = 0;
-      pad = clampRightPadding(pad, bars);
+      if (!Number.isFinite(pad) || pad < 0) pad = 0;
       const to = tip + pad;
-      const from = Math.max(0, to - bars);
+      const from = to - bars;
+      const visibleRange = clampVisibleLogicalWidth({ from, to }, MAX_VISIBLE_LOGICAL_BARS);
       return commit({
-        visibleRange: { from, to },
+        visibleRange,
         barSpacing: spacing,
         rightOffset: pad,
         sourceHostId: 'system',

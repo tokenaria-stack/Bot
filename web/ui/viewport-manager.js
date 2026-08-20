@@ -8,7 +8,6 @@
  */
 (function initViewportManager(global) {
   const HEALTHY_BAR_SPACING = 6;
-  const MAX_HEALTHY_VISIBLE_BARS = 400;
   const MIN_HEALTHY_BAR_SPACING = 1;
   const HEALTHY_VISIBLE_BARS = 150;
   /** Wide zoom is legitimate up to MAX_VISIBLE_BARS — not "poison". */
@@ -49,9 +48,8 @@
 
   function isPoisonCameraState(state) {
     if (!state) return true;
-    if (Number.isFinite(state.from) && state.from < 0) return true;
+    // from < 0 is left void / zoom past bar 0 — legitimate, not accordion poison.
     if (Number.isFinite(state.barSpacing) && state.barSpacing < MIN_HEALTHY_BAR_SPACING) return true;
-    if (Number.isFinite(state.visibleBars) && state.visibleBars > MAX_CAPTURE_VISIBLE_BARS) return true;
     return false;
   }
 
@@ -84,7 +82,9 @@
 
     if (isPoisonCameraState({ barSpacing, visibleBars, from: range.from })) {
       barSpacing = HEALTHY_BAR_SPACING;
-      visibleBars = Math.max(50, Math.min(visibleBars, MAX_CAPTURE_VISIBLE_BARS));
+    }
+    if (Number.isFinite(visibleBars) && visibleBars > MAX_CAPTURE_VISIBLE_BARS) {
+      visibleBars = MAX_CAPTURE_VISIBLE_BARS;
     }
 
     const classify = (typeof TimeCamera !== 'undefined' && TimeCamera._helpers?.classifyViewIntent)
