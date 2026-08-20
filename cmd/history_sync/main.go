@@ -3,7 +3,9 @@
 // Usage:
 //
 //	go run ./cmd/history_sync -symbol=BTCUSDT -interval=15m -year=2023
-//	go run ./cmd/history_sync -market=spot -symbol=ETHUSDT -interval=1h -year=2024 -month=6
+//	go run ./cmd/history_sync -market=spot -symbol=BTCUSDT -interval=15m -year=2018 -month=1
+//
+// Spot rows persist as SpotStorageSymbol (BTCUSDT_SPOT). Vision URLs still use the plain pair.
 package main
 
 import (
@@ -51,7 +53,11 @@ func main() {
 		log.Fatal("flag -market must be futures or spot")
 	}
 
-	sym := strings.ToUpper(strings.TrimSpace(*symbol))
+	pair := pairSymbol(*symbol)
+	if pair == "" {
+		log.Fatal("flag -symbol must be a pair (e.g. BTCUSDT)")
+	}
+	store := persistStorageSymbol(mkt, pair)
 	iv := strings.TrimSpace(*interval)
 
 	data.SetDBPath(*dbPath)
@@ -59,11 +65,13 @@ func main() {
 		log.Fatalf("init database: %v", err)
 	}
 
+	log.Printf("vision pair=%s persist=%s market=%s interval=%s year=%d", pair, store, mkt, iv, *year)
+
 	months := monthsToSync(*month)
 	var failed int
 	for _, m := range months {
-		if err := syncMonth(sym, iv, mkt, *year, m); err != nil {
-			log.Printf("[ERROR] %s %s %04d-%02d: %v", sym, iv, *year, m, err)
+		if err := syncMonth(pair, store, iv, mkt, *year, m); err != nil {
+			log.Printf("[ERROR] %s %s %04d-%02d: %v", store, iv, *year, m, err)
 			failed++
 			continue
 		}
@@ -92,10 +100,10 @@ func visionBaseURL(market string) string {
 	return visionFuturesBaseURL
 }
 
-func syncMonth(symbol, interval, market string, year, month int) error {
+func syncMonth(pair, store, interval, market string, year, month int) error {
 	label := fmt.Sprintf("%04d-%02d", year, month)
 	base := visionBaseURL(market)
-	url := fmt.Sprintf("%s/%s/%s/%s-%s-%s.zip", base, symbol, interval, symbol, interval, label)
+	url := fmt.Sprintf("%s/%s/%s/%s-%s-%s.zip", base, pair, interval, pair, interval, label)
 
 	tmpDir, err := os.MkdirTemp("", "history_sync_*")
 	if err != nil {
@@ -103,7 +111,7 @@ func syncMonth(symbol, interval, market string, year, month int) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	zipPath := filepath.Join(tmpDir, fmt.Sprintf("%s-%s-%s.zip", symbol, interval, label))
+	zipPath := filepath.Join(tmpDir, fmt.Sprintf("%s-%s-%s.zip", pair, interval, label))
 	if err := downloadFile(url, zipPath); err != nil {
 		return err
 	}
@@ -113,12 +121,12 @@ func syncMonth(symbol, interval, market string, year, month int) error {
 		return err
 	}
 
-	count, err := importCSV(symbol, interval, csvPath)
+	count, err := importCSV(store, interval, csvPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("[SUCCESS] Imported %d klines for %s %s (%s)\n", count, symbol, interval, label)
+	fmt.Printf("[SUCCESS] Imported %d klines for %s %s (%s)\n", count, store, interval, label)
 	return nil
 }
 
