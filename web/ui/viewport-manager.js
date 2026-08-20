@@ -142,6 +142,26 @@
   }
 
   /**
+   * LIVE TF-switch first fetch only. Scroll/prefetch still use HISTORY_CHUNK_LIMIT.
+   * initialLimit = min(MAX_STORE_BARS, max(HISTORY_CHUNK_LIMIT, ceil(visibleBars)))
+   */
+  function resolveLiveTfSwitchFetchLimit(visibleBars) {
+    const chunk = (typeof HISTORY_CHUNK_LIMIT !== 'undefined'
+      && Number.isFinite(HISTORY_CHUNK_LIMIT)
+      && HISTORY_CHUNK_LIMIT > 0)
+      ? Math.floor(HISTORY_CHUNK_LIMIT)
+      : 3000;
+    const storeCap = (typeof MAX_STORE_BARS !== 'undefined'
+      && Number.isFinite(MAX_STORE_BARS)
+      && MAX_STORE_BARS > 0)
+      ? Math.floor(MAX_STORE_BARS)
+      : 9000;
+    const vb = Number(visibleBars);
+    if (!Number.isFinite(vb) || vb <= 0) return chunk;
+    return Math.min(storeCap, Math.max(chunk, Math.ceil(vb)));
+  }
+
+  /**
    * HISTORY TF hydrate: API endTime so a normal chunk is centered on the captured
    * market-time focus (not the live tip). LIVE / missing center → nowSec.
    * @param {{
@@ -330,6 +350,7 @@
     HEALTHY_VISIBLE_BARS,
     isPoisonCameraState,
     cameraIntentForTfSwitch,
+    resolveLiveTfSwitchFetchLimit,
     resolveHistoryTfFetchEndSec,
     resolveRightHistoryFetchEndSec,
     historyEdgePrefetchBars,

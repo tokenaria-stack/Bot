@@ -1304,7 +1304,16 @@
       if (!isCurrentEpoch(epoch)) return;
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
-      const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+      const chunkLimit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+      let limit = chunkLimit;
+      // TF-2A: LIVE TF switch only — cover preserved VIEW. Scroll chunks stay chunkLimit.
+      if (options.userTfChange === true
+        && viewportAnchor
+        && viewportAnchor.intent === 'LIVE'
+        && typeof ViewportManager !== 'undefined'
+        && typeof ViewportManager.resolveLiveTfSwitchFetchLimit === 'function') {
+        limit = ViewportManager.resolveLiveTfSwitchFetchLimit(viewportAnchor.visibleBars);
+      }
       const nowSec = Math.floor(Date.now() / 1000);
       // Microscope / HISTORY→HISTORY TF switch: hydrate a normal chunk around the
       // captured centerTime — never Date.now() tip (that drops the focal market-time).

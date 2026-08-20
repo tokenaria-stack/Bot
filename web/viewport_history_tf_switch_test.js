@@ -121,6 +121,37 @@ test('isPoisonCameraState: from < 0 is not poison', () => {
   }), true);
 });
 
+test('TF-2A LIVE switch fetch: 5000 VIEW → limit 5000', () => {
+  assert.strictEqual(ViewportManager.resolveLiveTfSwitchFetchLimit(5000), 5000);
+});
+
+test('TF-2A LIVE switch fetch: 2000 VIEW → chunk 3000', () => {
+  assert.strictEqual(ViewportManager.resolveLiveTfSwitchFetchLimit(2000), 3000);
+});
+
+test('TF-2A LIVE switch fetch: above store cap → MAX_STORE_BARS', () => {
+  assert.strictEqual(ViewportManager.resolveLiveTfSwitchFetchLimit(12000), 9000);
+});
+
+test('TF-2A invalid visibleBars → default chunk 3000', () => {
+  assert.strictEqual(ViewportManager.resolveLiveTfSwitchFetchLimit(NaN), 3000);
+  assert.strictEqual(ViewportManager.resolveLiveTfSwitchFetchLimit(0), 3000);
+});
+
+test('TF-2A ordinary history fetchColumnar still uses HISTORY_CHUNK_LIMIT', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const boot = fs.readFileSync(path.join(__dirname, 'boot.js'), 'utf8');
+  assert.ok(
+    /fetchColumnar:[\s\S]*limit: typeof HISTORY_CHUNK_LIMIT/.test(boot),
+    'scroll/prefetch fetchColumnar must keep HISTORY_CHUNK_LIMIT',
+  );
+  assert.ok(
+    /userTfChange === true/.test(boot) && /resolveLiveTfSwitchFetchLimit/.test(boot),
+    'LIVE TF first fetch must be gated on userTfChange',
+  );
+});
+
 test('proposeAfterData HISTORY restores center inside hydrated 1m chunk', () => {
   TimeCamera._resetForTests();
   let seen = null;

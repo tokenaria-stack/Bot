@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TF-2A — LIVE TF first fetch covers VIEW (Aug 2026) ✅
+
+- `resolveLiveTfSwitchFetchLimit`: `min(MAX_STORE_BARS, max(HISTORY_CHUNK_LIMIT, ceil(visibleBars)))` on `userTfChange` + LIVE only.
+- Scroll/prefetch still `HISTORY_CHUNK_LIMIT` (3000). Camera TF-1 unchanged.
+
+---
+
 ## TF-1 phase 2 — delete dead pad clamp (Aug 2026) ✅
 
 - Removed `clampRightPadding` (unused after LIVE phase 1). HISTORY microscope unchanged.

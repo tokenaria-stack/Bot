@@ -19,7 +19,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
-3. TF-switch UX — **TF-1 phase 1+2 ✅** LIVE restore proven; `clampRightPadding` deleted. HISTORY microscope unchanged.  
+3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅** LIVE first fetch sized to VIEW. HISTORY microscope / 503 out of scope.  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
 
