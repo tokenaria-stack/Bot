@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TF-1 phase 2 — delete dead pad clamp (Aug 2026) ✅
+
+- Removed `clampRightPadding` (unused after LIVE phase 1). HISTORY microscope unchanged.
+
+---
+
 ## TF-1 phase 1 — LIVE TF restore (Aug 2026) ✅
 
 - LIVE switch keeps `visibleBars`, `barSpacing`, `rightPadding`. Width cap = `MAX_VISIBLE_BARS` via `clampVisibleLogicalWidth` (same as wheel).

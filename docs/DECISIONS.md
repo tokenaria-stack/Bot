@@ -790,7 +790,7 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 | Null / failed capture | Fresh LIVE: healthy spacing, `rightPadding: 0` |
 | No bar for `centerTime` | Nearest logical (data layer) |
 | Empty series | Fresh LIVE / no-op until data exists |
-| Accordion poison (`visibleBars` huge / spacing crushed) | Healthy defaults (spacing 6, bars capped ≤ 400, floor ≥ 50 when restoring window) |
+| Accordion / crushed spacing | LIVE: spacing &lt; min → 6; width cap `MAX_VISIBLE_BARS`. HISTORY TF: healthy 150/6 (microscope). |
 
 ### Explicit non-goals
 

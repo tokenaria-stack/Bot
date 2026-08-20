@@ -19,7 +19,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
-3. TF-switch UX — **TF-1 phase 1 ✅** (LIVE: keep bar count + pad + spacing; width cap = `MAX_VISIBLE_BARS` only). HISTORY microscope unchanged.  
+3. TF-switch UX — **TF-1 phase 1+2 ✅** LIVE restore proven; `clampRightPadding` deleted. HISTORY microscope unchanged.  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
 
@@ -95,29 +95,13 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 
 ---
 
-## TF-1 — LIVE TF switch (product, Aug 2026)
+## TF-1 — LIVE TF switch (Aug 2026) ✅ phase 1–2
 
-**Wanted:** New LIVE chart uses the **same number of bars** as the previous chart. The **new forming bar** sits at the **same screen X** as the old forming bar (same future void). Not the same time span. Not Mode B. Not default zoom (that changes bar width and/or bar count).
+**Wanted:** Same bar count, same forming-bar screen X, same spacing. Not time-span. Not Mode B.
 
-**Cheap law:** keep `visibleBars`, `barSpacing`, and `rightPadding` **in bars**. Then `to = newTip + pad`, `from = to - visibleBars`. Same spacing × same pad ⇒ same pixel X. No pixel convert, no DataResolve on LIVE.
+**Phase 1:** LIVE `proposeAfterData` keeps bars/spacing/pad; width = `clampVisibleLogicalWidth` / `MAX_VISIBLE_BARS`. Capture `from < 0` not poison. No FreshLive on valid LIVE layout-defer.
 
-**Today’s jump:** ADR-029 LIVE already aims at this, then **sanitizers undo it** — `sanitizeVisibleBars` (50–400), `clampRightPadding` (void can land ~50 bars), poison → spacing 6, null capture / layout-defer → `proposeFreshLive` (150 / pad 0).
-
-**LIVE propose (strip the sanitizer layer, keep the pin):**
-
-```
-capture: visibleBars, barSpacing, padBars = max(0, visibleTo - oldTip)
-hydrate live tip (unchanged)
-commit: those three values; to = newTip + padBars
-```
-
-Poison only: NaN / non-finite / spacing &lt; 1 / bars ≤ 0. Hard cap bars at `MAX_VISIBLE_BARS` (5000), not healthy 400. Pad: do not inflate; do not clamp to 50.
-
-**HISTORY:** unchanged (centerTime + current microscope zoom policy, no FreshLive on failed center).
-
-**Cleanups in the same change:** one CameraCommit after paint (no FreshLive-then-restore); LIVE TF must not call `proposeFreshLive` when capture succeeded.
-
-**Phase 1 (done):** LIVE `proposeAfterData` no longer uses `sanitizeVisibleBars` (50–400) or `clampRightPadding`. Window width uses the same `clampVisibleLogicalWidth` as wheel zoom (`MAX_VISIBLE_BARS`). Capture: `from < 0` is not poison; over-wide capture clamps bars to 5000 without resetting spacing. Compositor: no layout-defer FreshLive when LIVE restore seed is valid. HISTORY microscope unchanged.
+**Phase 2:** Deleted dead `clampRightPadding` (no production caller after phase 1). HISTORY still uses `sanitizeVisibleBars` (50–400) + healthy 150 at `cameraIntentForTfSwitch`.
 
 ---
 

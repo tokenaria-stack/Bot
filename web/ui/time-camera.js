@@ -108,15 +108,6 @@
     return Math.max(0, to - tip);
   }
 
-  function clampRightPadding(saved, visibleBars) {
-    const s = Number(saved);
-    const bars = Number(visibleBars);
-    if (!Number.isFinite(s) || s < 0) return 0;
-    const vb = Number.isFinite(bars) && bars > 0 ? bars : HEALTHY_VISIBLE_BARS;
-    const cap = Math.min(50, Math.max(5, Math.floor(vb / 4)));
-    return Math.min(s, cap);
-  }
-
   function sanitizeVisibleBars(bars) {
     let b = Number(bars);
     if (!Number.isFinite(b) || b <= 0) b = HEALTHY_VISIBLE_BARS;
@@ -781,7 +772,6 @@
       computeCenterLogical,
       computeCenterTimeMs,
       computeRightPadding,
-      clampRightPadding,
       sanitizeVisibleBars,
       sanitizeBarSpacing,
       barTimeToMs,

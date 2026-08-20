@@ -171,12 +171,10 @@ test('computeCenterTimeMs uses center bar from supplied times (pure)', () => {
   assert.strictEqual(computeCenterTimeMs([], { from: 0, to: 4 }), null);
 });
 
-test('clampRightPadding caps void across density (ADR-029)', () => {
-  const { clampRightPadding } = TimeCamera._helpers;
-  assert.strictEqual(clampRightPadding(1000, 100), 25); // min(1000, min(50, max(5, 25)))
-  assert.strictEqual(clampRightPadding(3, 100), 3);
-  assert.strictEqual(clampRightPadding(-1, 100), 0);
-  assert.strictEqual(clampRightPadding(100, 8), 5); // floor(8/4)=2 → max(5,2)=5 → min(100,5)=5
+test('shadow helpers poison / null inputs stay safe', () => {
+  const h = TimeCamera._helpers;
+  assert.strictEqual(h.computeRightPadding(NaN, 10), null);
+  assert.strictEqual(h.classifyViewIntent(10, NaN), null);
 });
 
 test('shadow capture after commit: LIVE + geometry from tip/rightOffset', () => {
@@ -260,13 +258,6 @@ test('shadow capture: HISTORY when tip pulled off right', () => {
     sourceHostId: 'price',
   });
   assert.strictEqual(TimeCamera._getShadowView().intent, 'HISTORY');
-});
-
-test('shadow helpers poison / null inputs stay safe', () => {
-  const h = TimeCamera._helpers;
-  assert.strictEqual(h.computeRightPadding(NaN, 10), null);
-  assert.strictEqual(h.clampRightPadding(NaN, 10), 0);
-  assert.strictEqual(h.classifyViewIntent(10, NaN), null);
 });
 
 test('DataResolve seam unbound returns null; bind works without LWC', () => {
