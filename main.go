@@ -179,6 +179,7 @@ func main() {
 	persistQ := data.NewPersistenceQueue(4096)
 	persistQ.Start(ctx)
 	master.SetPersistenceQueue(persistQ)
+	dashboard.SetPersistenceQueue(persistQ)
 
 	// Shot 9B + Core 4.2: every TF computes Projection; Transport routes only to subscribed clients.
 	master.SetOnKlineBar(func(tf string, k exchange.Kline, isClosed bool) {

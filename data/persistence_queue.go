@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -117,6 +118,27 @@ func (q *PersistenceQueue) AppendClosedBars(ctx context.Context, symbol, interva
 		case q.ch <- job:
 		}
 	}
+	return nil
+}
+
+// PersistClosedBarsNow UPSERTs through the queue's save sink and returns after
+// the write (interactive history reread). Same SaveKlines path as the worker —
+// not a second writer. Empty input is a no-op.
+func (q *PersistenceQueue) PersistClosedBarsNow(symbol, interval string, candles []Candle) error {
+	if q == nil {
+		return fmt.Errorf("persistence queue not bound")
+	}
+	if len(candles) == 0 {
+		return nil
+	}
+	save := q.save
+	if save == nil {
+		save = SaveKlines
+	}
+	if err := q.saveWithRetry(save, symbol, interval, candles); err != nil {
+		return err
+	}
+	NotePersistEdges(symbol, interval, candles)
 	return nil
 }
 

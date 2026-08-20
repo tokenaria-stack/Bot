@@ -189,6 +189,8 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `Bar Source Seam` | Only closed `exchange.Kline` enters Ingress; aggregation is producer-private |
 | `Boot FSM` | Connecting → Loading → Reconciling → Live (WS first) |
 | `PersistenceQueue` | Sole runtime SQLite UPSERT path |
+| `GetWindow` | Read-only history window (SQLite ∪ RAM). Interactive miss is filled by `EnsureHistoryWindow` then reread |
+| `EnsureHistoryWindow` | HIST-1: era-local REST acquire + persist for `/api/history` only |
 | `HistoryProvider` | Chart history window owner: SQLite ∪ RAM |
 | `Projector` | Slot → wire packer for live plots + columnar history |
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |

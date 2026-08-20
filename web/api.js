@@ -211,7 +211,16 @@ const API = {
       signal,
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(`columnar history API: ${resp.status}`);
+    if (resp.ok && (data.status === 'no_data' || data.code === 'NO_DATA')) {
+      return { ...data, times: Array.isArray(data.times) ? data.times : [], noData: true };
+    }
+    if (!resp.ok) {
+      const code = data.code || '';
+      const err = new Error(`columnar history API: ${resp.status}${code ? ` ${code}` : ''}`);
+      err.status = resp.status;
+      err.code = code;
+      throw err;
+    }
     return data;
   },
 

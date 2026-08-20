@@ -1357,6 +1357,10 @@
         return;
       }
 
+      if (columnar?.noData === true || columnar?.status === 'no_data') {
+        console.warn('[Renaissance] history NO_DATA — keep previous island');
+        return;
+      }
       if (!columnar?.times?.length || !liveColumnarStore) {
         console.warn('[Renaissance] no columnar history — chart idle');
         return;

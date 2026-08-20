@@ -93,7 +93,10 @@ func LoadContinuousContractBeforeEnd(symbol, interval string, endTimeMs int64, l
 			return nil, fmt.Errorf("load futures before end: %w", err)
 		}
 		merged = fut
-		if len(merged) < limit {
+		// HIST-0: pad from spot only when the requested count-window crosses
+		// futures genesis. Never use 2017–2019 spot as a count-filler for a
+		// wholly post-genesis request (e.g. 2023 1m microscope).
+		if len(merged) < limit && beforeEndWindowCrossesFuturesGenesis(endTimeMs, limit, interval) {
 			need := limit - len(merged)
 			spot, err := data.LoadKlinesBeforeEnd(SpotStorageSymbol(symbol), interval, BinanceFuturesGenesisMs-1, need)
 			if err != nil {
@@ -111,6 +114,17 @@ func LoadContinuousContractBeforeEnd(symbol, interval string, endTimeMs int64, l
 
 	out := candlesFromData(dedupeDataCandlesByOpenTime(merged))
 	return TruncateCandlesTail(out, limit), nil
+}
+
+func beforeEndWindowCrossesFuturesGenesis(endTimeMs int64, limit int, interval string) bool {
+	if limit <= 1 {
+		return false
+	}
+	startMs, err := data.RetreatBarOpen(endTimeMs, limit-1, interval)
+	if err != nil {
+		return false
+	}
+	return startMs < BinanceFuturesGenesisMs
 }
 
 // TruncateCandlesTail keeps the last max bars; max <= 0 is a no-op.

@@ -89,6 +89,10 @@ type DashboardServer struct {
 	liveNavMu        sync.RWMutex
 	liveNavigators   map[string]market.NavigatorUISettings
 	master           *market.Runtime
+	persistQ         *data.PersistenceQueue
+	ensureFetch      closedRangeFetchFunc
+	ensureMu         sync.Mutex
+	ensureInFlight   map[string]*historyEnsureCall
 	backtestRuns     *backtestRunManager
 	uiRegistry       *core.UIRegistry
 	projector        *wire.Projector
@@ -245,6 +249,7 @@ type historyChunkResponse struct {
 
 type historyResponse struct {
 	Status      string                               `json:"status"`
+	Code        string                               `json:"code,omitempty"`
 	Timeframe   string                               `json:"timeframe"`
 	Candles     []ChartCandle                        `json:"candles"`
 	Oscillators []ChartOscillator                    `json:"oscillators"`
@@ -1457,7 +1462,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 			CandleLimit: candleLimit,
 		})
 		if !okWin || len(win.Klines) == 0 {
-			http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+			writeHistoryNoData(w, spec.ID, false)
 			return
 		}
 		klines := win.Klines
@@ -1477,7 +1482,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
-	win, okWin := d.GetWindow(r.Context(), HistoryWindowQuery{
+	delivered := d.deliverHistoryWindow(r.Context(), HistoryWindowQuery{
 		Spec:        spec,
 		EndTimeMs:   resolvedEndMs,
 		CandleLimit: candleLimit,
@@ -1485,8 +1490,20 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	if !okWin || len(win.Klines) == 0 {
-		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+	switch delivered.Kind {
+	case historyDeliverExchange:
+		writeHistoryFault(w, http.StatusBadGateway, HistoryCodeExchangeFailed, delivered.Err)
+		return
+	case historyDeliverSQLite:
+		writeHistoryFault(w, http.StatusInternalServerError, HistoryCodeSQLiteError, delivered.Err)
+		return
+	case historyDeliverNoData:
+		writeHistoryNoData(w, spec.ID, false)
+		return
+	}
+	win := delivered.Win
+	if len(win.Klines) == 0 {
+		writeHistoryNoData(w, spec.ID, false)
 		return
 	}
 	klines := win.Klines
@@ -1510,7 +1527,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	}
 	if len(resp.Candles) == 0 {
 		log.Printf("[Dashboard] history replay empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(klines))
-		http.Error(w, "history replay empty", http.StatusServiceUnavailable)
+		writeHistoryNoData(w, spec.ID, false)
 		return
 	}
 	if len(resp.Candles) > 0 {

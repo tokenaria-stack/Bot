@@ -8,7 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## TF-2A — LIVE TF first fetch covers VIEW (Aug 2026) ✅
+## HIST-0/1/2 — on-demand historical window (Aug 2026) ✅
+
+- `GetWindow` read-only. `EnsureHistoryWindow` on `/api/history` miss (historical end, futures era).
+- Persist via `PersistenceQueue.PersistClosedBarsNow`. Single-flight per symbol+interval.
+- HTTP: 200 payload / 200 `no_data` / 502 exchange / 500 sqlite. FE keeps previous island on `NO_DATA`.
+- BeforeEnd does not pad post-genesis windows with pre-genesis spot.
+- Not done: HIST-3 microscope matrix, DATA-1 bulk/gap policy.
+
+---
 
 - `resolveLiveTfSwitchFetchLimit`: `min(MAX_STORE_BARS, max(HISTORY_CHUNK_LIMIT, ceil(visibleBars)))` on `userTfChange` + LIVE only.
 - Scroll/prefetch still `HISTORY_CHUNK_LIMIT` (3000). Camera TF-1 unchanged.

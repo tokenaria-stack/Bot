@@ -23,6 +23,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## HIST-0/1/2 — historical window acquire + typed empty (Aug 2026)
+
+**Context:** Microscope `/api/history` 1m at 2023-01-03 returned HTTP 503 because SQLite 1m starts Nov 2023. Empty archive is not an outage. REST must not live in `LoadKlines`. Spot must not pad a post-genesis count.
+
+**Decision:** `GetWindow` stays read-only. `/api/history` orchestrates read → `EnsureHistoryWindow` (futures era-local `FetchClosedRangePagesExact` + `PersistClosedBarsNow`) → reread. Empty → HTTP 200 `status=no_data`. Exchange fail → 502. SQLite fail → 500. Live `/api/state` and catch-up unchanged. Pre-futures REST is DATA-1 (no spot kline client yet).
+
+**Rejected:**
+- REST inside `data.LoadKlines` — **Reason:** storage must not become a network client.
+- Mapping all empty results to 503 — **Reason:** looks like warming/outage.
+- Full 1m `history_sync` before microscope works — **Reason:** years of bars for a ~3300-bar window.
+- Changing HISTORY 150-bar zoom in this chapter — **Reason:** data first.
+
+**Consequences:** HIST-3 smoke matrix and DATA-1 (15m hole, 1m archive min) are separate.
+
+---
+
 ## SQLITE-2 — no autostart MCP on `history.db`
 
 **Context:** SQLITE-1: `wal_checkpoint(TRUNCATE)` `busy` is concurrent GetWindow **or** a second process on the same file. Project MCP `sqlite-history` opened `history.db` for the whole Cursor session.

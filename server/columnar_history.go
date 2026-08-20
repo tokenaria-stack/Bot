@@ -24,6 +24,7 @@ type columnarCandles struct {
 type columnarHistoryResponse struct {
 	Format        string               `json:"format"`
 	Status        string               `json:"status"`
+	Code          string               `json:"code,omitempty"`
 	Timeframe     string               `json:"timeframe"`
 	WarmupDropped int                  `json:"warmupDropped"`
 	Added         int                  `json:"added"`
@@ -332,7 +333,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
 
-	win, okWin := d.GetWindow(r.Context(), HistoryWindowQuery{
+	delivered := d.deliverHistoryWindow(r.Context(), HistoryWindowQuery{
 		Spec:        spec,
 		EndTimeMs:   resolvedEndMs,
 		CandleLimit: candleLimit,
@@ -340,8 +341,20 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
-	if !okWin || len(win.Klines) == 0 {
-		http.Error(w, "no historical data available", http.StatusServiceUnavailable)
+	switch delivered.Kind {
+	case historyDeliverExchange:
+		writeHistoryFault(w, http.StatusBadGateway, HistoryCodeExchangeFailed, delivered.Err)
+		return
+	case historyDeliverSQLite:
+		writeHistoryFault(w, http.StatusInternalServerError, HistoryCodeSQLiteError, delivered.Err)
+		return
+	case historyDeliverNoData:
+		writeHistoryNoData(w, spec.ID, true)
+		return
+	}
+	win := delivered.Win
+	if len(win.Klines) == 0 {
+		writeHistoryNoData(w, spec.ID, true)
 		return
 	}
 
@@ -358,7 +371,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	)
 	if !ok {
 		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(win.Klines))
-		http.Error(w, "history replay empty", http.StatusServiceUnavailable)
+		writeHistoryNoData(w, spec.ID, true)
 		return
 	}
 	if err := requestCtxErr(r.Context()); err != nil {

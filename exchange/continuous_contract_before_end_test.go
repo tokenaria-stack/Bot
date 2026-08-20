@@ -92,3 +92,26 @@ func TestLoadContinuousContractBeforeEnd_TrueBeginning(t *testing.T) {
 		t.Fatalf("len=%d want 4", len(got))
 	}
 }
+
+func TestLoadContinuousContractBeforeEnd_NoSpotPadInFuturesEraWindow(t *testing.T) {
+	data.ResetDBForTest(filepath.Join(t.TempDir(), "cc_era.db"))
+	if err := data.InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	step := int64(60_000)
+	spotOpen := BinanceFuturesGenesisMs - step
+	if err := data.SaveKlines(SpotStorageSymbol("BTCUSDT"), "1m", []data.Candle{{
+		OpenTime: spotOpen, CloseTime: spotOpen + step - 1, Close: 111,
+		Open: 111, High: 111, Low: 111, Volume: 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	end := int64(1_672_765_200_000) // 2023-01-03 — wholly post-genesis for 12×1m
+	got, err := LoadContinuousContractBeforeEnd("BTCUSDT", "1m", end, 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len=%d want 0 (must not fill 2023 request from 2019 spot)", len(got))
+	}
+}
