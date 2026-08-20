@@ -19,7 +19,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
-3. TF-switch UX: same market time at same screen X  
+3. TF-switch UX — **TF-1 product ✅** (not implemented): LIVE keeps **visible bar count + tip screen X** (bar pad × spacing). Not Mode B. Not default zoom.  
 4. Later: indicator paint reduction / LOD  
 5. Then: ScoreNodes / clean strategy + indicator rebuild  
 
@@ -92,6 +92,32 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 **Cause:** `SetMaxOpenConns(CPU)` + Go default `MaxIdleConns=2`. Idle sqlite handles stay open after parallel Frame boot. `wal_checkpoint(TRUNCATE)` cannot restart WAL while any other connection exists — so every tick logged busy even with no history GET.
 
 **Fix:** `SetMaxOpenConns(1)` + `SetMaxIdleConns(1)`. Boot SELECTs serialize. Busy log kept; if it still fires, include `open/in_use/idle` (in-flight GetWindow or a second process). No pragma change. Test: `TestCheckpointWAL_TruncateAfterParallelReads`.
+
+---
+
+## TF-1 — LIVE TF switch (product, Aug 2026)
+
+**Wanted:** New LIVE chart uses the **same number of bars** as the previous chart. The **new forming bar** sits at the **same screen X** as the old forming bar (same future void). Not the same time span. Not Mode B. Not default zoom (that changes bar width and/or bar count).
+
+**Cheap law:** keep `visibleBars`, `barSpacing`, and `rightPadding` **in bars**. Then `to = newTip + pad`, `from = to - visibleBars`. Same spacing × same pad ⇒ same pixel X. No pixel convert, no DataResolve on LIVE.
+
+**Today’s jump:** ADR-029 LIVE already aims at this, then **sanitizers undo it** — `sanitizeVisibleBars` (50–400), `clampRightPadding` (void can land ~50 bars), poison → spacing 6, null capture / layout-defer → `proposeFreshLive` (150 / pad 0).
+
+**LIVE propose (strip the sanitizer layer, keep the pin):**
+
+```
+capture: visibleBars, barSpacing, padBars = max(0, visibleTo - oldTip)
+hydrate live tip (unchanged)
+commit: those three values; to = newTip + padBars
+```
+
+Poison only: NaN / non-finite / spacing &lt; 1 / bars ≤ 0. Hard cap bars at `MAX_VISIBLE_BARS` (5000), not healthy 400. Pad: do not inflate; do not clamp to 50.
+
+**HISTORY:** unchanged (centerTime + current microscope zoom policy, no FreshLive on failed center).
+
+**Cleanups in the same change:** one CameraCommit after paint (no FreshLive-then-restore); LIVE TF must not call `proposeFreshLive` when capture succeeded.
+
+**Not:** Mode B left/right times; default `HEALTHY_*` zoom; per-TF branches; Crosshair redesign.
 
 ---
 
