@@ -105,17 +105,7 @@ func TestHistoricalAcquireRange_PreFuturesNoData(t *testing.T) {
 func TestDeliverHistoryWindow_ArchiveHitNoREST(t *testing.T) {
 	d := histServer(t)
 	end := histJan2023Ms
-	rows := make([]data.Candle, 40)
-	for i := range rows {
-		open := end - int64(len(rows)-1-i)*60_000
-		rows[i] = data.Candle{
-			OpenTime: open, CloseTime: open + 59_999,
-			Open: 1, High: 2, Low: 1, Close: float64(i), Volume: 1,
-		}
-	}
-	if err := data.SaveKlines("BTCUSDT", "1m", rows); err != nil {
-		t.Fatal(err)
-	}
+	histSave(t, "BTCUSDT", "1m", []int64{end})
 	var fetches atomic.Int32
 	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
 		fetches.Add(1)
@@ -284,7 +274,7 @@ func TestShouldEnsureHistory_LiveEndSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UnixMilli()
-	if d.shouldEnsureHistory(spec, now, HistoryWindow{}, false) {
+	if d.shouldEnsureHistory(spec, now, HistoryWindow{}) {
 		t.Fatal("live end must not EnsureHistoryWindow")
 	}
 }
@@ -293,5 +283,168 @@ func TestShouldEnsureHistory_WarmupConstant(t *testing.T) {
 	d := &DashboardServer{}
 	if d.historyWantBars(3000) != 3000+market.IndicatorWarmupBars {
 		t.Fatalf("wantBars=%d", d.historyWantBars(3000))
+	}
+}
+
+func histQueryTF(tf string, endMs int64, limit int) HistoryWindowQuery {
+	spec, err := ResolveTimeframe(tf)
+	if err != nil {
+		panic(err)
+	}
+	return HistoryWindowQuery{Spec: spec, EndTimeMs: endMs, CandleLimit: limit}
+}
+
+func histSave(t *testing.T, symbol, interval string, opens []int64) {
+	t.Helper()
+	rows := make([]data.Candle, len(opens))
+	for i, open := range opens {
+		rows[i] = data.Candle{
+			OpenTime: open, CloseTime: open + 59_999,
+			Open: 1, High: 2, Low: 1, Close: float64(i + 1), Volume: 1,
+		}
+	}
+	if err := data.SaveKlines(symbol, interval, rows); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHistoryTailCoversEnd_Predicate(t *testing.T) {
+	end := histJan2023Ms
+	win := HistoryWindow{Klines: []exchange.Kline{{OpenTime: end - 60_000}, {OpenTime: end}}}
+	if !historyTailCoversEnd(win, end) {
+		t.Fatal("equal tail must HIT")
+	}
+	stale := HistoryWindow{Klines: []exchange.Kline{{OpenTime: end - 60_000}}}
+	if historyTailCoversEnd(stale, end) {
+		t.Fatal("stale tail must not HIT")
+	}
+	newer := HistoryWindow{Klines: []exchange.Kline{{OpenTime: end + 60_000}}}
+	if historyTailCoversEnd(newer, end) {
+		t.Fatal("last > expected must not HIT")
+	}
+	if historyTailCoversEnd(HistoryWindow{}, end) {
+		t.Fatal("empty must not HIT")
+	}
+}
+
+func TestDeliverHistoryWindow_PreFuturesStaleTailNoREST(t *testing.T) {
+	d := histServer(t)
+	focus := int64(1_529_064_000_000) // 2018-06-15 12:00 UTC
+	stale := int64(1_514_847_600_000) // 2018-01-01 23:00 UTC
+	histSave(t, exchange.SpotStorageSymbol("BTCUSDT"), "15m", []int64{stale})
+	var fetches atomic.Int32
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		fetches.Add(1)
+		return nil, fmt.Errorf("futures REST must not run pre-futures")
+	}
+	got := d.deliverHistoryWindow(context.Background(), histQueryTF("15m", focus, 10))
+	if got.Kind != historyDeliverNoData || got.Code != HistoryCodeWindowUnavailable {
+		t.Fatalf("kind=%v code=%s want WINDOW_UNAVAILABLE", got.Kind, got.Code)
+	}
+	if fetches.Load() != 0 {
+		t.Fatalf("fetches=%d want 0", fetches.Load())
+	}
+}
+
+func TestDeliverHistoryWindow_Seam15mStaleThenUnavailable(t *testing.T) {
+	d := histServer(t)
+	focus := int64(1_567_958_400_000) // 2019-09-08 16:00 UTC futures 4h/15m aligned
+	stale := int64(1_514_847_600_000)
+	histSave(t, exchange.SpotStorageSymbol("BTCUSDT"), "15m", []int64{stale})
+	var fetches atomic.Int32
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		fetches.Add(1)
+		if symbol != "BTCUSDT" {
+			t.Errorf("symbol=%s", symbol)
+		}
+		return nil, nil
+	}
+	got := d.deliverHistoryWindow(context.Background(), histQueryTF("15m", focus, 10))
+	if fetches.Load() != 1 {
+		t.Fatalf("fetches=%d want 1 Ensure", fetches.Load())
+	}
+	if got.Kind != historyDeliverNoData || got.Code != HistoryCodeWindowUnavailable {
+		t.Fatalf("kind=%v code=%s want WINDOW_UNAVAILABLE (must not pack 2018)", got.Kind, got.Code)
+	}
+}
+
+func TestDeliverHistoryWindow_Seam1hStaleThenUnavailable(t *testing.T) {
+	d := histServer(t)
+	focus := int64(1_567_958_400_000) // 2019-09-08 16:00
+	stale := int64(1_567_897_200_000) // 2019-09-07 23:00
+	histSave(t, exchange.SpotStorageSymbol("BTCUSDT"), "1h", []int64{stale})
+	var fetches atomic.Int32
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		fetches.Add(1)
+		return nil, nil
+	}
+	got := d.deliverHistoryWindow(context.Background(), histQueryTF("1h", focus, 10))
+	if fetches.Load() != 1 {
+		t.Fatalf("fetches=%d want 1", fetches.Load())
+	}
+	if got.Kind != historyDeliverNoData || got.Code != HistoryCodeWindowUnavailable {
+		t.Fatalf("kind=%v code=%s", got.Kind, got.Code)
+	}
+}
+
+func TestDeliverHistoryWindow_Seam4hExactHitNoREST(t *testing.T) {
+	d := histServer(t)
+	focus := int64(1_567_958_400_000) // 2019-09-08 16:00 4h open
+	histSave(t, "BTCUSDT", "4h", []int64{focus})
+	var fetches atomic.Int32
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		fetches.Add(1)
+		return nil, fmt.Errorf("REST must not run on 4h seam HIT")
+	}
+	got := d.deliverHistoryWindow(context.Background(), histQueryTF("4h", focus, 10))
+	if got.Kind != historyDeliverOK {
+		t.Fatalf("kind=%v code=%s", got.Kind, got.Code)
+	}
+	if fetches.Load() != 0 {
+		t.Fatalf("fetches=%d want 0", fetches.Load())
+	}
+	last := got.Win.Klines[len(got.Win.Klines)-1].OpenTime
+	if last != focus {
+		t.Fatalf("last=%d want %d", last, focus)
+	}
+}
+
+func TestDeliverHistoryWindow_2023_15mLocalHit(t *testing.T) {
+	d := histServer(t)
+	histSave(t, "BTCUSDT", "15m", []int64{histJan2023Ms})
+	var fetches atomic.Int32
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		fetches.Add(1)
+		return nil, fmt.Errorf("REST must not run")
+	}
+	got := d.deliverHistoryWindow(context.Background(), histQueryTF("15m", histJan2023Ms, 10))
+	if got.Kind != historyDeliverOK || fetches.Load() != 0 {
+		t.Fatalf("kind=%v fetches=%d", got.Kind, fetches.Load())
+	}
+}
+
+func TestWriteColumnarHistory_WindowUnavailableHTTP200(t *testing.T) {
+	d := histServer(t)
+	stale := int64(1_514_847_600_000)
+	histSave(t, exchange.SpotStorageSymbol("BTCUSDT"), "15m", []int64{stale})
+	d.ensureFetch = func(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+		return nil, nil
+	}
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/history?tf=15m&endTime=1567958400&limit=10&format=columnar", nil)
+	rec := httptest.NewRecorder()
+	d.handleHistory(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["status"] != "no_data" || payload["code"] != HistoryCodeWindowUnavailable {
+		t.Fatalf("payload=%v", payload)
+	}
+	if times, _ := payload["times"].([]any); len(times) != 0 {
+		t.Fatalf("must not pack stale times: %v", payload["times"])
 	}
 }

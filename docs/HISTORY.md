@@ -8,7 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## HIST-0/1/2 — on-demand historical window (Aug 2026) ✅
+## HIST-1.1 — historical tail-coverage HIT (Aug 2026) ✅
+
+- Historical `/api/history` HIT is `last GetWindow OpenTime == CurrentBarOpen(cappedEnd)`. `len>0` is not a hit.
+- Stale tail: futures-era Ensure once, then same predicate; still stale → 200 `no_data` / `WINDOW_UNAVAILABLE` (do not pack). Pre-futures stale → no futures REST.
+- Live-end `/api/history` unchanged.
+
+---
 
 - `GetWindow` read-only. `EnsureHistoryWindow` on `/api/history` miss (historical end, futures era).
 - Persist via `PersistenceQueue.PersistClosedBarsNow`. Single-flight per symbol+interval.

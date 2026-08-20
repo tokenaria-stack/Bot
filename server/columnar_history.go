@@ -349,12 +349,12 @@ func (d *DashboardServer) writeColumnarHistory(
 		writeHistoryFault(w, http.StatusInternalServerError, HistoryCodeSQLiteError, delivered.Err)
 		return
 	case historyDeliverNoData:
-		writeHistoryNoData(w, spec.ID, true)
+		writeHistoryNoData(w, spec.ID, true, delivered.Code)
 		return
 	}
 	win := delivered.Win
 	if len(win.Klines) == 0 {
-		writeHistoryNoData(w, spec.ID, true)
+		writeHistoryNoData(w, spec.ID, true, HistoryCodeNoData)
 		return
 	}
 
@@ -371,7 +371,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	)
 	if !ok {
 		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(win.Klines))
-		writeHistoryNoData(w, spec.ID, true)
+		writeHistoryNoData(w, spec.ID, true, HistoryCodeNoData)
 		return
 	}
 	if err := requestCtxErr(r.Context()); err != nil {

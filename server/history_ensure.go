@@ -30,11 +30,12 @@ import (
 // /api/history orchestrates: read → maybe ensure → read again → pack.
 
 const (
-	HistoryCodeOK             = "OK"
-	HistoryCodeArchiveMiss    = "ARCHIVE_MISS"
-	HistoryCodeNoData         = "NO_DATA"
-	HistoryCodeExchangeFailed = "EXCHANGE_FETCH_FAILED"
-	HistoryCodeSQLiteError    = "SQLITE_ERROR"
+	HistoryCodeOK                = "OK"
+	HistoryCodeArchiveMiss       = "ARCHIVE_MISS"
+	HistoryCodeNoData            = "NO_DATA"
+	HistoryCodeWindowUnavailable = "WINDOW_UNAVAILABLE"
+	HistoryCodeExchangeFailed    = "EXCHANGE_FETCH_FAILED"
+	HistoryCodeSQLiteError       = "SQLITE_ERROR"
 )
 
 type historyEnsureCall struct {
@@ -99,7 +100,32 @@ func historicalAcquireRange(endTimeMs int64, wantBars int, interval string) (fro
 	return fromMs, toMs, HistoryCodeOK, nil
 }
 
-func (d *DashboardServer) shouldEnsureHistory(spec TimeframeSpec, endTimeMs int64, win HistoryWindow, okWin bool) bool {
+func historySpecInterval(spec TimeframeSpec) string {
+	if spec.BinanceInterval != "" {
+		return spec.BinanceInterval
+	}
+	return spec.ID
+}
+
+// expectedHistoryLastOpen is the canonical closed-bar open at/before cappedEnd.
+func expectedHistoryLastOpen(cappedEndMs int64, interval string) (int64, error) {
+	if cappedEndMs <= 0 || interval == "" {
+		return 0, fmt.Errorf("expectedHistoryLastOpen: end and interval required")
+	}
+	return data.CurrentBarOpen(cappedEndMs, interval)
+}
+
+// historyTailCoversEnd is the HIST-1.1 HIT predicate: last GetWindow open
+// equals expectedLastOpen. Empty and last > expected are not hits.
+func historyTailCoversEnd(win HistoryWindow, expectedLastOpen int64) bool {
+	if expectedLastOpen <= 0 || len(win.Klines) == 0 {
+		return false
+	}
+	last := win.Klines[len(win.Klines)-1].OpenTime
+	return last == expectedLastOpen
+}
+
+func (d *DashboardServer) shouldEnsureHistory(spec TimeframeSpec, endTimeMs int64, win HistoryWindow) bool {
 	if d == nil {
 		return false
 	}
@@ -112,7 +138,11 @@ func (d *DashboardServer) shouldEnsureHistory(spec TimeframeSpec, endTimeMs int6
 	if endTimeMs < exchange.BinanceFuturesGenesisMs {
 		return false
 	}
-	return !okWin || len(win.Klines) == 0
+	expected, err := expectedHistoryLastOpen(endTimeMs, spec.BinanceInterval)
+	if err != nil {
+		return true
+	}
+	return !historyTailCoversEnd(win, expected)
 }
 
 func (d *DashboardServer) fetchClosedRangePages(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
@@ -206,26 +236,54 @@ const (
 
 type historyDeliverResult struct {
 	Kind historyDeliverKind
+	Code string
 	Win  HistoryWindow
 	Err  error
 }
 
+func historyUnavailableResult(win HistoryWindow) historyDeliverResult {
+	if len(win.Klines) > 0 {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeWindowUnavailable}
+	}
+	return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
+}
+
+func (d *DashboardServer) packIfHistoricalTailHit(win HistoryWindow, expectedLastOpen int64) historyDeliverResult {
+	if historyTailCoversEnd(win, expectedLastOpen) {
+		return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
+	}
+	return historyUnavailableResult(win)
+}
+
 // deliverHistoryWindow is the /api/history orchestration: GetWindow (read) →
 // EnsureHistoryWindow on miss → GetWindow again. Never returns REST candles as the payload.
+// HIST-1.1: historical HIT is last GetWindow OpenTime == CurrentBarOpen(cappedEnd).
 func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWindowQuery) historyDeliverResult {
 	win, ok := d.GetWindow(ctx, q)
 	if err := requestCtxErr(ctx); err != nil {
 		return historyDeliverResult{Kind: historyDeliverExchange, Err: err}
 	}
-	endMs := resolveClosedBarBoundary(q.EndTimeMs, q.Spec.BinanceInterval)
-	if q.Spec.BinanceInterval == "" {
-		endMs = resolveClosedBarBoundary(q.EndTimeMs, q.Spec.ID)
-	}
-	if !d.shouldEnsureHistory(q.Spec, endMs, win, ok) {
+	interval := historySpecInterval(q.Spec)
+	endMs := resolveClosedBarBoundary(q.EndTimeMs, interval)
+	historical := d.isHistoricalKlineEnd(endMs, interval)
+
+	if !historical {
 		if !ok || len(win.Klines) == 0 {
-			return historyDeliverResult{Kind: historyDeliverNoData}
+			return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
 		}
-		return historyDeliverResult{Kind: historyDeliverOK, Win: win}
+		return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
+	}
+
+	expected, err := expectedHistoryLastOpen(endMs, interval)
+	if err != nil {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData, Err: err}
+	}
+	if historyTailCoversEnd(win, expected) {
+		return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
+	}
+
+	if !d.shouldEnsureHistory(q.Spec, endMs, win) {
+		return historyUnavailableResult(win)
 	}
 
 	want := d.historyWantBars(q.CandleLimit)
@@ -237,34 +295,31 @@ func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWin
 	switch ens.Code {
 	case HistoryCodeExchangeFailed:
 		log.Printf("[Dashboard] EnsureHistoryWindow exchange %s %s: %v", symbol, q.Spec.BinanceInterval, ens.Err)
-		return historyDeliverResult{Kind: historyDeliverExchange, Err: ens.Err}
+		return historyDeliverResult{Kind: historyDeliverExchange, Code: HistoryCodeExchangeFailed, Err: ens.Err}
 	case HistoryCodeSQLiteError:
 		log.Printf("[Dashboard] EnsureHistoryWindow sqlite %s %s: %v", symbol, q.Spec.BinanceInterval, ens.Err)
-		return historyDeliverResult{Kind: historyDeliverSQLite, Err: ens.Err}
-	case HistoryCodeNoData:
-		win2, ok2 := d.GetWindow(ctx, q)
-		if ok2 && len(win2.Klines) > 0 {
-			return historyDeliverResult{Kind: historyDeliverOK, Win: win2}
-		}
-		return historyDeliverResult{Kind: historyDeliverNoData}
+		return historyDeliverResult{Kind: historyDeliverSQLite, Code: HistoryCodeSQLiteError, Err: ens.Err}
 	}
 
 	win2, ok2 := d.GetWindow(ctx, q)
 	if err := requestCtxErr(ctx); err != nil {
 		return historyDeliverResult{Kind: historyDeliverExchange, Err: err}
 	}
-	if !ok2 || len(win2.Klines) == 0 {
-		return historyDeliverResult{Kind: historyDeliverNoData}
+	if !ok2 {
+		win2 = HistoryWindow{}
 	}
-	return historyDeliverResult{Kind: historyDeliverOK, Win: win2}
+	return d.packIfHistoricalTailHit(win2, expected)
 }
 
-func writeHistoryNoData(w http.ResponseWriter, timeframe string, columnar bool) {
+func writeHistoryNoData(w http.ResponseWriter, timeframe string, columnar bool, code string) {
+	if code == "" {
+		code = HistoryCodeNoData
+	}
 	if columnar {
 		writeJSON(w, columnarHistoryResponse{
 			Format:    "columnar",
 			Status:    "no_data",
-			Code:      HistoryCodeNoData,
+			Code:      code,
 			Timeframe: timeframe,
 			Times:     []int64{},
 			Candles:   columnarCandles{},
@@ -275,7 +330,7 @@ func writeHistoryNoData(w http.ResponseWriter, timeframe string, columnar bool) 
 	}
 	writeJSON(w, historyResponse{
 		Status:    "no_data",
-		Code:      HistoryCodeNoData,
+		Code:      code,
 		Timeframe: timeframe,
 		HasMore:   false,
 	})

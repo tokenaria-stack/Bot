@@ -1462,7 +1462,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 			CandleLimit: candleLimit,
 		})
 		if !okWin || len(win.Klines) == 0 {
-			writeHistoryNoData(w, spec.ID, false)
+			writeHistoryNoData(w, spec.ID, false, HistoryCodeNoData)
 			return
 		}
 		klines := win.Klines
@@ -1498,12 +1498,12 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		writeHistoryFault(w, http.StatusInternalServerError, HistoryCodeSQLiteError, delivered.Err)
 		return
 	case historyDeliverNoData:
-		writeHistoryNoData(w, spec.ID, false)
+		writeHistoryNoData(w, spec.ID, false, delivered.Code)
 		return
 	}
 	win := delivered.Win
 	if len(win.Klines) == 0 {
-		writeHistoryNoData(w, spec.ID, false)
+		writeHistoryNoData(w, spec.ID, false, HistoryCodeNoData)
 		return
 	}
 	klines := win.Klines
@@ -1527,7 +1527,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	}
 	if len(resp.Candles) == 0 {
 		log.Printf("[Dashboard] history replay empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(klines))
-		writeHistoryNoData(w, spec.ID, false)
+		writeHistoryNoData(w, spec.ID, false, HistoryCodeNoData)
 		return
 	}
 	if len(resp.Candles) > 0 {
