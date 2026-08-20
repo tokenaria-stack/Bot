@@ -28,6 +28,7 @@ trading_bot
 .cursor/*
 !.cursor/rules/
 !.cursor/mcp.json.example
+.cursor/mcp.json
 
 # OS junk
 .DS_Store
