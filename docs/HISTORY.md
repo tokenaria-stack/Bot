@@ -14,9 +14,20 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - Stale tail: futures-era Ensure once, then same predicate; still stale → 200 `no_data` / `WINDOW_UNAVAILABLE` (do not pack). Pre-futures stale → no futures REST.
 - Live-end `/api/history` unchanged.
 
+## HIST freeze (Aug 2026) ✅
+
+- Live seam smoke after rebuild: `15m` and `1h` @ 2019-09-08 16:00 UTC → HTTP 200 `no_data` / `WINDOW_UNAVAILABLE`.
+- Do not reopen HIST unless a regression appears. Next chapter: DATA-1 archive acquisition (not Ensure-as-sync).
+
+## DATA-1A — spot Vision 15m key + import (Aug 2026) ✅
+
+- `history_sync -market=spot` persists `SpotStorageSymbol` (`BTCUSDT_SPOT`); Vision URL still uses `BTCUSDT`.
+- Operator import: BTCUSDT spot 15m, 2018-01 through 2019-09. No stitch rewrite.
+- Smoke: pre-genesis 15m READY from spot; first UM 15m (17:45) READY; 16:00 listing-day gap still `WINDOW_UNAVAILABLE`.
+
 ---
 
-- `GetWindow` read-only. `EnsureHistoryWindow` on `/api/history` miss (historical end, futures era).
+## HIST-0/1/2 — on-demand historical window (Aug 2026) ✅
 - Persist via `PersistenceQueue.PersistClosedBarsNow`. Single-flight per symbol+interval.
 - HTTP: 200 payload / 200 `no_data` / 502 exchange / 500 sqlite. FE keeps previous island on `NO_DATA`.
 - BeforeEnd does not pad post-genesis windows with pre-genesis spot.
