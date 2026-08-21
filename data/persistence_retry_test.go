@@ -258,14 +258,11 @@ func TestNotePersistEdges_RecordsNeighborHole(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	NotePersistEdges("BTCUSDT", "1m", []Candle{
-		{OpenTime: a + 5*step, Open: 2, High: 2, Low: 2, Close: 2, Volume: 1, CloseTime: a + 5*step + step - 1},
-	})
 	gaps, err := ListArchiveGaps("BTCUSDT", "1m", 8)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gaps) == 0 {
-		t.Fatal("expected gap ledger entry for neighbor hole")
+	if len(gaps) != 1 || gaps[0].AfterOpenMs != a || gaps[0].BeforeOpenMs != a+5*step {
+		t.Fatalf("SaveKlines should record neighbor hole, got %#v", gaps)
 	}
 }

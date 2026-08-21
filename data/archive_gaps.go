@@ -281,6 +281,143 @@ ORDER BY open_time ASC LIMIT 1`, symbol, interval, openMs).Scan(&ot)
 	return ot, true, nil
 }
 
+type gapPair struct {
+	after  int64
+	before int64
+}
+
+func neighborDiscontinuitiesTx(tx *sql.Tx, symbol, interval string, minOT, maxOT int64) ([]gapPair, error) {
+	prev, hasPrev, err := queryOpenTimeBeforeTx(tx, symbol, interval, minOT)
+	if err != nil {
+		return nil, err
+	}
+	next, hasNext, err := queryOpenTimeAfterTx(tx, symbol, interval, maxOT)
+	if err != nil {
+		return nil, err
+	}
+	mid, err := queryOpenTimesInclusiveTx(tx, symbol, interval, minOT, maxOT)
+	if err != nil {
+		return nil, err
+	}
+	opens := make([]int64, 0, len(mid)+2)
+	if hasPrev {
+		opens = append(opens, prev)
+	}
+	opens = append(opens, mid...)
+	if hasNext {
+		opens = append(opens, next)
+	}
+	return discontinuitiesFromOpens(interval, opens)
+}
+
+func queryOpenTimeBeforeTx(tx *sql.Tx, symbol, interval string, openMs int64) (int64, bool, error) {
+	var ot int64
+	err := tx.QueryRow(`
+SELECT open_time FROM historical_klines
+WHERE symbol = ? AND interval = ? AND open_time < ?
+ORDER BY open_time DESC LIMIT 1`, symbol, interval, openMs).Scan(&ot)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return ot, true, nil
+}
+
+func queryOpenTimeAfterTx(tx *sql.Tx, symbol, interval string, openMs int64) (int64, bool, error) {
+	var ot int64
+	err := tx.QueryRow(`
+SELECT open_time FROM historical_klines
+WHERE symbol = ? AND interval = ? AND open_time > ?
+ORDER BY open_time ASC LIMIT 1`, symbol, interval, openMs).Scan(&ot)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return ot, true, nil
+}
+
+func queryOpenTimesInclusiveTx(tx *sql.Tx, symbol, interval string, minOT, maxOT int64) ([]int64, error) {
+	rows, err := tx.Query(`
+SELECT open_time FROM historical_klines
+WHERE symbol = ? AND interval = ? AND open_time >= ? AND open_time <= ?
+ORDER BY open_time ASC`, symbol, interval, minOT, maxOT)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var ot int64
+		if err := rows.Scan(&ot); err != nil {
+			return nil, err
+		}
+		out = append(out, ot)
+	}
+	return out, rows.Err()
+}
+
+func discontinuitiesFromOpens(interval string, opens []int64) ([]gapPair, error) {
+	if len(opens) < 2 {
+		return nil, nil
+	}
+	out := make([]gapPair, 0)
+	prev := opens[0]
+	for i := 1; i < len(opens); i++ {
+		cur := opens[i]
+		if cur <= prev {
+			continue
+		}
+		next, err := NextBarOpen(prev, interval)
+		if err != nil {
+			return nil, err
+		}
+		if next > 0 && next < cur {
+			out = append(out, gapPair{after: prev, before: cur})
+		}
+		prev = cur
+	}
+	return out, nil
+}
+
+func applyArchiveGapDiffTx(tx *sql.Tx, symbol, interval string, oldPairs, newPairs []gapPair) error {
+	oldSet := make(map[gapPair]struct{}, len(oldPairs))
+	for _, p := range oldPairs {
+		oldSet[p] = struct{}{}
+	}
+	newSet := make(map[gapPair]struct{}, len(newPairs))
+	for _, p := range newPairs {
+		newSet[p] = struct{}{}
+	}
+	for p := range oldSet {
+		if _, ok := newSet[p]; ok {
+			continue
+		}
+		if _, err := tx.Exec(`
+DELETE FROM archive_gaps
+WHERE symbol = ? AND interval = ? AND after_open_ms = ? AND before_open_ms = ?`,
+			symbol, interval, p.after, p.before); err != nil {
+			return fmt.Errorf("delete stale archive_gaps: %w", err)
+		}
+	}
+	for p := range newSet {
+		if _, ok := oldSet[p]; ok {
+			continue
+		}
+		if _, err := tx.Exec(`
+INSERT INTO archive_gaps (symbol, interval, after_open_ms, before_open_ms, status, reason)
+VALUES (?, ?, ?, ?, ?, '')
+ON CONFLICT(symbol, interval, after_open_ms, before_open_ms) DO NOTHING`,
+			symbol, interval, p.after, p.before, ArchiveGapStatusOpen); err != nil {
+			return fmt.Errorf("insert archive_gaps: %w", err)
+		}
+	}
+	return nil
+}
+
 func trimInterval(interval string) string {
 	return strings.TrimSpace(interval)
 }

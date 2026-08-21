@@ -162,13 +162,10 @@ func describeTimeUnit(ts int64) string {
 	}
 }
 
-// SaveKlines UPSERTs candles into historical_klines.
-// OpenTime and CloseTime must be Unix milliseconds. SaveKlines performs no unit
-// inference or conversion (debt #83 Patch B) — callers (PersistenceQueue, REST/WS
-// adapters, offline tools) are responsible for the ms contract.
-// Production runtime: call only from PersistenceQueue (Shot 9E single-writer).
-// Tests and offline tools (cmd/history_sync) may call directly.
-// ON CONFLICT updates OHLCV so a stale/partial row never blocks a fresher closed bar.
+// SaveKlines UPSERTs candles into historical_klines and, in the same transaction,
+// maintains archive_gaps OPEN rows as the current physical neighbor discontinuities
+// for (symbol, interval). OpenTime and CloseTime must be Unix milliseconds.
+// Callers (PersistenceQueue, HIST, history_sync, tests) share this socket.
 func SaveKlines(symbol, interval string, klines []Candle) error {
 	if err := InitDB(); err != nil {
 		return err
@@ -180,11 +177,26 @@ func SaveKlines(symbol, interval string, klines []Candle) error {
 	symbol = normalizeSymbol(symbol)
 	interval = strings.TrimSpace(interval)
 
+	minOT, maxOT := klines[0].OpenTime, klines[0].OpenTime
+	for _, k := range klines[1:] {
+		if k.OpenTime < minOT {
+			minOT = k.OpenTime
+		}
+		if k.OpenTime > maxOT {
+			maxOT = k.OpenTime
+		}
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	oldPairs, err := neighborDiscontinuitiesTx(tx, symbol, interval, minOT, maxOT)
+	if err != nil {
+		return err
+	}
 
 	// Monotonic firewall (Core 5.0 Phase B): exchange totals for a closed bar only
 	// grow on honest re-reads. A stale/under-indexed REST snapshot can never shrink
@@ -213,6 +225,14 @@ ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
 		); err != nil {
 			return fmt.Errorf("upsert kline open_time=%d: %w", k.OpenTime, err)
 		}
+	}
+
+	newPairs, err := neighborDiscontinuitiesTx(tx, symbol, interval, minOT, maxOT)
+	if err != nil {
+		return err
+	}
+	if err := applyArchiveGapDiffTx(tx, symbol, interval, oldPairs, newPairs); err != nil {
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {

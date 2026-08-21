@@ -91,11 +91,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("reload: %v", err)
 	}
-	opens := make([]int64, len(restored))
-	for i, c := range restored {
-		opens[i] = c.OpenTime
-	}
-	data.NoteGapsFromOpenTimes(sym, iv, opens)
+	// SaveKlines already maintains archive_gaps. Re-check leftover OPEN rows near the window.
 
 	// Clear ledger entries that the repair just closed (tip-only heal left them).
 	gaps, _ := data.ListArchiveGaps(sym, iv, 32)

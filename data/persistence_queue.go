@@ -138,7 +138,6 @@ func (q *PersistenceQueue) PersistClosedBarsNow(symbol, interval string, candles
 	if err := q.saveWithRetry(save, symbol, interval, candles); err != nil {
 		return err
 	}
-	NotePersistEdges(symbol, interval, candles)
 	return nil
 }
 
@@ -268,7 +267,6 @@ func (q *PersistenceQueue) flushBatch(jobs []PersistJob) {
 			q.pushSpill(jobByKey[k])
 			continue
 		}
-		NotePersistEdges(k.sym, k.iv, candles)
 	}
 }
 

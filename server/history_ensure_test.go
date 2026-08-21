@@ -448,3 +448,55 @@ func TestWriteColumnarHistory_WindowUnavailableHTTP200(t *testing.T) {
 		t.Fatalf("must not pack stale times: %v", payload["times"])
 	}
 }
+
+func TestGetWindow_DoesNotWriteArchiveGapsOnVenueStitch(t *testing.T) {
+	d := histServer(t)
+	spec, err := ResolveTimeframe("15m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const step int64 = 15 * 60 * 1000
+	genesis := exchange.BinanceFuturesGenesisMs
+	lastSpot := genesis - step
+	firstFut := genesis + 71*step // 2019-09-08 17:45 UTC
+
+	spot := make([]data.Candle, 5)
+	for i := 0; i < 5; i++ {
+		ot := lastSpot - int64(4-i)*step
+		spot[i] = data.Candle{
+			OpenTime: ot, Open: 1, High: 1, Low: 1, Close: 1, Volume: 1, CloseTime: ot + step - 1,
+		}
+	}
+	if err := data.SaveKlines(exchange.SpotStorageSymbol("BTCUSDT"), "15m", spot); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.SaveKlines("BTCUSDT", "15m", []data.Candle{{
+		OpenTime: firstFut, Open: 2, High: 2, Low: 2, Close: 2, Volume: 1, CloseTime: firstFut + step - 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := data.ListArchiveGaps("BTCUSDT", "15m", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: firstFut, CandleLimit: 50,
+	})
+	if !ok || len(win.Klines) < 2 {
+		t.Fatalf("GetWindow ok=%v n=%d", ok, len(win.Klines))
+	}
+
+	after, err := data.ListArchiveGaps("BTCUSDT", "15m", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("GetWindow mutated archive_gaps: before=%#v after=%#v", before, after)
+	}
+	for _, g := range after {
+		if g.AfterOpenMs == lastSpot && g.BeforeOpenMs == firstFut {
+			t.Fatal("venue stitch must not be recorded as a BTCUSDT physical gap")
+		}
+	}
+}

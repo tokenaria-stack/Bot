@@ -1878,11 +1878,6 @@ func (d *DashboardServer) loadRESTKlinesFromStore(ctx context.Context, spec Time
 			if err := requestCtxErr(ctx); err != nil {
 				return nil
 			}
-			opens := make([]int64, len(candles))
-			for i, c := range candles {
-				opens[i] = c.OpenTime
-			}
-			data.NoteGapsFromOpenTimes(d.symbol, spec.BinanceInterval, opens)
 			klines := candlesToKlines(candles)
 			if wantBars > 0 && len(klines) > wantBars {
 				klines = klines[len(klines)-wantBars:]
