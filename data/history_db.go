@@ -55,6 +55,18 @@ func ResetDBForTest(path string) {
 	resetDBConnection(path)
 }
 
+// TestingForceOpenArchiveGap inserts an OPEN ledger row without adjacency checks (tests only).
+func TestingForceOpenArchiveGap(symbol, interval string, afterMs, beforeMs int64) error {
+	if err := InitDB(); err != nil {
+		return err
+	}
+	_, err := db.Exec(`
+INSERT INTO archive_gaps (symbol, interval, after_open_ms, before_open_ms, status, reason)
+VALUES (?, ?, ?, ?, ?, '')`,
+		normalizeSymbol(symbol), trimInterval(interval), afterMs, beforeMs, ArchiveGapStatusOpen)
+	return err
+}
+
 // InitDB opens history.db and ensures schema exists.
 func InitDB() error {
 	mu.Lock()

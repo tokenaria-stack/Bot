@@ -136,11 +136,11 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		still, err := data.ArchiveGapStillOpen(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
+		current, err := data.ArchiveGapIsCurrentNeighbor(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 		if err != nil {
 			return err
 		}
-		if !still {
+		if !current {
 			_ = data.ClearArchiveGap(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 			continue
 		}
@@ -162,7 +162,7 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 			continue
 		}
 
-		candles, err := m.exchangeClient.FetchClosedRangePagesExact(symbol, interval, fetchStart, fetchEnd)
+		candles, err := m.fetchClosedRangeForGapHeal(symbol, interval, fetchStart, fetchEnd)
 		if err != nil {
 			// Network / API error — keep status=open for retry.
 			return err
@@ -176,11 +176,11 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 		if err := q.AppendClosedBars(ctx, symbol, interval, exchange.CandlesToData(candles)); err != nil {
 			return err
 		}
-		still, err = data.ArchiveGapStillOpen(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
+		current, err = data.ArchiveGapIsCurrentNeighbor(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 		if err != nil {
 			return err
 		}
-		if !still {
+		if !current {
 			_ = data.ClearArchiveGap(gap.Symbol, gap.Interval, gap.AfterOpenMs, gap.BeforeOpenMs)
 			log.Printf("[SQLiteArchive] gap healed %s %s after=%d before=%d bars=%d",
 				symbol, interval, gap.AfterOpenMs, gap.BeforeOpenMs, len(candles))
@@ -196,4 +196,11 @@ func (m *Runtime) healSQLiteArchiveGaps(ctx context.Context, symbol, interval st
 		}
 	}
 	return nil
+}
+
+func (m *Runtime) fetchClosedRangeForGapHeal(symbol, interval string, fromMs, toMs int64) ([]exchange.Candle, error) {
+	if m != nil && m.healClosedFetcher != nil {
+		return m.healClosedFetcher(symbol, interval, fromMs, toMs)
+	}
+	return m.exchangeClient.FetchClosedRangePagesExact(symbol, interval, fromMs, toMs)
 }

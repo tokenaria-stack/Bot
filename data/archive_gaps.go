@@ -452,6 +452,37 @@ func GapHealWindow(gap ArchiveGap) (startMs, endMs int64, ok bool, err error) {
 	return startMs, endMs, true, nil
 }
 
+// ArchiveGapIsCurrentNeighbor reports whether (after, before) is still the current
+// physical neighbor discontinuity for this storage series. One indexed lookup:
+// next stored open after `after` must equal `before`, and they must not be
+// calendar-adjacent (NextBarOpen).
+//
+// If no stored bar exists after `after`, the pair is not a current neighbor
+// (stale OPEN). Healer clears it and does not REST — we do not treat a missing
+// successor as a fetch-to-tip repair.
+func ArchiveGapIsCurrentNeighbor(symbol, interval string, afterOpenMs, beforeOpenMs int64) (bool, error) {
+	if err := InitDB(); err != nil {
+		return false, err
+	}
+	symbol = normalizeSymbol(symbol)
+	interval = trimInterval(interval)
+	nextExisting, ok, err := queryOpenTimeAfter(symbol, interval, afterOpenMs)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	if nextExisting != beforeOpenMs {
+		return false, nil
+	}
+	expect, err := NextBarOpen(afterOpenMs, interval)
+	if err != nil {
+		return false, err
+	}
+	return expect > 0 && beforeOpenMs != expect, nil
+}
+
 // ArchiveGapStillOpen reports whether the ledger edges still have missing intermediates.
 func ArchiveGapStillOpen(symbol, interval string, afterOpenMs, beforeOpenMs int64) (bool, error) {
 	if err := InitDB(); err != nil {
