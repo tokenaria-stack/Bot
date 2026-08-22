@@ -56,4 +56,11 @@ test('native count matches Go catalog (14)', () => {
   assert.strictEqual(NATIVE.length, 14);
 });
 
+test('requiresDenseTimeContinuity lives in config (class, not 1s hardcode)', () => {
+  assert.ok(config.includes('function requiresDenseTimeContinuity'));
+  assert.ok(config.includes('/^\\d+s$/i'));
+  assert.ok(/tick/i.test(config.slice(config.indexOf('function requiresDenseTimeContinuity'))));
+  assert.ok(!/if\s*\(\s*tf\s*===\s*['"]1s['"]/.test(config));
+});
+
 console.log('timeframe_catalog_test: ALL PASS');

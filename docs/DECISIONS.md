@@ -870,5 +870,7 @@ Tick contract: **1 tick = 1 `aggTrade` event** (tick bars not implemented).
 
 **Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h,1s}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. 1s is out of Master continuity. Derived `/api/history` folds the parent window. Camera unchanged.
 
+MICRO-1.1: FE live gap heal (`appendTick` 1.5× interval → `fe_gapDetected`) runs only when `requiresDenseTimeContinuity(tf)` is true (native + derived). Seconds/ticks never treat a skipped timestamp as a data hole. Do not special-case `"1s"`.
+
 ---
 

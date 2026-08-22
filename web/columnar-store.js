@@ -39,6 +39,8 @@ class ColumnarStore {
     this._sealed = false;
     /** @type {number} TF bar duration (sec); 0 = gap detection disabled. */
     this._intervalSec = 0;
+    /** Dense TFs report chronology gaps; sparse micro (seconds/ticks) never does. */
+    this._denseContinuity = true;
     /**
      * Display-window mode (Debt #69A).
      * 'live' — store tip tracks the market; WS may appendTick.
@@ -63,6 +65,11 @@ class ColumnarStore {
   setTfInterval(seconds) {
     const s = Number(seconds);
     this._intervalSec = Number.isFinite(s) && s > 0 ? s : 0;
+  }
+
+  /** Core 4.5 / MICRO-1.1: native+derived dense; seconds/ticks sparse. */
+  setDenseContinuity(dense) {
+    this._denseContinuity = dense !== false;
   }
 
   /** Columnar times[] are Unix seconds (ChartTimeSec). No 1e12 unit guess. */
@@ -985,9 +992,9 @@ class ColumnarStore {
 
     const isNewBar = lastTime == null || time > lastTime;
 
-    // Core 4.5 Self-Healing: a forward jump beyond 1.5 intervals is a chronology gap.
-    // The store never glues over holes — it reports the gap; composition root decides how to heal.
-    if (isNewBar && this._intervalSec > 0 && lastTime != null
+    // Dense TFs: a forward jump beyond 1.5 intervals is a chronology gap (server heal).
+    // Sparse micro TFs (seconds/ticks): missing buckets are legal; never report a gap.
+    if (this._denseContinuity && isNewBar && this._intervalSec > 0 && lastTime != null
       && (time - lastTime) > this._intervalSec * 1.5) {
       return { gapDetected: true, lastTime, tickTime: time };
     }

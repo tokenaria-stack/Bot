@@ -95,6 +95,15 @@ const LIVE_CHART_TFS = [
   '1d', '1w', '1M',
 ];
 
+/** Native + derived time bars are dense. Seconds and ticks are sparse (no-trade buckets are legal). */
+function requiresDenseTimeContinuity(tf) {
+  const id = String(tf || '').trim();
+  if (!id) return true;
+  if (/tick/i.test(id)) return false;
+  if (/^\d+s$/i.test(id)) return false;
+  return true;
+}
+
 const TF_DISPLAY = {
   '1s': '1s',
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
@@ -461,4 +470,5 @@ if (typeof window !== 'undefined') {
     defaultRsxSettings, defaultNavigatorPaneSettings, defaultRiskSettings, defaultWozduhPrefs,
     ensureChartLibraryStyles,
   };
+  window.requiresDenseTimeContinuity = requiresDenseTimeContinuity;
 }

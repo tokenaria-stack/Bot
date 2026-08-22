@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## MICRO-1.1 — sparse micro live series (Aug 2026) ✅
+
+- FE `appendTick` chronology-gap heal is dense-only (`requiresDenseTimeContinuity`).
+- Native + derived time bars stay dense. Seconds / ticks are sparse: missing buckets append, they do not enter timeline healing.
+- No synthetic no-trade candles. No 1s REST/SQLite. Camera / watchdog timing unchanged.
+
+---
+
 ## MICRO-1 — aggTrade 1s RAM bars (Aug 2026) ✅
 
 - Combined WS adds `BTCUSDT@aggTrade` (same client). Builder folds T/p/q into 1s OHLCV; no raw trade list.

@@ -100,6 +100,12 @@
       : (typeof TimeNormalizer !== 'undefined' ? TimeNormalizer.getIntervalMs : null);
     const ms = fn ? Number(fn(window.currentTf)) : 0;
     liveColumnarStore.setTfInterval(Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0);
+    if (typeof liveColumnarStore.setDenseContinuity === 'function') {
+      const dense = typeof requiresDenseTimeContinuity === 'function'
+        ? requiresDenseTimeContinuity(window.currentTf)
+        : true;
+      liveColumnarStore.setDenseContinuity(dense);
+    }
   }
 
   /**
@@ -842,6 +848,10 @@
 
   /** Store tip is behind wall-clock — Microscope island can extend toward live. */
   function canExtendHistoryRight() {
+    if (typeof requiresDenseTimeContinuity === 'function'
+      && !requiresDenseTimeContinuity(window.currentTf)) {
+      return false;
+    }
     const last = liveColumnarStore?.lastTimeSec?.();
     if (!Number.isFinite(last) || last <= 0) return false;
     const nowSec = Math.floor(Date.now() / 1000);
@@ -1146,6 +1156,10 @@
       viewToSec: viewTimes?.viewToSec,
     });
     if (appendResult?.gapDetected) {
+      const tf = tick?.timeframe || window.currentTf;
+      if (typeof requiresDenseTimeContinuity === 'function' && !requiresDenseTimeContinuity(tf)) {
+        return false;
+      }
       if (liveColumnarStore.windowMode === 'history') return false;
       console.warn('[Self-Healing] Time gap detected — waiting for server heal', {
         lastTime: appendResult.lastTime,
