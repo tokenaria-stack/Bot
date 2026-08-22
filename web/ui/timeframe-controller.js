@@ -9,13 +9,15 @@ const TimeframeController = (() => {
   }
 
   function tfSortKey(id) {
+    if (id === '1M') return 4004;
     const s = id.toLowerCase();
     if (s.includes('tick')) return 100 + (parseInt(s, 10) || 1);
     if (/^\d+s$/.test(s)) return 1000 + parseInt(s, 10);
     if (/^\d+m$/.test(s)) return 2000 + parseInt(s, 10);
     if (/^\d+h$/.test(s)) return 3000 + parseInt(s, 10);
     if (s === '1d') return 4001;
-    if (s === '1w') return 4002;
+    if (s === '3d') return 4002;
+    if (s === '1w') return 4003;
     return 9000;
   }
 
@@ -30,7 +32,7 @@ const TimeframeController = (() => {
     } catch {
       tfFavorites = [...DEFAULT_FAVS];
     }
-    tfFavorites = tfFavorites.filter((id) => id !== '1M');
+    tfFavorites = tfFavorites.filter((id) => NATIVE_BINANCE_TFS.includes(id));
     sortFavorites();
   }
 
@@ -143,8 +145,7 @@ const TimeframeController = (() => {
 
   function switchLiveTimeframe(tf) {
     const resolved = resolveTf(tf);
-    if (!resolved) return;
-    if (resolved === '1M') return;
+    if (!resolved || !NATIVE_BINANCE_TFS.includes(resolved)) return;
 
     const changed = resolved !== currentTf;
     let viewportAnchor = null;
@@ -214,6 +215,9 @@ const TimeframeController = (() => {
     }
     const nextTf = resolveTf(tf);
     if (!nextTf) return;
+    if (!TabsController.isBacktestTfContext() && !NATIVE_BINANCE_TFS.includes(nextTf)) {
+      return;
+    }
 
     if (TabsController.isBacktestTfContext()) {
       switchBacktestTimeframe(nextTf, event);
@@ -299,8 +303,8 @@ const TimeframeController = (() => {
     loadFavorites();
     if (!useServerTf) {
       currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
-      if (currentTf === '1M') {
-        currentTf = '1w';
+      if (!NATIVE_BINANCE_TFS.includes(currentTf)) {
+        currentTf = '1m';
         localStorage.setItem(LS_TF_KEY, currentTf);
       }
     }

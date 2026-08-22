@@ -82,36 +82,32 @@ function defaultRiskSettings() {
   return null;
 }
 
+const NATIVE_BINANCE_TFS = [
+  '1m', '3m', '5m', '15m', '30m',
+  '1h', '2h', '4h', '6h', '8h', '12h',
+  '1d', '3d', '1w', '1M',
+];
+
 const TF_DISPLAY = {
-  '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
-  '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H',
-  '1d': 'D', '1w': 'W',
-  '1tick': '1 tick', '10ticks': '10 ticks', '100ticks': '100 ticks', '1000ticks': '1000 ticks',
-  '1s': '1s', '5s': '5s', '10s': '10s', '15s': '15s', '30s': '30s', '45s': '45s',
+  '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
+  '1h': '1H', '2h': '2H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
+  '1d': 'D', '3d': '3D', '1w': 'W', '1M': '1M',
 };
 
 const TF_MENU = {
-  TICKS: [
-    { id: '1tick', label: '1 tick' }, { id: '10ticks', label: '10 ticks' },
-    { id: '100ticks', label: '100 ticks' }, { id: '1000ticks', label: '1000 ticks' },
-  ],
-  SECONDS: [
-    { id: '1s', label: '1 second' }, { id: '5s', label: '5 seconds' },
-    { id: '10s', label: '10 seconds' }, { id: '15s', label: '15 seconds' },
-    { id: '30s', label: '30 seconds' }, { id: '45s', label: '45 seconds' },
-  ],
   MINUTES: [
-    { id: '1m', label: '1 minute' }, { id: '2m', label: '2 minutes' },
-    { id: '3m', label: '3 minutes' }, { id: '5m', label: '5 minutes' },
-    { id: '10m', label: '10 minutes' }, { id: '15m', label: '15 minutes' },
-    { id: '30m', label: '30 minutes' }, { id: '45m', label: '45 minutes' },
+    { id: '1m', label: '1 minute' }, { id: '3m', label: '3 minutes' },
+    { id: '5m', label: '5 minutes' }, { id: '15m', label: '15 minutes' },
+    { id: '30m', label: '30 minutes' },
   ],
   HOURS: [
     { id: '1h', label: '1 hour' }, { id: '2h', label: '2 hours' },
-    { id: '3h', label: '3 hours' }, { id: '4h', label: '4 hours' },
+    { id: '4h', label: '4 hours' }, { id: '6h', label: '6 hours' },
+    { id: '8h', label: '8 hours' }, { id: '12h', label: '12 hours' },
   ],
   DAYS: [
-    { id: '1d', label: '1 day' }, { id: '1w', label: '1 week' },
+    { id: '1d', label: '1 day' }, { id: '3d', label: '3 days' },
+    { id: '1w', label: '1 week' }, { id: '1M', label: '1 month' },
   ],
 };
 

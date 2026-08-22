@@ -154,21 +154,8 @@ func (c *WsClient) run(ctx context.Context) {
 }
 
 func (c *WsClient) connectAndListen(ctx context.Context) error {
-	streams := []string{
-		fmt.Sprintf("%s@kline_1m", c.symbol),
-		fmt.Sprintf("%s@kline_3m", c.symbol),
-		fmt.Sprintf("%s@kline_5m", c.symbol),
-		fmt.Sprintf("%s@kline_15m", c.symbol),
-		fmt.Sprintf("%s@kline_30m", c.symbol),
-		fmt.Sprintf("%s@kline_1h", c.symbol),
-		fmt.Sprintf("%s@kline_4h", c.symbol),
-		fmt.Sprintf("%s@kline_1d", c.symbol),
-		fmt.Sprintf("%s@kline_1w", c.symbol),
-		fmt.Sprintf("%s@kline_1M", c.symbol),
-		// Order Flow amputated (debt #44) — aggTrade/forceOrder leak RAM until strategy settings restore.
-		// fmt.Sprintf("%s@aggTrade", c.symbol),
-		// fmt.Sprintf("%s@forceOrder", c.symbol),
-	}
+	streams := CombinedKlineStreamNames(c.symbol)
+	// Order Flow amputated (debt #44) — aggTrade/forceOrder leak RAM until TickBarBuilder.
 
 	url := FuturesWSCombinedURL() + strings.Join(streams, "/")
 	log.Printf("[WS] Connecting to %s (mainnet=%v)", url, !futures.UseTestnet)
