@@ -7,7 +7,7 @@ import (
 
 func TestBarBoundary_FixedBitIdenticalToStepFloor(t *testing.T) {
 	t.Parallel()
-	intervals := []string{"1m", "10m", "45m", "3h", "1h", "4h", "1d"}
+	intervals := []string{"1s", "1m", "10m", "45m", "3h", "1h", "4h", "1d"}
 	samples := []int64{
 		time.Date(2024, 6, 15, 12, 34, 56, 0, time.UTC).UnixMilli(),
 		time.Date(2026, 7, 21, 15, 57, 30, 0, time.UTC).UnixMilli(),

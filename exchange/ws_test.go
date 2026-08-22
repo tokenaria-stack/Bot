@@ -39,6 +39,23 @@ func TestHandleAggTradePayload(t *testing.T) {
 	}
 }
 
+func TestHandleAggTradeSendsTradeTimeNotEventTime(t *testing.T) {
+	c := NewWsClient("BTCUSDT", nil)
+	raw := []byte(`{
+		"e":"aggTrade","E":1700000000999,"s":"BTCUSDT","a":123,
+		"p":"65000.10","q":"0.015","f":100,"l":101,"T":1700000000123,"m":false
+	}`)
+	c.handleAggTrade(raw)
+	select {
+	case ev := <-c.AggCh:
+		if ev.TimeMs != 1700000000123 || ev.Price != 65000.10 || ev.Qty != 0.015 {
+			t.Fatalf("%+v", ev)
+		}
+	default:
+		t.Fatal("expected AggCh event")
+	}
+}
+
 func TestHandleKlinePayload(t *testing.T) {
 	raw := []byte(`{
 		"e":"kline","E":1700000000000,"s":"BTCUSDT",

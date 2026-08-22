@@ -202,11 +202,12 @@ func MenuTimeframes() map[string][]TimeframeSpec {
 		"MINUTES": nil,
 		"HOURS":   nil,
 		"DAYS":    nil,
+		"SECONDS": nil,
 	}
 	for _, e := range exchange.LiveChart() {
 		spec := specFromCatalog(e)
 		switch e.MenuGroup {
-		case "MINUTES", "HOURS", "DAYS":
+		case "MINUTES", "HOURS", "DAYS", "SECONDS":
 			out[e.MenuGroup] = append(out[e.MenuGroup], spec)
 		}
 	}

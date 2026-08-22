@@ -554,3 +554,51 @@ func TestDeliverDerivedMapsParentNoData(t *testing.T) {
 		t.Fatalf("kind=%v code=%s want no_data", res.Kind, res.Code)
 	}
 }
+
+func TestEnsureHistoryWindowRejects1s(t *testing.T) {
+	d := histServer(t)
+	res := d.EnsureHistoryWindow(context.Background(), "BTCUSDT", "1s", histJan2023Ms, 100)
+	if res.Err == nil {
+		t.Fatal("EnsureHistoryWindow(1s) must fail")
+	}
+}
+
+func TestGetWindowLiveSecondRAMOnlyNoREST(t *testing.T) {
+	d := histServer(t)
+	var rest int32
+	d.ensureFetch = func(string, string, int64, int64) ([]exchange.Candle, error) {
+		atomic.AddInt32(&rest, 1)
+		return nil, nil
+	}
+	bars := make([]exchange.Kline, 3)
+	base := time.Now().UnixMilli()/1000*1000 - 5_000
+	for i := 0; i < 3; i++ {
+		ot := base + int64(i)*1000
+		bars[i] = exchange.Kline{OpenTime: ot, CloseTime: ot + 999, Open: 1, High: 2, Low: 1, Close: 1, Volume: 1}
+	}
+	d.frames = map[string]*market.Frame{
+		"1s": market.NewFrame(bars, "1s", market.ChaosConfig{}),
+	}
+	spec, err := ResolveTimeframe("1s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: 0, CandleLimit: 10,
+	})
+	if !ok || win.HasMore {
+		t.Fatalf("ok=%v hasMore=%v", ok, win.HasMore)
+	}
+	if len(win.Klines) != 3 {
+		t.Fatalf("klines=%d", len(win.Klines))
+	}
+	got := d.deliverHistoryWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: 0, CandleLimit: 10,
+	})
+	if got.Kind != historyDeliverOK {
+		t.Fatalf("deliver kind=%v code=%s", got.Kind, got.Code)
+	}
+	if atomic.LoadInt32(&rest) != 0 {
+		t.Fatal("1s must not Ensure/REST")
+	}
+}

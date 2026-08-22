@@ -222,8 +222,8 @@ func (a *Frame) LoadHistoricalKlines(klines []exchange.Kline) {
 func (a *Frame) ReplaceWorkingKlines(klines []exchange.Kline) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if len(klines) > LiveKlineRAMCap {
-		klines = klines[len(klines)-LiveKlineRAMCap:]
+	if capN := a.ramBarCap(); len(klines) > capN {
+		klines = klines[len(klines)-capN:]
 	}
 	copied := make([]exchange.Kline, len(klines))
 	copy(copied, klines)

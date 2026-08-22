@@ -53,6 +53,7 @@ type Runtime struct {
 	timeframe      string
 	onKlineBar     func(timeframe string, kline exchange.Kline, isClosed bool)
 	derivedAcc     map[string]*exchange.DerivedAccumulator
+	secondBar      *exchange.SecondBarBuilder
 
 	TickLiveCh chan struct{}
 
@@ -112,6 +113,7 @@ func NewRuntime(
 	// on Binance disconnect / ingest hole (mid-session). First Dial ≠ unpublish.
 	m.timelinePublishable.Store(true)
 	m.initDerivedAccumulators()
+	m.secondBar = exchange.NewSecondBarBuilder()
 	return m
 }
 
@@ -486,6 +488,33 @@ func (m *Runtime) applyTick(tick exchange.WsTick) {
 	m.fanoutDerived(tick.Timeframe, tick.Kline, tick.IsClosed)
 }
 
+func (m *Runtime) applyAggTrade(t exchange.AggTrade) {
+	if m == nil || m.secondBar == nil {
+		return
+	}
+	m.mu.RLock()
+	frame := m.frames[exchange.SecondTF]
+	cb := m.onKlineBar
+	m.mu.RUnlock()
+	if frame == nil {
+		return
+	}
+	closed, forming, didClose, hasForming := m.secondBar.OnAggTrade(t)
+	if didClose {
+		frame.UpdateKlineTick(closed, true)
+		if cb != nil {
+			cb(exchange.SecondTF, closed, true)
+		}
+		frame.UpdateIndicators()
+	}
+	if hasForming {
+		frame.UpdateKlineTick(forming, false)
+		if cb != nil {
+			cb(exchange.SecondTF, forming, false)
+		}
+	}
+}
+
 // ingestTipGap reports a forward jump of tip OpenTime beyond one expected bar
 // (backend twin of FE columnar-store gapDetected). Same OpenTime = forming update.
 func (m *Runtime) ingestTipGap(tick exchange.WsTick) bool {
@@ -594,7 +623,7 @@ func (m *Runtime) notifyTimelinePublishable() {
 }
 
 // StartDataFeed runs a background listener that routes WebSocket ticks to frames.
-func (m *Runtime) StartDataFeed(ctx context.Context, wsOutCh <-chan exchange.WsTick) {
+func (m *Runtime) StartDataFeed(ctx context.Context, wsOutCh <-chan exchange.WsTick, aggCh <-chan exchange.AggTrade) {
 	m.mu.Lock()
 	m.feedCtx = ctx
 	m.mu.Unlock()
@@ -611,6 +640,12 @@ func (m *Runtime) StartDataFeed(ctx context.Context, wsOutCh <-chan exchange.WsT
 					return
 				}
 				m.routeTick(tick)
+			case t, ok := <-aggCh:
+				if !ok {
+					aggCh = nil
+					continue
+				}
+				m.applyAggTrade(t)
 			}
 		}
 	}()

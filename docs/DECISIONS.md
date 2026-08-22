@@ -847,27 +847,28 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 
 Binance also sells `3d`. This project does **not** support it: epoch-floor 3d is not Binance’s 3d grid (phase offset + historical realignments). Re-add only with a Binance-observed 3d boundary chapter.
 
-Live chart also includes derived views `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h` (TF-B): own Frame, parent history fold, no WS, no SQLite. Persistence:
+Live chart also includes derived views `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h` (TF-B) and live `1s` from aggTrade (MICRO-1): RAM Frame, no SQLite, no REST. Persistence:
 
 ```text
 NATIVE_BINANCE  → durable historical_klines (Binance authority)
 DERIVED timebars → reconstructable view; no SQLite source of truth
-SECONDS / TICKS → bounded RAM only until an explicit retention feature
+1s (aggTrade)   → bounded RAM (9000); honest gaps; not Master/native health
+SECONDS 5s–45s / TICKS → catalog placeholders until derived from 1s / tick bars
 ```
 
-WS subscriptions stay native-only. Live-chart allow-list = native ∪ the four derived TFs. Forming updates replace the same parent bucket; child close requires distinct closed parents.
+WS kline subscriptions stay native-only. Combined WS also carries `@aggTrade` for the 1s builder only. Live-chart allow-list = native ∪ `{2m,10m,45m,3h,1s}`. Forming derived updates replace the same parent bucket; child close requires distinct closed parents.
 
-Future tick contract (not implemented here): **1 tick = 1 `aggTrade` event**.
+Tick contract: **1 tick = 1 `aggTrade` event** (tick bars not implemented).
 
 **Rejected:**
 - Persist derived 2m / 10m / 45m / 3h — **Reason:** no new market information; reconstruct from parent.
 - Persist seconds/ticks in `historical_klines` — **Reason:** 60× 1m (and worse); RAM rings later.
 - Timeframe registry / service / lazy Frame factory — **Reason:** deletes duplicated lists; does not own runtime.
-- Enabling tick/second menus — **Reason:** no producer (ADR-002 / debt #44).
+- Enabling tick bars and 5s–45s in this slice — **Reason:** 1s is the primitive; others derive after it is proven.
 - Injecting synthetic child `WsTick` into `routeTick` — **Reason:** would trip native tip-gap REST on a non-exchange interval.
 - Keeping native `3d` on the generic fixed-duration grid — **Reason:** Binance 3d is not Unix-epoch floor (live phase + 2019/2023 seams); unused TF poisoned Master timeline health.
 
-**Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. Derived `/api/history` folds the parent window. Camera unchanged.
+**Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h,1s}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. 1s is out of Master continuity. Derived `/api/history` folds the parent window. Camera unchanged.
 
 ---
 

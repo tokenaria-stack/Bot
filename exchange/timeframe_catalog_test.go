@@ -108,6 +108,9 @@ func TestInactiveClassesNotActivated(t *testing.T) {
 		if e.Class == TFClassDerived && e.MenuGroup != "" {
 			continue // TF-B live derived views
 		}
+		if e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == "" {
+			continue // MICRO-1 live 1s
+		}
 		if e.MenuGroup != "" {
 			t.Fatalf("%s MenuGroup=%q; seconds/ticks stay hidden", e.Name, e.MenuGroup)
 		}
@@ -178,10 +181,13 @@ func TestBootAndWSUseNativeCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(wsSrc), "CombinedKlineStreamNames(") {
-		t.Fatal("ws.go must subscribe via CombinedKlineStreamNames")
+	if !strings.Contains(string(wsSrc), "CombinedLiveStreamNames(") {
+		t.Fatal("ws.go must subscribe via CombinedLiveStreamNames")
 	}
 	if strings.Contains(string(wsSrc), "@kline_1m") {
 		t.Fatal("ws.go still hardcodes kline stream names")
+	}
+	if !strings.Contains(string(mainSrc), "AttachLiveSecondFrames") {
+		t.Fatal("main.go must attach live 1s Frame")
 	}
 }

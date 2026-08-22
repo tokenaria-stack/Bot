@@ -197,7 +197,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
 | `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip; Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
-| `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived views `2m/10m/45m/3h` (`exchange/timeframe_catalog.go`, ADR-031). `3d` unsupported. Seconds/ticks remain placeholders |
+| `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived `2m/10m/45m/3h` plus live `1s` RAM (`exchange/timeframe_catalog.go`, ADR-031). `3d` unsupported. Other seconds/ticks remain placeholders |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |

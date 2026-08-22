@@ -19,7 +19,7 @@ const (
 const (
 	LiveBinanceKlineWS = "binance_kline_ws"
 	LiveParentClosed   = "parent_closed" // derived fold / accumulator (no WS)
-	LiveAggTrade       = "aggtrade"      // future seconds / ticks
+	LiveAggTrade       = "aggtrade"      // 1s builder (MICRO-1); ticks later
 )
 
 // Timeframe is one row of the chart timeframe catalog.
@@ -57,7 +57,7 @@ var timeframeCatalog = []Timeframe{
 	{Name: "45m", Label: "45 minutes", Class: TFClassDerived, LiveSource: LiveParentClosed, Persist: false, Parent: "15m", MenuGroup: "MINUTES"},
 	{Name: "3h", Label: "3 hours", Class: TFClassDerived, LiveSource: LiveParentClosed, Persist: false, Parent: "1h", MenuGroup: "HOURS"},
 
-	{Name: "1s", Label: "1 second", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false},
+	{Name: "1s", Label: "1 second", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, MenuGroup: "SECONDS"},
 	{Name: "5s", Label: "5 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
 	{Name: "10s", Label: "10 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
 	{Name: "15s", Label: "15 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
@@ -131,6 +131,13 @@ func CombinedKlineStreamNames(symbol string) []string {
 	return out
 }
 
+// CombinedLiveStreamNames is native klines plus aggTrade on the same combined WS.
+func CombinedLiveStreamNames(symbol string) []string {
+	out := CombinedKlineStreamNames(symbol)
+	sym := strings.ToLower(NormalizeFuturesSymbol(symbol))
+	return append(out, fmt.Sprintf("%s@aggTrade", sym))
+}
+
 // ShouldPersist reports durable SQLite authority (native Binance only).
 func ShouldPersist(id string) bool {
 	e, ok := timeframeByName[id]
@@ -143,9 +150,26 @@ func IsDerivedTime(id string) bool {
 	return ok && e.Class == TFClassDerived && e.Parent != "" && e.MenuGroup != ""
 }
 
-// IsLiveChartTF is native ∪ activated derived (UI + Frame). WS stays native-only.
+// IsLiveSecond is the activated 1s RAM view (not 5s…45s, not ticks).
+func IsLiveSecond(id string) bool {
+	e, ok := timeframeByName[id]
+	return ok && e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == ""
+}
+
+// LiveSeconds is activated second-class catalog rows (catalog order).
+func LiveSeconds() []Timeframe {
+	out := make([]Timeframe, 0, 1)
+	for _, e := range timeframeCatalog {
+		if e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// IsLiveChartTF is native ∪ activated derived ∪ live 1s. WS klines stay native-only.
 func IsLiveChartTF(id string) bool {
-	return IsNativeBinance(id) || IsDerivedTime(id)
+	return IsNativeBinance(id) || IsDerivedTime(id) || IsLiveSecond(id)
 }
 
 // DerivedTime is activated derived catalog rows (catalog order).
@@ -177,7 +201,8 @@ func LiveChart() []Timeframe {
 		if e.MenuGroup == "" {
 			continue
 		}
-		if e.Class == TFClassNative || (e.Class == TFClassDerived && e.Parent != "") {
+		if e.Class == TFClassNative || (e.Class == TFClassDerived && e.Parent != "") ||
+			(e.Class == TFClassSeconds && e.Parent == "") {
 			out = append(out, e)
 		}
 	}

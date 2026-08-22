@@ -27,6 +27,7 @@ func TestResolveBacktestInterval(t *testing.T) {
 		{"2m", "", true},
 		{"10m", "", true},
 		{"3h", "", true},
+		{"1s", "", true},
 		{"3M", "", true},
 		{"3M", "", true},
 		{"35m", "", true},
@@ -101,11 +102,12 @@ func TestMenuTimeframesLiveChart(t *testing.T) {
 	if _, ok := menu["TICKS"]; ok {
 		t.Fatal("TICKS must stay hidden until tick builder")
 	}
-	if _, ok := menu["SECONDS"]; ok {
-		t.Fatal("SECONDS must stay hidden until seconds builder")
+	secs := menu["SECONDS"]
+	if len(secs) != 1 || secs[0].ID != "1s" {
+		t.Fatalf("SECONDS=%v want [1s]", secs)
 	}
 	var ids []string
-	for _, group := range []string{"MINUTES", "HOURS", "DAYS"} {
+	for _, group := range []string{"MINUTES", "HOURS", "DAYS", "SECONDS"} {
 		for _, spec := range menu[group] {
 			ids = append(ids, spec.ID)
 			if !exchange.IsLiveChartTF(spec.ID) {
@@ -114,12 +116,12 @@ func TestMenuTimeframesLiveChart(t *testing.T) {
 		}
 	}
 	joined := strings.Join(ids, ",")
-	for _, need := range []string{"2m", "10m", "45m", "3h", "1M", "2h"} {
+	for _, need := range []string{"2m", "10m", "45m", "3h", "1M", "2h", "1s"} {
 		if !strings.Contains(joined, need) {
 			t.Fatalf("menu missing %s: %v", need, ids)
 		}
 	}
-	if strings.Contains(joined, "1s") || strings.Contains(joined, "1tick") || strings.Contains(joined, "3d") {
-		t.Fatal("seconds/ticks/3d must stay out of the live menu")
+	if strings.Contains(joined, "5s") || strings.Contains(joined, "1tick") || strings.Contains(joined, "3d") {
+		t.Fatal("5s/ticks/3d must stay out of the live menu")
 	}
 }

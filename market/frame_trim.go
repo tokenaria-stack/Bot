@@ -7,10 +7,10 @@ import (
 // trimKlinesToCapLocked drops oldest bars when RAM exceeds LiveKlineRAMCap.
 // Parallel DataBus series are slice-trimmed in lockstep — no full replay.
 func (a *Frame) trimKlinesToCapLocked() {
-	if a == nil || len(a.klines) <= LiveKlineRAMCap {
+	if a == nil || len(a.klines) <= a.ramBarCap() {
 		return
 	}
-	drop := len(a.klines) - LiveKlineRAMCap
+	drop := len(a.klines) - a.ramBarCap()
 	a.trimMarkerRAMLocked(drop)
 }
 

@@ -89,18 +89,23 @@ const NATIVE_BINANCE_TFS = [
 ];
 
 const LIVE_CHART_TFS = [
+  '1s',
   '1m', '2m', '3m', '5m', '10m', '15m', '30m', '45m',
   '1h', '2h', '3h', '4h', '6h', '8h', '12h',
   '1d', '1w', '1M',
 ];
 
 const TF_DISPLAY = {
+  '1s': '1s',
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
   '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
   '1d': 'D', '1w': 'W', '1M': '1M',
 };
 
 const TF_MENU = {
+  SECONDS: [
+    { id: '1s', label: '1 second' },
+  ],
   MINUTES: [
     { id: '1m', label: '1 minute' }, { id: '2m', label: '2 minutes' },
     { id: '3m', label: '3 minutes' }, { id: '5m', label: '5 minutes' },

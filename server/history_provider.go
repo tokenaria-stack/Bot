@@ -59,6 +59,22 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	wantBars := limit + warmup
 
 	spec := q.Spec
+	if exchange.IsLiveSecond(spec.ID) {
+		endTimeMs := q.EndTimeMs
+		if endTimeMs <= 0 {
+			endTimeMs = time.Now().UnixMilli()
+		}
+		want := limit + warmup
+		if want > market.MicroKlineRAMCap {
+			want = market.MicroKlineRAMCap
+		}
+		klines := d.ramKlines(spec.ID, want)
+		klines = filterKlinesUntilOpenMs(klines, endTimeMs)
+		if len(klines) == 0 {
+			return HistoryWindow{}, false
+		}
+		return HistoryWindow{Klines: klines, HasMore: false}, true
+	}
 	if exchange.IsDerivedTime(spec.ID) {
 		return d.getDerivedWindow(ctx, q, wantBars)
 	}

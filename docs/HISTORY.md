@@ -8,6 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## MICRO-1 — aggTrade 1s RAM bars (Aug 2026) ✅
+
+- Combined WS adds `BTCUSDT@aggTrade` (same client). Builder folds T/p/q into 1s OHLCV; no raw trade list.
+- Own Frame, RAM cap 9000, no SQLite/REST/Ensure/heal. Quiet seconds are honest holes.
+- 1s is excluded from Master/native timeline health. Does not unpublish kline Frames.
+- `/api/history?tf=1s` is Frame RAM only (`hasMore=false`). Restart starts empty.
+- Not in this slice: 5s–45s, tick bars, 1s persist, reconnect backfill.
+
+---
+
 ## TF-B — derived time-bar views (Aug 2026) ✅
 
 - Live derived TFs: `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h`. Own Frame; no WS, no SQLite.

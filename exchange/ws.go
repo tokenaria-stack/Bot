@@ -71,6 +71,7 @@ type wsForceOrderEvent struct {
 type WsClient struct {
 	symbol    string
 	OutCh     chan WsTick
+	AggCh     chan AggTrade
 	orderFlow OrderFlowSink
 
 	aggTradeCount atomic.Uint64
@@ -85,6 +86,7 @@ func NewWsClient(symbol string, orderFlow OrderFlowSink) *WsClient {
 	return &WsClient{
 		symbol:    strings.ToLower(NormalizeFuturesSymbol(symbol)),
 		OutCh:     make(chan WsTick, 1000),
+		AggCh:     make(chan AggTrade, 8192),
 		orderFlow: orderFlow,
 	}
 }
@@ -154,8 +156,8 @@ func (c *WsClient) run(ctx context.Context) {
 }
 
 func (c *WsClient) connectAndListen(ctx context.Context) error {
-	streams := CombinedKlineStreamNames(c.symbol)
-	// Order Flow amputated (debt #44) — aggTrade/forceOrder leak RAM until TickBarBuilder.
+	streams := CombinedLiveStreamNames(c.symbol)
+	// forceOrder stays unsubscribed (debt #44). aggTrade feeds the 1s builder only.
 
 	url := FuturesWSCombinedURL() + strings.Join(streams, "/")
 	log.Printf("[WS] Connecting to %s (mainnet=%v)", url, !futures.UseTestnet)
@@ -200,9 +202,9 @@ func (c *WsClient) connectAndListen(ctx context.Context) error {
 		switch {
 		case strings.Contains(envelope.Stream, "@kline_"):
 			c.handleKline(ctx, envelope.Data)
-		// Order Flow amputated (#44) — ignore if a stale combined stream still carries micro events.
-		case strings.Contains(envelope.Stream, "@aggTrade"),
-			strings.Contains(envelope.Stream, "@forceOrder"):
+		case strings.Contains(envelope.Stream, "@aggTrade"):
+			c.handleAggTrade(envelope.Data)
+		case strings.Contains(envelope.Stream, "@forceOrder"):
 			continue
 		}
 	}
@@ -239,10 +241,6 @@ func (c *WsClient) handleKline(ctx context.Context, raw json.RawMessage) {
 }
 
 func (c *WsClient) handleAggTrade(raw json.RawMessage) {
-	if c.orderFlow == nil {
-		return
-	}
-
 	var event wsAggTradeEvent
 	if err := json.Unmarshal(raw, &event); err != nil {
 		log.Printf("[WS ERROR] aggTrade parse: %v", err)
@@ -250,20 +248,26 @@ func (c *WsClient) handleAggTrade(raw json.RawMessage) {
 	}
 
 	price, err := strconv.ParseFloat(event.Price, 64)
-	if err != nil {
+	if err != nil || price <= 0 {
 		return
 	}
 	qty, err := strconv.ParseFloat(event.Quantity, 64)
-	if err != nil {
+	if err != nil || qty <= 0 {
 		return
 	}
-	if event.TradeTime <= 0 || price <= 0 {
+	if event.TradeTime < 0 {
 		return
 	}
 
-	c.orderFlow.PushAggTrade(price, qty, event.TradeTime, event.IsBuyerMaker)
+	ev := AggTrade{TimeMs: event.TradeTime, Price: price, Qty: qty}
+	if c.AggCh != nil {
+		select {
+		case c.AggCh <- ev:
+		default:
+		}
+	}
 	n := c.aggTradeCount.Add(1)
-	if n == 1 || n%5000 == 0 {
+	if n == 1 || n%20000 == 0 {
 		log.Printf("[WS] aggTrade ingested: %d total", n)
 	}
 }

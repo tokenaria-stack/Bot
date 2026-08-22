@@ -87,7 +87,7 @@ func main() {
 	// ── Boot FSM Phase 0: Connecting ──────────────────────────────────────────
 	// WS goes up FIRST. Live ticks buffer inside BootController while history
 	// loads — REST recovery can never again be "the truth" over missed WS bars.
-	// Order Flow sink is nil (debt #44): aggTrade ring returns with TickBarBuilder.
+	// Order Flow sink is nil (debt #44). aggTrade on the combined WS feeds 1s bars only.
 	wsClient := exchange.NewWsClient(symbol, nil)
 	boot := market.NewBootController(wsClient.OutCh)
 	boot.Begin(ctx)
@@ -139,6 +139,7 @@ func main() {
 	}
 	bootWG.Wait()
 	market.HydrateDerivedFrames(frames, chaosCfg)
+	market.AttachLiveSecondFrames(frames, chaosCfg)
 	log.Printf("[Init] All frames ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
 	htfProvider := exchange.NewHTFProvider()
@@ -218,7 +219,7 @@ func main() {
 
 	// ── Boot FSM Phase 3: Live ────────────────────────────────────────────────
 	boot.GoLive()
-	master.StartDataFeed(ctx, wsClient.OutCh)
+	master.StartDataFeed(ctx, wsClient.OutCh, wsClient.AggCh)
 	master.StartKlineGapFillLoop(ctx)
 	// Shot 9D/9E: SQLite tip self-heals via FetchClosedRange → PersistenceQueue (no Frame touch).
 	master.StartSQLiteArchiveCatchUpLoop(ctx)

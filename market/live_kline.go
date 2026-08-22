@@ -2,8 +2,11 @@ package market
 
 import "trading_bot/exchange"
 
-// LiveKlineRAMCap is the max closed bars kept in RAM per live Frame (ring buffer).
+// LiveKlineRAMCap is the max closed bars kept in RAM per live native/derived Frame.
 const LiveKlineRAMCap = 3000
+
+// MicroKlineRAMCap is the fixed working-set cap for live 1s (chart store contract).
+const MicroKlineRAMCap = 9000
 
 // FrameBootKlineLimit is how many bars each Frame loads from SQLite/REST at process start.
 const FrameBootKlineLimit = 400
@@ -22,4 +25,11 @@ func (a *Frame) GetKlinesTail(maxBars int) []exchange.Kline {
 	out := make([]exchange.Kline, len(a.klines)-start)
 	copy(out, a.klines[start:])
 	return out
+}
+
+func (a *Frame) ramBarCap() int {
+	if a != nil && exchange.IsLiveSecond(a.timeframe) {
+		return MicroKlineRAMCap
+	}
+	return LiveKlineRAMCap
 }
