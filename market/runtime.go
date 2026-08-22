@@ -52,6 +52,7 @@ type Runtime struct {
 	symbol         string
 	timeframe      string
 	onKlineBar     func(timeframe string, kline exchange.Kline, isClosed bool)
+	derivedAcc     map[string]*exchange.DerivedAccumulator
 
 	TickLiveCh chan struct{}
 
@@ -110,6 +111,7 @@ func NewRuntime(
 	// Cold boot: BootController → routeTick must apply ticks. Unpublish only
 	// on Binance disconnect / ingest hole (mid-session). First Dial ≠ unpublish.
 	m.timelinePublishable.Store(true)
+	m.initDerivedAccumulators()
 	return m
 }
 
@@ -481,12 +483,16 @@ func (m *Runtime) applyTick(tick exchange.WsTick) {
 	if tick.IsClosed {
 		frame.UpdateIndicators()
 	}
+	m.fanoutDerived(tick.Timeframe, tick.Kline, tick.IsClosed)
 }
 
 // ingestTipGap reports a forward jump of tip OpenTime beyond one expected bar
 // (backend twin of FE columnar-store gapDetected). Same OpenTime = forming update.
 func (m *Runtime) ingestTipGap(tick exchange.WsTick) bool {
 	if m == nil || tick.Kline.OpenTime <= 0 || tick.Timeframe == "" {
+		return false
+	}
+	if !exchange.IsNativeBinance(tick.Timeframe) {
 		return false
 	}
 	m.mu.RLock()

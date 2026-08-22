@@ -217,6 +217,21 @@ func (a *Frame) LoadHistoricalKlines(klines []exchange.Kline) {
 	a.alignAllDataBusToKlinesLocked()
 }
 
+// ReplaceWorkingKlines replaces the working set (derived view rebuild). Native
+// REST backfill must keep using LoadHistoricalKlines (merge, WS-final wins).
+func (a *Frame) ReplaceWorkingKlines(klines []exchange.Kline) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(klines) > LiveKlineRAMCap {
+		klines = klines[len(klines)-LiveKlineRAMCap:]
+	}
+	copied := make([]exchange.Kline, len(klines))
+	copy(copied, klines)
+	a.klines = copied
+	a.replayStreamingLocked()
+	a.alignAllDataBusToKlinesLocked()
+}
+
 // UpdateKline appends a new candle or overwrites the latest one for the same open time.
 func (a *Frame) UpdateKline(k exchange.Kline) {
 	a.UpdateKlineTick(k, false)

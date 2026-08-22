@@ -39,6 +39,9 @@ func main() {
 	if _, err := server.ResolveTimeframe(tradingTF); err != nil {
 		log.Fatalf("[Init] Invalid TRADING_TIMEFRAME %q: %v", tradingTF, err)
 	}
+	if !exchange.IsNativeBinance(tradingTF) {
+		log.Fatalf("[Init] TRADING_TIMEFRAME %q must be a native Binance interval", tradingTF)
+	}
 	symbol := exchange.NormalizeFuturesSymbol(cfg.Symbol)
 	log.Printf("[Init] Trading pair %s @ %s", symbol, tradingTF)
 
@@ -135,6 +138,7 @@ func main() {
 		}(tf)
 	}
 	bootWG.Wait()
+	market.HydrateDerivedFrames(frames, chaosCfg)
 	log.Printf("[Init] All frames ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
 	htfProvider := exchange.NewHTFProvider()
@@ -193,7 +197,7 @@ func main() {
 			isClosed,
 			frame.DAGTickFrame(),
 		)
-		if isClosed {
+		if isClosed && exchange.ShouldPersist(tf) {
 			// Blocking enqueue — closed bars must never be silently dropped (archive integrity).
 			persistQ.Enqueue(symbol, tf, data.Candle{
 				OpenTime:  k.OpenTime,

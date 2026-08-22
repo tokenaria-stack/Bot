@@ -53,6 +53,9 @@ func (m *Runtime) CatchUpAllSQLiteArchiveTips(ctx context.Context) {
 
 	nowMs := time.Now().UnixMilli()
 	for _, interval := range intervals {
+		if !exchange.IsNativeBinance(interval) {
+			continue
+		}
 		if err := m.catchUpSQLiteArchiveTip(ctx, symbol, interval, nowMs); err != nil {
 			log.Printf("[SQLiteArchive] catch-up %s %s: %v", symbol, interval, err)
 		}

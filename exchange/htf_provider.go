@@ -36,6 +36,9 @@ func (p *HTFProvider) GetKlines(symbol, interval string, startMs int64) ([]Kline
 	if p == nil {
 		return nil, fmt.Errorf("htf provider is nil")
 	}
+	if !IsNativeBinance(interval) {
+		return nil, fmt.Errorf("htf loader is native-only (got %q)", interval)
+	}
 	key := htfCacheKey(symbol, interval)
 	if raw, ok := p.cache.Load(key); ok {
 		entry := raw.(htfCacheEntry)

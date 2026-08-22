@@ -500,3 +500,57 @@ func TestGetWindow_DoesNotWriteArchiveGapsOnVenueStitch(t *testing.T) {
 		}
 	}
 }
+
+func TestEnsureHistoryWindowRejectsDerived(t *testing.T) {
+	d := histServer(t)
+	res := d.EnsureHistoryWindow(context.Background(), "BTCUSDT", "2m", histJan2023Ms, 100)
+	if res.Err == nil {
+		t.Fatal("EnsureHistoryWindow(2m) must fail")
+	}
+}
+
+func TestGetWindowDerivedFoldsParentRAM(t *testing.T) {
+	d := histServer(t)
+	base := int64(1_672_765_200_000) // 2023-01-03 17:00 UTC, 2m-aligned
+	parents := make([]exchange.Kline, 4)
+	for i := 0; i < 4; i++ {
+		ot := base + int64(i)*60_000
+		parents[i] = exchange.Kline{
+			OpenTime: ot, CloseTime: ot + 59_999,
+			Open: float64(i + 1), High: float64(i + 2), Low: float64(i), Close: float64(i + 1), Volume: 1,
+		}
+	}
+	d.frames = map[string]*market.Frame{
+		"1m": market.NewFrame(parents, "1m", market.ChaosConfig{}),
+	}
+	spec, err := ResolveTimeframe("2m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: base + 240_000, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("GetWindow derived")
+	}
+	if len(win.Klines) != 2 {
+		t.Fatalf("child bars=%d want 2", len(win.Klines))
+	}
+	if win.Klines[0].OpenTime != base || win.Klines[1].OpenTime != base+120_000 {
+		t.Fatalf("%+v", win.Klines)
+	}
+}
+
+func TestDeliverDerivedMapsParentNoData(t *testing.T) {
+	d := histServer(t)
+	d.ensureFetch = func(string, string, int64, int64) ([]exchange.Candle, error) {
+		return nil, nil
+	}
+	spec, _ := ResolveTimeframe("2m")
+	res := d.deliverHistoryWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: histJan2023Ms, CandleLimit: 50,
+	})
+	if res.Kind != historyDeliverNoData {
+		t.Fatalf("kind=%v code=%s want no_data", res.Kind, res.Code)
+	}
+}

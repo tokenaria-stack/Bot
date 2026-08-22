@@ -60,7 +60,7 @@ func TestTwoMinuteIsDerivedNotNative(t *testing.T) {
 	t.Parallel()
 	e, ok := TimeframeByName("2m")
 	if !ok {
-		t.Fatal("2m must exist as future derived")
+		t.Fatal("2m must exist as derived")
 	}
 	if e.Class != TFClassDerived {
 		t.Fatalf("2m class=%s want derived", e.Class)
@@ -74,8 +74,8 @@ func TestTwoMinuteIsDerivedNotNative(t *testing.T) {
 	if IsNativeBinance("2m") {
 		t.Fatal("2m must not be Binance-native")
 	}
-	if e.MenuGroup != "" {
-		t.Fatal("2m must stay hidden from live menu")
+	if e.MenuGroup != "MINUTES" {
+		t.Fatalf("2m MenuGroup=%q want MINUTES", e.MenuGroup)
 	}
 }
 
@@ -95,8 +95,11 @@ func TestInactiveClassesNotActivated(t *testing.T) {
 		if e.Persist {
 			t.Fatalf("%s persist=true; only native persists", e.Name)
 		}
+		if e.Class == TFClassDerived && e.MenuGroup != "" {
+			continue // TF-B live derived views
+		}
 		if e.MenuGroup != "" {
-			t.Fatalf("%s MenuGroup=%q; inactive TFs stay hidden", e.Name, e.MenuGroup)
+			t.Fatalf("%s MenuGroup=%q; seconds/ticks stay hidden", e.Name, e.MenuGroup)
 		}
 		if e.LiveSource == LiveBinanceKlineWS {
 			t.Fatalf("%s must not use kline WS until a builder exists", e.Name)
@@ -151,6 +154,12 @@ func TestBootAndWSUseNativeCatalog(t *testing.T) {
 	}
 	if !strings.Contains(string(mainSrc), "exchange.NativeBinanceIDs()") {
 		t.Fatal("main.go must boot Frames from NativeBinanceIDs")
+	}
+	if !strings.Contains(string(mainSrc), "HydrateDerivedFrames") {
+		t.Fatal("main.go must hydrate derived Frames after native boot")
+	}
+	if !strings.Contains(string(mainSrc), "ShouldPersist") {
+		t.Fatal("main.go must gate persistence on catalog Persist")
 	}
 	if strings.Contains(string(mainSrc), `"1m", "3m", "5m"`) {
 		t.Fatal("main.go still has a duplicated native TF list")

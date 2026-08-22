@@ -7,7 +7,7 @@ import (
 
 func TestBarBoundary_FixedBitIdenticalToStepFloor(t *testing.T) {
 	t.Parallel()
-	intervals := []string{"1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d"}
+	intervals := []string{"1m", "10m", "45m", "3h", "1h", "4h", "1d"}
 	samples := []int64{
 		time.Date(2024, 6, 15, 12, 34, 56, 0, time.UTC).UnixMilli(),
 		time.Date(2026, 7, 21, 15, 57, 30, 0, time.UTC).UnixMilli(),
@@ -155,7 +155,7 @@ func TestBarBoundary_AlgebraicInvariants(t *testing.T) {
 	t.Parallel()
 	intervals := []string{"1m", "15m", "1h", "4h", "1d", "1w", "1M"}
 	anchors := []int64{
-		time.Date(2024, 2, 29, 10, 0, 0, 0, time.UTC).UnixMilli(), // leap
+		time.Date(2024, 2, 29, 10, 0, 0, 0, time.UTC).UnixMilli(),  // leap
 		time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC).UnixMilli(),   // Monday
 		time.Date(2026, 7, 22, 15, 30, 0, 0, time.UTC).UnixMilli(), // mid-week
 		time.Date(2025, 12, 31, 23, 59, 0, 0, time.UTC).UnixMilli(),

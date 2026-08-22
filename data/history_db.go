@@ -450,14 +450,20 @@ func intervalDurationMs(interval string) (int64, error) {
 		return 3 * 60_000, nil
 	case "5m":
 		return 5 * 60_000, nil
+	case "10m":
+		return 10 * 60_000, nil
 	case "15m":
 		return 15 * 60_000, nil
 	case "30m":
 		return 30 * 60_000, nil
+	case "45m":
+		return 45 * 60_000, nil
 	case "1h":
 		return 60 * 60_000, nil
 	case "2h":
 		return 2 * 60 * 60_000, nil
+	case "3h":
+		return 3 * 60 * 60_000, nil
 	case "4h":
 		return 4 * 60 * 60_000, nil
 	case "6h":

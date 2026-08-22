@@ -3,6 +3,8 @@ package server
 import (
 	"strings"
 	"testing"
+
+	"trading_bot/exchange"
 )
 
 func TestResolveBacktestInterval(t *testing.T) {
@@ -23,6 +25,9 @@ func TestResolveBacktestInterval(t *testing.T) {
 		{"6h", "6h", false},
 		{"3d", "3d", false},
 		{"2m", "", true},
+		{"10m", "", true},
+		{"3h", "", true},
+		{"3M", "", true},
 		{"3M", "", true},
 		{"35m", "", true},
 	}
@@ -91,7 +96,7 @@ func TestResolveTimeframe(t *testing.T) {
 	}
 }
 
-func TestMenuTimeframesNativeOnly(t *testing.T) {
+func TestMenuTimeframesLiveChart(t *testing.T) {
 	t.Parallel()
 	menu := MenuTimeframes()
 	if _, ok := menu["TICKS"]; ok {
@@ -104,35 +109,18 @@ func TestMenuTimeframesNativeOnly(t *testing.T) {
 	for _, group := range []string{"MINUTES", "HOURS", "DAYS"} {
 		for _, spec := range menu[group] {
 			ids = append(ids, spec.ID)
-			if spec.Kind != TFBinanceREST || spec.BinanceInterval == "" {
-				t.Fatalf("menu %s %s is not native", group, spec.ID)
+			if !exchange.IsLiveChartTF(spec.ID) {
+				t.Fatalf("menu %s %s not live-chart", group, spec.ID)
 			}
 		}
 	}
 	joined := strings.Join(ids, ",")
-	if strings.Contains(joined, "2m") {
-		t.Fatal("2m must not appear in live menu")
-	}
-	foundM := false
-	found2h, found6h, found3d := false, false, false
-	for _, id := range ids {
-		if id == "1M" {
-			foundM = true
-		}
-		if id == "2h" {
-			found2h = true
-		}
-		if id == "6h" {
-			found6h = true
-		}
-		if id == "3d" {
-			found3d = true
+	for _, need := range []string{"2m", "10m", "45m", "3h", "1M", "2h"} {
+		if !strings.Contains(joined, need) {
+			t.Fatalf("menu missing %s: %v", need, ids)
 		}
 	}
-	if !foundM {
-		t.Fatal("1M must be in DAYS menu")
-	}
-	if !found2h || !found6h || !found3d {
-		t.Fatalf("missing native hours/days in menu: %v", ids)
+	if strings.Contains(joined, "1s") || strings.Contains(joined, "1tick") {
+		t.Fatal("seconds/ticks must stay hidden")
 	}
 }

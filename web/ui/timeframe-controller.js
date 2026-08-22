@@ -32,7 +32,7 @@ const TimeframeController = (() => {
     } catch {
       tfFavorites = [...DEFAULT_FAVS];
     }
-    tfFavorites = tfFavorites.filter((id) => NATIVE_BINANCE_TFS.includes(id));
+    tfFavorites = tfFavorites.filter((id) => LIVE_CHART_TFS.includes(id));
     sortFavorites();
   }
 
@@ -145,7 +145,7 @@ const TimeframeController = (() => {
 
   function switchLiveTimeframe(tf) {
     const resolved = resolveTf(tf);
-    if (!resolved || !NATIVE_BINANCE_TFS.includes(resolved)) return;
+    if (!resolved || !LIVE_CHART_TFS.includes(resolved)) return;
 
     const changed = resolved !== currentTf;
     let viewportAnchor = null;
@@ -215,7 +215,7 @@ const TimeframeController = (() => {
     }
     const nextTf = resolveTf(tf);
     if (!nextTf) return;
-    if (!TabsController.isBacktestTfContext() && !NATIVE_BINANCE_TFS.includes(nextTf)) {
+    if (!TabsController.isBacktestTfContext() && !LIVE_CHART_TFS.includes(nextTf)) {
       return;
     }
 
@@ -303,7 +303,7 @@ const TimeframeController = (() => {
     loadFavorites();
     if (!useServerTf) {
       currentTf = resolveTf(localStorage.getItem(LS_TF_KEY) || '1m') || '1m';
-      if (!NATIVE_BINANCE_TFS.includes(currentTf)) {
+      if (!LIVE_CHART_TFS.includes(currentTf)) {
         currentTf = '1m';
         localStorage.setItem(LS_TF_KEY, currentTf);
       }

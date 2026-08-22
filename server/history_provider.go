@@ -59,6 +59,9 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 	wantBars := limit + warmup
 
 	spec := q.Spec
+	if exchange.IsDerivedTime(spec.ID) {
+		return d.getDerivedWindow(ctx, q, wantBars)
+	}
 	interval := spec.BinanceInterval
 	if interval == "" {
 		interval = spec.ID
@@ -136,4 +139,40 @@ func filterKlinesUntilOpenMs(klines []exchange.Kline, endTimeMs int64) []exchang
 		}
 	}
 	return out
+}
+
+func (d *DashboardServer) getDerivedWindow(ctx context.Context, q HistoryWindowQuery, wantChildBars int) (HistoryWindow, bool) {
+	e, ok := exchange.TimeframeByName(q.Spec.ID)
+	if !ok || e.Parent == "" {
+		return HistoryWindow{}, false
+	}
+	parentSpec, err := ResolveTimeframe(e.Parent)
+	if err != nil {
+		return HistoryWindow{}, false
+	}
+	parentNeed, err := exchange.ParentBarsNeeded(wantChildBars, e.Name)
+	if err != nil {
+		return HistoryWindow{}, false
+	}
+	pwin, pok := d.GetWindow(ctx, HistoryWindowQuery{
+		Spec:        parentSpec,
+		EndTimeMs:   q.EndTimeMs,
+		CandleLimit: parentNeed,
+	})
+	if !pok || len(pwin.Klines) == 0 {
+		return HistoryWindow{}, false
+	}
+	closed, _, ferr := exchange.FoldClosedChildren(pwin.Klines, e.Name, false)
+	if ferr != nil || len(closed) == 0 {
+		return HistoryWindow{}, false
+	}
+	capEnd := resolveClosedBarBoundary(q.EndTimeMs, e.Name)
+	closed = filterKlinesUntilOpenMs(closed, capEnd)
+	if len(closed) == 0 {
+		return HistoryWindow{}, false
+	}
+	if wantChildBars > 0 && len(closed) > wantChildBars {
+		closed = closed[len(closed)-wantChildBars:]
+	}
+	return HistoryWindow{Klines: closed, HasMore: pwin.HasMore}, true
 }

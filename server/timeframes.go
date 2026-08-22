@@ -3,8 +3,10 @@ package server
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
+	"trading_bot/data"
 	"trading_bot/exchange"
 )
 
@@ -196,19 +198,33 @@ func parseCustomTimeframe(raw string) (TimeframeSpec, error) {
 	}, nil
 }
 
-// MenuTimeframes returns live (native Binance) menu entries grouped for the UI catalog.
+// MenuTimeframes returns live chart menu entries (native ∪ derived views).
 func MenuTimeframes() map[string][]TimeframeSpec {
 	out := map[string][]TimeframeSpec{
 		"MINUTES": nil,
 		"HOURS":   nil,
 		"DAYS":    nil,
 	}
-	for _, e := range exchange.NativeBinance() {
+	for _, e := range exchange.LiveChart() {
 		spec := specFromCatalog(e)
 		switch e.MenuGroup {
 		case "MINUTES", "HOURS", "DAYS":
 			out[e.MenuGroup] = append(out[e.MenuGroup], spec)
 		}
+	}
+	for g, specs := range out {
+		sort.Slice(specs, func(i, j int) bool {
+			if specs[i].ID == "1M" {
+				return false
+			}
+			if specs[j].ID == "1M" {
+				return true
+			}
+			di, _ := data.IntervalDurationMs(specs[i].ID)
+			dj, _ := data.IntervalDurationMs(specs[j].ID)
+			return di < dj
+		})
+		out[g] = specs
 	}
 	return out
 }

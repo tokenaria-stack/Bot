@@ -841,11 +841,11 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 
 **Context:** Live Frames and WS kline streams were a copied 10-TF list. The UI advertised `2h` and `2m` as if they were live Binance intervals. `2m` is not sold by USD-M klines. Derived / seconds / ticks were menu sockets with no builder. Persisting every TF equally would duplicate 1m into SQLite.
 
-**Decision:** One static catalog in `exchange/timeframe_catalog.go`. Native USD-M klines are the only live chart TFs:
+**Decision:** One static catalog in `exchange/timeframe_catalog.go`. Native USD-M klines are the only **exchange** authority:
 
 `1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w 1M`
 
-Boot, WS `@kline_*`, resolver native class, and the live menu read that set. Persistence:
+Live chart also includes derived views `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h` (TF-B): own Frame, parent history fold, no WS, no SQLite. Persistence:
 
 ```text
 NATIVE_BINANCE  → durable historical_klines (Binance authority)
@@ -853,7 +853,7 @@ DERIVED timebars → reconstructable view; no SQLite source of truth
 SECONDS / TICKS → bounded RAM only until an explicit retention feature
 ```
 
-`2m` stays catalogued as derived (`parent=1m`, persist=no), hidden until a builder exists.
+WS subscriptions stay native-only. Live-chart allow-list = native ∪ the four derived TFs. Forming updates replace the same parent bucket; child close requires distinct closed parents.
 
 Future tick contract (not implemented here): **1 tick = 1 `aggTrade` event**.
 
@@ -861,9 +861,10 @@ Future tick contract (not implemented here): **1 tick = 1 `aggTrade` event**.
 - Persist derived 2m / 10m / 45m / 3h — **Reason:** no new market information; reconstruct from parent.
 - Persist seconds/ticks in `historical_klines` — **Reason:** 60× 1m (and worse); RAM rings later.
 - Timeframe registry / service / lazy Frame factory — **Reason:** deletes duplicated lists; does not own runtime.
-- Enabling tick/second/derived menus in this slice — **Reason:** no producer (ADR-002 / debt #44).
+- Enabling tick/second menus — **Reason:** no producer (ADR-002 / debt #44).
+- Injecting synthetic child `WsTick` into `routeTick` — **Reason:** would trip native tip-gap REST on a non-exchange interval.
 
-**Consequences:** Missing native `2h 6h 8h 12h 3d` boot and subscribe like existing natives. No TF-specific history or camera code. `GetWindow` / `EnsureHistoryWindow` / `SaveKlines` / `archive_gaps` unchanged.
+**Consequences:** Native `2h 6h 8h 12h 3d` boot and subscribe like other natives. Live-chart allow-list = native ∪ `{2m,10m,45m,3h}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. Derived `/api/history` folds the parent window. Camera unchanged.
 
 ---
 

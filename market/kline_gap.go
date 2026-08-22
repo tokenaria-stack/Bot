@@ -238,6 +238,9 @@ func (m *Runtime) healFillClosedGapsBeforeFlush(pending []exchange.WsTick) error
 	m.mu.RUnlock()
 
 	for _, interval := range intervals {
+		if !exchange.IsNativeBinance(interval) {
+			continue
+		}
 		m.mu.RLock()
 		frame := m.frames[interval]
 		m.mu.RUnlock()
@@ -267,6 +270,7 @@ func (m *Runtime) healFillClosedGapsBeforeFlush(pending []exchange.WsTick) error
 		log.Printf("[Master] heal closed fill %s [%d..%d] bars=%d", interval, fromMs, toMs, len(candles))
 		frame.LoadHistoricalKlines(exchange.KlinesFromCandles(candles))
 		m.enqueueArchiveCandles(symbol, interval, candles)
+		m.rebuildDerivedFromParent(interval)
 	}
 	return nil
 }
@@ -306,6 +310,9 @@ func (m *Runtime) pendingTipJumpRemains(pending []exchange.WsTick) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for interval, frame := range m.frames {
+		if !exchange.IsNativeBinance(interval) {
+			continue
+		}
 		if frame == nil {
 			continue
 		}
@@ -335,6 +342,9 @@ func (m *Runtime) framesSeriesContiguous() bool {
 	for interval, frame := range m.frames {
 		if frame == nil {
 			return false
+		}
+		if !exchange.IsNativeBinance(interval) {
+			continue
 		}
 		klines := frame.GetKlines()
 		if len(klines) == 0 {
@@ -367,6 +377,9 @@ func (m *Runtime) framesTimelineHealthy() bool {
 	m.mu.RUnlock()
 
 	for i, interval := range intervals {
+		if !exchange.IsNativeBinance(interval) {
+			continue
+		}
 		frame := frames[i]
 		if frame == nil {
 			return false
@@ -407,6 +420,9 @@ func (m *Runtime) reconcileAllKlineGaps(force bool) error {
 
 	var firstErr error
 	for _, interval := range intervals {
+		if !exchange.IsNativeBinance(interval) {
+			continue
+		}
 		m.mu.RLock()
 		frame := m.frames[interval]
 		m.mu.RUnlock()
@@ -458,11 +474,15 @@ func (m *Runtime) reconcileKlineGap(symbol, interval string, frame *Frame, force
 		m.SeedClosedBarTelemetry()
 		m.rebuildMTFTrackerIfReady()
 	}
+	m.rebuildDerivedFromParent(interval)
 	return nil
 }
 
 func (m *Runtime) enqueueArchiveCandles(symbol, interval string, candles []exchange.Candle) {
 	if m == nil || len(candles) == 0 {
+		return
+	}
+	if !exchange.ShouldPersist(interval) {
 		return
 	}
 	m.mu.RLock()
@@ -480,9 +500,10 @@ func (m *Runtime) enqueueArchiveCandles(symbol, interval string, candles []excha
 
 // logHealContiguityProbe answers GPT's four questions (logs only, no behavior change).
 // Verdict classes:
-//   PENDING_JUMP_MISSING_MIDDLE — Cap/Frame tip then pending skips ≥1 closed open
-//   FRAME_HOLE_AFTER_FLUSH      — Frame series discontinuous after applyTick flush
-//   CONTIGUOUS                  — no tip jump / no frame hole detected
+//
+//	PENDING_JUMP_MISSING_MIDDLE — Cap/Frame tip then pending skips ≥1 closed open
+//	FRAME_HOLE_AFTER_FLUSH      — Frame series discontinuous after applyTick flush
+//	CONTIGUOUS                  — no tip jump / no frame hole detected
 func (m *Runtime) logHealContiguityProbe(phase string, pending []exchange.WsTick) {
 	if m == nil {
 		return
@@ -603,4 +624,3 @@ func classifyHealFlushProbe(frameOpens, pendingOpens []int64, interval, phase st
 	}
 	return "CONTIGUOUS"
 }
-

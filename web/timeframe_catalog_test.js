@@ -29,17 +29,21 @@ test('config native list includes missing Binance TFs and 1M', () => {
   assert.ok(config.includes('NATIVE_BINANCE_TFS'));
 });
 
-test('2m is not in live TF_MENU / NATIVE list as Binance', () => {
+test('2m 10m 45m 3h are live derived in TF_MENU', () => {
   const menuStart = config.indexOf('const TF_MENU');
   const menu = config.slice(menuStart, config.indexOf('const LS_FAV_KEY'));
-  assert.ok(!menu.includes("'2m'"), '2m must not be in TF_MENU');
+  for (const id of ['2m', '10m', '45m', '3h']) {
+    assert.ok(menu.includes(`'${id}'`), `menu missing ${id}`);
+  }
   assert.ok(!menu.includes('TICKS'), 'TICKS menu must stay hidden');
   assert.ok(!menu.includes('SECONDS'), 'SECONDS menu must stay hidden');
   assert.ok(menu.includes("'1M'"), '1M must be in DAYS menu');
+  assert.ok(config.includes('LIVE_CHART_TFS'));
+  assert.ok(config.includes('NATIVE_BINANCE_TFS'));
 });
 
-test('live switch uses native allow-list; 1M is not blocked', () => {
-  assert.ok(controller.includes('NATIVE_BINANCE_TFS.includes(resolved)'));
+test('live switch uses live-chart allow-list; 1M is not blocked', () => {
+  assert.ok(controller.includes('LIVE_CHART_TFS.includes(resolved)'));
   assert.ok(!controller.includes("if (resolved === '1M') return;"));
   assert.ok(!controller.includes("tfFavorites.filter((id) => id !== '1M')"));
   assert.ok(!controller.includes("if (currentTf === '1M')"));

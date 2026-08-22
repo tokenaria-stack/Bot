@@ -8,6 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TF-B — derived time-bar views (Aug 2026) ✅
+
+- Live derived TFs: `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h`. Own Frame; no WS, no SQLite.
+- One OHLCV law (`exchange/derived_bars.go`): history fold + live accumulator. Child close = complete distinct closed parents.
+- `/api/history` fetches parent then folds. `EnsureHistoryWindow` / heal / persist remain native-only.
+- Trading / HTF / backtest stay native. Camera unchanged. Seconds / ticks / 6m not in this slice.
+
+---
+
 ## HIST-1.1 — historical tail-coverage HIT (Aug 2026) ✅
 
 - Historical `/api/history` HIT is `last GetWindow OpenTime == CurrentBarOpen(cappedEnd)`. `len>0` is not a hit.

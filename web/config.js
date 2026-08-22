@@ -88,22 +88,30 @@ const NATIVE_BINANCE_TFS = [
   '1d', '3d', '1w', '1M',
 ];
 
+const LIVE_CHART_TFS = [
+  '1m', '2m', '3m', '5m', '10m', '15m', '30m', '45m',
+  '1h', '2h', '3h', '4h', '6h', '8h', '12h',
+  '1d', '3d', '1w', '1M',
+];
+
 const TF_DISPLAY = {
-  '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
-  '1h': '1H', '2h': '2H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
+  '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
+  '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
   '1d': 'D', '3d': '3D', '1w': 'W', '1M': '1M',
 };
 
 const TF_MENU = {
   MINUTES: [
-    { id: '1m', label: '1 minute' }, { id: '3m', label: '3 minutes' },
-    { id: '5m', label: '5 minutes' }, { id: '15m', label: '15 minutes' },
-    { id: '30m', label: '30 minutes' },
+    { id: '1m', label: '1 minute' }, { id: '2m', label: '2 minutes' },
+    { id: '3m', label: '3 minutes' }, { id: '5m', label: '5 minutes' },
+    { id: '10m', label: '10 minutes' }, { id: '15m', label: '15 minutes' },
+    { id: '30m', label: '30 minutes' }, { id: '45m', label: '45 minutes' },
   ],
   HOURS: [
     { id: '1h', label: '1 hour' }, { id: '2h', label: '2 hours' },
-    { id: '4h', label: '4 hours' }, { id: '6h', label: '6 hours' },
-    { id: '8h', label: '8 hours' }, { id: '12h', label: '12 hours' },
+    { id: '3h', label: '3 hours' }, { id: '4h', label: '4 hours' },
+    { id: '6h', label: '6 hours' }, { id: '8h', label: '8 hours' },
+    { id: '12h', label: '12 hours' },
   ],
   DAYS: [
     { id: '1d', label: '1 day' }, { id: '3d', label: '3 days' },

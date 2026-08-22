@@ -162,6 +162,9 @@ func (d *DashboardServer) EnsureHistoryWindow(ctx context.Context, symbol, inter
 	if d == nil {
 		return HistoryEnsureResult{Code: HistoryCodeSQLiteError, Err: fmt.Errorf("dashboard server is nil")}
 	}
+	if !exchange.IsNativeBinance(interval) {
+		return HistoryEnsureResult{Code: HistoryCodeNoData, Err: fmt.Errorf("EnsureHistoryWindow is native-only (got %q)", interval)}
+	}
 	symbol = exchange.NormalizeFuturesSymbol(symbol)
 	key := symbol + "\x00" + interval
 
@@ -259,6 +262,9 @@ func (d *DashboardServer) packIfHistoricalTailHit(win HistoryWindow, expectedLas
 // EnsureHistoryWindow on miss → GetWindow again. Never returns REST candles as the payload.
 // HIST-1.1: historical HIT is last GetWindow OpenTime == CurrentBarOpen(cappedEnd).
 func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWindowQuery) historyDeliverResult {
+	if exchange.IsDerivedTime(q.Spec.ID) {
+		return d.deliverDerivedHistoryWindow(ctx, q)
+	}
 	win, ok := d.GetWindow(ctx, q)
 	if err := requestCtxErr(ctx); err != nil {
 		return historyDeliverResult{Kind: historyDeliverExchange, Err: err}
@@ -309,6 +315,47 @@ func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWin
 		win2 = HistoryWindow{}
 	}
 	return d.packIfHistoricalTailHit(win2, expected)
+}
+
+func (d *DashboardServer) deliverDerivedHistoryWindow(ctx context.Context, q HistoryWindowQuery) historyDeliverResult {
+	e, ok := exchange.TimeframeByName(q.Spec.ID)
+	if !ok || e.Parent == "" {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
+	}
+	parentSpec, err := ResolveTimeframe(e.Parent)
+	if err != nil {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData, Err: err}
+	}
+	childWant := d.historyWantBars(q.CandleLimit)
+	parentNeed, err := exchange.ParentBarsNeeded(childWant, e.Name)
+	if err != nil {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData, Err: err}
+	}
+	parentRes := d.deliverHistoryWindow(ctx, HistoryWindowQuery{
+		Spec:        parentSpec,
+		EndTimeMs:   q.EndTimeMs,
+		CandleLimit: parentNeed,
+	})
+	if parentRes.Kind != historyDeliverOK {
+		return parentRes
+	}
+	closed, _, ferr := exchange.FoldClosedChildren(parentRes.Win.Klines, e.Name, false)
+	if ferr != nil {
+		return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData, Err: ferr}
+	}
+	capEnd := resolveClosedBarBoundary(q.EndTimeMs, e.Name)
+	closed = filterKlinesUntilOpenMs(closed, capEnd)
+	if childWant > 0 && len(closed) > childWant {
+		closed = closed[len(closed)-childWant:]
+	}
+	if len(closed) == 0 {
+		return historyUnavailableResult(parentRes.Win)
+	}
+	return historyDeliverResult{
+		Kind: historyDeliverOK,
+		Code: HistoryCodeOK,
+		Win:  HistoryWindow{Klines: closed, HasMore: parentRes.Win.HasMore},
+	}
 }
 
 func writeHistoryNoData(w http.ResponseWriter, timeframe string, columnar bool, code string) {
