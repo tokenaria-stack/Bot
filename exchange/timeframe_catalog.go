@@ -48,7 +48,6 @@ var timeframeCatalog = []Timeframe{
 	{Name: "8h", Label: "8 hours", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "HOURS"},
 	{Name: "12h", Label: "12 hours", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "HOURS"},
 	{Name: "1d", Label: "1 day", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "DAYS"},
-	{Name: "3d", Label: "3 days", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "DAYS"},
 	{Name: "1w", Label: "1 week", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "DAYS"},
 	{Name: "1M", Label: "1 month", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "DAYS"},
 

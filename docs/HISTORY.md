@@ -14,6 +14,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - One OHLCV law (`exchange/derived_bars.go`): history fold + live accumulator. Child close = complete distinct closed parents.
 - `/api/history` fetches parent then folds. `EnsureHistoryWindow` / heal / persist remain native-only.
 - Trading / HTF / backtest stay native. Camera unchanged. Seconds / ticks / 6m not in this slice.
+- **`3d` withdrawn** from the project catalog: Binance sells it; our fixed-duration floor is not Binance 3d. No Frame/WS/menu. Revisit only with venue-observed 3d boundaries.
 
 ---
 

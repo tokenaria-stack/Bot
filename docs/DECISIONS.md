@@ -841,9 +841,11 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 
 **Context:** Live Frames and WS kline streams were a copied 10-TF list. The UI advertised `2h` and `2m` as if they were live Binance intervals. `2m` is not sold by USD-M klines. Derived / seconds / ticks were menu sockets with no builder. Persisting every TF equally would duplicate 1m into SQLite.
 
-**Decision:** One static catalog in `exchange/timeframe_catalog.go`. Native USD-M klines are the only **exchange** authority:
+**Decision:** One static catalog in `exchange/timeframe_catalog.go`. Project-supported native USD-M klines:
 
-`1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w 1M`
+`1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 1w 1M`
+
+Binance also sells `3d`. This project does **not** support it: epoch-floor 3d is not Binance’s 3d grid (phase offset + historical realignments). Re-add only with a Binance-observed 3d boundary chapter.
 
 Live chart also includes derived views `2m←1m`, `10m←5m`, `45m←15m`, `3h←1h` (TF-B): own Frame, parent history fold, no WS, no SQLite. Persistence:
 
@@ -863,8 +865,9 @@ Future tick contract (not implemented here): **1 tick = 1 `aggTrade` event**.
 - Timeframe registry / service / lazy Frame factory — **Reason:** deletes duplicated lists; does not own runtime.
 - Enabling tick/second menus — **Reason:** no producer (ADR-002 / debt #44).
 - Injecting synthetic child `WsTick` into `routeTick` — **Reason:** would trip native tip-gap REST on a non-exchange interval.
+- Keeping native `3d` on the generic fixed-duration grid — **Reason:** Binance 3d is not Unix-epoch floor (live phase + 2019/2023 seams); unused TF poisoned Master timeline health.
 
-**Consequences:** Native `2h 6h 8h 12h 3d` boot and subscribe like other natives. Live-chart allow-list = native ∪ `{2m,10m,45m,3h}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. Derived `/api/history` folds the parent window. Camera unchanged.
+**Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. Derived `/api/history` folds the parent window. Camera unchanged.
 
 ---
 

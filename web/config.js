@@ -85,19 +85,19 @@ function defaultRiskSettings() {
 const NATIVE_BINANCE_TFS = [
   '1m', '3m', '5m', '15m', '30m',
   '1h', '2h', '4h', '6h', '8h', '12h',
-  '1d', '3d', '1w', '1M',
+  '1d', '1w', '1M',
 ];
 
 const LIVE_CHART_TFS = [
   '1m', '2m', '3m', '5m', '10m', '15m', '30m', '45m',
   '1h', '2h', '3h', '4h', '6h', '8h', '12h',
-  '1d', '3d', '1w', '1M',
+  '1d', '1w', '1M',
 ];
 
 const TF_DISPLAY = {
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
   '1h': '1H', '2h': '2H', '3h': '3H', '4h': '4H', '6h': '6H', '8h': '8H', '12h': '12H',
-  '1d': 'D', '3d': '3D', '1w': 'W', '1M': '1M',
+  '1d': 'D', '1w': 'W', '1M': '1M',
 };
 
 const TF_MENU = {
@@ -114,8 +114,8 @@ const TF_MENU = {
     { id: '12h', label: '12 hours' },
   ],
   DAYS: [
-    { id: '1d', label: '1 day' }, { id: '3d', label: '3 days' },
-    { id: '1w', label: '1 week' }, { id: '1M', label: '1 month' },
+    { id: '1d', label: '1 day' }, { id: '1w', label: '1 week' },
+    { id: '1M', label: '1 month' },
   ],
 };
 
@@ -149,7 +149,6 @@ const MTF_PERIOD_COLORS = (typeof ChartTheme !== 'undefined' && ChartTheme.mtfPe
     '8h': '#ffa726',
     '12h': '#ff7043',
     '1d': '#f23645',
-    '3d': '#e91e63',
     '1w': '#ab47bc',
   };
 /** Fast RAM tail for /api/state; deep history comes from pre-fetch assembly. */

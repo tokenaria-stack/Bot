@@ -109,8 +109,6 @@ func normalizeTFKey(raw string) string {
 		return "12h"
 	case "1d", "d", "day", "1D", "D":
 		return "1d"
-	case "3d", "3days":
-		return "3d"
 	case "1w", "w", "week", "1W", "W":
 		return "1w"
 	case "1m":

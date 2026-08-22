@@ -474,8 +474,6 @@ func intervalDurationMs(interval string) (int64, error) {
 		return 12 * 60 * 60_000, nil
 	case "1d":
 		return 24 * 60 * 60_000, nil
-	case "3d":
-		return 3 * 24 * 60 * 60_000, nil
 	case "1w":
 		return 7 * 24 * 60 * 60_000, nil
 	case "1M":

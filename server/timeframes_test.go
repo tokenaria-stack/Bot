@@ -23,7 +23,7 @@ func TestResolveBacktestInterval(t *testing.T) {
 		{"1M", "1M", false},
 		{"2h", "2h", false},
 		{"6h", "6h", false},
-		{"3d", "3d", false},
+		{"3d", "", true},
 		{"2m", "", true},
 		{"10m", "", true},
 		{"3h", "", true},
@@ -68,7 +68,6 @@ func TestResolveTimeframe(t *testing.T) {
 		{"6h", "6h", TFBinanceREST},
 		{"8h", "8h", TFBinanceREST},
 		{"12h", "12h", TFBinanceREST},
-		{"3d", "3d", TFBinanceREST},
 		{"2m", "2m", TFRAMOnly},
 	}
 
@@ -120,7 +119,7 @@ func TestMenuTimeframesLiveChart(t *testing.T) {
 			t.Fatalf("menu missing %s: %v", need, ids)
 		}
 	}
-	if strings.Contains(joined, "1s") || strings.Contains(joined, "1tick") {
-		t.Fatal("seconds/ticks must stay hidden")
+	if strings.Contains(joined, "1s") || strings.Contains(joined, "1tick") || strings.Contains(joined, "3d") {
+		t.Fatal("seconds/ticks/3d must stay out of the live menu")
 	}
 }

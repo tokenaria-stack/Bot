@@ -13,7 +13,7 @@ func TestNativeBinanceSet(t *testing.T) {
 	want := []string{
 		"1m", "3m", "5m", "15m", "30m",
 		"1h", "2h", "4h", "6h", "8h", "12h",
-		"1d", "3d", "1w", "1M",
+		"1d", "1w", "1M",
 	}
 	got := NativeBinanceIDs()
 	if len(got) != len(want) {
@@ -49,10 +49,20 @@ func TestNativeBinanceSet(t *testing.T) {
 
 func TestMissingNativesAreNative(t *testing.T) {
 	t.Parallel()
-	for _, id := range []string{"2h", "6h", "8h", "12h", "3d"} {
+	for _, id := range []string{"2h", "6h", "8h", "12h"} {
 		if !IsNativeBinance(id) {
 			t.Fatalf("%s must be native", id)
 		}
+	}
+}
+
+func TestThreeDayIsUnsupported(t *testing.T) {
+	t.Parallel()
+	if _, ok := TimeframeByName("3d"); ok {
+		t.Fatal("3d must not be in the project catalog")
+	}
+	if IsNativeBinance("3d") || IsLiveChartTF("3d") {
+		t.Fatal("3d must not be native or live-chart")
 	}
 }
 
@@ -123,7 +133,7 @@ func TestCombinedKlineStreamsCoverEveryNative(t *testing.T) {
 		t.Fatalf("streams=%d ids=%d", len(streams), len(ids))
 	}
 	joined := strings.Join(streams, " ")
-	if strings.Contains(joined, "2m") || strings.Contains(joined, "kline_1s") {
+	if strings.Contains(joined, "2m") || strings.Contains(joined, "kline_1s") || strings.Contains(joined, "kline_3d") {
 		t.Fatalf("inactive TF leaked into WS: %v", streams)
 	}
 	for _, id := range ids {

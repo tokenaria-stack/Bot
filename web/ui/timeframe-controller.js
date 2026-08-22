@@ -16,7 +16,6 @@ const TimeframeController = (() => {
     if (/^\d+m$/.test(s)) return 2000 + parseInt(s, 10);
     if (/^\d+h$/.test(s)) return 3000 + parseInt(s, 10);
     if (s === '1d') return 4001;
-    if (s === '3d') return 4002;
     if (s === '1w') return 4003;
     return 9000;
   }
