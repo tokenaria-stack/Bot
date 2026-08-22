@@ -14,6 +14,7 @@
   const GESTURE_MUTE_MS = 100;
   const HEALTHY_BAR_SPACING = 6;
   const HEALTHY_VISIBLE_BARS = 150;
+  /** Fallback seed only (first microscope / invalid restore). Not a TF-switch clamp. */
   const MAX_HEALTHY_VISIBLE_BARS = 400;
   const MIN_HEALTHY_BAR_SPACING = 1;
   /** Max zoom-out (logical bars). Gesture + LIVE TF restore — one wall (`MAX_VISIBLE_BARS`). */
@@ -111,8 +112,7 @@
   function sanitizeVisibleBars(bars) {
     let b = Number(bars);
     if (!Number.isFinite(b) || b <= 0) b = HEALTHY_VISIBLE_BARS;
-    if (b > MAX_HEALTHY_VISIBLE_BARS) b = MAX_HEALTHY_VISIBLE_BARS;
-    if (b < 50) b = 50;
+    if (b > MAX_VISIBLE_LOGICAL_BARS) b = MAX_VISIBLE_LOGICAL_BARS;
     return b;
   }
 
@@ -697,9 +697,10 @@
       from = Math.max(0, centerLogical - half);
       to = from + bars;
     }
-    const rightPadding = Math.max(0, to - tip);
+    const visibleRange = clampVisibleLogicalWidth({ from, to }, MAX_VISIBLE_LOGICAL_BARS);
+    const rightPadding = Math.max(0, visibleRange.to - tip);
     return commit({
-      visibleRange: { from, to },
+      visibleRange,
       barSpacing: spacing,
       rightOffset: rightPadding,
       sourceHostId: 'system',

@@ -1306,17 +1306,17 @@
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
       const chunkLimit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
       let limit = chunkLimit;
-      // TF-2A: LIVE TF switch only — cover preserved VIEW. Scroll chunks stay chunkLimit.
+      // TF-2A / HIST-VIEW-1: user TF switch covers preserved VIEW. Scroll chunks stay chunkLimit.
       if (options.userTfChange === true
         && viewportAnchor
-        && viewportAnchor.intent === 'LIVE'
+        && (viewportAnchor.intent === 'LIVE' || viewportAnchor.intent === 'HISTORY')
         && typeof ViewportManager !== 'undefined'
         && typeof ViewportManager.resolveLiveTfSwitchFetchLimit === 'function') {
         limit = ViewportManager.resolveLiveTfSwitchFetchLimit(viewportAnchor.visibleBars);
       }
       const nowSec = Math.floor(Date.now() / 1000);
-      // Microscope / HISTORY→HISTORY TF switch: hydrate a normal chunk around the
-      // captured centerTime — never Date.now() tip (that drops the focal market-time).
+      // Microscope / HISTORY→HISTORY TF switch: hydrate around captured centerTime
+      // using the same `limit` as the fetch (island must stay centered on focus).
       let endTimeSec = nowSec;
       if (viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))

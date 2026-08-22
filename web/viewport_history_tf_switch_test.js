@@ -77,7 +77,7 @@ test('resolveHistoryTfFetchEndSec: LIVE / missing / invalid center → nowSec', 
   }), NOW_SEC);
 });
 
-test('cameraIntentForTfSwitch HISTORY: healthy bars, sacred center', () => {
+test('cameraIntentForTfSwitch HISTORY: preserve VIEW + sacred center', () => {
   const seed = ViewportManager.cameraIntentForTfSwitch({
     centerTimeMs: CENTER_MS,
     visibleBars: 2992,
@@ -88,8 +88,20 @@ test('cameraIntentForTfSwitch HISTORY: healthy bars, sacred center', () => {
   });
   assert.strictEqual(seed.intent, 'HISTORY');
   assert.strictEqual(seed.centerTimeMs, CENTER_MS);
+  assert.strictEqual(seed.visibleBars, 2992);
+  assert.strictEqual(seed.barSpacing, 2);
+});
+
+test('cameraIntentForTfSwitch HISTORY: invalid VIEW → 150/6 fallback', () => {
+  const seed = ViewportManager.cameraIntentForTfSwitch({
+    centerTimeMs: CENTER_MS,
+    visibleBars: NaN,
+    intent: 'HISTORY',
+    isAtRightEdge: false,
+    barSpacing: 0,
+  });
   assert.strictEqual(seed.visibleBars, TimeCamera.HEALTHY_VISIBLE_BARS);
-  assert.notStrictEqual(seed.visibleBars, 2992);
+  assert.strictEqual(seed.barSpacing, TimeCamera.HEALTHY_BAR_SPACING);
 });
 
 test('cameraIntentForTfSwitch LIVE: keeps visibleBars and spacing', () => {
@@ -148,8 +160,36 @@ test('TF-2A ordinary history fetchColumnar still uses HISTORY_CHUNK_LIMIT', () =
   );
   assert.ok(
     /userTfChange === true/.test(boot) && /resolveLiveTfSwitchFetchLimit/.test(boot),
-    'LIVE TF first fetch must be gated on userTfChange',
+    'TF first fetch must be gated on userTfChange',
   );
+  assert.ok(
+    /viewportAnchor\.intent === 'LIVE' \|\| viewportAnchor\.intent === 'HISTORY'/.test(boot),
+    'HISTORY user TF switch must share the preserved-VIEW fetch limit',
+  );
+});
+
+test('HIST-VIEW-1: HISTORY fetch end uses the same limit as the fetch', () => {
+  const visibleBars = 5000;
+  const limit = ViewportManager.resolveLiveTfSwitchFetchLimit(visibleBars);
+  assert.strictEqual(limit, 5000);
+  const intervalSec = 60;
+  const end = ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: CENTER_MS,
+    nowSec: NOW_SEC,
+    limit,
+    intervalSec,
+  });
+  const centerSec = Math.floor(CENTER_MS / 1000);
+  assert.strictEqual(end, centerSec + Math.floor(limit / 2) * intervalSec);
+  const endIfChunk = ViewportManager.resolveHistoryTfFetchEndSec({
+    intent: 'HISTORY',
+    centerTimeMs: CENTER_MS,
+    nowSec: NOW_SEC,
+    limit: 3000,
+    intervalSec,
+  });
+  assert.notStrictEqual(end, endIfChunk, 'mismatched limit would de-center the island');
 });
 
 test('proposeAfterData HISTORY restores center inside hydrated 1m chunk', () => {
@@ -187,6 +227,105 @@ test('proposeAfterData HISTORY restores center inside hydrated 1m chunk', () => 
   assert.ok(Math.abs(midSec - centerSec) <= intervalSec, `center market-time drift: ${midSec} vs ${centerSec}`);
   const width = seen.visibleRange.to - seen.visibleRange.from;
   assert.ok(Math.abs(width - TimeCamera.HEALTHY_VISIBLE_BARS) < 1e-6);
+});
+
+test('proposeAfterData HISTORY: preserved 2800 VIEW is not clamped to 50–400', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+
+  const limit = 5000;
+  const intervalSec = 60;
+  const centerSec = Math.floor(CENTER_MS / 1000);
+  const end = centerSec + Math.floor(limit / 2) * intervalSec;
+  const first = end - limit * intervalSec;
+  const times = Array.from({ length: limit }, (_, i) => first + i * intervalSec);
+
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(times, ms),
+  });
+
+  const ok = TimeCamera.proposeAfterData({
+    tipLogical: times.length - 1,
+    timesSec: times,
+    seed: {
+      intent: 'HISTORY',
+      _liveEdge: false,
+      centerTime: CENTER_MS,
+      visibleBars: 2800,
+      barSpacing: 2,
+    },
+    mode: 'switch',
+  });
+  assert.strictEqual(ok, true);
+  const width = seen.visibleRange.to - seen.visibleRange.from;
+  assert.ok(Math.abs(width - 2800) < 1e-6, `expected 2800, got ${width}`);
+  assert.strictEqual(seen.barSpacing, 2);
+});
+
+test('proposeAfterData HISTORY: 8000 VIEW caps at MAX_VISIBLE (5000), not 400', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+
+  const limit = 5000;
+  const intervalSec = 60;
+  const centerSec = Math.floor(CENTER_MS / 1000);
+  const end = centerSec + Math.floor(limit / 2) * intervalSec;
+  const first = end - limit * intervalSec;
+  const times = Array.from({ length: limit }, (_, i) => first + i * intervalSec);
+
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(times, ms),
+  });
+
+  TimeCamera.proposeAfterData({
+    tipLogical: times.length - 1,
+    timesSec: times,
+    seed: {
+      intent: 'HISTORY',
+      _liveEdge: false,
+      centerTime: CENTER_MS,
+      visibleBars: 8000,
+      barSpacing: 2,
+    },
+    mode: 'switch',
+  });
+  const width = seen.visibleRange.to - seen.visibleRange.from;
+  assert.ok(Math.abs(width - TimeCamera.MAX_VISIBLE_LOGICAL_BARS) < 1e-6, `expected 5000, got ${width}`);
+});
+
+test('proposeAfterData HISTORY: invalid seed → 150/6 fallback', () => {
+  TimeCamera._resetForTests();
+  let seen = null;
+  TimeCamera.bind({ applyCommitted: (s) => { seen = s; } });
+
+  const limit = 3000;
+  const intervalSec = 60;
+  const centerSec = Math.floor(CENTER_MS / 1000);
+  const end = centerSec + Math.floor(limit / 2) * intervalSec;
+  const first = end - limit * intervalSec;
+  const times = Array.from({ length: limit }, (_, i) => first + i * intervalSec);
+
+  TimeCamera.bindDataResolve({
+    nearestLogicalForTime: (ms) => ChartCompositor.findIndexByTimeMs(times, ms),
+  });
+
+  TimeCamera.proposeAfterData({
+    tipLogical: times.length - 1,
+    timesSec: times,
+    seed: {
+      intent: 'HISTORY',
+      _liveEdge: false,
+      centerTime: CENTER_MS,
+      visibleBars: NaN,
+      barSpacing: 0,
+    },
+    mode: 'switch',
+  });
+  const width = seen.visibleRange.to - seen.visibleRange.from;
+  assert.ok(Math.abs(width - TimeCamera.HEALTHY_VISIBLE_BARS) < 1e-6);
+  assert.strictEqual(seen.barSpacing, TimeCamera.HEALTHY_BAR_SPACING);
 });
 
 test('HISTORY restore: tip-only store must NOT FreshLive (center missing)', () => {

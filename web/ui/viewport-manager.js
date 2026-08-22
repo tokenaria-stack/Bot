@@ -112,8 +112,8 @@
 
   /**
    * Build TF handoff seed from capture. No TF-density branching (ADR-028).
-   * HISTORY → HISTORY: preserve centerTime only; use healthy default zoom for the NEW TF
-   * (do not carry the old visibleBars / old time-span into the denser TF).
+   * Valid prior VIEW: preserve visibleBars + barSpacing (LIVE tip / HISTORY focus).
+   * Invalid bars/spacing → 150/6 fallback. Cap width at MAX_CAPTURE_VISIBLE_BARS.
    * @param {object|null} captured
    */
   function cameraIntentForTfSwitch(captured) {
@@ -123,26 +123,32 @@
       && Number.isFinite(TimeCamera.HEALTHY_VISIBLE_BARS))
       ? TimeCamera.HEALTHY_VISIBLE_BARS
       : HEALTHY_VISIBLE_BARS;
+    const healthySpacing = (typeof TimeCamera !== 'undefined'
+      && Number.isFinite(TimeCamera.HEALTHY_BAR_SPACING))
+      ? TimeCamera.HEALTHY_BAR_SPACING
+      : HEALTHY_BAR_SPACING;
+    let visibleBars = Number(captured.visibleBars);
+    if (!Number.isFinite(visibleBars) || visibleBars <= 0) visibleBars = healthyBars;
+    if (visibleBars > MAX_CAPTURE_VISIBLE_BARS) visibleBars = MAX_CAPTURE_VISIBLE_BARS;
+    let barSpacing = Number(captured.barSpacing);
+    if (!Number.isFinite(barSpacing) || barSpacing < MIN_HEALTHY_BAR_SPACING) {
+      barSpacing = healthySpacing;
+    }
     return {
       centerTimeMs: captured.centerTimeMs,
-      // Microscope contract: center is sacred; new TF gets a normal viewport size.
-      visibleBars: isHistory ? healthyBars : (captured.visibleBars || healthyBars),
+      visibleBars,
       rightOffset: Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0,
       rightPadding: Number.isFinite(captured.rightPadding)
         ? captured.rightPadding
         : (Number.isFinite(captured.rightOffset) ? captured.rightOffset : 0),
-      barSpacing: isHistory
-        ? ((typeof TimeCamera !== 'undefined' && Number.isFinite(TimeCamera.HEALTHY_BAR_SPACING))
-          ? TimeCamera.HEALTHY_BAR_SPACING
-          : HEALTHY_BAR_SPACING)
-        : captured.barSpacing,
+      barSpacing,
       isAtRightEdge: captured.isAtRightEdge === true || captured.intent === 'LIVE',
       intent: isHistory ? 'HISTORY' : 'LIVE',
     };
   }
 
   /**
-   * LIVE TF-switch first fetch only. Scroll/prefetch still use HISTORY_CHUNK_LIMIT.
+   * User TF-switch first fetch (LIVE or HISTORY). Scroll/prefetch still use HISTORY_CHUNK_LIMIT.
    * initialLimit = min(MAX_STORE_BARS, max(HISTORY_CHUNK_LIMIT, ceil(visibleBars)))
    */
   function resolveLiveTfSwitchFetchLimit(visibleBars) {

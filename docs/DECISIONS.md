@@ -798,6 +798,7 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 - DataResolve → nearest logical on the **new** series.
 - Center geometry on that logical; keep `visibleBars` / `barSpacing` (poison-sanitized).
 - **Never** jump to live tip.
+- User TF change + valid prior VIEW: same preserve as LIVE (`visibleBars` + `barSpacing`). Initial HISTORY fetch is sized to that VIEW; **the same limit** is used for `endTime` and the fetch (island stays centered). Invalid / no prior HISTORY geometry → 150 bars / spacing 6. Scroll chunk stays 3000. Caps: `MAX_VISIBLE` 5000 (camera), `MAX_STORE` 9000 (storage).
 
 ### Error / poison
 
@@ -806,7 +807,7 @@ Do not treat large positive overhang alone as a reason to invent density-specifi
 | Null / failed capture | Fresh LIVE: healthy spacing, `rightPadding: 0` |
 | No bar for `centerTime` | Nearest logical (data layer) |
 | Empty series | Fresh LIVE / no-op until data exists |
-| Accordion / crushed spacing | LIVE: spacing &lt; min → 6; width cap `MAX_VISIBLE_BARS`. HISTORY TF: healthy 150/6 (microscope). |
+| Accordion / crushed spacing | LIVE and HISTORY: spacing &lt; min → 6; width cap `MAX_VISIBLE_BARS`. Invalid/no prior HISTORY geometry → 150/6 fallback (not a TF-switch reset). |
 
 ### Explicit non-goals
 
