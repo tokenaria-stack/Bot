@@ -249,7 +249,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 22. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
 23. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
 24. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
-25. **Dense vs sparse live series (MICRO-1.1 / MICRO-2B).** Native and derived time bars expect every bucket. Seconds and ticks do not. FE `appendTick` gap heal is dense-only (`requiresDenseTimeContinuity`). Sparse holes append; they never enter `fe_gapDetected` healing. TimelineRecovery is dense-only; sparse Master heal is a no-op; browser reconnect is a quiet RAM snapshot.
+25. **Dense vs sparse live series (MICRO-1.1 / MICRO-2B / MICRO-2C).** Native and derived time bars expect every bucket. Seconds and ticks do not. FE `appendTick` gap heal is dense-only (`requiresDenseTimeContinuity`). Sparse holes append; they never enter `fe_gapDetected` healing. TimelineRecovery is dense-only; sparse Master heal is a no-op; browser reconnect is a quiet RAM snapshot. Sparse HISTORY skips live delta paint; HISTORY→LIVE is one full store paint.
 
 **Interaction pipeline (canonical):**
 

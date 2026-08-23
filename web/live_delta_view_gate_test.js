@@ -53,8 +53,12 @@ test('B. HISTORY + same bar → no paint', () => {
   assert.strictEqual(shouldMarkDirtyLiveDelta('HISTORY', false), false);
 });
 
-test('C. HISTORY + new bar → paint', () => {
+test('C. HISTORY + new bar → paint (native / dense)', () => {
   assert.strictEqual(shouldMarkDirtyLiveDelta('HISTORY', true), true);
+});
+
+test('MICRO-2C. sparse HISTORY skips new-bar delta too', () => {
+  assert.strictEqual(shouldMarkDirtyLiveDelta('HISTORY', true, true), false);
 });
 
 test('D. null / unknown intent → fail open (paint)', () => {

@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## MICRO-2C — sparse off-screen live paint (Aug 2026) ✅
+
+- Sparse VIEW=HISTORY: store still ingests; no LWC `series.update` for hidden live bars.
+- HISTORY→LIVE: one full paint from store (`restore`/`preserve`), then deltas resume.
+- Native/derived Fix F unchanged (HISTORY new bars still delta). Camera math untouched.
+
+---
+
 ## MICRO-2B — sparse recovery isolation (Aug 2026) ✅
 
 - Sparse live TFs (`requiresDenseTimeContinuity` false) do not enter TimelineRecovery on Master `timeline_healing` / `timeline_publishable`.

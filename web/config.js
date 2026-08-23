@@ -141,6 +141,11 @@ function appendLiveTickBuffer(pending, tick, max, tf) {
   return list;
 }
 
+/** MICRO-2C: one authoritative full paint when sparse VIEW returns to LIVE. */
+function sparseHistoryToLiveNeedsFullPaint(prevIntent, nextIntent) {
+  return prevIntent === 'HISTORY' && nextIntent === 'LIVE';
+}
+
 const TF_DISPLAY = {
   '1s': '1s',
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
@@ -511,4 +516,5 @@ if (typeof window !== 'undefined') {
   window.isSparseLiveChart = isSparseLiveChart;
   window.isSecondsTimeframe = isSecondsTimeframe;
   window.appendLiveTickBuffer = appendLiveTickBuffer;
+  window.sparseHistoryToLiveNeedsFullPaint = sparseHistoryToLiveNeedsFullPaint;
 }

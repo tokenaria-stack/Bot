@@ -85,7 +85,8 @@
 	let tickBufferEpoch = 0;
 	/** Core 4.2 tip-handoff diagnostic (temporary): history tip vs first accepted live tick. */
 	let handoffDiag = null;
-	/** Core 4.5 Self-Healing: last gap-triggered reload (ms); throttles reload storms. */
+	/** MICRO-2C: last sparse TimeCamera intent (LIVE|HISTORY); dense path leaves it null. */
+	let sparseViewIntent = null;
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
 
@@ -815,6 +816,7 @@
     syncStoreTfInterval();
     abortLiveTickBuffer();
     beginLiveTickBuffer();
+    sparseViewIntent = null;
     liveHydrationOrchestrator?.reset();
     disarmLiveHistoryScroll();
     liveNavigatorResult = null;
@@ -1229,11 +1231,14 @@
       handoffDiag.waiting = false;
     }
     if (options.silent) return true;
-    // Render gate only (Fix F): store already ingested. VIEW intent ≠ windowMode.
-    // Same-bar ticks while looking at HISTORY must not schedule delta RAFs.
-    // New bars still paint so LWC series length stays aligned with the store.
-    // Unknown/null intent fails open (keep existing delta paint).
-    if (!shouldMarkDirtyLiveDelta(liveCameraViewIntent(), appendResult.isNewBar)) {
+    // Render gate only (Fix F / MICRO-2C): store already ingested. VIEW ≠ windowMode.
+    const viewIntent = liveCameraViewIntent();
+    const sparse = typeof isSparseLiveChart === 'function'
+      && isSparseLiveChart(tick?.timeframe || window.currentTf);
+    if (maybeSparseHistoryToLivePaint(viewIntent, sparse)) {
+      return true;
+    }
+    if (!shouldMarkDirtyLiveDelta(viewIntent, appendResult.isNewBar, sparse)) {
       return true;
     }
     liveRenderScheduler.markDirty({
@@ -1267,11 +1272,42 @@
 
   /**
    * Delta *paint* policy after appendTick. Ingest is never gated here.
+   * Native/derived: HISTORY same-bar skip; new bars still delta (Fix F).
+   * Sparse: HISTORY skips all deltas (MICRO-2C). Unknown intent fails open.
    * @param {'LIVE'|'HISTORY'|null|undefined} viewIntent
    * @param {boolean} isNewBar
+   * @param {boolean} [sparse]
    */
-  function shouldMarkDirtyLiveDelta(viewIntent, isNewBar) {
+  function shouldMarkDirtyLiveDelta(viewIntent, isNewBar, sparse) {
+    if (sparse === true && viewIntent === 'HISTORY') return false;
     return !(viewIntent === 'HISTORY' && isNewBar !== true);
+  }
+
+  /**
+   * Sparse HISTORY→LIVE: one full setData from store, then deltas resume.
+   * Dense TFs never take this path. Does not move VIEW (restore/preserve only).
+   */
+  function maybeSparseHistoryToLivePaint(viewIntent, sparse) {
+    if (sparse !== true) {
+      sparseViewIntent = null;
+      return false;
+    }
+    if (viewIntent !== 'LIVE' && viewIntent !== 'HISTORY') {
+      return false;
+    }
+    const prev = sparseViewIntent;
+    sparseViewIntent = viewIntent;
+    const needsFull = typeof sparseHistoryToLiveNeedsFullPaint === 'function'
+      ? sparseHistoryToLiveNeedsFullPaint(prev, viewIntent)
+      : (prev === 'HISTORY' && viewIntent === 'LIVE');
+    if (!needsFull || !liveRenderScheduler) return false;
+    const anchor = captureReconnectViewportAnchor();
+    liveRenderScheduler.markDirty({
+      mode: 'full',
+      viewport: anchor ? 'restore' : 'preserve',
+      anchor: anchor || undefined,
+    });
+    return true;
   }
 
   /** Replay buffered ticks onto the fresh monolith (TF + projectionEpoch gated). */
