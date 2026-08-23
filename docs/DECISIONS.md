@@ -398,6 +398,8 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Consequences:** Duplicate healing no longer extends wait; publishable exits immediately. Debt **#89**. Module: `web/timeline-recovery.js`. Regression: `web/timeline_recovery_test.js`.
 
+MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts ignore Master heal/publishable (no enter, no `loadDashboard`). Browser reconnect uses Shot 10B + preserved VIEW. Do not teach TimelineRecovery about micro TFs.
+
 ---
 
 ## ADR-019 — PaneLayout (Footer Pane Membership)

@@ -104,6 +104,43 @@ function requiresDenseTimeContinuity(tf) {
   return true;
 }
 
+function isSparseLiveChart(tf) {
+  return typeof requiresDenseTimeContinuity === 'function'
+    && !requiresDenseTimeContinuity(tf);
+}
+
+/** Seconds bucket identity (one bar per OpenTime). Not ticks. */
+function isSecondsTimeframe(tf) {
+  return /^\d+s$/i.test(String(tf || '').trim());
+}
+
+/**
+ * Shot 10B buffer append. Seconds: same OpenTime replaces the forming update.
+ * Ticks must not use this coalesce (identity is not OpenTime).
+ * @param {object[]} pending
+ * @param {object} tick
+ * @param {number} max
+ * @param {string} [tf]
+ * @returns {object[]}
+ */
+function appendLiveTickBuffer(pending, tick, max, tf) {
+  const list = Array.isArray(pending) ? pending : [];
+  const cap = Number.isFinite(max) && max > 0 ? Math.floor(max) : 5000;
+  if (!tick) return list;
+  const idTf = String(tick.timeframe || tf || '');
+  const open = Number(tick.time);
+  if (isSecondsTimeframe(idTf) && list.length && Number.isFinite(open)) {
+    const lastOpen = Number(list[list.length - 1]?.time);
+    if (lastOpen === open) {
+      list[list.length - 1] = tick;
+      return list;
+    }
+  }
+  list.push(tick);
+  if (list.length > cap) list.splice(0, list.length - cap);
+  return list;
+}
+
 const TF_DISPLAY = {
   '1s': '1s',
   '1m': '1m', '2m': '2m', '3m': '3m', '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m', '45m': '45m',
@@ -471,4 +508,7 @@ if (typeof window !== 'undefined') {
     ensureChartLibraryStyles,
   };
   window.requiresDenseTimeContinuity = requiresDenseTimeContinuity;
+  window.isSparseLiveChart = isSparseLiveChart;
+  window.isSecondsTimeframe = isSecondsTimeframe;
+  window.appendLiveTickBuffer = appendLiveTickBuffer;
 }

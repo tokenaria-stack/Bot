@@ -156,9 +156,13 @@
     if (tickTf && wantTf && tickTf !== wantTf) {
       return true;
     }
-    pendingLiveTicks.push(tick);
-    if (pendingLiveTicks.length > LIVE_TICK_BUFFER_MAX) {
-      pendingLiveTicks.splice(0, pendingLiveTicks.length - LIVE_TICK_BUFFER_MAX);
+    if (typeof appendLiveTickBuffer === 'function') {
+      appendLiveTickBuffer(pendingLiveTicks, tick, LIVE_TICK_BUFFER_MAX, wantTf);
+    } else {
+      pendingLiveTicks.push(tick);
+      if (pendingLiveTicks.length > LIVE_TICK_BUFFER_MAX) {
+        pendingLiveTicks.splice(0, pendingLiveTicks.length - LIVE_TICK_BUFFER_MAX);
+      }
     }
     return true;
   }
@@ -704,6 +708,9 @@
   }
 
   function enterTimelineHealing(reason) {
+    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+      return;
+    }
     if (timelineRecovery) {
       timelineRecovery.enter(reason);
       return;
@@ -713,16 +720,47 @@
   }
 
   function onTimelineHealingFromServer() {
+    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+      return;
+    }
     enterTimelineHealing('server_timeline_healing');
   }
 
   function onTimelinePublishableFromServer() {
+    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+      // Clear leftover dense HEALING if the user switched TF; never hydrate 1s from Master.
+      timelineRecovery?.publishable?.();
+      return;
+    }
     if (timelineRecovery) {
       timelineRecovery.publishable();
       return;
     }
     if (window.__isDashboardLoading) return;
     loadDashboard();
+  }
+
+  function captureReconnectViewportAnchor() {
+    if (typeof ViewportManager === 'undefined' || typeof ViewportManager.capture !== 'function') {
+      return null;
+    }
+    const captured = ViewportManager.capture('live');
+    if (!captured) return null;
+    if (typeof ViewportManager.cameraIntentForTfSwitch === 'function') {
+      return ViewportManager.cameraIntentForTfSwitch(captured);
+    }
+    return captured;
+  }
+
+  function onBrowserReconnect() {
+    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+      const viewportAnchor = captureReconnectViewportAnchor();
+      if (!tickBufferActive) beginLiveTickBuffer();
+      loadDashboard({ viewportAnchor, quiet: true });
+      return;
+    }
+    console.warn('[Self-Healing] browser WS reconnected — entering timeline recovery');
+    enterTimelineHealing('browser_ws_reconnect');
   }
 
   function initTimelineRecovery() {
@@ -740,6 +778,9 @@
       },
       onRecovered() {
         if (window.__isDashboardLoading) return;
+        if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+          return;
+        }
         loadDashboard();
       },
     });
@@ -1278,11 +1319,8 @@
       onOpen: () => wsSubscribeTf(window.currentTf),
       onTimelineHealing: onTimelineHealingFromServer,
       onTimelinePublishable: onTimelinePublishableFromServer,
-      // Browser↔bot reconnect ≠ Binance heal. Buffer + short safety; publishable wins if both drop.
-      onReconnect: () => {
-        console.warn('[Self-Healing] browser WS reconnected — entering timeline recovery');
-        enterTimelineHealing('browser_ws_reconnect');
-      },
+      // Browser↔bot reconnect ≠ Binance heal. Sparse: quiet Shot 10B. Dense: TimelineRecovery.
+      onReconnect: onBrowserReconnect,
     });
   }
 
@@ -1307,7 +1345,9 @@
     }
     window.__isDashboardLoading = true;
     wsSubscribeTf(window.currentTf);
-    if (typeof ToolbarController !== 'undefined') ToolbarController.setBuffering(true);
+    if (!options.quiet && typeof ToolbarController !== 'undefined') {
+      ToolbarController.setBuffering(true);
+    }
 
     let completed = false;
     let retrying = false;

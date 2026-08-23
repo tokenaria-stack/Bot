@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## MICRO-2B — sparse recovery isolation (Aug 2026) ✅
+
+- Sparse live TFs (`requiresDenseTimeContinuity` false) do not enter TimelineRecovery on Master `timeline_healing` / `timeline_publishable`.
+- Browser↔bot reconnect: quiet Shot 10B RAM snapshot + tip handoff; preserve VIEW. No Synchronizing/Retry.
+- Seconds buffer coalesces same OpenTime. Ticks identity unchanged. No SQLite, no paint-policy change, no builder rewrite.
+
+---
+
 ## MICRO-1.1 — sparse micro live series (Aug 2026) ✅
 
 - FE `appendTick` chronology-gap heal is dense-only (`requiresDenseTimeContinuity`).
