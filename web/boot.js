@@ -1190,8 +1190,14 @@
 
   function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
-    // Debt #69A: history display window must not ingest live ticks (avoids gap-heal yank-to-live).
-    if (liveColumnarStore.windowMode === 'history') return false;
+    // Dense HISTORY island must not ingest live ticks (Debt #69A gap-heal yank).
+    // Sparse 1s: MICRO-2C still ingests; paint is gated by TimeCamera VIEW.
+    // Blocking ingest here deadlocks 1s: quiet seconds never promote windowMode.
+    if (liveColumnarStore.windowMode === 'history') {
+      const sparseTick = typeof isSparseLiveChart === 'function'
+        && isSparseLiveChart(tick?.timeframe || window.currentTf);
+      if (!sparseTick) return false;
+    }
     // Preserve-paired: capture VIEW before append so budget cannot drop visible oldest bars.
     const viewTimes = captureStoreViewTimes();
     const appendResult = liveColumnarStore.appendTick(tick, {
@@ -1405,10 +1411,15 @@
         limit = ViewportManager.resolveLiveTfSwitchFetchLimit(viewportAnchor.visibleBars);
       }
       const nowSec = Math.floor(Date.now() / 1000);
+      const sparseTf = typeof isSparseLiveChart === 'function'
+        && isSparseLiveChart(window.currentTf);
       // Microscope / HISTORY→HISTORY TF switch: hydrate around captured centerTime
       // using the same `limit` as the fetch (island must stay centered on focus).
+      // Sparse 1s is live-edge hydrate only — a lagged TimeCamera HISTORY must not
+      // fetch a 3000-bar island and freeze ticks (windowMode=history deadlock).
       let endTimeSec = nowSec;
-      if (viewportAnchor?.intent === 'HISTORY'
+      if (!sparseTf
+        && viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))
         && typeof ViewportManager !== 'undefined'
         && typeof ViewportManager.resolveHistoryTfFetchEndSec === 'function') {
@@ -1460,7 +1471,8 @@
       // Commit-paired (FreshLive / TF hydrate): intentional world replace — no Mutation Set.
       // P0: HISTORY TF island must be windowMode=history so live ticks do not gap-heal
       // (Debt #69A). Tip-behind-live is intentional Microscope, not a transport failure.
-      const historyIsland = viewportAnchor?.intent === 'HISTORY'
+      const historyIsland = !sparseTf
+        && viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs));
       liveColumnarStore.replaceMonolith(columnar, {
         commitPaired: true,

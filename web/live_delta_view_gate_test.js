@@ -104,7 +104,9 @@ test('boot: ingest still precedes the VIEW paint gate', () => {
   assert.ok(appendAt >= 0 && gateAt > appendAt && dirtyAt > gateAt,
     'appendTick → shouldMarkDirtyLiveDelta → markDirty');
   assert.ok(/windowMode === 'history'/.test(pushBody),
-    'existing windowMode data gate must remain');
+    'existing windowMode data gate must remain for dense TFs');
+  assert.ok(/isSparseLiveChart/.test(pushBody),
+    'sparse 1s must still ingest when windowMode is history');
   assert.ok(/liveCameraViewIntent/.test(pushBody),
     'paint gate must read TimeCamera VIEW, not windowMode');
 });
@@ -115,6 +117,12 @@ test('boot: TimeCamera shadow is the VIEW source', () => {
   assert.ok(!/windowMode/.test(reader), 'VIEW reader must not use windowMode');
   assert.ok(!/classifyViewIntent/.test(reader),
     'must not recompute slack; shadow already classified');
+});
+
+test('boot: sparse 1s TF hydrate is FreshLive, not HISTORY island', () => {
+  const load = extractFn(boot, 'loadDashboard');
+  assert.ok(/sparseTf/.test(load) && /historyIsland = !sparseTf/.test(load),
+    '1s must not commit windowMode=history on TF hydrate');
 });
 
 console.log('live_delta_view_gate_test: ALL PASS');
