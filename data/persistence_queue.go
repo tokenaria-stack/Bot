@@ -26,7 +26,9 @@ type PersistJob struct {
 }
 
 // PersistenceQueue isolates disk I/O from the live WS/DAG hot path (Shot 9C/9E).
-// It is the sole production writer into historical_klines (via SaveKlines).
+// It is the sole production writer into historical_klines (via SaveKlines) and
+// micro_klines (via SaveMicroKlines). Interval selects the sink; there is no
+// second writer or live-path ticker.
 //
 // Closed bars are never silently discarded:
 //   - Enqueue blocks until the job is accepted (no drop-on-full).
@@ -34,8 +36,9 @@ type PersistJob struct {
 //   - After exhausting retries, jobs stay on an in-memory spill and the failure
 //     is surfaced via Failures/LastError — never reported as success.
 type PersistenceQueue struct {
-	ch   chan PersistJob
-	save func(symbol, interval string, klines []Candle) error
+	ch        chan PersistJob
+	save      func(symbol, interval string, klines []Candle) error
+	saveMicro func(symbol, interval string, klines []Candle) error
 
 	spillMu sync.Mutex
 	spill   []PersistJob
@@ -54,6 +57,7 @@ func NewPersistenceQueue(buffer int) *PersistenceQueue {
 	}
 	q := &PersistenceQueue{ch: make(chan PersistJob, buffer)}
 	q.save = SaveKlines
+	q.saveMicro = SaveMicroKlines
 	q.lastErr.Store("")
 	return q
 }
@@ -68,6 +72,31 @@ func (q *PersistenceQueue) SetSaveFunc(fn func(symbol, interval string, klines [
 		return
 	}
 	q.save = fn
+}
+
+// SetSaveMicroFunc overrides the 1s micro_klines sink (tests only).
+func (q *PersistenceQueue) SetSaveMicroFunc(fn func(symbol, interval string, klines []Candle) error) {
+	if q == nil {
+		return
+	}
+	if fn == nil {
+		q.saveMicro = SaveMicroKlines
+		return
+	}
+	q.saveMicro = fn
+}
+
+func (q *PersistenceQueue) sinkFor(interval string) func(string, string, []Candle) error {
+	if IsMicroKlineInterval(interval) {
+		if q != nil && q.saveMicro != nil {
+			return q.saveMicro
+		}
+		return SaveMicroKlines
+	}
+	if q != nil && q.save != nil {
+		return q.save
+	}
+	return SaveKlines
 }
 
 // Start launches the single worker that drains the queue into SaveKlines (UPSERT).
@@ -131,11 +160,7 @@ func (q *PersistenceQueue) PersistClosedBarsNow(symbol, interval string, candles
 	if len(candles) == 0 {
 		return nil
 	}
-	save := q.save
-	if save == nil {
-		save = SaveKlines
-	}
-	if err := q.saveWithRetry(save, symbol, interval, candles); err != nil {
+	if err := q.saveWithRetry(q.sinkFor(interval), symbol, interval, candles); err != nil {
 		return err
 	}
 	return nil
@@ -171,11 +196,14 @@ func (q *PersistenceQueue) SpillLen() int {
 // walCheckpointInterval paces forced WAL truncation from the sole writer:
 // between flushBatch calls no write transaction is open, so TRUNCATE can succeed.
 const walCheckpointInterval = 5 * time.Minute
+const microRetentionInterval = time.Hour
 
 func (q *PersistenceQueue) worker(ctx context.Context) {
 	log.Printf("[PersistenceQueue] worker started (cap=%d)", cap(q.ch))
 	walTicker := time.NewTicker(walCheckpointInterval)
 	defer walTicker.Stop()
+	retentionTicker := time.NewTicker(microRetentionInterval)
+	defer retentionTicker.Stop()
 	spillBackoff := time.Duration(0)
 	for {
 		if q.SpillLen() > 0 {
@@ -218,6 +246,14 @@ func (q *PersistenceQueue) worker(ctx context.Context) {
 			if err := CheckpointWAL(); err != nil {
 				log.Printf("[PersistenceQueue] WAL checkpoint: %v", err)
 			}
+		case <-retentionTicker.C:
+			cutoff := time.Now().Add(-MicroKlineRetention).UnixMilli()
+			n, err := PruneMicroKlinesBefore(cutoff)
+			if err != nil {
+				log.Printf("[PersistenceQueue] micro_klines retention: %v", err)
+			} else if n > 0 {
+				log.Printf("[PersistenceQueue] pruned %d micro_klines older than 24h", n)
+			}
 		case job := <-q.ch:
 			q.flushBatch(collectPersistBatch(q.ch, job))
 		}
@@ -253,13 +289,9 @@ func (q *PersistenceQueue) flushBatch(jobs []PersistJob) {
 		groups[k] = append(groups[k], job.Candle)
 		jobByKey[k] = append(jobByKey[k], job)
 	}
-	save := q.save
-	if save == nil {
-		save = SaveKlines
-	}
 	for _, k := range order {
 		candles := groups[k]
-		if err := q.saveWithRetry(save, k.sym, k.iv, candles); err != nil {
+		if err := q.saveWithRetry(q.sinkFor(k.iv), k.sym, k.iv, candles); err != nil {
 			q.Failures.Add(1)
 			q.lastErr.Store(err.Error())
 			log.Printf("[PersistenceQueue] HARD SaveKlines exhausted retries %s %s n=%d: %v — re-spilling (closed bars not discarded)",

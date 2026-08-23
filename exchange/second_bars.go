@@ -14,12 +14,24 @@ type AggTrade struct {
 // SecondBarBuilder folds aggTrade events into 1s OHLCV. State is the current
 // forming bar only — no raw-event list.
 type SecondBarBuilder struct {
-	cur Kline
-	has bool
+	cur   Kline
+	has   bool
+	floor int64 // last hydrated/persisted closed open; trades in that second are dropped
 }
 
 func NewSecondBarBuilder() *SecondBarBuilder {
 	return &SecondBarBuilder{}
+}
+
+// SeedClosedFloor records the last closed 1s open after boot hydrate.
+// Trades whose bucket is at or before floor do not reopen that bar.
+func (b *SecondBarBuilder) SeedClosedFloor(openMs int64) {
+	if b == nil || openMs <= 0 {
+		return
+	}
+	if openMs > b.floor {
+		b.floor = openMs
+	}
 }
 
 func newSecondBar(open int64, t AggTrade) Kline {
@@ -61,6 +73,9 @@ func (b *SecondBarBuilder) OnAggTrade(t AggTrade) (closed Kline, forming Kline, 
 		return
 	}
 	if b.has && t.TimeMs < b.cur.OpenTime {
+		return
+	}
+	if b.floor > 0 && open <= b.floor {
 		return
 	}
 	if !b.has {

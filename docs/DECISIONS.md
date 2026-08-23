@@ -854,7 +854,8 @@ Live chart also includes derived views `2m←1m`, `10m←5m`, `45m←15m`, `3h�
 ```text
 NATIVE_BINANCE  → durable historical_klines (Binance authority)
 DERIVED timebars → reconstructable view; no SQLite source of truth
-1s (aggTrade)   → bounded RAM (9000); honest gaps; not Master/native health
+1s (aggTrade)   → micro_klines (24h, sparse, same PersistenceQueue; not historical_klines / archive_gaps)
+                 + bounded RAM (9000) hydrated from latest micro rows on boot
 SECONDS 5s–45s / TICKS → catalog placeholders until derived from 1s / tick bars
 ```
 
@@ -870,7 +871,7 @@ Tick contract: **1 tick = 1 `aggTrade` event** (tick bars not implemented).
 - Injecting synthetic child `WsTick` into `routeTick` — **Reason:** would trip native tip-gap REST on a non-exchange interval.
 - Keeping native `3d` on the generic fixed-duration grid — **Reason:** Binance 3d is not Unix-epoch floor (live phase + 2019/2023 seams); unused TF poisoned Master timeline health.
 
-**Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h,1s}`. `EnsureHistoryWindow` / persist / heal / archive stay native-only. 1s is out of Master continuity. Derived `/api/history` folds the parent window. Camera unchanged.
+**Consequences:** Native `2h 6h 8h 12h` boot and subscribe like other natives. `3d` is out of the catalog (no Frame, no WS, no menu). Live-chart allow-list = native ∪ `{2m,10m,45m,3h,1s}`. `EnsureHistoryWindow` / `historical_klines` / heal / archive stay native-only. Closed 1s persists to `micro_klines` via the same PersistenceQueue (MICRO-2A); it never writes `archive_gaps` or participates in Master continuity. Derived `/api/history` folds the parent window. Camera unchanged.
 
 MICRO-1.1: FE live gap heal (`appendTick` 1.5× interval → `fe_gapDetected`) runs only when `requiresDenseTimeContinuity(tf)` is true (native + derived). Seconds/ticks never treat a skipped timestamp as a data hole. Do not special-case `"1s"`.
 

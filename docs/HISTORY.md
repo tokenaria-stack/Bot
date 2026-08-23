@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## MICRO-2A — durable sparse 1s history (Aug 2026) ✅
+
+- Closed 1s bars enqueue on the existing PersistenceQueue into `micro_klines` (same `history.db`, same writer). Forming bars and raw aggTrade are not stored.
+- `/api/history?tf=1s` reads `micro_klines` (chunk ≤3000 + warmup) with RAM overlay for unflushed closed bars. `hasMore` is true iff an older micro row exists. Empty DB is `no_data`.
+- Boot hydrates the 1s Frame from the latest ≤9000 micro rows. Sparse holes are legal. No continuity/Master gate. Retention 24h (startup + hourly DELETE).
+- Native `historical_klines` / `archive_gaps` / Ensure / REST / catalog `Persist` unchanged. 5s–45s, ticks, camera, MICRO-2B/2C, LIVE-EDGE-1 not in this slice.
+
 ## LIVE-EDGE-1 — live tip 1-bar floor (Aug 2026) ✅
 
 - LIVE + new bar: if `visible.to - tip < 1`, shift range forward by the overflow. Same-bar and HISTORY never move the camera.

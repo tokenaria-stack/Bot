@@ -123,3 +123,18 @@ func TestLiveSecondNotNativePersist(t *testing.T) {
 		t.Fatal("combined live streams must include aggTrade")
 	}
 }
+
+func TestSecondBarSeedClosedFloorDropsSameSecond(t *testing.T) {
+	t.Parallel()
+	b := NewSecondBarBuilder()
+	base := int64(1_700_000_100_000)
+	b.SeedClosedFloor(base)
+	_, _, didClose, ok := b.OnAggTrade(AggTrade{TimeMs: base + 10, Price: 1, Qty: 1})
+	if ok || didClose {
+		t.Fatal("trades in hydrated closed second must drop")
+	}
+	closed, forming, didClose, ok := b.OnAggTrade(AggTrade{TimeMs: base + 1000, Price: 2, Qty: 1})
+	if !ok || didClose || closed.OpenTime != 0 || forming.OpenTime != base+1000 {
+		t.Fatalf("next second must start forming, got closed=%+v forming=%+v didClose=%v ok=%v", closed, forming, didClose, ok)
+	}
+}

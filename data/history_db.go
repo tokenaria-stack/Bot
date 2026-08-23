@@ -123,6 +123,9 @@ CREATE INDEX IF NOT EXISTS idx_klines_time ON historical_klines(symbol, interval
 	if dbErr = ensureArchiveGapsTableLocked(); dbErr != nil {
 		return dbErr
 	}
+	if dbErr = ensureMicroKlinesTableLocked(); dbErr != nil {
+		return dbErr
+	}
 
 	logDBStatsLocked()
 	return nil
@@ -144,7 +147,13 @@ func logDBStatsLocked() {
 		return
 	}
 
-	log.Printf("[Init] history DB path=%s total_klines=%d", absPath, total)
+	var microTotal int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM micro_klines`).Scan(&microTotal); err != nil {
+		log.Printf("[Init] history DB micro stats failed (path=%s): %v", absPath, err)
+		microTotal = 0
+	}
+
+	log.Printf("[Init] history DB path=%s total_klines=%d micro_klines=%d", absPath, total, microTotal)
 
 	var minT, maxT sql.NullInt64
 	if err := db.QueryRow(`SELECT MIN(open_time), MAX(open_time) FROM historical_klines`).Scan(&minT, &maxT); err != nil {
@@ -188,6 +197,9 @@ func SaveKlines(symbol, interval string, klines []Candle) error {
 
 	symbol = normalizeSymbol(symbol)
 	interval = strings.TrimSpace(interval)
+	if IsMicroKlineInterval(interval) {
+		return fmt.Errorf("SaveKlines refuses %s: use SaveMicroKlines / micro_klines", interval)
+	}
 
 	minOT, maxOT := klines[0].OpenTime, klines[0].OpenTime
 	for _, k := range klines[1:] {

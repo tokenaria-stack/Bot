@@ -197,7 +197,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
 | `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip; Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
-| `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived `2m/10m/45m/3h` plus live `1s` RAM (`exchange/timeframe_catalog.go`, ADR-031). `3d` unsupported. Other seconds/ticks remain placeholders |
+| `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived `2m/10m/45m/3h` plus live `1s` from aggTrade (`exchange/timeframe_catalog.go`, ADR-031). Durable 1s lives in `micro_klines` (24h, sparse), not `historical_klines`. `3d` unsupported. Other seconds/ticks remain placeholders |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
@@ -249,7 +249,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 22. **RAM ≠ SQLite.** Frame/Runtime = realtime; SQLite = archive ledger. Healthy RAM ≠ healthy DB tip. **SQLite catch-up ≠ Frame heal** — chart/DAG truth requires `LoadHistoricalKlines` + replay, not archive enqueue alone.
 23. **Frontend ≠ history DB.** `ColumnarStore` is a bounded display window (Debt #69A). Server owns durable history. Viewport never mutates OHLC/plots.
 24. **Timeline publish gate.** `WS Connected ≠ History Reconciled ≠ Timeline Publishable`. Mid-session heal follows ADR-017; FE recovery presentation follows ADR-018.
-25. **Dense vs sparse live series (MICRO-1.1 / MICRO-2B / MICRO-2C).** Native and derived time bars expect every bucket. Seconds and ticks do not. FE `appendTick` gap heal is dense-only (`requiresDenseTimeContinuity`). Sparse holes append; they never enter `fe_gapDetected` healing. TimelineRecovery is dense-only; sparse Master heal is a no-op; browser reconnect is a quiet RAM snapshot. Sparse HISTORY skips live delta paint; HISTORY→LIVE is one full store paint.
+25. **Dense vs sparse live series (MICRO-1.1 / MICRO-2B / MICRO-2C / MICRO-2A).** Native and derived time bars expect every bucket. Seconds and ticks do not. FE `appendTick` gap heal is dense-only (`requiresDenseTimeContinuity`). Sparse holes append; they never enter `fe_gapDetected` healing. TimelineRecovery is dense-only; sparse Master heal is a no-op; browser reconnect is a quiet RAM snapshot. Sparse HISTORY skips live delta paint; HISTORY→LIVE is one full store paint. Durable 1s is `micro_klines` only — never `SaveKlines` / `archive_gaps` / Ensure / REST.
 26. **LIVE-EDGE-1.** LIVE + new bar: keep at least 1 logical bar of right slack (`TimeCamera.proposeLiveEdgeGuard`). Floor, not a forced offset. HISTORY and same-bar ticks do not move the camera.
 
 **Interaction pipeline (canonical):**

@@ -251,6 +251,11 @@ func CandlesToData(in []Candle) []data.Candle {
 	return out
 }
 
+// KlinesFromDataCandles converts persisted rows into chart klines (timestamps as stored).
+func KlinesFromDataCandles(in []data.Candle) []Kline {
+	return KlinesFromCandles(candlesFromData(in))
+}
+
 func candlesFromData(in []data.Candle) []Candle {
 	out := make([]Candle, len(in))
 	for i, c := range in {

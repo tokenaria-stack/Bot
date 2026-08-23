@@ -138,7 +138,8 @@ func CombinedLiveStreamNames(symbol string) []string {
 	return append(out, fmt.Sprintf("%s@aggTrade", sym))
 }
 
-// ShouldPersist reports durable SQLite authority (native Binance only).
+// ShouldPersist reports durable historical_klines authority (native Binance only).
+// Live 1s uses micro_klines via PersistenceQueue routing, not this flag.
 func ShouldPersist(id string) bool {
 	e, ok := timeframeByName[id]
 	return ok && e.Persist

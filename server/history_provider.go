@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"trading_bot/data"
@@ -60,20 +61,7 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 
 	spec := q.Spec
 	if exchange.IsLiveSecond(spec.ID) {
-		endTimeMs := q.EndTimeMs
-		if endTimeMs <= 0 {
-			endTimeMs = time.Now().UnixMilli()
-		}
-		want := limit + warmup
-		if want > market.MicroKlineRAMCap {
-			want = market.MicroKlineRAMCap
-		}
-		klines := d.ramKlines(spec.ID, want)
-		klines = filterKlinesUntilOpenMs(klines, endTimeMs)
-		if len(klines) == 0 {
-			return HistoryWindow{}, false
-		}
-		return HistoryWindow{Klines: klines, HasMore: false}, true
+		return d.getMicroWindow(spec, q.EndTimeMs, wantBars)
 	}
 	if exchange.IsDerivedTime(spec.ID) {
 		return d.getDerivedWindow(ctx, q, wantBars)
@@ -122,6 +110,43 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 
 	return HistoryWindow{Klines: merged, HasMore: hasMore}, true
 }
+
+func (d *DashboardServer) getMicroWindow(spec TimeframeSpec, endTimeMs int64, wantBars int) (HistoryWindow, bool) {
+	if endTimeMs <= 0 {
+		endTimeMs = time.Now().UnixMilli()
+	}
+	symbol := ""
+	if d != nil {
+		symbol = d.symbol
+	}
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
+	dbRows, err := data.LoadMicroKlinesBeforeEnd(symbol, exchange.SecondTF, endTimeMs, wantBars)
+	if err != nil {
+		log.Printf("[Dashboard] micro_klines load %s 1s: %v", symbol, err)
+	}
+	dbKlines := exchange.KlinesFromDataCandles(dbRows)
+	ramKlines := filterKlinesUntilOpenMs(d.ramKlines(spec.ID, wantBars), endTimeMs)
+	merged := exchange.MergeKlineSeries(dbKlines, ramKlines, exchange.AuthoritySettled, exchange.AuthorityFinal)
+	if len(merged) == 0 {
+		return HistoryWindow{}, false
+	}
+	if wantBars > 0 && len(merged) > wantBars {
+		merged = merged[len(merged)-wantBars:]
+	}
+	hasMore := false
+	if len(merged) > 0 {
+		older, herr := data.HasOlderMicroKline(symbol, exchange.SecondTF, merged[0].OpenTime)
+		if herr != nil {
+			log.Printf("[Dashboard] micro hasMore %s: %v", symbol, herr)
+		}
+		hasMore = older
+	}
+	return HistoryWindow{Klines: merged, HasMore: hasMore}, true
+}
+
+// MICRO-2A: sparse 1s history is micro_klines ∪ RAM overlay; never Cap/Ensure/REST.
 
 // frameKlinesTail returns a defensive copy of the live working-set tail (RLock inside Frame).
 func (d *DashboardServer) frameKlinesTail(spec TimeframeSpec, maxBars int) []exchange.Kline {

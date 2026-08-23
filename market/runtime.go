@@ -114,6 +114,12 @@ func NewRuntime(
 	m.timelinePublishable.Store(true)
 	m.initDerivedAccumulators()
 	m.secondBar = exchange.NewSecondBarBuilder()
+	if f := frames[exchange.SecondTF]; f != nil {
+		ks := f.GetKlines()
+		if n := len(ks); n > 0 {
+			m.secondBar.SeedClosedFloor(ks[n-1].OpenTime)
+		}
+	}
 	return m
 }
 

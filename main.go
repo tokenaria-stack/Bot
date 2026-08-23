@@ -48,6 +48,11 @@ func main() {
 	if err := data.InitDB(); err != nil {
 		log.Fatalf("[Init] Failed to init history DB: %v", err)
 	}
+	if n, err := data.PruneMicroKlinesBefore(time.Now().Add(-data.MicroKlineRetention).UnixMilli()); err != nil {
+		log.Printf("[Init] micro_klines retention: %v", err)
+	} else if n > 0 {
+		log.Printf("[Init] pruned %d micro_klines older than 24h", n)
+	}
 	log.Println("[Init] SQLite history cache ready (history.db)")
 
 	if err := market.LoadRSXSettingsFromDisk(); err != nil {
@@ -139,7 +144,7 @@ func main() {
 	}
 	bootWG.Wait()
 	market.HydrateDerivedFrames(frames, chaosCfg)
-	market.AttachLiveSecondFrames(frames, chaosCfg)
+	market.AttachLiveSecondFrames(frames, symbol, chaosCfg)
 	log.Printf("[Init] All frames ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
 	htfProvider := exchange.NewHTFProvider()
@@ -198,7 +203,7 @@ func main() {
 			isClosed,
 			frame.DAGTickFrame(),
 		)
-		if isClosed && exchange.ShouldPersist(tf) {
+		if isClosed && (exchange.ShouldPersist(tf) || exchange.IsLiveSecond(tf)) {
 			// Blocking enqueue — closed bars must never be silently dropped (archive integrity).
 			persistQ.Enqueue(symbol, tf, data.Candle{
 				OpenTime:  k.OpenTime,

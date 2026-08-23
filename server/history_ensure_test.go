@@ -602,3 +602,41 @@ func TestGetWindowLiveSecondRAMOnlyNoREST(t *testing.T) {
 		t.Fatal("1s must not Ensure/REST")
 	}
 }
+
+func TestGetWindowLiveSecondPaginatesMicroKlines(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	const n = 320
+	rows := make([]data.Candle, n)
+	base := int64(1_700_000_000_000)
+	for i := 0; i < n; i++ {
+		ot := base + int64(i)*1000
+		rows[i] = data.Candle{OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: 1, CloseTime: ot + 999}
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("1s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: rows[n-1].OpenTime, CandleLimit: 3,
+	})
+	if !ok || len(win.Klines) < 3 {
+		t.Fatalf("ok=%v n=%d", ok, len(win.Klines))
+	}
+	if !win.HasMore {
+		t.Fatal("hasMore must be true while older micro rows exist")
+	}
+	head := win.Klines[0].OpenTime
+	older, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: head - 1, CandleLimit: 3,
+	})
+	if !ok || len(older.Klines) == 0 {
+		t.Fatal("older page empty")
+	}
+	if older.Klines[len(older.Klines)-1].OpenTime >= head {
+		t.Fatalf("seam overlap last=%d head=%d", older.Klines[len(older.Klines)-1].OpenTime, head)
+	}
+}
