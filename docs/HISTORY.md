@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## LIVE-EDGE-1 — live tip 1-bar floor (Aug 2026) ✅
+
+- LIVE + new bar: if `visible.to - tip < 1`, shift range forward by the overflow. Same-bar and HISTORY never move the camera.
+- Extra right pad is kept (floor, not a magnet). Width / barSpacing unchanged. One TimeCamera commit.
+- LIVE `proposeAfterData` restore uses the same floor (HISTORY→LIVE has no second nudge). All TFs.
+
+---
+
 ## MICRO-2C — sparse off-screen live paint (Aug 2026) ✅
 
 - Sparse VIEW=HISTORY: store still ingests; no LWC `series.update` for hidden live bars.

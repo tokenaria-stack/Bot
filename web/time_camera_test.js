@@ -318,8 +318,8 @@ test('D2 proposeAfterData LIVE keeps zoom-in under 50 bars', () => {
   });
   assert.ok(seen);
   assert.strictEqual(seen.visibleRange.to - seen.visibleRange.from, 20);
-  assert.strictEqual(seen.rightOffset, 0);
-  assert.strictEqual(seen.visibleRange.to, tip);
+  assert.strictEqual(seen.rightOffset, TimeCamera.LIVE_EDGE_GUARD_BARS);
+  assert.strictEqual(seen.visibleRange.to, tip + TimeCamera.LIVE_EDGE_GUARD_BARS);
 });
 
 test('D2 proposeAfterData LIVE keeps zoom-out 2000 bars (not 400)', () => {
@@ -478,6 +478,96 @@ test('Wave1 proposePreserveViewport without DataResolve does not FreshLive', () 
   });
   assert.strictEqual(ok, false);
   assert.strictEqual(applies, 0);
+});
+
+test('LIVE-EDGE-1 A: 5 bars slack → no shift', () => {
+  const { liveEdgeGuardShift } = TimeCamera._helpers;
+  const next = liveEdgeGuardShift({ from: 0, to: 105 }, 100, 1);
+  assert.strictEqual(next, null);
+});
+
+test('LIVE-EDGE-1 B: exactly 1 bar slack → no shift', () => {
+  const { liveEdgeGuardShift } = TimeCamera._helpers;
+  assert.strictEqual(liveEdgeGuardShift({ from: 0, to: 101 }, 100, 1), null);
+});
+
+test('LIVE-EDGE-1 C: slack below 1 → shift exactly overflow', () => {
+  const { liveEdgeGuardShift } = TimeCamera._helpers;
+  assert.deepStrictEqual(liveEdgeGuardShift({ from: 0, to: 100 }, 100, 1), {
+    from: 1,
+    to: 101,
+  });
+  assert.deepStrictEqual(liveEdgeGuardShift({ from: 50, to: 100 }, 101, 1), {
+    from: 52,
+    to: 102,
+  });
+});
+
+test('LIVE-EDGE-1 D/F: proposeLiveEdgeGuard same slack does not move; width/spacing held', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  TimeCamera.commit({
+    visibleRange: { from: 0, to: 50 },
+    barSpacing: 8,
+    rightOffset: 5,
+    sourceHostId: 'system',
+  });
+  applies = 0;
+  const before = TimeCamera.getCanonical();
+  assert.strictEqual(TimeCamera.proposeLiveEdgeGuard({ tipLogical: 45 }), false);
+  assert.strictEqual(applies, 0);
+  assert.deepStrictEqual(TimeCamera.getCanonical().visibleRange, before.visibleRange);
+  assert.strictEqual(TimeCamera.getCanonical().barSpacing, 8);
+});
+
+test('LIVE-EDGE-1 C commit: overflow shifts range once; spacing unchanged', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  TimeCamera.commit({
+    visibleRange: { from: 0, to: 100 },
+    barSpacing: 7,
+    rightOffset: 0,
+    sourceHostId: 'system',
+  });
+  applies = 0;
+  const ok = TimeCamera.proposeLiveEdgeGuard({ tipLogical: 100 });
+  assert.strictEqual(ok, true);
+  assert.strictEqual(applies, 1);
+  const c = TimeCamera.getCanonical();
+  assert.deepStrictEqual(c.visibleRange, { from: 1, to: 101 });
+  assert.strictEqual(c.barSpacing, 7);
+  assert.strictEqual(c.visibleRange.to - c.visibleRange.from, 100);
+  assert.strictEqual(c.rightOffset, 1);
+});
+
+test('LIVE-EDGE-1 E: HISTORY new tip does not move camera', () => {
+  TimeCamera._resetForTests();
+  let applies = 0;
+  TimeCamera.bind({ applyCommitted: () => { applies += 1; } });
+  TimeCamera.commit({
+    visibleRange: { from: 0, to: 50 },
+    barSpacing: 6,
+    sourceHostId: 'system',
+  });
+  applies = 0;
+  assert.strictEqual(TimeCamera.proposeLiveEdgeGuard({ tipLogical: 80 }), false);
+  assert.strictEqual(applies, 0);
+  assert.deepStrictEqual(TimeCamera.getCanonical().visibleRange, { from: 0, to: 50 });
+});
+
+test('LIVE-EDGE-1 G: compositor delta path has no dense/sparse TF gate', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, 'chart-compositor.js'), 'utf8');
+  assert.ok(src.includes('_maybeProposeLiveEdgeGuard'));
+  assert.ok(src.includes('proposeLiveEdgeGuard'));
+  assert.ok(src.includes('isNewBar'));
+  const fn = src.slice(src.indexOf('_maybeProposeLiveEdgeGuard'));
+  const body = fn.slice(0, fn.indexOf('_flushFull'));
+  assert.ok(!body.includes('requiresDenseTimeContinuity'));
+  assert.ok(!body.includes('isSparseLiveChart'));
 });
 
 console.log('time_camera_test: ALL PASS');

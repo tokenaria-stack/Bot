@@ -11,6 +11,8 @@
   'use strict';
 
   const SLACK = 1.5;
+  /** LIVE-EDGE-1: minimum right slack (logical bars). Floor, not a forced offset. */
+  const LIVE_EDGE_GUARD_BARS = 1;
   const GESTURE_MUTE_MS = 100;
   const HEALTHY_BAR_SPACING = 6;
   const HEALTHY_VISIBLE_BARS = 150;
@@ -107,6 +109,25 @@
     const tip = Number(tipLogical);
     if (!Number.isFinite(to) || !Number.isFinite(tip)) return null;
     return Math.max(0, to - tip);
+  }
+
+  /**
+   * LIVE-EDGE-1: if post-append slack is below guard, shift range forward by overflow.
+   * Preserves width. Null = no movement.
+   * @param {{ from: number, to: number }} range
+   * @param {number} tipLogical
+   * @param {number} [guardBars]
+   * @returns {{ from: number, to: number }|null}
+   */
+  function liveEdgeGuardShift(range, tipLogical, guardBars) {
+    if (!isFiniteLogicalRange(range)) return null;
+    const tip = Number(tipLogical);
+    const guard = Number.isFinite(guardBars) && guardBars >= 0 ? Number(guardBars) : LIVE_EDGE_GUARD_BARS;
+    if (!Number.isFinite(tip)) return null;
+    const rightSlack = range.to - tip;
+    if (rightSlack >= guard) return null;
+    const overflow = guard - rightSlack;
+    return { from: range.from + overflow, to: range.to + overflow };
   }
 
   function sanitizeVisibleBars(bars) {
@@ -623,14 +644,30 @@
   }
 
   /**
-   * ADR-029 propose after series data is painted + tip/times observed.
-   * @param {{
-   *   tipLogical: number,
-   *   timesSec?: number[],
-   *   seed?: object|null,
-   *   mode?: 'fresh'|'switch'|'preserve',
-   * }} opts
+   * LIVE-EDGE-1: one commit to keep the live tip inside the 1-bar right floor.
+   * HISTORY / same-bar callers must not invoke this. No-op if slack already >= guard.
+   * @param {{ tipLogical?: number }} [opts]
    */
+  function proposeLiveEdgeGuard(opts) {
+    if (isSyncing) return false;
+    if (cameraGesturing) return false;
+    const tip = Number(opts?.tipLogical);
+    if (Number.isFinite(tip)) notedTipLogical = tip;
+    const tipNow = notedTipLogical;
+    const range = cloneRange(canonical.visibleRange);
+    if (!range || !Number.isFinite(tipNow)) return false;
+    const intent = classifyViewIntent(range.to, tipNow, SLACK);
+    if (intent !== 'LIVE') return false;
+    const next = liveEdgeGuardShift(range, tipNow, LIVE_EDGE_GUARD_BARS);
+    if (!next) return false;
+    const pad = computeRightPadding(next.to, tipNow);
+    return commit({
+      visibleRange: next,
+      rightOffset: pad != null ? pad : LIVE_EDGE_GUARD_BARS,
+      sourceHostId: 'system',
+    });
+  }
+
   function proposeAfterData(opts) {
     if (!opts || typeof opts !== 'object') return false;
     const mode = opts.mode || 'switch';
@@ -665,6 +702,8 @@
       let pad = Number(seed.rightPadding);
       if (!Number.isFinite(pad)) pad = Number(seed.rightOffset);
       if (!Number.isFinite(pad) || pad < 0) pad = 0;
+      // LIVE-EDGE-1 floor inside this same LIVE restore commit (no follow-up nudge).
+      if (pad < LIVE_EDGE_GUARD_BARS) pad = LIVE_EDGE_GUARD_BARS;
       const to = tip + pad;
       const from = to - bars;
       const visibleRange = clampVisibleLogicalWidth({ from, to }, MAX_VISIBLE_LOGICAL_BARS);
@@ -742,6 +781,7 @@
     SLACK,
     HEALTHY_BAR_SPACING,
     HEALTHY_VISIBLE_BARS,
+    LIVE_EDGE_GUARD_BARS,
     MAX_HEALTHY_VISIBLE_BARS,
     MAX_VISIBLE_LOGICAL_BARS,
     bind,
@@ -753,6 +793,7 @@
     resolveMarketTimePreserve,
     proposeMarketTimePreserve,
     proposeAfterData,
+    proposeLiveEdgeGuard,
     beginPreserveTransaction,
     releasePreserveTransaction,
     hasOpenPreserveTransaction,
@@ -773,6 +814,7 @@
       computeCenterLogical,
       computeCenterTimeMs,
       computeRightPadding,
+      liveEdgeGuardShift,
       sanitizeVisibleBars,
       sanitizeBarSpacing,
       barTimeToMs,

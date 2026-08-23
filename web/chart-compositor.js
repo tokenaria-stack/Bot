@@ -269,10 +269,31 @@ class ChartCompositor {
           tipLogical: n - 1,
         });
       }
+      this._maybeProposeLiveEdgeGuard(chain, n);
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
     }
+  }
+
+  /**
+   * LIVE-EDGE-1: after a new bar on LIVE, one TimeCamera shift if slack < 1.
+   * Same-bar / HISTORY: no-op. No TF-class gate.
+   */
+  _maybeProposeLiveEdgeGuard(chain, barCount) {
+    let sawNewBar = false;
+    for (let i = 0; i < chain.length; i++) {
+      if (chain[i]?.isNewBar === true) {
+        sawNewBar = true;
+        break;
+      }
+    }
+    if (!sawNewBar) return;
+    if (typeof TimeCamera === 'undefined' || typeof TimeCamera.proposeLiveEdgeGuard !== 'function') {
+      return;
+    }
+    const tipLogical = Number.isFinite(barCount) && barCount > 0 ? barCount - 1 : null;
+    TimeCamera.proposeLiveEdgeGuard({ tipLogical });
   }
 
   _flushFull(storeData, snapshot, intent) {
