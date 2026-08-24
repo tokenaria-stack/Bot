@@ -18,6 +18,19 @@ class RenderScheduler {
     this._pending = null;
     this._busy = false;
     this._epoch = 0;
+    if (compositor && typeof compositor.bindQueuedDeltaInvalidator === 'function') {
+      compositor.bindQueuedDeltaInvalidator(() => this.discardQueuedDeltas());
+    }
+  }
+
+  /**
+   * PAINT-ORDER-1: after an authoritative store snapshot, drop queued DELTA work
+   * already represented by that snapshot. Never clear FULL / PREPEND / indicators.
+   */
+  discardQueuedDeltas() {
+    if (this._pending && this._pending.mode === 'delta') {
+      this._pending = null;
+    }
   }
 
   isBusy() {

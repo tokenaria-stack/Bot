@@ -43,4 +43,20 @@ assert(
   'no hole in time chain',
 );
 
+{
+  const s = new RenderScheduler({ flush() {} });
+  s._pending = { mode: 'full', viewport: 'preserve' };
+  s.discardQueuedDeltas();
+  assert(s._pending && s._pending.mode === 'full', 'queued FULL survives');
+  s._pending = { mode: 'prepend', edge: 'left' };
+  s.discardQueuedDeltas();
+  assert(s._pending && s._pending.mode === 'prepend', 'queued PREPEND survives');
+  s._pending = { mode: 'indicators' };
+  s.discardQueuedDeltas();
+  assert(s._pending && s._pending.mode === 'indicators', 'indicators survive');
+  s._pending = delta(99, false);
+  s.discardQueuedDeltas();
+  assert(s._pending === null, 'queued DELTA is invalidated');
+}
+
 console.log('render-scheduler_test: OK');

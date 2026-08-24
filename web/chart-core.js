@@ -1336,8 +1336,20 @@
     refreshRulerOverlay();
   }
 
+  /**
+   * PAINT-ORDER-1 belt: older than painted tip is illegal for series.update.
+   * Same-time is allowed. Not a tick-bar identity law.
+   */
+  function isOlderThanPaintedTip(state, candle) {
+    if (!state || !candle) return false;
+    const t = Number(candle.time);
+    const tip = Number(state._lastRealCandleTime);
+    return Number.isFinite(t) && Number.isFinite(tip) && t < tip;
+  }
+
   function updateCandle(state, candle) {
     if (!state?.candleSeries || !candle) return;
+    if (isOlderThanPaintedTip(state, candle)) return;
     const isNewBar = candle.time !== state._lastRealCandleTime;
     if (Array.isArray(state._realCandles) && state._realCandles.length) {
       if (state._realCandles[state._realCandles.length - 1]?.time === candle.time) {
@@ -1423,22 +1435,25 @@
     },
 
     applyDelta(context, delta) {
-      if (context !== 'live' || !_live || !delta) return;
+      if (context !== 'live' || !_live || !delta) return false;
       // Shot 11E: compositor may pass a boundary chain (close tip → open new bar).
       if (Array.isArray(delta)) {
+        let any = false;
         for (let i = 0; i < delta.length; i++) {
-          ChartAdapter.applyDelta(context, delta[i]);
+          if (ChartAdapter.applyDelta(context, delta[i]) !== false) any = true;
         }
-        return;
+        return any;
       }
-      if (!delta.candle) return;
+      if (!delta.candle) return false;
+      if (isOlderThanPaintedTip(_live, delta.candle)) return false;
       const barCount = Number.isFinite(delta.barCount) ? delta.barCount : 0;
       if (barCount <= 1) {
         const candles = delta.candle ? [delta.candle] : [];
         paintCandles(_live, candles);
-        return;
+        return true;
       }
       updateCandle(_live, delta.candle);
+      return true;
     },
 
     setLiveUpdating(flag) {

@@ -231,6 +231,69 @@ function mockStore(snapshot) {
   assert(observed, 'delta still observes TimeCamera');
   assert(observed.tipLogical === 49, 'tipLogical = barCount - 1');
   assert(observed.timesSec === snap.times, 'timesSec is live store times, not a snapshot clone');
+  global.window.DDRFactory = { cutoverActive: false };
+}
+
+{
+  const order = [];
+  stubAdapter({
+    applyFullData() { order.push('setData'); },
+  });
+  const store = mockStore(makeSnapshot(50));
+  const origSnap = store.snapshot;
+  store.snapshot = function snapshotWithTrace() {
+    order.push('snap');
+    return origSnap.call(this);
+  };
+  const compositor = new ChartCompositor({ store, onAfterFlush: () => {} });
+  compositor.bindQueuedDeltaInvalidator(() => { order.push('discard'); });
+  compositor.flush({ mode: 'full', phase: 'F1', viewport: 'preserve' });
+  assert(order.join(',') === 'snap,discard,setData', `F1 order was ${order.join(',')}`);
+  const n = order.length;
+  compositor.flush({ mode: 'full', phase: 'F2', viewport: 'preserve' });
+  assert(order.length === n, 'F2 must not snapshot/discard/setData');
+}
+
+{
+  const discarded = [];
+  stubAdapter({ applyFullData() {} });
+  const compositor = new ChartCompositor({
+    store: mockStore(makeSnapshot(50)),
+    onAfterFlush: () => {},
+  });
+  compositor.bindQueuedDeltaInvalidator(() => { discarded.push('yes'); });
+  compositor.flush({ mode: 'prepend', phase: 'F1', edge: 'left' });
+  assert(discarded.length === 1, 'prepend F1 is snapshot-authoritative — same delta barrier');
+}
+
+{
+  let deltaCalls = 0;
+  let ddrTicks = 0;
+  stubAdapter({
+    applyDelta() {
+      deltaCalls += 1;
+      return false;
+    },
+  });
+  global.window = global.window || global;
+  global.window.DDRFactory = {
+    cutoverActive: true,
+    updateTick() { ddrTicks += 1; },
+  };
+  const compositor = new ChartCompositor({
+    store: mockStore(makeSnapshot(50)),
+    onAfterFlush: () => {},
+  });
+  compositor.flush({
+    mode: 'delta',
+    delta: {
+      candle: { time: 1, open: 1, high: 2, low: 1, close: 1.5 },
+      barCount: 50,
+    },
+    tick: { time: 1, plots: { line_rsx: 50 } },
+  });
+  assert(deltaCalls === 1, 'stale belt still reaches applyDelta');
+  assert(ddrTicks === 0, 'rejected delta must not update DDR');
 }
 
 console.log('chart_compositor_extract_window_test: OK');

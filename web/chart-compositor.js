@@ -25,6 +25,16 @@ class ChartCompositor {
     this._prependCameraPending = false;
     /** @type {Function[]} */
     this._prependCameraSettledCbs = [];
+    /** @type {(() => void)|null} */
+    this._invalidateQueuedDeltas = null;
+  }
+
+  /**
+   * PAINT-ORDER-1: scheduler binds this so F1 snapshot can drop stale pending deltas.
+   * @param {() => void} fn
+   */
+  bindQueuedDeltaInvalidator(fn) {
+    this._invalidateQueuedDeltas = typeof fn === 'function' ? fn : null;
   }
 
   /** True while prepend settle callbacks are waiting (RenderScheduler serialization). */
@@ -183,6 +193,11 @@ class ChartCompositor {
     }
 
     const snapshot = this._store.snapshot();
+    // F1 full/prepend: S already contains ticks queued during the RAF wait.
+    // Drop only those deltas; a queued FULL/PREPEND must survive.
+    if (typeof this._invalidateQueuedDeltas === 'function') {
+      this._invalidateQueuedDeltas();
+    }
     const viewTimes = ChartCompositor.capturePaintViewTimes(snapshot);
     const paintSnapshot = ChartCompositor.selectPaintSnapshot(snapshot, viewTimes || {});
     const storeData = ChartCompositor.snapshotToStoreData(paintSnapshot);
@@ -248,17 +263,21 @@ class ChartCompositor {
 
     ChartAdapter.setLiveUpdating(true);
     try {
+      const applied = [];
       for (let i = 0; i < chain.length; i++) {
         const delta = chain[i];
         if (!delta?.candle) continue;
+        const payload = {
+          ...delta,
+          barCount: delta.barCount ?? this._store.barCount(),
+        };
+        const ok = ChartAdapter.applyDelta('live', payload);
+        if (ok === false) continue;
+        applied.push(delta);
         const tick = ticks[i] ?? (i === chain.length - 1 ? fallbackTick : null);
         if (tick?.plots && typeof window !== 'undefined' && window.DDRFactory?.cutoverActive) {
           window.DDRFactory.updateTick(tick.time, tick.plots);
         }
-        ChartAdapter.applyDelta('live', {
-          ...delta,
-          barCount: delta.barCount ?? this._store.barCount(),
-        });
       }
       // Tip may advance on new bars — observe without cloning OHLC/plots/annotations.
       const n = typeof this._store.barCount === 'function' ? this._store.barCount() : 0;
@@ -269,7 +288,7 @@ class ChartCompositor {
           tipLogical: n - 1,
         });
       }
-      this._maybeProposeLiveEdgeGuard(chain, n);
+      this._maybeProposeLiveEdgeGuard(applied, n);
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
