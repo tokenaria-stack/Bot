@@ -88,6 +88,39 @@ func TestLoadMicroKlines_PaginationHasMore(t *testing.T) {
 	}
 }
 
+func TestLoadMicroKlines_AfterStartAndHasNewer(t *testing.T) {
+	ResetDBForTest(filepath.Join(t.TempDir(), "micro_fwd.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	rows := make([]Candle, 5)
+	for i := 0; i < 5; i++ {
+		rows[i] = microBar(int64(i+1)*1000, float64(i))
+	}
+	if err := SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadMicroKlinesAfterStart("BTCUSDT", "1s", 2_000, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].OpenTime != 3_000 || got[2].OpenTime != 5_000 {
+		t.Fatalf("after=%v", got)
+	}
+	newer, err := HasNewerMicroKline("BTCUSDT", "1s", 4_000)
+	if err != nil || !newer {
+		t.Fatalf("hasNewer after 4s=%v err=%v", newer, err)
+	}
+	done, err := HasNewerMicroKline("BTCUSDT", "1s", 5_000)
+	if err != nil || done {
+		t.Fatalf("hasNewer at tail=%v err=%v", done, err)
+	}
+	empty, err := LoadMicroKlinesAfterStart("BTCUSDT", "1s", 5_000, 3)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("empty after tail=%v err=%v", empty, err)
+	}
+}
+
 func TestPruneMicroKlines_RemovesOlderThan24hOnly(t *testing.T) {
 	ResetDBForTest(filepath.Join(t.TempDir(), "micro_prune.db"))
 	if err := InitDB(); err != nil {

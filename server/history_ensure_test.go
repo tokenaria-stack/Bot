@@ -640,3 +640,50 @@ func TestGetWindowLiveSecondPaginatesMicroKlines(t *testing.T) {
 		t.Fatalf("seam overlap last=%d head=%d", older.Klines[len(older.Klines)-1].OpenTime, head)
 	}
 }
+
+func TestGetWindowLiveSecondForwardPage(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	const n = 12
+	rows := make([]data.Candle, n)
+	base := int64(1_710_000_000_000)
+	for i := 0; i < n; i++ {
+		ot := base + int64(i)*1000
+		rows[i] = data.Candle{OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: 1, CloseTime: ot + 999}
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("1s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tip := rows[4].OpenTime
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, StartTimeMs: tip, CandleLimit: 3,
+	})
+	if !ok || len(win.Klines) != 3 {
+		t.Fatalf("ok=%v n=%d", ok, len(win.Klines))
+	}
+	if win.Klines[0].OpenTime != rows[5].OpenTime || win.Klines[2].OpenTime != rows[7].OpenTime {
+		t.Fatalf("forward page=%v", win.Klines)
+	}
+	if !win.HasNewer {
+		t.Fatal("hasNewer must be true while later micro rows exist")
+	}
+	if !win.HasMore {
+		t.Fatal("hasMore must stay about older rows")
+	}
+	tail, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, StartTimeMs: rows[n-1].OpenTime, CandleLimit: 3,
+	})
+	if !ok {
+		t.Fatal("empty forward page must still be ok")
+	}
+	if len(tail.Klines) != 0 {
+		t.Fatalf("want empty after tail, n=%d", len(tail.Klines))
+	}
+	if tail.HasNewer {
+		t.Fatal("hasNewer must be false at source tail")
+	}
+}

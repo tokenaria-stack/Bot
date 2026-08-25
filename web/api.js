@@ -187,10 +187,14 @@ const API = {
     return { warmingUp: false, data };
   },
 
-  async fetchColumnarHistory({ tf, endTimeSec, limit = 3000, slots, rsxSettings, symbol, signal }) {
+  async fetchColumnarHistory({ tf, endTimeSec, startTimeSec, limit = 3000, slots, rsxSettings, symbol, signal }) {
+    const hasEnd = Number.isFinite(Number(endTimeSec)) && Number(endTimeSec) > 0;
+    const hasStart = Number.isFinite(Number(startTimeSec)) && Number(startTimeSec) > 0;
+    if (hasEnd === hasStart) {
+      throw new Error('columnar history requires exactly one of endTimeSec or startTimeSec');
+    }
     const params = new URLSearchParams({
       tf,
-      endTime: String(endTimeSec),
       limit: String(limit),
       format: 'columnar',
       rsx_length: String(rsxSettings.length),
@@ -202,6 +206,8 @@ const API = {
       min_price_delta_ratio: String(rsxSettings.min_price_delta_ratio),
       min_osc_delta: String(rsxSettings.min_osc_delta),
     });
+    if (hasStart) params.set('startTime', String(startTimeSec));
+    else params.set('endTime', String(endTimeSec));
     if (Array.isArray(slots) && slots.length > 0) {
       params.set('slots', slots.join(','));
     }
@@ -239,6 +245,7 @@ const API = {
       oscillators: [],
       annotations: columnar.annotations || [],
       hasMore: columnar.hasMore,
+      hasNewer: columnar.hasNewer,
       status: columnar.status || 'ready',
     };
   },

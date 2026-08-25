@@ -121,6 +121,35 @@ ORDER BY open_time ASC`,
 	return scanKlineRows(rows)
 }
 
+// LoadMicroKlinesAfterStart returns at most limit bars with open_time > startTimeMs, ascending.
+func LoadMicroKlinesAfterStart(symbol, interval string, startTimeMs int64, limit int) ([]Candle, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("LoadMicroKlinesAfterStart: limit must be > 0")
+	}
+	if err := InitDB(); err != nil {
+		return nil, err
+	}
+	symbol = normalizeSymbol(symbol)
+	interval = strings.TrimSpace(interval)
+	if startTimeMs <= 0 {
+		return nil, fmt.Errorf("LoadMicroKlinesAfterStart: startTimeMs required")
+	}
+
+	rows, err := db.Query(`
+SELECT open_time, open, high, low, close, volume, close_time
+FROM micro_klines
+WHERE symbol = ? AND interval = ? AND open_time > ?
+ORDER BY open_time ASC
+LIMIT ?`,
+		symbol, interval, startTimeMs, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query micro klines after start: %w", err)
+	}
+	defer rows.Close()
+	return scanKlineRows(rows)
+}
+
 // LoadLatestMicroKlines returns the newest limit 1s rows, ascending.
 func LoadLatestMicroKlines(symbol, interval string, limit int) ([]Candle, error) {
 	if limit <= 0 {
@@ -152,6 +181,29 @@ LIMIT 1`,
 	}
 	if err != nil {
 		return false, fmt.Errorf("has older micro kline: %w", err)
+	}
+	return true, nil
+}
+
+// HasNewerMicroKline is true when a row exists with open_time > afterOpenMs.
+func HasNewerMicroKline(symbol, interval string, afterOpenMs int64) (bool, error) {
+	if err := InitDB(); err != nil {
+		return false, err
+	}
+	symbol = normalizeSymbol(symbol)
+	interval = strings.TrimSpace(interval)
+	var n int
+	err := db.QueryRow(`
+SELECT 1 FROM micro_klines
+WHERE symbol = ? AND interval = ? AND open_time > ?
+LIMIT 1`,
+		symbol, interval, afterOpenMs,
+	).Scan(&n)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("has newer micro kline: %w", err)
 	}
 	return true, nil
 }

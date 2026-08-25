@@ -162,14 +162,29 @@ const TimeframeController = (() => {
             : captured;
         }
       }
-    } else {
-      // TODO(ADR-029): same-TF click should emit NavigationIntent.RESET_LIVE via TimeCamera
-      // (Fresh LIVE). Product feature — leave existing reload behavior unchanged for now.
+    } else if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(resolved)
+      && typeof returnToLive === 'function') {
+      currentTf = resolved;
+      localStorage.setItem(LS_TF_KEY, resolved);
+      historyHasMore = true;
+      if (typeof window !== 'undefined') window.historyHasNewer = true;
+      disarmLiveHistoryScroll();
+      syncToolbar();
+      returnToLive();
+      if (refreshTimer) clearInterval(refreshTimer);
+      if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);
+      wsSubscribeTf(resolved);
+      if (!WS.isOpen()) {
+        startLivePollTimer();
+      }
+      ChartAdapter.applyOrderFlowTimeScale(false);
+      return;
     }
 
     currentTf = resolved;
     localStorage.setItem(LS_TF_KEY, resolved);
     historyHasMore = true;
+    if (typeof window !== 'undefined') window.historyHasNewer = true;
     disarmLiveHistoryScroll();
     syncToolbar();
 

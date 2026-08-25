@@ -15,6 +15,7 @@
   window.projectionEpoch = window.projectionEpoch ?? 0;
   window.navigatorRequestId = window.navigatorRequestId ?? 0;
   window.historyHasMore = window.historyHasMore ?? true;
+  window.historyHasNewer = window.historyHasNewer ?? true;
   window.isLoadingHistory = window.isLoadingHistory ?? false;
   window.backtestHistoryLoading = window.backtestHistoryLoading ?? false;
   window.backtestHistoryHasMore = window.backtestHistoryHasMore ?? true;
@@ -559,6 +560,7 @@
   function installGlobalShims() {
     const fns = {
       loadDashboard,
+      returnToLive,
       reloadDashboard,
       clearChartData,
       prepareLiveTfHandoff,
@@ -803,6 +805,7 @@
     }
     liveNavigatorResult = null;
     window.historyHasMore = true;
+    window.historyHasNewer = true;
     window.isLoadingHistory = false;
   }
 
@@ -821,6 +824,7 @@
     disarmLiveHistoryScroll();
     liveNavigatorResult = null;
     window.historyHasMore = true;
+    window.historyHasNewer = true;
     window.isLoadingHistory = false;
   }
 
@@ -891,12 +895,15 @@
 
   /** Store tip is behind wall-clock — Microscope island can extend toward live. */
   function canExtendHistoryRight() {
+    const last = liveColumnarStore?.lastTimeSec?.();
+    if (!Number.isFinite(last) || last <= 0) return false;
+    if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+      return window.historyHasNewer !== false;
+    }
     if (typeof requiresDenseTimeContinuity === 'function'
       && !requiresDenseTimeContinuity(window.currentTf)) {
       return false;
     }
-    const last = liveColumnarStore?.lastTimeSec?.();
-    if (!Number.isFinite(last) || last <= 0) return false;
     const nowSec = Math.floor(Date.now() / 1000);
     const iv = liveTfIntervalSec();
     return last + iv < nowSec;
@@ -1003,6 +1010,9 @@
       getRightFetchEndSec: () => {
         const last = liveColumnarStore?.lastTimeSec?.();
         if (!Number.isFinite(last) || last <= 0) return null;
+        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+          return last;
+        }
         if (typeof ViewportManager === 'undefined'
           || typeof ViewportManager.resolveRightHistoryFetchEndSec !== 'function') {
           return null;
@@ -1013,6 +1023,27 @@
           nowSec: Math.floor(Date.now() / 1000),
           limit,
           intervalSec: liveTfIntervalSec(),
+        });
+      },
+      fetchRightColumnar: (cursorSec) => {
+        const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+        const limit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;
+        const base = {
+          tf: window.currentTf,
+          limit,
+          slots: resolveLiveSlotIds(),
+          rsxSettings: resolveLiveRsxSettings(),
+          symbol,
+        };
+        const req = (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf))
+          ? API.fetchColumnarHistory({ ...base, startTimeSec: cursorSec })
+          : API.fetchColumnarHistory({ ...base, endTimeSec: cursorSec });
+        return req.then((data) => {
+          if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+            if (data && data.hasNewer === false) window.historyHasNewer = false;
+            else if (data && data.hasNewer === true) window.historyHasNewer = true;
+          }
+          return data;
         });
       },
       fetchColumnar: (endTimeSec) => {
@@ -1060,6 +1091,9 @@
         const added = Number(merge?.added) || 0;
         if (added <= 0) {
           return null;
+        }
+        if ((Number(merge.prunedRightCount) || 0) > 0) {
+          window.historyHasNewer = true;
         }
         const storeAfter = liveColumnarStore?.barCount?.() ?? 0;
         const tipAfter = typeof liveColumnarStore?.lastTimeSec === 'function'
@@ -1394,6 +1428,27 @@
     return (now - centerSec) > viewSpanSec;
   }
 
+  /**
+   * Explicit Return-to-Live: latest 1s tail replace + full paint + VIEW LIVE.
+   * Does not stitch intermediate chunks. Does not move camera on hasNewer=false paging.
+   */
+  function returnToLive() {
+    let viewportAnchor = null;
+    if (typeof ViewportManager !== 'undefined' && typeof ViewportManager.capture === 'function') {
+      const cap = ViewportManager.capture('live');
+      if (cap) {
+        viewportAnchor = {
+          intent: 'LIVE',
+          isAtRightEdge: true,
+          visibleBars: cap.visibleBars,
+          barSpacing: cap.barSpacing,
+          rightPadding: cap.rightPadding != null ? cap.rightPadding : cap.rightOffset,
+        };
+      }
+    }
+    return loadDashboard({ viewportAnchor, userReturnToLive: true });
+  }
+
   async function loadDashboard(options = {}) {
     const viewportAnchor = options.viewportAnchor ?? null;
     const epoch = bumpProjectionEpoch();
@@ -1441,12 +1496,17 @@
       const nowSec = Math.floor(Date.now() / 1000);
       const sparseTf = typeof isSparseLiveChart === 'function'
         && isSparseLiveChart(window.currentTf);
-      const sparseHistory = sparseTf && sparseExplicitHistoryHydrate(viewportAnchor, nowSec);
+      const returnToLiveJump = options.userReturnToLive === true;
+      const sparseHistory = !returnToLiveJump
+        && sparseTf
+        && sparseExplicitHistoryHydrate(viewportAnchor, nowSec);
       // Dense: HISTORY TF switch hydrates around captured centerTime.
       // Sparse live-entry: latest tail (stale HISTORY classification is not an endTime).
       // Sparse explicit history: same centered BeforeEnd window as native.
+      // Explicit Return-to-Live: latest tail, never a historical endTime.
       let endTimeSec = nowSec;
-      if (viewportAnchor?.intent === 'HISTORY'
+      if (!returnToLiveJump
+        && viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))
         && (!sparseTf || sparseHistory)
         && typeof ViewportManager !== 'undefined'
@@ -1502,7 +1562,8 @@
       // windowMode = which data window was fetched. TimeCamera intent = paint.
       // Dense HISTORY island: windowMode=history (Debt #69A). Sparse explicit
       // history: same label, but live ticks still ingest (MICRO-2C).
-      const historyIsland = viewportAnchor?.intent === 'HISTORY'
+      const historyIsland = !returnToLiveJump
+        && viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))
         && (!sparseTf || sparseHistory);
       liveColumnarStore.replaceMonolith(columnar, {
@@ -1525,15 +1586,19 @@
       }
 
       window.historyHasMore = columnar.hasMore !== false;
+      if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+        window.historyHasNewer = columnar.hasNewer === true;
+      }
       await mountDDRLiveCutover();
       if (!isCurrentEpoch(epoch)) return;
 
       completed = true;
       beginDataUpdate();
       try {
+        const restoreLive = returnToLiveJump || (viewportAnchor && viewportAnchor.intent === 'LIVE');
         liveRenderScheduler?.markDirty({
           mode: 'full',
-          viewport: viewportAnchor ? 'restore' : 'fresh',
+          viewport: restoreLive ? 'restore' : (viewportAnchor ? 'restore' : 'fresh'),
           anchor: viewportAnchor,
         });
       } finally {

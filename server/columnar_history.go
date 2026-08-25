@@ -34,6 +34,7 @@ type columnarHistoryResponse struct {
 	Annotations   []wire.Annotation    `json:"annotations"`
 	Sentinel      float64              `json:"sentinel"`
 	HasMore       bool                 `json:"hasMore"`
+	HasNewer      bool                 `json:"hasNewer"`
 	// ProjCont is an opt-in ADR-015 probe (DEBUG_PROJ_CONT=1). Safe to ignore when absent.
 	ProjCont *projectionContinuityDiag `json:"projCont,omitempty"`
 }
@@ -95,6 +96,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	rsxSettings market.RSXSettings,
 	slotIDs []string,
 	hasMore bool,
+	hasNewer bool,
 	timeframe string,
 	binanceInterval string,
 ) (columnarHistoryResponse, bool) {
@@ -166,6 +168,7 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		Annotations:   annotations,
 		Sentinel:      sentinel,
 		HasMore:       hasMore,
+		HasNewer:      hasNewer,
 	}
 	closedBars := len(resp.Times)
 	// ADR-010 / B2.2: APPEND new forming bar or OVERWRITE Cap tip with Frame Cur.
@@ -308,7 +311,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	w http.ResponseWriter,
 	r *http.Request,
 	spec TimeframeSpec,
-	endTimeMs, endTimeSec int64,
+	endTimeMs, endTimeSec, startTimeMs, startTimeSec int64,
 	rsxSettings market.RSXSettings,
 	candleLimit int,
 	slotIDs []string,
@@ -327,17 +330,31 @@ func (d *DashboardServer) writeColumnarHistory(
 		}
 	}
 
-	warmup := market.IndicatorWarmupBars
+	resolvedStartMs := startTimeMs
+	if resolvedStartMs <= 0 {
+		resolvedStartMs = historyEndTimeToMs(startTimeSec)
+	}
 	resolvedEndMs := endTimeMs
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
 
-	delivered := d.deliverHistoryWindow(r.Context(), HistoryWindowQuery{
+	q := HistoryWindowQuery{
 		Spec:        spec,
-		EndTimeMs:   resolvedEndMs,
 		CandleLimit: candleLimit,
-	})
+	}
+	if resolvedStartMs > 0 {
+		q.StartTimeMs = resolvedStartMs
+	} else {
+		q.EndTimeMs = resolvedEndMs
+	}
+
+	warmup := market.IndicatorWarmupBars
+	if q.StartTimeMs > 0 {
+		warmup = 0
+	}
+
+	delivered := d.deliverHistoryWindow(r.Context(), q)
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
@@ -354,6 +371,17 @@ func (d *DashboardServer) writeColumnarHistory(
 	}
 	win := delivered.Win
 	if len(win.Klines) == 0 {
+		if q.StartTimeMs > 0 {
+			writeJSON(w, columnarHistoryResponse{
+				Format:    "columnar",
+				Status:    "ready",
+				Timeframe: spec.ID,
+				Times:     []int64{},
+				HasMore:   win.HasMore,
+				HasNewer:  win.HasNewer,
+			})
+			return
+		}
 		writeHistoryNoData(w, spec.ID, true, HistoryCodeNoData)
 		return
 	}
@@ -366,6 +394,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		rsxSettings,
 		slotIDs,
 		win.HasMore,
+		win.HasNewer,
 		spec.ID,
 		spec.BinanceInterval,
 	)

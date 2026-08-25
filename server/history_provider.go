@@ -13,15 +13,17 @@ import (
 // HistoryWindowQuery is the sole input contract for history delivery (Shot 9A).
 type HistoryWindowQuery struct {
 	Spec        TimeframeSpec
-	EndTimeMs   int64 // Unix ms; 0 → now (then Closed-bar Boundary Cap)
-	CandleLimit int   // display bars (warmup added inside GetWindow)
+	EndTimeMs   int64 // Unix ms; 0 → now (then Closed-bar Boundary Cap). Ignored when StartTimeMs > 0.
+	StartTimeMs int64 // Unix ms exclusive lower bound (1s forward page only).
+	CandleLimit int   // display bars (warmup added inside GetWindow for endTime)
 }
 
 // HistoryWindow is a continuous kline series ready for packing (columnar/JSON).
 // Controllers must not know whether bars came from SQLite, RAM, or both.
 type HistoryWindow struct {
-	Klines  []exchange.Kline
-	HasMore bool
+	Klines   []exchange.Kline
+	HasMore  bool
+	HasNewer bool
 }
 
 // resolveClosedBarBoundary is the Closed-bar Boundary SSOT (#67 / ADR-009).
@@ -61,6 +63,9 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 
 	spec := q.Spec
 	if exchange.IsLiveSecond(spec.ID) {
+		if q.StartTimeMs > 0 {
+			return d.getMicroWindowAfter(spec, q.StartTimeMs, limit)
+		}
 		return d.getMicroWindow(spec, q.EndTimeMs, wantBars)
 	}
 	if exchange.IsDerivedTime(spec.ID) {
@@ -143,7 +148,75 @@ func (d *DashboardServer) getMicroWindow(spec TimeframeSpec, endTimeMs int64, wa
 		}
 		hasMore = older
 	}
-	return HistoryWindow{Klines: merged, HasMore: hasMore}, true
+	hasNewer := false
+	if len(merged) > 0 {
+		hasNewer = d.microHasNewerClosed(spec, symbol, merged[len(merged)-1].OpenTime)
+	}
+	return HistoryWindow{Klines: merged, HasMore: hasMore, HasNewer: hasNewer}, true
+}
+
+func (d *DashboardServer) getMicroWindowAfter(spec TimeframeSpec, startTimeMs int64, wantBars int) (HistoryWindow, bool) {
+	if startTimeMs <= 0 {
+		return HistoryWindow{}, false
+	}
+	if wantBars <= 0 {
+		wantBars = defaultStateCandleLimit
+	}
+	symbol := ""
+	if d != nil {
+		symbol = d.symbol
+	}
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
+	dbRows, err := data.LoadMicroKlinesAfterStart(symbol, exchange.SecondTF, startTimeMs, wantBars)
+	if err != nil {
+		log.Printf("[Dashboard] micro_klines after %s 1s: %v", symbol, err)
+	}
+	dbKlines := exchange.KlinesFromDataCandles(dbRows)
+	ramKlines := filterKlinesAfterOpenMs(d.ramKlines(spec.ID, wantBars+8), startTimeMs)
+	merged := exchange.MergeKlineSeries(dbKlines, ramKlines, exchange.AuthoritySettled, exchange.AuthorityFinal)
+	if wantBars > 0 && len(merged) > wantBars {
+		merged = merged[:wantBars]
+	}
+	hasMore, herr := data.HasOlderMicroKline(symbol, exchange.SecondTF, startTimeMs)
+	if herr != nil {
+		log.Printf("[Dashboard] micro hasMore after-cursor %s: %v", symbol, herr)
+		hasMore = false
+	}
+	afterMs := startTimeMs
+	if len(merged) > 0 {
+		afterMs = merged[len(merged)-1].OpenTime
+	}
+	hasNewer := d.microHasNewerClosed(spec, symbol, afterMs)
+	return HistoryWindow{Klines: merged, HasMore: hasMore, HasNewer: hasNewer}, true
+}
+
+func (d *DashboardServer) microHasNewerClosed(spec TimeframeSpec, symbol string, afterOpenMs int64) bool {
+	if afterOpenMs <= 0 {
+		return false
+	}
+	newer, err := data.HasNewerMicroKline(symbol, exchange.SecondTF, afterOpenMs)
+	if err != nil {
+		log.Printf("[Dashboard] micro hasNewer %s: %v", symbol, err)
+	}
+	if newer {
+		return true
+	}
+	nowMs := time.Now().UnixMilli()
+	for _, k := range d.ramKlines(spec.ID, 8) {
+		if k.OpenTime > afterOpenMs && isClosedMicroKline(k, nowMs) {
+			return true
+		}
+	}
+	return false
+}
+
+func isClosedMicroKline(k exchange.Kline, nowMs int64) bool {
+	if k.CloseTime > 0 {
+		return nowMs > k.CloseTime
+	}
+	return nowMs > k.OpenTime+999
 }
 
 // MICRO-2A: sparse 1s history is micro_klines ∪ RAM overlay; never Cap/Ensure/REST.
@@ -176,6 +249,20 @@ func filterKlinesUntilOpenMs(klines []exchange.Kline, endTimeMs int64) []exchang
 	out := make([]exchange.Kline, 0, len(klines))
 	for _, k := range klines {
 		if k.OpenTime <= endTimeMs {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// filterKlinesAfterOpenMs keeps bars with OpenTime > startTimeMs (exclusive).
+func filterKlinesAfterOpenMs(klines []exchange.Kline, startTimeMs int64) []exchange.Kline {
+	if len(klines) == 0 || startTimeMs <= 0 {
+		return klines
+	}
+	out := make([]exchange.Kline, 0, len(klines))
+	for _, k := range klines {
+		if k.OpenTime > startTimeMs {
 			out = append(out, k)
 		}
 	}

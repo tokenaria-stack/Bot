@@ -75,6 +75,7 @@ func TestProjectViewportFormingTip_OverwriteSameOpen(t *testing.T) {
 		rsx,
 		[]string{"line_rsx", "line_rsx_signal"},
 		false,
+		false,
 		"1m",
 		"1m",
 	)
@@ -161,6 +162,7 @@ func TestProjectViewportFormingTip_SeedsLiveEdge(t *testing.T) {
 		rsx,
 		[]string{"line_rsx", "line_rsx_signal"},
 		false,
+		false,
 		"1m",
 		"1m",
 	)
@@ -226,7 +228,7 @@ func TestProjectViewportFormingTip_SkipsDeepHistory(t *testing.T) {
 		projector: wire.NewProjector(reg),
 	}
 	resp, ok := d.buildColumnarHistoryPayload(
-		context.Background(), closed, 20, 0, rsx, []string{"line_rsx"}, false, "1m", "1m",
+		context.Background(), closed, 20, 0, rsx, []string{"line_rsx"}, false, false, "1m", "1m",
 	)
 	if !ok {
 		t.Fatal("payload failed")

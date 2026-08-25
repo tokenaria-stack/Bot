@@ -74,6 +74,7 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 		market.GetRSXSettings(),
 		[]string{"line_rsx", "woz_fast"},
 		false,
+		false,
 		"1m",
 		"1m",
 	)
@@ -201,6 +202,7 @@ func TestBuildColumnarHistoryPayload_stripsFormingTip(t *testing.T) {
 		market.IndicatorWarmupBars,
 		market.GetRSXSettings(),
 		[]string{"line_rsx"},
+		false,
 		false,
 		"1m",
 		"1m",

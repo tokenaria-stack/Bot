@@ -87,7 +87,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 	col, okCol := d.buildColumnarHistoryPayload(
 		ctx, win.Klines, display, market.IndicatorWarmupBars, rsx,
 		[]string{"line_rsx", "line_rsx_signal", "line_woz"},
-		false, interval, interval,
+		false, false, interval, interval,
 	)
 	if !okCol || len(col.Times) == 0 {
 		t.Fatal("columnar empty")
@@ -152,7 +152,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 	col2, ok2 := d.buildColumnarHistoryPayload(
 		ctx, win.Klines, display, market.IndicatorWarmupBars, rsx,
 		[]string{"line_rsx", "line_rsx_signal", "line_woz"},
-		false, interval, interval,
+		false, false, interval, interval,
 	)
 	if !ok2 || len(col2.Times) == 0 {
 		t.Fatal("columnar after forming empty")

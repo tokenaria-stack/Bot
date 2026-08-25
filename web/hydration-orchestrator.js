@@ -50,6 +50,7 @@ class HydrationOrchestrator {
    * @param {() => number|null} deps.getAnchorEndTimeSec
    * @param {() => string[]} [deps.getSlotIds]
    * @param {(endTimeSec: number) => Promise<object>} deps.fetchColumnar
+   * @param {(cursorSec: number) => Promise<object>} [deps.fetchRightColumnar]
    * @param {(data: object) => { added: number, viewportRange?: object|null }|null} deps.mergeIntoStore
    * @param {(range: object, options?: object) => boolean} [deps.shouldLoadRight]
    * @param {() => boolean} [deps.shouldContinueRightHistory]
@@ -631,7 +632,10 @@ class HydrationOrchestrator {
     let completed = false;
 
     try {
-      const data = await deps.fetchColumnar(endTimeSec);
+      const fetchRight = typeof deps.fetchRightColumnar === 'function'
+        ? deps.fetchRightColumnar
+        : deps.fetchColumnar;
+      const data = await fetchRight(endTimeSec);
       if (epoch !== deps.getEpoch()) return;
       if (reqId != null && typeof deps.getReqId === 'function' && reqId !== deps.getReqId()) return;
 

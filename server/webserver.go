@@ -1420,14 +1420,22 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	tf := r.URL.Query().Get("tf")
 	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTimeMs"), 10, 64)
 	endTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	if tf == "" || (endTimeMs <= 0 && endTimeSec <= 0) {
-		http.Error(w, "tf and endTime or endTimeMs required", http.StatusBadRequest)
+	startTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("startTimeMs"), 10, 64)
+	startTimeSec, _ := strconv.ParseInt(r.URL.Query().Get("startTime"), 10, 64)
+	hasEnd := endTimeMs > 0 || endTimeSec > 0
+	hasStart := startTimeMs > 0 || startTimeSec > 0
+	if tf == "" || (hasEnd == hasStart) {
+		http.Error(w, "tf and exactly one of endTime/endTimeMs or startTime/startTimeMs required", http.StatusBadRequest)
 		return
 	}
 
 	spec, err := ResolveTimeframe(tf)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if hasStart && !exchange.IsLiveSecond(spec.ID) {
+		http.Error(w, "startTime is only valid for 1s", http.StatusBadRequest)
 		return
 	}
 
@@ -1444,7 +1452,7 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 	slotIDs := parseSlotsParam(r.URL.Query().Get("slots"))
 
 	if columnar {
-		d.writeColumnarHistory(w, r, spec, endTimeMs, endTimeSec, rsxSettings, candleLimit, slotIDs)
+		d.writeColumnarHistory(w, r, spec, endTimeMs, endTimeSec, startTimeMs, startTimeSec, rsxSettings, candleLimit, slotIDs)
 		return
 	}
 
@@ -1478,15 +1486,21 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	resolvedStartMs := startTimeMs
+	if resolvedStartMs <= 0 {
+		resolvedStartMs = historyEndTimeToMs(startTimeSec)
+	}
 	resolvedEndMs := endTimeMs
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
-	delivered := d.deliverHistoryWindow(r.Context(), HistoryWindowQuery{
-		Spec:        spec,
-		EndTimeMs:   resolvedEndMs,
-		CandleLimit: candleLimit,
-	})
+	q := HistoryWindowQuery{Spec: spec, CandleLimit: candleLimit}
+	if resolvedStartMs > 0 {
+		q.StartTimeMs = resolvedStartMs
+	} else {
+		q.EndTimeMs = resolvedEndMs
+	}
+	delivered := d.deliverHistoryWindow(r.Context(), q)
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}

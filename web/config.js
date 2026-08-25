@@ -109,6 +109,11 @@ function isSparseLiveChart(tf) {
     && !requiresDenseTimeContinuity(tf);
 }
 
+/** Activated 1s live series (micro_klines). Not 5s–45s, not ticks. */
+function isLiveSecondChart(tf) {
+  return String(tf || '').trim() === '1s';
+}
+
 /** Seconds bucket identity (one bar per OpenTime). Not ticks. */
 function isSecondsTimeframe(tf) {
   return /^\d+s$/i.test(String(tf || '').trim());
@@ -514,6 +519,7 @@ if (typeof window !== 'undefined') {
   };
   window.requiresDenseTimeContinuity = requiresDenseTimeContinuity;
   window.isSparseLiveChart = isSparseLiveChart;
+  window.isLiveSecondChart = isLiveSecondChart;
   window.isSecondsTimeframe = isSecondsTimeframe;
   window.appendLiveTickBuffer = appendLiveTickBuffer;
   window.sparseHistoryToLiveNeedsFullPaint = sparseHistoryToLiveNeedsFullPaint;
