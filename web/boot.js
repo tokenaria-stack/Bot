@@ -1366,6 +1366,34 @@
     });
   }
 
+  /**
+   * Sparse 1s: HISTORY acquisition is allowed only for explicit navigation
+   * (focus well behind now). A lagged live camera that classified HISTORY
+   * must not pick a historical endTime / windowMode=history island.
+   * Scroll-left prepend is a different path (HydrationOrchestrator).
+   */
+  function sparseExplicitHistoryHydrate(anchor, nowSec) {
+    if (!anchor || anchor.intent !== 'HISTORY') return false;
+    const centerMs = Number(anchor.centerTimeMs);
+    if (!Number.isFinite(centerMs) || centerMs <= 0) return false;
+    let centerSec = Math.floor(centerMs / 1000);
+    try {
+      const CDS = typeof ChartDataStore !== 'undefined' ? ChartDataStore : globalThis.ChartDataStore;
+      if (CDS && typeof CDS.msToChartSec === 'function') {
+        const sec = Number(CDS.msToChartSec(centerMs));
+        if (Number.isFinite(sec) && sec > 0) centerSec = sec;
+      }
+    } catch {
+      /* keep ms/1000 fallback */
+    }
+    if (!Number.isFinite(centerSec) || centerSec <= 0) return false;
+    const now = Math.floor(Number(nowSec));
+    if (!Number.isFinite(now) || now <= 0) return false;
+    const visible = Math.floor(Number(anchor.visibleBars));
+    const viewSpanSec = Math.max(60, Number.isFinite(visible) && visible > 0 ? visible : 300);
+    return (now - centerSec) > viewSpanSec;
+  }
+
   async function loadDashboard(options = {}) {
     const viewportAnchor = options.viewportAnchor ?? null;
     const epoch = bumpProjectionEpoch();
@@ -1413,14 +1441,14 @@
       const nowSec = Math.floor(Date.now() / 1000);
       const sparseTf = typeof isSparseLiveChart === 'function'
         && isSparseLiveChart(window.currentTf);
-      // Microscope / HISTORY→HISTORY TF switch: hydrate around captured centerTime
-      // using the same `limit` as the fetch (island must stay centered on focus).
-      // Sparse 1s is live-edge hydrate only — a lagged TimeCamera HISTORY must not
-      // fetch a 3000-bar island and freeze ticks (windowMode=history deadlock).
+      const sparseHistory = sparseTf && sparseExplicitHistoryHydrate(viewportAnchor, nowSec);
+      // Dense: HISTORY TF switch hydrates around captured centerTime.
+      // Sparse live-entry: latest tail (stale HISTORY classification is not an endTime).
+      // Sparse explicit history: same centered BeforeEnd window as native.
       let endTimeSec = nowSec;
-      if (!sparseTf
-        && viewportAnchor?.intent === 'HISTORY'
+      if (viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))
+        && (!sparseTf || sparseHistory)
         && typeof ViewportManager !== 'undefined'
         && typeof ViewportManager.resolveHistoryTfFetchEndSec === 'function') {
         const intervalFn = typeof getIntervalMs === 'function'
@@ -1471,9 +1499,12 @@
       // Commit-paired (FreshLive / TF hydrate): intentional world replace — no Mutation Set.
       // P0: HISTORY TF island must be windowMode=history so live ticks do not gap-heal
       // (Debt #69A). Tip-behind-live is intentional Microscope, not a transport failure.
-      const historyIsland = !sparseTf
-        && viewportAnchor?.intent === 'HISTORY'
-        && Number.isFinite(Number(viewportAnchor.centerTimeMs));
+      // windowMode = which data window was fetched. TimeCamera intent = paint.
+      // Dense HISTORY island: windowMode=history (Debt #69A). Sparse explicit
+      // history: same label, but live ticks still ingest (MICRO-2C).
+      const historyIsland = viewportAnchor?.intent === 'HISTORY'
+        && Number.isFinite(Number(viewportAnchor.centerTimeMs))
+        && (!sparseTf || sparseHistory);
       liveColumnarStore.replaceMonolith(columnar, {
         commitPaired: true,
         windowMode: historyIsland ? 'history' : 'live',

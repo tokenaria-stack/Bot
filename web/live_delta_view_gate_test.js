@@ -119,10 +119,25 @@ test('boot: TimeCamera shadow is the VIEW source', () => {
     'must not recompute slack; shadow already classified');
 });
 
-test('boot: sparse 1s TF hydrate is FreshLive, not HISTORY island', () => {
+test('boot: sparse live-entry hydrate ignores lagged HISTORY; explicit history remains', () => {
   const load = extractFn(boot, 'loadDashboard');
-  assert.ok(/sparseTf/.test(load) && /historyIsland = !sparseTf/.test(load),
-    '1s must not commit windowMode=history on TF hydrate');
+  assert.ok(/sparseExplicitHistoryHydrate/.test(load),
+    '1s HISTORY acquisition must use explicit-history predicate');
+  assert.ok(!/historyIsland = !sparseTf/.test(load),
+    'must not blanket-FreshLive every 1s hydrate');
+  const pred = eval(`(${extractFn(boot, 'sparseExplicitHistoryHydrate')})`); // eslint-disable-line no-eval
+  const now = 1_800_000_000;
+  assert.strictEqual(pred({ intent: 'LIVE', centerTimeMs: now * 1000, visibleBars: 300 }, now), false);
+  assert.strictEqual(pred({
+    intent: 'HISTORY',
+    centerTimeMs: (now - 10) * 1000,
+    visibleBars: 300,
+  }, now), false, 'lagged live edge is not explicit history');
+  assert.strictEqual(pred({
+    intent: 'HISTORY',
+    centerTimeMs: (now - 900) * 1000,
+    visibleBars: 300,
+  }, now), true, 'focus well behind now is explicit 1s history');
 });
 
 console.log('live_delta_view_gate_test: ALL PASS');
