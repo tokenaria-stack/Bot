@@ -4,7 +4,10 @@
  * Modules only markDirty; this class alone drives compositor.flush.
  */
 class RenderScheduler {
-  /** Soft cap: extreme bursts keep last N boundary+tip slots (still contiguous). */
+  /**
+   * Validity threshold: at most this many distinct pending bars stay incremental.
+   * One more new bar promotes to FULL — never a truncated (lossy) suffix.
+   */
   static get DELTA_CHAIN_CAP() {
     return 64;
   }
@@ -111,17 +114,9 @@ class RenderScheduler {
     return { deltas: [], ticks: [] };
   }
 
-  static _trimDeltaChain(deltas, ticks) {
-    const cap = RenderScheduler.DELTA_CHAIN_CAP;
-    if (deltas.length <= cap) return { deltas, ticks };
-    return {
-      deltas: deltas.slice(deltas.length - cap),
-      ticks: ticks.slice(ticks.length - cap),
-    };
-  }
-
   /**
    * Shot 11E: coalesce same-bar tips; append on isNewBar (never overwrite a boundary).
+   * DELTA-CATCHUP-1: overflow → FULL (preserve VIEW). Never truncate chronology.
    * @returns {object|null}
    */
   static _coalesce(prev, next) {
@@ -145,6 +140,13 @@ class RenderScheduler {
 
       const nextIsNewBar = nextDelta.isNewBar === true;
       if (nextIsNewBar || deltas.length === 0) {
+        if (nextIsNewBar && deltas.length >= RenderScheduler.DELTA_CHAIN_CAP) {
+          return {
+            mode: 'full',
+            viewport: 'preserve',
+            anchor: prev.anchor ?? null,
+          };
+        }
         // Boundary (or empty chain): append — closing tip of prior bar stays in chain.
         deltas.push(nextDelta);
         ticks.push(nextTick);
@@ -154,13 +156,12 @@ class RenderScheduler {
         ticks[ticks.length - 1] = nextTick;
       }
 
-      const trimmed = RenderScheduler._trimDeltaChain(deltas, ticks);
-      const tip = trimmed.deltas[trimmed.deltas.length - 1];
-      const tipTick = trimmed.ticks[trimmed.ticks.length - 1];
+      const tip = deltas[deltas.length - 1];
+      const tipTick = ticks[ticks.length - 1];
       return {
         mode: 'delta',
-        deltas: trimmed.deltas,
-        ticks: trimmed.ticks,
+        deltas,
+        ticks,
         delta: tip,
         tick: tipTick,
       };

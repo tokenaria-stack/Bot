@@ -44,6 +44,33 @@ assert(
 );
 
 {
+  const cap = RenderScheduler.DELTA_CHAIN_CAP;
+  let chain = RenderScheduler._coalesce(null, delta(1, false));
+  for (let t = 2; t <= cap; t++) {
+    chain = RenderScheduler._coalesce(chain, delta(t, true));
+  }
+  assert(chain.mode === 'delta' && chain.deltas.length === cap, `cap ${cap} stays incremental`);
+  chain = RenderScheduler._coalesce(chain, delta(cap, false));
+  assert(chain.mode === 'delta' && chain.deltas.length === cap, 'same-bar at cap must not promote');
+  const overflow = RenderScheduler._coalesce(chain, {
+    ...delta(cap + 1, true),
+    anchor: { centerTimeMs: 1 },
+  });
+  assert(overflow.mode === 'full', 'overflowing new bar promotes to FULL');
+  assert(overflow.viewport === 'preserve', 'catch-up FULL must not FreshLive');
+  assert(!overflow.deltas, 'FULL must not keep a truncated delta suffix');
+  const withAnchor = RenderScheduler._coalesce(
+    { ...chain, anchor: { centerTimeMs: 42 } },
+    delta(cap + 1, true),
+  );
+  assert(withAnchor.mode === 'full' && withAnchor.anchor && withAnchor.anchor.centerTimeMs === 42,
+    'promoted FULL carries prev.anchor');
+  const absorbed = RenderScheduler._coalesce(overflow, delta(cap + 2, true));
+  assert(absorbed.mode === 'full' && absorbed.viewport === 'preserve', 'later deltas stay on FULL');
+  assert(typeof RenderScheduler._trimDeltaChain !== 'function', 'lossy trim path is gone');
+}
+
+{
   const s = new RenderScheduler({ flush() {} });
   s._pending = { mode: 'full', viewport: 'preserve' };
   s.discardQueuedDeltas();
