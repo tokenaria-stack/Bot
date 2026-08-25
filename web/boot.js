@@ -988,6 +988,7 @@
         }
         return null;
       },
+      pickHistoryPrefetchEdge,
       shouldLoadRight: (range, options = {}) => {
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
@@ -1038,13 +1039,7 @@
         const req = (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf))
           ? API.fetchColumnarHistory({ ...base, startTimeSec: cursorSec })
           : API.fetchColumnarHistory({ ...base, endTimeSec: cursorSec });
-        return req.then((data) => {
-          if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
-            if (data && data.hasNewer === false) window.historyHasNewer = false;
-            else if (data && data.hasNewer === true) window.historyHasNewer = true;
-          }
-          return data;
-        });
+        return req;
       },
       fetchColumnar: (endTimeSec) => {
         const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
@@ -1092,13 +1087,16 @@
         if (added <= 0) {
           return null;
         }
-        if ((Number(merge.prunedRightCount) || 0) > 0) {
-          window.historyHasNewer = true;
-        }
         const storeAfter = liveColumnarStore?.barCount?.() ?? 0;
         const tipAfter = typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
           : null;
+        // Detached island: prune dropped the FE tip. Page-level hasNewer is not this signal.
+        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)
+            && Number.isFinite(tipBefore) && Number.isFinite(tipAfter)
+            && tipAfter < tipBefore) {
+          window.historyHasNewer = true;
+        }
         return {
           added,
           prependedCount: merge.prependedCount ?? added,
@@ -1138,6 +1136,10 @@
           viewToSec: viewTimes?.viewToSec,
         });
         if (added <= 0) return null;
+        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)
+            && data && typeof data.hasNewer === 'boolean') {
+          window.historyHasNewer = data.hasNewer === true;
+        }
         return { added, viewportRange, viewportAnchor };
       },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
@@ -1173,6 +1175,31 @@
     return null;
   }
 
+  /** Bars remaining from the visible range to the island head / tip (logical indices). */
+  function remainingIslandRunway(range) {
+    const n = liveColumnarStore?.barCount?.() ?? 0;
+    const tip = n > 0 ? n - 1 : 0;
+    const left = Math.max(0, Number(range.from));
+    const right = Math.max(0, tip - Number(range.to));
+    return { left, right };
+  }
+
+  /**
+   * One prefetch edge per range event. Both eligible → smaller remaining runway.
+   * No pan-direction FSM.
+   */
+  function pickHistoryPrefetchEdge(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
+    const leftOk = !!window.historyHasMore && isApproachingLoadedLeftEdge(range);
+    const rightOk = canExtendHistoryRight() && isApproachingLoadedRightEdge(range);
+    if (leftOk && !rightOk) return 'left';
+    if (rightOk && !leftOk) return 'right';
+    if (!leftOk && !rightOk) return null;
+    const { left, right } = remainingIslandRunway(range);
+    if (right < left) return 'right';
+    return 'left';
+  }
+
   function scheduleHistoryLoad(_rawLwcRange) {
     // Wave 2: Boot detects only — never retries, never owns pending.
     // Busy must not drop: HydrationOrchestrator remembers newest left/right intent.
@@ -1186,14 +1213,10 @@
     const range = resolveCanonicalPrefetchView();
     if (!range) return;
 
-    // Left void — older history (independent of TF-switch center hydrate).
-    if (window.historyHasMore && isApproachingLoadedLeftEdge(range)) {
+    const edge = pickHistoryPrefetchEdge(range);
+    if (edge === 'left') {
       liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range, { force: true });
-      return;
-    }
-
-    // Right edge of loaded island → append toward live (not centerTime re-fetch).
-    if (canExtendHistoryRight() && isApproachingLoadedRightEdge(range)) {
+    } else if (edge === 'right') {
       liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true });
     }
   }
@@ -1231,6 +1254,12 @@
       const sparseTick = typeof isSparseLiveChart === 'function'
         && isSparseLiveChart(tick?.timeframe || window.currentTf);
       if (!sparseTick) return false;
+    }
+    // Detached 1s island: live ticks must not append a "now" tip. Server + micro_klines remain truth.
+    if (typeof isLiveSecondChart === 'function'
+        && isLiveSecondChart(tick?.timeframe || window.currentTf)
+        && window.historyHasNewer === true) {
+      return false;
     }
     // Preserve-paired: capture VIEW before append so budget cannot drop visible oldest bars.
     const viewTimes = captureStoreViewTimes();

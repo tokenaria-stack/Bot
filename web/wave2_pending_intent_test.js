@@ -110,6 +110,7 @@ test('boot scheduleHistoryLoad must not busy-drop (source gate)', () => {
   const body = m[0];
   assert.ok(/noteLeftHistoryIntent/.test(body), 'Boot must forward to noteLeftHistoryIntent');
   assert.ok(/noteRightHistoryIntent/.test(body), 'Boot must forward right-island fill to noteRightHistoryIntent');
+  assert.ok(/pickHistoryPrefetchEdge/.test(body), 'must not left-return before considering right');
   assert.ok(/resolveCanonicalPrefetchView/.test(body), 'Prefetch decisions must use canonical VIEW');
   assert.ok(!/isApproachingLoadedLeftEdge\(_raw/.test(body), 'Must not prefetch from raw LWC range arg');
   assert.ok(!/isBusy\(\)/.test(body), 'Boot must not gate on isBusy (Hydration owns pending)');
@@ -165,6 +166,42 @@ test('in-flight LEFT does not arm RIGHT from prune-echo note', async () => {
   orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true });
   assert.strictEqual(orch.hasPendingRightIntent(), false);
   assert.strictEqual(fetchCount, 1);
+});
+
+test('both pending: pickHistoryPrefetchEdge right starts append not prepend', async () => {
+  const orch = new HydrationOrchestrator();
+  const order = [];
+  orch.init({
+    getEpoch: () => 1,
+    getReqId: () => 1,
+    shouldLoad: () => true,
+    getAnchorEndTimeSec: () => 1000,
+    isRenderBusy: () => false,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 5, to: 60 }),
+    pickHistoryPrefetchEdge: () => 'right',
+    fetchColumnar: async () => {
+      order.push('left');
+      return { times: [1], hasMore: true, candles: { open: [], high: [], low: [], close: [], volume: [] } };
+    },
+    mergeIntoStore: () => ({ added: 3 }),
+    markDirty: () => {},
+    processTick: () => {},
+    shouldLoadRight: () => true,
+    shouldContinueRightHistory: () => true,
+    getRightFetchEndSec: () => 2000,
+    fetchRightColumnar: async () => {
+      order.push('right');
+      return { times: [1], hasNewer: true, candles: { open: [], high: [], low: [], close: [], volume: [] } };
+    },
+    mergeAppendIntoStore: () => ({ added: 3 }),
+  });
+  orch._pendingLeftIntent = { range: { from: 5, to: 60 }, options: { force: true } };
+  orch._pendingRightIntent = { range: { from: 5, to: 60 }, options: { force: true } };
+  orch.tryConsumePending();
+  await new Promise((r) => setImmediate(r));
+  assert.ok(order.length >= 1, 'expected a history fetch');
+  assert.strictEqual(order[0], 'right');
 });
 
 console.log('wave2_pending_intent_test: ALL PASS');

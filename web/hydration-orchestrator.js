@@ -243,7 +243,21 @@ class HydrationOrchestrator {
     if (!this._deps) return;
     if (!this._canStartNow()) return;
 
-    // Left prepend has priority when both are pending (deeper history exploration).
+    if (this._pendingLeftIntent && this._pendingRightIntent
+        && typeof this._deps.pickHistoryPrefetchEdge === 'function') {
+      const range = (typeof this._deps.getVisibleRange === 'function'
+        ? this._deps.getVisibleRange()
+        : null) || this._pendingLeftIntent.range;
+      const edge = this._deps.pickHistoryPrefetchEdge(range);
+      if (edge === 'right') {
+        this._tryStartRightPending();
+        return;
+      }
+      if (edge === 'left') {
+        this._tryStartLeftPending();
+        return;
+      }
+    }
     if (this._pendingLeftIntent) {
       this._tryStartLeftPending();
       return;

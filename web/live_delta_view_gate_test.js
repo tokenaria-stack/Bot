@@ -109,6 +109,12 @@ test('boot: ingest still precedes the VIEW paint gate', () => {
     'sparse 1s must still ingest when windowMode is history');
   assert.ok(/liveCameraViewIntent/.test(pushBody),
     'paint gate must read TimeCamera VIEW, not windowMode');
+  assert.ok(/historyHasNewer === true/.test(pushBody),
+    'detached 1s island must skip live ingest');
+  assert.ok(pushBody.indexOf('historyHasNewer') < appendAt,
+    'detach skip is before appendTick');
+  assert.ok(/isLiveSecondChart/.test(pushBody),
+    'detach skip is 1s-only, not all sparse');
 });
 
 test('boot: TimeCamera shadow is the VIEW source', () => {
