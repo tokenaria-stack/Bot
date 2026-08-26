@@ -68,6 +68,9 @@ func (d *DashboardServer) GetWindow(ctx context.Context, q HistoryWindowQuery) (
 		}
 		return d.getMicroWindow(spec, q.EndTimeMs, wantBars)
 	}
+	if exchange.IsSparseSecondChild(spec.ID) {
+		return d.getSparseSecondWindow(q, wantBars)
+	}
 	if exchange.IsDerivedTime(spec.ID) {
 		return d.getDerivedWindow(ctx, q, wantBars)
 	}
@@ -267,6 +270,54 @@ func filterKlinesAfterOpenMs(klines []exchange.Kline, startTimeMs int64) []excha
 		}
 	}
 	return out
+}
+
+func (d *DashboardServer) getSparseSecondWindow(q HistoryWindowQuery, wantChildBars int) (HistoryWindow, bool) {
+	e, ok := exchange.TimeframeByName(q.Spec.ID)
+	if !ok || e.Parent != exchange.SecondTF {
+		return HistoryWindow{}, false
+	}
+	parentNeed, err := exchange.SparseSecondParentRows(wantChildBars, e.Name)
+	if err != nil {
+		return HistoryWindow{}, false
+	}
+	parentSpec, err := ResolveTimeframe(exchange.SecondTF)
+	if err != nil {
+		return HistoryWindow{}, false
+	}
+	endTimeMs := q.EndTimeMs
+	if endTimeMs <= 0 {
+		endTimeMs = time.Now().UnixMilli()
+	}
+	pwin, pok := d.getMicroWindow(parentSpec, endTimeMs, parentNeed)
+	if !pok || len(pwin.Klines) == 0 {
+		return HistoryWindow{}, false
+	}
+	var lookBehind *exchange.Kline
+	symbol := d.symbol
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
+	firstOpen := pwin.Klines[0].OpenTime
+	if firstOpen > 0 {
+		rows, lerr := data.LoadMicroKlinesBeforeEnd(symbol, exchange.SecondTF, firstOpen-1, 1)
+		if lerr == nil && len(rows) > 0 {
+			ks := exchange.KlinesFromDataCandles(rows)
+			if len(ks) > 0 {
+				k := ks[len(ks)-1]
+				lookBehind = &k
+			}
+		}
+	}
+	res, ferr := exchange.FoldSparseSecondParents(pwin.Klines, e.Name, lookBehind)
+	if ferr != nil {
+		return HistoryWindow{}, false
+	}
+	closed := res.Closed
+	if wantChildBars > 0 && len(closed) > wantChildBars {
+		closed = closed[len(closed)-wantChildBars:]
+	}
+	return HistoryWindow{Klines: closed, HasMore: pwin.HasMore}, true
 }
 
 func (d *DashboardServer) getDerivedWindow(ctx context.Context, q HistoryWindowQuery, wantChildBars int) (HistoryWindow, bool) {

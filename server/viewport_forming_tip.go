@@ -79,6 +79,70 @@ func (d *DashboardServer) projectViewportFormingTip(
 	}
 }
 
+func (d *DashboardServer) packSparseSecondFormingOnly(
+	timeframe string,
+	hasMore, hasNewer bool,
+) (columnarHistoryResponse, bool) {
+	resp := columnarHistoryResponse{
+		Format:    "columnar",
+		Status:    "ready",
+		Timeframe: timeframe,
+		Times:     []int64{},
+		Candles: columnarCandles{
+			Open:   []float64{},
+			High:   []float64{},
+			Low:    []float64{},
+			Close:  []float64{},
+			Volume: []float64{},
+		},
+		Plots:       map[string][]float64{},
+		Annotations: []wire.Annotation{},
+		HasMore:     hasMore,
+		HasNewer:    hasNewer,
+	}
+	if d.projectSparseSecondFormingTip(&resp, timeframe) == viewportProjNone {
+		return columnarHistoryResponse{}, false
+	}
+	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
+		return columnarHistoryResponse{}, false
+	}
+	return resp, true
+}
+
+// projectSparseSecondFormingTip overlays the Frame tip without calendar CloseTime.
+// Empty closed history + one forming child is a valid viewport.
+func (d *DashboardServer) projectSparseSecondFormingTip(
+	resp *columnarHistoryResponse,
+	timeframe string,
+) viewportProjectionMode {
+	if d == nil || d.projector == nil || resp == nil {
+		return viewportProjNone
+	}
+	frame := d.frameForTimeframe(timeframe)
+	if frame == nil {
+		return viewportProjNone
+	}
+	raw := frame.GetKlines()
+	if len(raw) == 0 {
+		return viewportProjNone
+	}
+	tip := raw[len(raw)-1]
+	tipSec := exchange.ChartTimeSec(tip.OpenTime)
+	tickPlots := d.projector.BuildTickJSON(frame.DAGTickFrame())
+	if len(resp.Times) == 0 {
+		return d.appendFormingTip(resp, tip, tipSec, tickPlots)
+	}
+	lastSec := resp.Times[len(resp.Times)-1]
+	switch {
+	case tipSec > lastSec:
+		return d.appendFormingTip(resp, tip, tipSec, tickPlots)
+	case tipSec == lastSec:
+		return d.overwriteFormingTip(resp, tip, tickPlots)
+	default:
+		return viewportProjNone
+	}
+}
+
 func (d *DashboardServer) appendFormingTip(
 	resp *columnarHistoryResponse,
 	tip exchange.Kline,

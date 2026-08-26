@@ -18,7 +18,7 @@ const (
 
 const (
 	LiveBinanceKlineWS = "binance_kline_ws"
-	LiveParentClosed   = "parent_closed" // derived fold / accumulator (no WS)
+	LiveParentClosed   = "parent_closed" // parent Frame drives the view (no dedicated WS)
 	LiveAggTrade       = "aggtrade"      // 1s builder (MICRO-1); ticks later
 )
 
@@ -30,7 +30,7 @@ type Timeframe struct {
 	LiveSource string
 	Persist    bool
 	Parent     string
-	MenuGroup  string // MINUTES | HOURS | DAYS; empty = hidden from live menu
+	MenuGroup  string // MINUTES | HOURS | DAYS | SECONDS; empty = hidden from live menu
 }
 
 // USD-M native klines Binance actually sells, then derived views, then inactive seconds/ticks.
@@ -58,7 +58,7 @@ var timeframeCatalog = []Timeframe{
 	{Name: "3h", Label: "3 hours", Class: TFClassDerived, LiveSource: LiveParentClosed, Persist: false, Parent: "1h", MenuGroup: "HOURS"},
 
 	{Name: "1s", Label: "1 second", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, MenuGroup: "SECONDS"},
-	{Name: "5s", Label: "5 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
+	{Name: "5s", Label: "5 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
 	{Name: "10s", Label: "10 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
 	{Name: "15s", Label: "15 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
 	{Name: "30s", Label: "30 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
@@ -157,6 +157,23 @@ func IsLiveSecond(id string) bool {
 	return ok && e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == ""
 }
 
+// IsSparseSecondChild is an activated second-class fold from 1s (5s now; 10s–45s later).
+func IsSparseSecondChild(id string) bool {
+	e, ok := timeframeByName[id]
+	return ok && e.Class == TFClassSeconds && e.Parent == SecondTF && e.MenuGroup != ""
+}
+
+// SparseSecondChildren is activated 1s-fold TFs (catalog order).
+func SparseSecondChildren() []Timeframe {
+	out := make([]Timeframe, 0, 1)
+	for _, e := range timeframeCatalog {
+		if e.Class == TFClassSeconds && e.Parent == SecondTF && e.MenuGroup != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // LiveSeconds is activated second-class catalog rows (catalog order).
 func LiveSeconds() []Timeframe {
 	out := make([]Timeframe, 0, 1)
@@ -168,9 +185,9 @@ func LiveSeconds() []Timeframe {
 	return out
 }
 
-// IsLiveChartTF is native ∪ activated derived ∪ live 1s. WS klines stay native-only.
+// IsLiveChartTF is native ∪ activated derived ∪ live 1s ∪ activated sparse-second children.
 func IsLiveChartTF(id string) bool {
-	return IsNativeBinance(id) || IsDerivedTime(id) || IsLiveSecond(id)
+	return IsNativeBinance(id) || IsDerivedTime(id) || IsLiveSecond(id) || IsSparseSecondChild(id)
 }
 
 // DerivedTime is activated derived catalog rows (catalog order).
@@ -203,7 +220,8 @@ func LiveChart() []Timeframe {
 			continue
 		}
 		if e.Class == TFClassNative || (e.Class == TFClassDerived && e.Parent != "") ||
-			(e.Class == TFClassSeconds && e.Parent == "") {
+			(e.Class == TFClassSeconds && e.Parent == "") ||
+			(e.Class == TFClassSeconds && e.Parent == SecondTF) {
 			out = append(out, e)
 		}
 	}

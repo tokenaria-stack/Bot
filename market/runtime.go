@@ -54,6 +54,7 @@ type Runtime struct {
 	onKlineBar     func(timeframe string, kline exchange.Kline, isClosed bool)
 	derivedAcc     map[string]*exchange.DerivedAccumulator
 	secondBar      *exchange.SecondBarBuilder
+	sparseSec      map[string]*exchange.SparseSecondReducer
 
 	TickLiveCh chan struct{}
 
@@ -120,6 +121,7 @@ func NewRuntime(
 			m.secondBar.SeedClosedFloor(ks[n-1].OpenTime)
 		}
 	}
+	m.initSparseSecondReducers()
 	return m
 }
 
@@ -512,12 +514,14 @@ func (m *Runtime) applyAggTrade(t exchange.AggTrade) {
 			cb(exchange.SecondTF, closed, true)
 		}
 		frame.UpdateIndicators()
+		m.fanoutSparseSeconds(closed)
 	}
 	if hasForming {
 		frame.UpdateKlineTick(forming, false)
 		if cb != nil {
 			cb(exchange.SecondTF, forming, false)
 		}
+		m.fanoutSparseSeconds(forming)
 	}
 }
 

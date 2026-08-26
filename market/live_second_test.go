@@ -19,7 +19,7 @@ func TestAttachLiveSecondFrame(t *testing.T) {
 		t.Fatal("missing 1s Frame")
 	}
 	if frames["5s"] != nil {
-		t.Fatal("5s must not boot")
+		t.Fatal("5s must not boot from AttachLiveSecondFrames")
 	}
 }
 

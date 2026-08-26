@@ -456,6 +456,16 @@ func intervalDurationMs(interval string) (int64, error) {
 	switch strings.TrimSpace(interval) {
 	case "1s":
 		return 1_000, nil
+	case "5s":
+		return 5_000, nil
+	case "10s":
+		return 10_000, nil
+	case "15s":
+		return 15_000, nil
+	case "30s":
+		return 30_000, nil
+	case "45s":
+		return 45_000, nil
 	case "1m":
 		return 60_000, nil
 	case "2m":

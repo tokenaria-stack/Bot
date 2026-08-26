@@ -507,6 +507,10 @@ func TestEnsureHistoryWindowRejectsDerived(t *testing.T) {
 	if res.Err == nil {
 		t.Fatal("EnsureHistoryWindow(2m) must fail")
 	}
+	res = d.EnsureHistoryWindow(context.Background(), "BTCUSDT", "5s", histJan2023Ms, 100)
+	if res.Err == nil {
+		t.Fatal("EnsureHistoryWindow(5s) must fail")
+	}
 }
 
 func TestGetWindowDerivedFoldsParentRAM(t *testing.T) {
@@ -600,6 +604,42 @@ func TestGetWindowLiveSecondRAMOnlyNoREST(t *testing.T) {
 	}
 	if atomic.LoadInt32(&rest) != 0 {
 		t.Fatal("1s must not Ensure/REST")
+	}
+}
+
+func TestGetWindowSparseSecondReturnsClosedOnly(t *testing.T) {
+	d := histServer(t)
+	base := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC).UnixMilli()
+	bars := []exchange.Kline{
+		{OpenTime: base, CloseTime: base + 999, Open: 1, High: 2, Low: 1, Close: 1.5, Volume: 1},
+		{OpenTime: base + 5000, CloseTime: base + 5999, Open: 3, High: 3, Low: 3, Close: 3, Volume: 1},
+	}
+	d.frames = map[string]*market.Frame{
+		"1s": market.NewFrame(bars, "1s", market.ChaosConfig{}),
+	}
+	spec, err := ResolveTimeframe("5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: base + 6000, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("GetWindow 5s")
+	}
+	if len(win.Klines) != 1 || win.Klines[0].OpenTime != base {
+		t.Fatalf("closed-only 5s got %v", win.Klines)
+	}
+
+	d.frames["1s"] = market.NewFrame(bars[:1], "1s", market.ChaosConfig{})
+	win, ok = d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: base + 20_000, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("golden: 1s exists so window ok")
+	}
+	if len(win.Klines) != 0 {
+		t.Fatalf("golden Closed must be empty, got %d", len(win.Klines))
 	}
 }
 

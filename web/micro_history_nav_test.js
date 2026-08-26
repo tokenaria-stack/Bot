@@ -28,7 +28,7 @@ const cfg = fs.readFileSync(path.join(__dirname, 'config.js'), 'utf8');
 const tf = fs.readFileSync(path.join(__dirname, 'ui/timeframe-controller.js'), 'utf8');
 
 assert.ok(/function isLiveSecondChart/.test(cfg), '1s capability is not all-sparse');
-assert.ok(/=== '1s'/.test(extractFn(cfg, 'isLiveSecondChart')), 'gate is explicit 1s');
+	assert.ok(/=== '1s'/.test(extractFn(cfg, 'isLiveSecondChart')), 'gate is explicit 1s');
 
 const right = extractFn(boot, 'canExtendHistoryRight');
 assert.ok(/isLiveSecondChart/.test(right), 'right extend allowed for 1s');

@@ -111,6 +111,9 @@ func TestInactiveClassesNotActivated(t *testing.T) {
 		if e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == "" {
 			continue // MICRO-1 live 1s
 		}
+		if e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == SecondTF {
+			continue // SPARSE-SECONDS-1 activated 5s
+		}
 		if e.MenuGroup != "" {
 			t.Fatalf("%s MenuGroup=%q; seconds/ticks stay hidden", e.Name, e.MenuGroup)
 		}
@@ -189,5 +192,8 @@ func TestBootAndWSUseNativeCatalog(t *testing.T) {
 	}
 	if !strings.Contains(string(mainSrc), "AttachLiveSecondFrames") {
 		t.Fatal("main.go must attach live 1s Frame")
+	}
+	if !strings.Contains(string(mainSrc), "HydrateSparseSecondFrames") {
+		t.Fatal("main.go must hydrate sparse-second children after 1s")
 	}
 }

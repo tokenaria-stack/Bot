@@ -102,15 +102,23 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 ) (columnarHistoryResponse, bool) {
 	_ = ctx
 	_ = binanceInterval
-	if d == nil || d.projector == nil || len(klines) == 0 {
+	sparseChild := exchange.IsSparseSecondChild(timeframe)
+	if d == nil || d.projector == nil {
+		return columnarHistoryResponse{}, false
+	}
+	if len(klines) == 0 && !sparseChild {
 		return columnarHistoryResponse{}, false
 	}
 
-	// Shot 11A / ADR-010: strip forming tip before Replay (History stays closed-only).
-	// Viewport may re-attach Frame's forming tip after projection (TV Model 2).
-	klines = dropFormingTip(klines, time.Now().UnixMilli())
+	if !sparseChild {
+		klines = dropFormingTip(klines, time.Now().UnixMilli())
+		if len(klines) == 0 {
+			return columnarHistoryResponse{}, false
+		}
+	}
+
 	if len(klines) == 0 {
-		return columnarHistoryResponse{}, false
+		return d.packSparseSecondFormingOnly(timeframe, hasMore, hasNewer)
 	}
 
 	trimBars := historyWarmupTrim(len(klines), candleLimit, warmupBars)
@@ -171,8 +179,12 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 		HasNewer:      hasNewer,
 	}
 	closedBars := len(resp.Times)
-	// ADR-010 / B2.2: APPEND new forming bar or OVERWRITE Cap tip with Frame Cur.
-	mode := d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
+	var mode viewportProjectionMode
+	if sparseChild {
+		mode = d.projectSparseSecondFormingTip(&resp, timeframe)
+	} else {
+		mode = d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
+	}
 	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
 		return columnarHistoryResponse{}, false
 	}
@@ -382,8 +394,10 @@ func (d *DashboardServer) writeColumnarHistory(
 			})
 			return
 		}
-		writeHistoryNoData(w, spec.ID, true, HistoryCodeNoData)
-		return
+		if !exchange.IsSparseSecondChild(spec.ID) {
+			writeHistoryNoData(w, spec.ID, true, HistoryCodeNoData)
+			return
+		}
 	}
 
 	resp, ok := d.buildColumnarHistoryPayload(

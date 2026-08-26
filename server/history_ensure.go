@@ -281,6 +281,16 @@ func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWin
 		}
 		return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
 	}
+	if exchange.IsSparseSecondChild(q.Spec.ID) {
+		win, ok := d.GetWindow(ctx, q)
+		if err := requestCtxErr(ctx); err != nil {
+			return historyDeliverResult{Kind: historyDeliverExchange, Err: err}
+		}
+		if !ok {
+			return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
+		}
+		return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
+	}
 	win, ok := d.GetWindow(ctx, q)
 	if err := requestCtxErr(ctx); err != nil {
 		return historyDeliverResult{Kind: historyDeliverExchange, Err: err}

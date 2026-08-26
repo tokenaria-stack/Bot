@@ -102,8 +102,18 @@ func TestLiveSecondNotNativePersist(t *testing.T) {
 	if !IsLiveSecond("1s") || !IsLiveChartTF("1s") {
 		t.Fatal("1s must be live second")
 	}
-	if IsLiveSecond("5s") || IsLiveChartTF("5s") {
-		t.Fatal("5s must stay inactive")
+	if IsLiveSecond("5s") {
+		t.Fatal("5s must not be the 1s live-second identity")
+	}
+	if !IsSparseSecondChild("5s") || !IsLiveChartTF("5s") {
+		t.Fatal("5s must be an activated sparse-second child")
+	}
+	e5, ok := TimeframeByName("5s")
+	if !ok || e5.LiveSource != LiveParentClosed || e5.Persist || e5.Parent != SecondTF {
+		t.Fatalf("5s catalog %+v", e5)
+	}
+	if IsSparseSecondChild("10s") || IsLiveChartTF("10s") {
+		t.Fatal("10s must stay inactive")
 	}
 	for _, s := range CombinedKlineStreamNames("BTCUSDT") {
 		if s == "btcusdt@kline_1s" {

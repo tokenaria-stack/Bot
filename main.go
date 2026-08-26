@@ -145,6 +145,7 @@ func main() {
 	bootWG.Wait()
 	market.HydrateDerivedFrames(frames, chaosCfg)
 	market.AttachLiveSecondFrames(frames, symbol, chaosCfg)
+	market.HydrateSparseSecondFrames(frames, symbol, chaosCfg)
 	log.Printf("[Init] All frames ready in %.2fs (parallel)", time.Since(bootStart).Seconds())
 
 	htfProvider := exchange.NewHTFProvider()
