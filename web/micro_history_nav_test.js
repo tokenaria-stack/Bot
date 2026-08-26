@@ -31,7 +31,7 @@ assert.ok(/function isLiveSecondChart/.test(cfg), '1s capability is not all-spar
 	assert.ok(/=== '1s'/.test(extractFn(cfg, 'isLiveSecondChart')), 'gate is explicit 1s');
 
 const right = extractFn(boot, 'canExtendHistoryRight');
-assert.ok(/isLiveSecondChart/.test(right), 'right extend allowed for 1s');
+assert.ok(/isSecondsHistoryNavChart/.test(right), 'right extend allowed for 1s and sparse-second children');
 assert.ok(/historyHasNewer !== false/.test(right), 'hasNewer=false stops right pages');
 assert.ok(!/isSparseLiveChart/.test(right), 'must not unlock all sparse TFs');
 
@@ -66,7 +66,7 @@ assert.ok(!/historyHasNewer/.test(boot.slice(boot.indexOf('fetchRightColumnar:')
 const pushStart = boot.indexOf('function pushLiveTickDelta');
 assert.ok(pushStart >= 0, 'missing pushLiveTickDelta');
 const push = boot.slice(pushStart, boot.indexOf('function liveCameraViewIntent', pushStart));
-assert.ok(/historyHasNewer === true/.test(push) && /isLiveSecondChart/.test(push),
+assert.ok(/historyHasNewer === true/.test(push) && /isSecondsHistoryNavChart/.test(push),
   'detached 1s island must not ingest live ticks');
 assert.ok(push.indexOf('historyHasNewer') < push.indexOf('appendTick'),
   'detach gate is before appendTick');

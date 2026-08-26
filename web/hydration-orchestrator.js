@@ -656,6 +656,10 @@ class HydrationOrchestrator {
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         // Empty right payload → stop right pending (no left EOF inference).
         this._pendingRightIntent = null;
+        if (this._rightReachedSourceTail(data)) {
+          this._clearRightDetachedOnSourceTail();
+          return;
+        }
         if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
         return;
       }
@@ -678,8 +682,12 @@ class HydrationOrchestrator {
           && afterTipSec != null
           && afterTipSec > tipSec;
         if (!mergeResult || mergeResult.added <= 0 || !tipAdvanced) {
-          console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
           this._pendingRightIntent = null;
+          if (this._rightReachedSourceTail(data)) {
+            this._clearRightDetachedOnSourceTail();
+            return;
+          }
+          console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
           const blockTip = afterTipSec != null ? afterTipSec : tipSec;
           if (blockTip != null) this._zeroProgressRightTipSec = blockTip;
           return;
@@ -727,6 +735,24 @@ class HydrationOrchestrator {
         this.state = HydrationState.IDLE;
       }
       this.tryConsumePending();
+    }
+  }
+
+  /**
+   * Sparse-second right page: hasNewer=false is 1s source tail even if folded
+   * children added == 0 (remaining bucket may be FORMING). Must not stall-block
+   * and must not move TimeCamera.
+   */
+  _rightReachedSourceTail(data) {
+    return !!(data && data.hasNewer === false
+      && typeof this._deps?.rightEmptyClearsDetached === 'function'
+      && this._deps.rightEmptyClearsDetached());
+  }
+
+  _clearRightDetachedOnSourceTail() {
+    this._zeroProgressRightTipSec = null;
+    if (typeof this._deps?.onRightSourceTail === 'function') {
+      this._deps.onRightSourceTail();
     }
   }
 

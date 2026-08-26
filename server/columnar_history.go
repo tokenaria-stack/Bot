@@ -100,6 +100,22 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	timeframe string,
 	binanceInterval string,
 ) (columnarHistoryResponse, bool) {
+	return d.buildColumnarHistoryPayloadOpts(ctx, klines, candleLimit, warmupBars, rsxSettings, slotIDs, hasMore, hasNewer, timeframe, binanceInterval, true)
+}
+
+func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
+	ctx context.Context,
+	klines []exchange.Kline,
+	candleLimit int,
+	warmupBars int,
+	rsxSettings market.RSXSettings,
+	slotIDs []string,
+	hasMore bool,
+	hasNewer bool,
+	timeframe string,
+	binanceInterval string,
+	projectForming bool,
+) (columnarHistoryResponse, bool) {
 	_ = ctx
 	_ = binanceInterval
 	sparseChild := exchange.IsSparseSecondChild(timeframe)
@@ -181,7 +197,9 @@ func (d *DashboardServer) buildColumnarHistoryPayload(
 	closedBars := len(resp.Times)
 	var mode viewportProjectionMode
 	if sparseChild {
-		mode = d.projectSparseSecondFormingTip(&resp, timeframe)
+		if projectForming {
+			mode = d.projectSparseSecondFormingTip(&resp, timeframe)
+		}
 	} else {
 		mode = d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
 	}
@@ -400,7 +418,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		}
 	}
 
-	resp, ok := d.buildColumnarHistoryPayload(
+	resp, ok := d.buildColumnarHistoryPayloadOpts(
 		r.Context(),
 		win.Klines,
 		candleLimit,
@@ -411,6 +429,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		win.HasNewer,
 		spec.ID,
 		spec.BinanceInterval,
+		q.StartTimeMs <= 0,
 	)
 	if !ok {
 		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(win.Klines))

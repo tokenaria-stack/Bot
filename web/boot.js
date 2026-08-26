@@ -893,11 +893,28 @@
       : 60;
   }
 
+  function isSecondsHistoryNavChart(tf) {
+    const id = tf || window.currentTf;
+    return (typeof isLiveSecondChart === 'function' && isLiveSecondChart(id))
+      || (typeof isSparseSecondChart === 'function' && isSparseSecondChart(id));
+  }
+
+  /** Child-tip CloseTime in unix seconds. 1s: same as OpenTime. Do not reuse child OpenTime as right cursor. */
+  function sparseChildRightCursorSec(openSec) {
+    const open = Number(openSec);
+    if (!Number.isFinite(open) || open <= 0) return null;
+    if (typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)) {
+      const iv = liveTfIntervalSec();
+      return open + iv - 1;
+    }
+    return open;
+  }
+
   /** Store tip is behind wall-clock — Microscope island can extend toward live. */
   function canExtendHistoryRight() {
     const last = liveColumnarStore?.lastTimeSec?.();
     if (!Number.isFinite(last) || last <= 0) return false;
-    if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+    if (isSecondsHistoryNavChart(window.currentTf)) {
       return window.historyHasNewer !== false;
     }
     if (typeof requiresDenseTimeContinuity === 'function'
@@ -1011,8 +1028,8 @@
       getRightFetchEndSec: () => {
         const last = liveColumnarStore?.lastTimeSec?.();
         if (!Number.isFinite(last) || last <= 0) return null;
-        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
-          return last;
+        if (isSecondsHistoryNavChart(window.currentTf)) {
+          return sparseChildRightCursorSec(last);
         }
         if (typeof ViewportManager === 'undefined'
           || typeof ViewportManager.resolveRightHistoryFetchEndSec !== 'function') {
@@ -1036,7 +1053,7 @@
           rsxSettings: resolveLiveRsxSettings(),
           symbol,
         };
-        const req = (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf))
+        const req = isSecondsHistoryNavChart(window.currentTf)
           ? API.fetchColumnarHistory({ ...base, startTimeSec: cursorSec })
           : API.fetchColumnarHistory({ ...base, endTimeSec: cursorSec });
         return req;
@@ -1092,7 +1109,7 @@
           ? liveColumnarStore.lastTimeSec()
           : null;
         // Detached island: prune dropped the FE tip. Page-level hasNewer is not this signal.
-        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)
+        if (isSecondsHistoryNavChart(window.currentTf)
             && Number.isFinite(tipBefore) && Number.isFinite(tipAfter)
             && tipAfter < tipBefore) {
           window.historyHasNewer = true;
@@ -1136,11 +1153,17 @@
           viewToSec: viewTimes?.viewToSec,
         });
         if (added <= 0) return null;
-        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)
+        if (isSecondsHistoryNavChart(window.currentTf)
             && data && typeof data.hasNewer === 'boolean') {
           window.historyHasNewer = data.hasNewer === true;
         }
         return { added, viewportRange, viewportAnchor };
+      },
+      rightEmptyClearsDetached: () => (
+        typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+      ),
+      onRightSourceTail: () => {
+        window.historyHasNewer = false;
       },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
       processTick: (tick) => pushLiveTickDelta(tick),
@@ -1256,8 +1279,7 @@
       if (!sparseTick) return false;
     }
     // Detached 1s island: live ticks must not append a "now" tip. Server + micro_klines remain truth.
-    if (typeof isLiveSecondChart === 'function'
-        && isLiveSecondChart(tick?.timeframe || window.currentTf)
+    if (isSecondsHistoryNavChart(tick?.timeframe || window.currentTf)
         && window.historyHasNewer === true) {
       return false;
     }
@@ -1615,7 +1637,7 @@
       }
 
       window.historyHasMore = columnar.hasMore !== false;
-      if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+      if (isSecondsHistoryNavChart(window.currentTf)) {
         window.historyHasNewer = columnar.hasNewer === true;
       }
       await mountDDRLiveCutover();

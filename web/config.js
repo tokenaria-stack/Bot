@@ -114,6 +114,20 @@ function isLiveSecondChart(tf) {
   return String(tf || '').trim() === '1s';
 }
 
+/** Folded sparse-second children of 1s. Not 1s. Do not widen isLiveSecondChart. */
+function isSparseSecondChart(tf) {
+  switch (String(tf || '').trim()) {
+    case '5s':
+    case '10s':
+    case '15s':
+    case '30s':
+    case '45s':
+      return true;
+    default:
+      return false;
+  }
+}
+
 /** Seconds bucket identity (one bar per OpenTime). Not ticks. */
 function isSecondsTimeframe(tf) {
   return /^\d+s$/i.test(String(tf || '').trim());
@@ -525,6 +539,7 @@ if (typeof window !== 'undefined') {
   window.requiresDenseTimeContinuity = requiresDenseTimeContinuity;
   window.isSparseLiveChart = isSparseLiveChart;
   window.isLiveSecondChart = isLiveSecondChart;
+  window.isSparseSecondChart = isSparseSecondChart;
   window.isSecondsTimeframe = isSecondsTimeframe;
   window.appendLiveTickBuffer = appendLiveTickBuffer;
   window.sparseHistoryToLiveNeedsFullPaint = sparseHistoryToLiveNeedsFullPaint;

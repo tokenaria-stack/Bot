@@ -286,6 +286,12 @@ func (d *DashboardServer) deliverHistoryWindow(ctx context.Context, q HistoryWin
 		if err := requestCtxErr(ctx); err != nil {
 			return historyDeliverResult{Kind: historyDeliverExchange, Err: err}
 		}
+		if q.StartTimeMs > 0 {
+			if !ok {
+				return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
+			}
+			return historyDeliverResult{Kind: historyDeliverOK, Code: HistoryCodeOK, Win: win}
+		}
 		if !ok {
 			return historyDeliverResult{Kind: historyDeliverNoData, Code: HistoryCodeNoData}
 		}

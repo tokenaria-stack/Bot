@@ -113,8 +113,10 @@ test('boot: ingest still precedes the VIEW paint gate', () => {
     'detached 1s island must skip live ingest');
   assert.ok(pushBody.indexOf('historyHasNewer') < appendAt,
     'detach skip is before appendTick');
-  assert.ok(/isLiveSecondChart/.test(pushBody),
-    'detach skip is 1s-only, not all sparse');
+  assert.ok(/isSecondsHistoryNavChart/.test(pushBody),
+    'detach skip is 1s and sparse-second children, not all sparse');
+  assert.ok(!/isLiveSecondChart\(tick/.test(pushBody),
+    'must not widen isLiveSecondChart; use the seconds-history nav gate');
 });
 
 test('boot: TimeCamera shadow is the VIEW source', () => {

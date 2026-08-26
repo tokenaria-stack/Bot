@@ -1434,8 +1434,8 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if hasStart && !exchange.IsLiveSecond(spec.ID) {
-		http.Error(w, "startTime is only valid for 1s", http.StatusBadRequest)
+	if hasStart && !exchange.IsLiveSecond(spec.ID) && !exchange.IsSparseSecondChild(spec.ID) {
+		http.Error(w, "startTime is only valid for 1s and sparse-second children", http.StatusBadRequest)
 		return
 	}
 

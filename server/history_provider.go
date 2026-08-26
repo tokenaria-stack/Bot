@@ -285,39 +285,105 @@ func (d *DashboardServer) getSparseSecondWindow(q HistoryWindowQuery, wantChildB
 	if err != nil {
 		return HistoryWindow{}, false
 	}
-	endTimeMs := q.EndTimeMs
-	if endTimeMs <= 0 {
-		endTimeMs = time.Now().UnixMilli()
-	}
-	pwin, pok := d.getMicroWindow(parentSpec, endTimeMs, parentNeed)
-	if !pok || len(pwin.Klines) == 0 {
-		return HistoryWindow{}, false
-	}
-	var lookBehind *exchange.Kline
-	symbol := d.symbol
-	if symbol == "" {
-		symbol = "BTCUSDT"
-	}
-	firstOpen := pwin.Klines[0].OpenTime
-	if firstOpen > 0 {
-		rows, lerr := data.LoadMicroKlinesBeforeEnd(symbol, exchange.SecondTF, firstOpen-1, 1)
-		if lerr == nil && len(rows) > 0 {
-			ks := exchange.KlinesFromDataCandles(rows)
-			if len(ks) > 0 {
-				k := ks[len(ks)-1]
-				lookBehind = &k
-			}
+	forward := q.StartTimeMs > 0
+	var pwin HistoryWindow
+	var pok bool
+	if forward {
+		pwin, pok = d.getMicroWindowAfter(parentSpec, q.StartTimeMs, parentNeed)
+		if !pok {
+			return HistoryWindow{HasMore: false, HasNewer: false}, true
+		}
+	} else {
+		endTimeMs := q.EndTimeMs
+		if endTimeMs <= 0 {
+			endTimeMs = time.Now().UnixMilli()
+		} else {
+			// FE left cursor is child head OpenTime; 1s parents are strictly before it.
+			endTimeMs--
+		}
+		pwin, pok = d.getMicroWindow(parentSpec, endTimeMs, parentNeed)
+		if !pok {
+			return HistoryWindow{}, false
 		}
 	}
-	res, ferr := exchange.FoldSparseSecondParents(pwin.Klines, e.Name, lookBehind)
-	if ferr != nil {
-		return HistoryWindow{}, false
+
+	closed := []exchange.Kline{}
+	if len(pwin.Klines) > 0 {
+		symbol := d.symbol
+		if symbol == "" {
+			symbol = "BTCUSDT"
+		}
+		lookBehind := d.sparseSecondLookBehind(symbol, pwin.Klines[0].OpenTime)
+		parents := pwin.Klines
+		if ahead := d.sparseSecondLookAhead(symbol, pwin.Klines[len(pwin.Klines)-1].OpenTime); ahead != nil {
+			parents = append(append([]exchange.Kline{}, pwin.Klines...), *ahead)
+		}
+		res, ferr := exchange.FoldSparseSecondParents(parents, e.Name, lookBehind)
+		if ferr != nil {
+			return HistoryWindow{}, false
+		}
+		closed = filterSparseChildOverlap(res.Closed, q)
 	}
-	closed := res.Closed
 	if wantChildBars > 0 && len(closed) > wantChildBars {
-		closed = closed[len(closed)-wantChildBars:]
+		if forward {
+			closed = closed[:wantChildBars]
+		} else {
+			closed = closed[len(closed)-wantChildBars:]
+		}
 	}
-	return HistoryWindow{Klines: closed, HasMore: pwin.HasMore}, true
+	return HistoryWindow{Klines: closed, HasMore: pwin.HasMore, HasNewer: pwin.HasNewer}, true
+}
+
+func (d *DashboardServer) sparseSecondLookBehind(symbol string, firstOpen int64) *exchange.Kline {
+	if firstOpen <= 0 {
+		return nil
+	}
+	rows, err := data.LoadMicroKlinesBeforeEnd(symbol, exchange.SecondTF, firstOpen-1, 1)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	ks := exchange.KlinesFromDataCandles(rows)
+	if len(ks) == 0 {
+		return nil
+	}
+	k := ks[len(ks)-1]
+	return &k
+}
+
+func (d *DashboardServer) sparseSecondLookAhead(symbol string, lastOpen int64) *exchange.Kline {
+	if lastOpen < 0 {
+		return nil
+	}
+	parentSpec, err := ResolveTimeframe(exchange.SecondTF)
+	if err != nil {
+		return nil
+	}
+	win, ok := d.getMicroWindowAfter(parentSpec, lastOpen, 1)
+	if !ok || len(win.Klines) == 0 {
+		return nil
+	}
+	k := win.Klines[0]
+	return &k
+}
+
+func filterSparseChildOverlap(closed []exchange.Kline, q HistoryWindowQuery) []exchange.Kline {
+	if len(closed) == 0 {
+		return closed
+	}
+	out := make([]exchange.Kline, 0, len(closed))
+	for _, k := range closed {
+		if q.StartTimeMs > 0 {
+			if k.OpenTime > q.StartTimeMs {
+				out = append(out, k)
+			}
+			continue
+		}
+		if q.EndTimeMs > 0 && k.OpenTime >= q.EndTimeMs {
+			continue
+		}
+		out = append(out, k)
+	}
+	return out
 }
 
 func (d *DashboardServer) getDerivedWindow(ctx context.Context, q HistoryWindowQuery, wantChildBars int) (HistoryWindow, bool) {

@@ -162,7 +162,8 @@ const TimeframeController = (() => {
             : captured;
         }
       }
-    } else if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(resolved)
+    } else if (((typeof isLiveSecondChart === 'function' && isLiveSecondChart(resolved))
+        || (typeof isSparseSecondChart === 'function' && isSparseSecondChart(resolved)))
       && typeof returnToLive === 'function') {
       currentTf = resolved;
       localStorage.setItem(LS_TF_KEY, resolved);

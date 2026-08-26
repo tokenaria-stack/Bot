@@ -727,3 +727,133 @@ func TestGetWindowLiveSecondForwardPage(t *testing.T) {
 		t.Fatal("hasNewer must be false at source tail")
 	}
 }
+
+func TestGetWindowSparseSecondLeftUsesChildOpenExclusive(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	base := int64(1_720_000_000_000)
+	const n = 20
+	rows := make([]data.Candle, n)
+	for i := 0; i < n; i++ {
+		ot := base + int64(i)*1000
+		rows[i] = data.Candle{OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: 1, CloseTime: ot + 999}
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	headOpen := base + 10_000 // 5s child at t+10s
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, EndTimeMs: headOpen, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("left 5s page")
+	}
+	if len(win.Klines) == 0 {
+		t.Fatal("expected closed 5s children strictly before head")
+	}
+	for _, k := range win.Klines {
+		if k.OpenTime >= headOpen {
+			t.Fatalf("overlap child open=%d head=%d", k.OpenTime, headOpen)
+		}
+	}
+	if !win.HasMore && !win.HasNewer {
+		// older 1s exist before page and newer 1s exist after last parent
+	}
+	if !win.HasNewer {
+		t.Fatal("hasNewer must come from 1s after the parent window, not child count")
+	}
+}
+
+func TestGetWindowSparseSecondRightUsesChildCloseTime(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	base := int64(1_721_000_000_000)
+	const n = 20
+	rows := make([]data.Candle, n)
+	for i := 0; i < n; i++ {
+		ot := base + int64(i)*1000
+		rows[i] = data.Candle{OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: 1, CloseTime: ot + 999}
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tipOpen := base + 5_000
+	tipClose := tipOpen + 5_000 - 1
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, StartTimeMs: tipClose, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("right 5s page")
+	}
+	if len(win.Klines) == 0 {
+		t.Fatal("expected closed 5s after tip CloseTime")
+	}
+	for _, k := range win.Klines {
+		if k.OpenTime <= tipClose {
+			t.Fatalf("right overlap open=%d closeCursor=%d", k.OpenTime, tipClose)
+		}
+		if k.OpenTime == tipOpen {
+			t.Fatal("must not reuse child OpenTime as right cursor result")
+		}
+	}
+	if win.Klines[0].OpenTime != base+10_000 {
+		t.Fatalf("first closed after tip = %d want %d", win.Klines[0].OpenTime, base+10_000)
+	}
+}
+
+func TestGetWindowSparseSecondRightEmptyFormingTail(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	base := int64(1_722_000_000_000)
+	rows := make([]data.Candle, 8)
+	for i := 0; i < 8; i++ {
+		ot := base + int64(i)*1000
+		rows[i] = data.Candle{OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: 1, CloseTime: ot + 999}
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Closed 5s at base (1s 0..4 closed by 1s at 5000). Tip CloseTime = 5999.
+	// 1s at 6000,7000 remain in forming 5s bucket only.
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec: spec, StartTimeMs: base + 5999, CandleLimit: 10,
+	})
+	if !ok {
+		t.Fatal("empty folded right page must still be ok")
+	}
+	if len(win.Klines) != 0 {
+		t.Fatalf("forming-only tail must return 0 closed children, got %d", len(win.Klines))
+	}
+	if win.HasNewer {
+		t.Fatal("hasNewer must be false when no closed 1s exist after the cursor")
+	}
+}
+
+func TestFilterSparseChildOverlap(t *testing.T) {
+	base := int64(1_000)
+	in := []exchange.Kline{
+		{OpenTime: base},
+		{OpenTime: base + 5000},
+		{OpenTime: base + 10_000},
+	}
+	left := filterSparseChildOverlap(in, HistoryWindowQuery{EndTimeMs: base + 5000})
+	if len(left) != 1 || left[0].OpenTime != base {
+		t.Fatalf("left overlap drop: %+v", left)
+	}
+	right := filterSparseChildOverlap(in, HistoryWindowQuery{StartTimeMs: base + 5000 + 4999})
+	if len(right) != 1 || right[0].OpenTime != base+10_000 {
+		t.Fatalf("right overlap drop: %+v", right)
+	}
+}
