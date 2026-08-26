@@ -37,7 +37,9 @@ test('2m 10m 45m 3h are live derived in TF_MENU', () => {
   }
   assert.ok(menu.includes("'1s'"), 'menu missing 1s');
   assert.ok(menu.includes("'5s'"), 'menu missing 5s');
-  assert.ok(!menu.includes("'10s'"), '10s must stay hidden');
+  for (const id of ['10s', '15s', '30s', '45s']) {
+    assert.ok(menu.includes(`'${id}'`), `menu missing ${id}`);
+  }
   assert.ok(!menu.includes("'3d'"), '3d must not be in TF_MENU');
   assert.ok(!menu.includes('TICKS'), 'TICKS menu must stay hidden');
   assert.ok(menu.includes('SECONDS'), '1s lives in SECONDS group');

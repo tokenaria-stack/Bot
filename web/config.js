@@ -89,7 +89,7 @@ const NATIVE_BINANCE_TFS = [
 ];
 
 const LIVE_CHART_TFS = [
-  '1s', '5s',
+  '1s', '5s', '10s', '15s', '30s', '45s',
   '1m', '2m', '3m', '5m', '10m', '15m', '30m', '45m',
   '1h', '2h', '3h', '4h', '6h', '8h', '12h',
   '1d', '1w', '1M',
@@ -162,6 +162,10 @@ const TF_MENU = {
   SECONDS: [
     { id: '1s', label: '1 second' },
     { id: '5s', label: '5 seconds' },
+    { id: '10s', label: '10 seconds' },
+    { id: '15s', label: '15 seconds' },
+    { id: '30s', label: '30 seconds' },
+    { id: '45s', label: '45 seconds' },
   ],
   MINUTES: [
     { id: '1m', label: '1 minute' }, { id: '2m', label: '2 minutes' },

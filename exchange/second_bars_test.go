@@ -102,35 +102,41 @@ func TestLiveSecondNotNativePersist(t *testing.T) {
 	if !IsLiveSecond("1s") || !IsLiveChartTF("1s") {
 		t.Fatal("1s must be live second")
 	}
-	if IsLiveSecond("5s") {
-		t.Fatal("5s must not be the 1s live-second identity")
+	for _, id := range []string{"5s", "10s", "15s", "30s", "45s"} {
+		if IsLiveSecond(id) {
+			t.Fatalf("%s must not be the 1s live-second identity", id)
+		}
+		if !IsSparseSecondChild(id) || !IsLiveChartTF(id) {
+			t.Fatalf("%s must be an activated sparse-second child", id)
+		}
+		e, ok := TimeframeByName(id)
+		if !ok || e.LiveSource != LiveParentClosed || e.Persist || e.Parent != SecondTF {
+			t.Fatalf("%s catalog %+v", id, e)
+		}
 	}
-	if !IsSparseSecondChild("5s") || !IsLiveChartTF("5s") {
-		t.Fatal("5s must be an activated sparse-second child")
-	}
-	e5, ok := TimeframeByName("5s")
-	if !ok || e5.LiveSource != LiveParentClosed || e5.Persist || e5.Parent != SecondTF {
-		t.Fatalf("5s catalog %+v", e5)
-	}
-	if IsSparseSecondChild("10s") || IsLiveChartTF("10s") {
-		t.Fatal("10s must stay inactive")
+	if n := len(SparseSecondChildren()); n != 5 {
+		t.Fatalf("SparseSecondChildren len=%d want 5", n)
 	}
 	for _, s := range CombinedKlineStreamNames("BTCUSDT") {
 		if s == "btcusdt@kline_1s" {
 			t.Fatal("1s must not be a kline stream")
 		}
 	}
-	found := false
+	found := 0
 	for _, s := range CombinedLiveStreamNames("BTCUSDT") {
 		if s == "btcusdt@aggTrade" {
-			found = true
+			found++
+		}
+		if s == "btcusdt@kline_5s" || s == "btcusdt@kline_10s" || s == "btcusdt@kline_15s" ||
+			s == "btcusdt@kline_30s" || s == "btcusdt@kline_45s" {
+			t.Fatal("sparse-second kline leaked")
 		}
 		if s == "btcusdt@kline_2m" {
 			t.Fatal("derived kline leaked")
 		}
 	}
-	if !found {
-		t.Fatal("combined live streams must include aggTrade")
+	if found != 1 {
+		t.Fatalf("aggTrade streams=%d want 1", found)
 	}
 }
 

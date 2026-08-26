@@ -34,7 +34,7 @@ type Timeframe struct {
 }
 
 // USD-M native klines Binance actually sells, then derived views, then inactive seconds/ticks.
-// Native = WS + persist. Derived = live chart Frame only. Seconds/ticks stay hidden.
+// Native = WS + persist. Derived / sparse-second children = live chart Frame only. Ticks stay hidden.
 var timeframeCatalog = []Timeframe{
 	{Name: "1m", Label: "1 minute", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "MINUTES"},
 	{Name: "3m", Label: "3 minutes", Class: TFClassNative, LiveSource: LiveBinanceKlineWS, Persist: true, MenuGroup: "MINUTES"},
@@ -59,10 +59,10 @@ var timeframeCatalog = []Timeframe{
 
 	{Name: "1s", Label: "1 second", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, MenuGroup: "SECONDS"},
 	{Name: "5s", Label: "5 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
-	{Name: "10s", Label: "10 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
-	{Name: "15s", Label: "15 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
-	{Name: "30s", Label: "30 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
-	{Name: "45s", Label: "45 seconds", Class: TFClassSeconds, LiveSource: LiveAggTrade, Persist: false, Parent: "1s"},
+	{Name: "10s", Label: "10 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
+	{Name: "15s", Label: "15 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
+	{Name: "30s", Label: "30 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
+	{Name: "45s", Label: "45 seconds", Class: TFClassSeconds, LiveSource: LiveParentClosed, Persist: false, Parent: "1s", MenuGroup: "SECONDS"},
 
 	{Name: "1tick", Label: "1 tick", Class: TFClassTicks, LiveSource: LiveAggTrade, Persist: false},
 	{Name: "10ticks", Label: "10 ticks", Class: TFClassTicks, LiveSource: LiveAggTrade, Persist: false},
@@ -157,7 +157,7 @@ func IsLiveSecond(id string) bool {
 	return ok && e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == ""
 }
 
-// IsSparseSecondChild is an activated second-class fold from 1s (5s now; 10s–45s later).
+// IsSparseSecondChild is an activated second-class fold from 1s (5s–45s).
 func IsSparseSecondChild(id string) bool {
 	e, ok := timeframeByName[id]
 	return ok && e.Class == TFClassSeconds && e.Parent == SecondTF && e.MenuGroup != ""
@@ -165,7 +165,7 @@ func IsSparseSecondChild(id string) bool {
 
 // SparseSecondChildren is activated 1s-fold TFs (catalog order).
 func SparseSecondChildren() []Timeframe {
-	out := make([]Timeframe, 0, 1)
+	out := make([]Timeframe, 0, 5)
 	for _, e := range timeframeCatalog {
 		if e.Class == TFClassSeconds && e.Parent == SecondTF && e.MenuGroup != "" {
 			out = append(out, e)

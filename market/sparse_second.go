@@ -7,7 +7,7 @@ import (
 	"trading_bot/exchange"
 )
 
-// HydrateSparseSecondFrames folds the 1s Frame into activated second children (5s).
+// HydrateSparseSecondFrames folds the 1s Frame into activated second children (5s–45s).
 // 1s forming is the last parent in the series — not wall-clock CurrentBarOpen.
 func HydrateSparseSecondFrames(frames map[string]*Frame, symbol string, chaos ChaosConfig) {
 	if frames == nil {

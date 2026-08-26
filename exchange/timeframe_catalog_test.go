@@ -112,7 +112,7 @@ func TestInactiveClassesNotActivated(t *testing.T) {
 			continue // MICRO-1 live 1s
 		}
 		if e.Class == TFClassSeconds && e.MenuGroup != "" && e.Parent == SecondTF {
-			continue // SPARSE-SECONDS-1 activated 5s
+			continue // SPARSE-SECONDS activated 5s–45s
 		}
 		if e.MenuGroup != "" {
 			t.Fatalf("%s MenuGroup=%q; seconds/ticks stay hidden", e.Name, e.MenuGroup)
@@ -139,7 +139,7 @@ func TestCombinedKlineStreamsCoverEveryNative(t *testing.T) {
 		t.Fatalf("streams=%d ids=%d", len(streams), len(ids))
 	}
 	joined := strings.Join(streams, " ")
-	if strings.Contains(joined, "2m") || strings.Contains(joined, "kline_1s") || strings.Contains(joined, "kline_3d") {
+	if strings.Contains(joined, "2m") || strings.Contains(joined, "kline_1s") || strings.Contains(joined, "kline_3d") || strings.Contains(joined, "kline_10s") {
 		t.Fatalf("inactive TF leaked into WS: %v", streams)
 	}
 	for _, id := range ids {
