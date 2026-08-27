@@ -128,6 +128,36 @@ function isSparseSecondChart(tf) {
   }
 }
 
+/** Activated seconds family: 1s plus folded 5s–45s. Not native minutes. */
+function isSecondsFamilyChart(tf) {
+  return isLiveSecondChart(tf) || isSparseSecondChart(tf);
+}
+
+/** Interval duration in seconds for the seconds family. Null if not in family. */
+function secondsFamilyIntervalSec(tf) {
+  if (!isSecondsFamilyChart(tf)) return null;
+  const m = /^(\d+)s$/i.exec(String(tf || '').trim());
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * SECONDS-TF-SWITCH: HISTORY + smaller→bigger interval → LIVE tail.
+ * HISTORY + bigger→smaller stays HISTORY (microscope). LIVE seed unchanged.
+ * Native TFs: no-op. Does not convert wall-time span.
+ */
+function applySecondsFamilyTfSwitchIntent(seed, prevTf, nextTf) {
+  if (!seed || seed.intent !== 'HISTORY') return seed;
+  const prevIv = secondsFamilyIntervalSec(prevTf);
+  const nextIv = secondsFamilyIntervalSec(nextTf);
+  if (prevIv == null || nextIv == null) return seed;
+  if (nextIv > prevIv) {
+    return { ...seed, intent: 'LIVE', isAtRightEdge: true };
+  }
+  return seed;
+}
+
 /** Seconds bucket identity (one bar per OpenTime). Not ticks. */
 function isSecondsTimeframe(tf) {
   return /^\d+s$/i.test(String(tf || '').trim());
@@ -540,6 +570,9 @@ if (typeof window !== 'undefined') {
   window.isSparseLiveChart = isSparseLiveChart;
   window.isLiveSecondChart = isLiveSecondChart;
   window.isSparseSecondChart = isSparseSecondChart;
+  window.isSecondsFamilyChart = isSecondsFamilyChart;
+  window.secondsFamilyIntervalSec = secondsFamilyIntervalSec;
+  window.applySecondsFamilyTfSwitchIntent = applySecondsFamilyTfSwitchIntent;
   window.isSecondsTimeframe = isSecondsTimeframe;
   window.appendLiveTickBuffer = appendLiveTickBuffer;
   window.sparseHistoryToLiveNeedsFullPaint = sparseHistoryToLiveNeedsFullPaint;

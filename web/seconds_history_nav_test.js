@@ -67,8 +67,8 @@ assert.ok(tailFn >= 0, 'missing _clearRightDetachedOnSourceTail');
 assert.ok(!/TimeCamera/.test(orch.slice(tailFn, tailFn + 280)),
   'reaching 1s tail must not move TimeCamera');
 
-assert.ok(/isSparseSecondChart/.test(tf) && /returnToLive\(\)/.test(tf),
-  'same-TF sparse-second click is explicit RTL');
+assert.ok(/returnToLive\(\)/.test(tf) && /applySecondsFamilyTfSwitchIntent/.test(tf),
+  'same-TF sparse-second click is explicit RTL; cross-TF uses seconds-family law');
 
 const rtl = extractFn(boot, 'returnToLive');
 assert.ok(/userReturnToLive: true/.test(rtl), 'RTL is latest-tail hydrate');

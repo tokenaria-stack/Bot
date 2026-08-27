@@ -160,6 +160,9 @@ const TimeframeController = (() => {
           viewportAnchor = typeof ViewportManager.cameraIntentForTfSwitch === 'function'
             ? ViewportManager.cameraIntentForTfSwitch(captured, prevTf, resolved)
             : captured;
+          if (typeof applySecondsFamilyTfSwitchIntent === 'function') {
+            viewportAnchor = applySecondsFamilyTfSwitchIntent(viewportAnchor, prevTf, resolved);
+          }
         }
       }
     } else if (((typeof isLiveSecondChart === 'function' && isLiveSecondChart(resolved))

@@ -992,6 +992,7 @@
         return true;
       },
       shouldContinueLeftHistory: (range) => {
+        if (isSecondsHistoryNavChart(window.currentTf) && !liveHistoryScrollArmed) return false;
         if (!window.historyHasMore) return false;
         if (liveHydrationOrchestrator?.isLeftHeadBlocked?.()) return false;
         return isApproachingLoadedLeftEdge(range);
@@ -1021,6 +1022,7 @@
         return isApproachingLoadedRightEdge(range);
       },
       shouldContinueRightHistory: (range) => {
+        if (isSecondsHistoryNavChart(window.currentTf) && !liveHistoryScrollArmed) return false;
         if (!canExtendHistoryRight()) return false;
         if (liveHydrationOrchestrator?.isRightTipBlocked?.()) return false;
         if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
