@@ -42,7 +42,17 @@ assert.ok(!/isSparseLiveChart/.test(right), 'must not unlock all sparse TFs');
 const cursor = extractFn(boot, 'sparseChildRightCursorSec');
 assert.ok(/open \+ iv - 1/.test(cursor), 'right cursor is child CloseTime, not OpenTime');
 
-assert.ok(/startTimeSec: cursorSec/.test(boot), 'seconds history right fetch is startTime');
+assert.ok(/parentResumeAfterSec/.test(boot) && /onSparseRightNoProgress/.test(boot),
+  'zero-child page continues from parent watermark');
+assert.ok(/parentResumeAfterSec/.test(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8')),
+  'API carries parentResumeAfterSec');
+assert.ok(/action === 'continue'/.test(orch), 'watermark advance must not latch the child tip');
+
+const load = boot;
+const newerAt = load.indexOf('historyHasNewer = columnar.hasNewer');
+const flushAt = load.indexOf('flushLiveTickBuffer();');
+assert.ok(newerAt >= 0 && flushAt > newerAt,
+  'detach state must be published before live tick flush');
 assert.ok(/rightEmptyClearsDetached/.test(boot) && /onRightSourceTail/.test(boot),
   'forming-only 1s tail clears detached even if folded added==0');
 assert.ok(/_rightReachedSourceTail/.test(orch), 'orchestrator honors source-tail empty right page');

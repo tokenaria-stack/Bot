@@ -12,18 +12,20 @@ import (
 
 // HistoryWindowQuery is the sole input contract for history delivery (Shot 9A).
 type HistoryWindowQuery struct {
-	Spec        TimeframeSpec
-	EndTimeMs   int64 // Unix ms; 0 → now (then Closed-bar Boundary Cap). Ignored when StartTimeMs > 0.
-	StartTimeMs int64 // Unix ms exclusive lower bound (1s forward page only).
-	CandleLimit int   // display bars (warmup added inside GetWindow for endTime)
+	Spec                TimeframeSpec
+	EndTimeMs           int64 // Unix ms; 0 → now (then Closed-bar Boundary Cap). Ignored when StartTimeMs > 0.
+	StartTimeMs         int64 // Unix ms exclusive lower bound (child CloseTime on sparse-child right pages).
+	ParentResumeAfterMs int64 // Unix ms; max 1s OpenTime scanned (sparse-child continuation only).
+	CandleLimit         int   // display bars (warmup added inside GetWindow for endTime)
 }
 
 // HistoryWindow is a continuous kline series ready for packing (columnar/JSON).
 // Controllers must not know whether bars came from SQLite, RAM, or both.
 type HistoryWindow struct {
-	Klines   []exchange.Kline
-	HasMore  bool
-	HasNewer bool
+	Klines              []exchange.Kline
+	HasMore             bool
+	HasNewer            bool
+	ParentResumeAfterMs int64 // max 1s OpenTime scanned (sparse-child forward pages)
 }
 
 // resolveClosedBarBoundary is the Closed-bar Boundary SSOT (#67 / ADR-009).
@@ -281,14 +283,32 @@ func (d *DashboardServer) getSparseSecondWindow(q HistoryWindowQuery, wantChildB
 	if err != nil {
 		return HistoryWindow{}, false
 	}
+	ratio, err := exchange.SparseSecondParentRows(1, e.Name)
+	if err != nil {
+		return HistoryWindow{}, false
+	}
 	parentSpec, err := ResolveTimeframe(exchange.SecondTF)
 	if err != nil {
 		return HistoryWindow{}, false
 	}
 	forward := q.StartTimeMs > 0
+	continuation := forward && q.ParentResumeAfterMs > 0
 	var pwin HistoryWindow
 	var pok bool
-	if forward {
+	if continuation {
+		floor, ferr := data.CurrentBarOpen(q.ParentResumeAfterMs, e.Name)
+		if ferr != nil || floor < 0 {
+			return HistoryWindow{}, false
+		}
+		exclusive := floor - 1
+		if exclusive < 0 {
+			exclusive = 0
+		}
+		pwin, pok = d.getMicroWindowAfter(parentSpec, exclusive, parentNeed+ratio)
+		if !pok {
+			return HistoryWindow{HasMore: false, HasNewer: false}, true
+		}
+	} else if forward {
 		pwin, pok = d.getMicroWindowAfter(parentSpec, q.StartTimeMs, parentNeed)
 		if !pok {
 			return HistoryWindow{HasMore: false, HasNewer: false}, true
@@ -307,16 +327,21 @@ func (d *DashboardServer) getSparseSecondWindow(q HistoryWindowQuery, wantChildB
 		}
 	}
 
+	symbol := d.symbol
+	if symbol == "" {
+		symbol = "BTCUSDT"
+	}
 	closed := []exchange.Kline{}
+	scanned := int64(0)
 	if len(pwin.Klines) > 0 {
-		symbol := d.symbol
-		if symbol == "" {
-			symbol = "BTCUSDT"
-		}
+		scanned = pwin.Klines[len(pwin.Klines)-1].OpenTime
 		lookBehind := d.sparseSecondLookBehind(symbol, pwin.Klines[0].OpenTime)
 		parents := pwin.Klines
 		if ahead := d.sparseSecondLookAhead(symbol, pwin.Klines[len(pwin.Klines)-1].OpenTime); ahead != nil {
 			parents = append(append([]exchange.Kline{}, pwin.Klines...), *ahead)
+			if ahead.OpenTime > scanned {
+				scanned = ahead.OpenTime
+			}
 		}
 		res, ferr := exchange.FoldSparseSecondParents(parents, e.Name, lookBehind)
 		if ferr != nil {
@@ -331,7 +356,35 @@ func (d *DashboardServer) getSparseSecondWindow(q HistoryWindowQuery, wantChildB
 			closed = closed[len(closed)-wantChildBars:]
 		}
 	}
-	return HistoryWindow{Klines: closed, HasMore: pwin.HasMore, HasNewer: pwin.HasNewer}, true
+	hasNewer := d.sparseSecondHasNewer(parentSpec, symbol, closed, scanned, q)
+	return HistoryWindow{
+		Klines:              closed,
+		HasMore:             pwin.HasMore,
+		HasNewer:            hasNewer,
+		ParentResumeAfterMs: scanned,
+	}, true
+}
+
+func (d *DashboardServer) sparseSecondHasNewer(parentSpec TimeframeSpec, symbol string, closed []exchange.Kline, scanned int64, q HistoryWindowQuery) bool {
+	if len(closed) > 0 {
+		tip := closed[len(closed)-1]
+		after := tip.CloseTime
+		if after <= 0 {
+			after = tip.OpenTime
+		}
+		return d.microHasNewerClosed(parentSpec, symbol, after)
+	}
+	after := scanned
+	if after <= 0 {
+		after = q.ParentResumeAfterMs
+	}
+	if after <= 0 {
+		after = q.StartTimeMs
+	}
+	if after <= 0 {
+		return false
+	}
+	return d.microHasNewerClosed(parentSpec, symbol, after)
 }
 
 func (d *DashboardServer) sparseSecondLookBehind(symbol string, firstOpen int64) *exchange.Kline {

@@ -656,8 +656,19 @@ class HydrationOrchestrator {
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         // Empty right payload → stop right pending (no left EOF inference).
         this._pendingRightIntent = null;
+        if (typeof deps.logRightAppendDiag === 'function') {
+          deps.logRightAppendDiag(data, { added: 0, tipBefore: tipSec, tipAfter: tipSec });
+        }
         if (this._rightReachedSourceTail(data)) {
           this._clearRightDetachedOnSourceTail();
+          return;
+        }
+        const action = typeof deps.onSparseRightNoProgress === 'function'
+          ? deps.onSparseRightNoProgress(data)
+          : 'stall';
+        if (action === 'continue') {
+          this._zeroProgressRightTipSec = null;
+          completed = true;
           return;
         }
         if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
@@ -681,10 +692,26 @@ class HydrationOrchestrator {
         const tipAdvanced = tipSec != null
           && afterTipSec != null
           && afterTipSec > tipSec;
-        if (!mergeResult || mergeResult.added <= 0 || !tipAdvanced) {
+        const added = Number(mergeResult?.added) || 0;
+        if (typeof deps.logRightAppendDiag === 'function') {
+          deps.logRightAppendDiag(data, {
+            added,
+            tipBefore: tipSec,
+            tipAfter: afterTipSec,
+          });
+        }
+        if (!mergeResult || added <= 0 || !tipAdvanced) {
           this._pendingRightIntent = null;
           if (this._rightReachedSourceTail(data)) {
             this._clearRightDetachedOnSourceTail();
+            return;
+          }
+          const action = typeof deps.onSparseRightNoProgress === 'function'
+            ? deps.onSparseRightNoProgress(data)
+            : 'stall';
+          if (action === 'continue') {
+            this._zeroProgressRightTipSec = null;
+            completed = true;
             return;
           }
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');

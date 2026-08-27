@@ -841,6 +841,55 @@ func TestGetWindowSparseSecondRightEmptyFormingTail(t *testing.T) {
 	}
 }
 
+func TestGetWindowSparseSecondContinuationReplaysUnresolvedBucket(t *testing.T) {
+	d := histServer(t)
+	d.symbol = "BTCUSDT"
+	base := int64(1_723_000_000_000)
+	// Tip child A at base is already on the island. B parents 5s/6s/7s were
+	// scanned (watermark 7s) without closing B. C at 10s closes B.
+	rows := []data.Candle{}
+	for _, i := range []int{5, 6, 7, 10} {
+		ot := base + int64(i)*1000
+		vol := 1.0
+		if i == 5 || i == 6 || i == 7 {
+			vol = float64(i)
+		}
+		rows = append(rows, data.Candle{
+			OpenTime: ot, Open: 10, High: 11, Low: 9, Close: 10, Volume: vol, CloseTime: ot + 999,
+		})
+	}
+	if err := data.SaveMicroKlines("BTCUSDT", "1s", rows); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ResolveTimeframe("5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tipClose := base + 4999
+	resume := base + 7000
+	win, ok := d.GetWindow(context.Background(), HistoryWindowQuery{
+		Spec:                spec,
+		StartTimeMs:         tipClose,
+		ParentResumeAfterMs: resume,
+		CandleLimit:         10,
+	})
+	if !ok {
+		t.Fatal("continuation page")
+	}
+	if len(win.Klines) != 1 || win.Klines[0].OpenTime != base+5000 {
+		t.Fatalf("want closed B at %d, got %+v", base+5000, win.Klines)
+	}
+	if win.Klines[0].Volume != 5+6+7 {
+		t.Fatalf("replay must keep early B OHLCV, volume=%v", win.Klines[0].Volume)
+	}
+	if win.Klines[0].OpenTime <= tipClose {
+		t.Fatal("output filter is child CloseTime, not parent watermark")
+	}
+	if win.ParentResumeAfterMs < resume {
+		t.Fatalf("watermark must advance, got %d", win.ParentResumeAfterMs)
+	}
+}
+
 func TestFilterSparseChildOverlap(t *testing.T) {
 	base := int64(1_000)
 	in := []exchange.Kline{

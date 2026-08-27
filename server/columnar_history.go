@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,19 +23,20 @@ type columnarCandles struct {
 }
 
 type columnarHistoryResponse struct {
-	Format        string               `json:"format"`
-	Status        string               `json:"status"`
-	Code          string               `json:"code,omitempty"`
-	Timeframe     string               `json:"timeframe"`
-	WarmupDropped int                  `json:"warmupDropped"`
-	Added         int                  `json:"added"`
-	Times         []int64              `json:"times"`
-	Candles       columnarCandles      `json:"candles"`
-	Plots         map[string][]float64 `json:"plots"`
-	Annotations   []wire.Annotation    `json:"annotations"`
-	Sentinel      float64              `json:"sentinel"`
-	HasMore       bool                 `json:"hasMore"`
-	HasNewer      bool                 `json:"hasNewer"`
+	Format               string               `json:"format"`
+	Status               string               `json:"status"`
+	Code                 string               `json:"code,omitempty"`
+	Timeframe            string               `json:"timeframe"`
+	WarmupDropped        int                  `json:"warmupDropped"`
+	Added                int                  `json:"added"`
+	Times                []int64              `json:"times"`
+	Candles              columnarCandles      `json:"candles"`
+	Plots                map[string][]float64 `json:"plots"`
+	Annotations          []wire.Annotation    `json:"annotations"`
+	Sentinel             float64              `json:"sentinel"`
+	HasMore              bool                 `json:"hasMore"`
+	HasNewer             bool                 `json:"hasNewer"`
+	ParentResumeAfterSec int64                `json:"parentResumeAfterSec,omitempty"`
 	// ProjCont is an opt-in ADR-015 probe (DEBUG_PROJ_CONT=1). Safe to ignore when absent.
 	ProjCont *projectionContinuityDiag `json:"projCont,omitempty"`
 }
@@ -368,6 +370,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	if resolvedEndMs <= 0 {
 		resolvedEndMs = historyEndTimeToMs(endTimeSec)
 	}
+	parentResumeAfterSec, _ := strconv.ParseInt(r.URL.Query().Get("parentResumeAfterSec"), 10, 64)
 
 	q := HistoryWindowQuery{
 		Spec:        spec,
@@ -375,6 +378,9 @@ func (d *DashboardServer) writeColumnarHistory(
 	}
 	if resolvedStartMs > 0 {
 		q.StartTimeMs = resolvedStartMs
+		if parentResumeAfterSec > 0 {
+			q.ParentResumeAfterMs = historyEndTimeToMs(parentResumeAfterSec)
+		}
 	} else {
 		q.EndTimeMs = resolvedEndMs
 	}
@@ -403,12 +409,13 @@ func (d *DashboardServer) writeColumnarHistory(
 	if len(win.Klines) == 0 {
 		if q.StartTimeMs > 0 {
 			writeJSON(w, columnarHistoryResponse{
-				Format:    "columnar",
-				Status:    "ready",
-				Timeframe: spec.ID,
-				Times:     []int64{},
-				HasMore:   win.HasMore,
-				HasNewer:  win.HasNewer,
+				Format:               "columnar",
+				Status:               "ready",
+				Timeframe:            spec.ID,
+				Times:                []int64{},
+				HasMore:              win.HasMore,
+				HasNewer:             win.HasNewer,
+				ParentResumeAfterSec: exchange.ChartTimeSec(win.ParentResumeAfterMs),
 			})
 			return
 		}
@@ -439,6 +446,7 @@ func (d *DashboardServer) writeColumnarHistory(
 	if err := requestCtxErr(r.Context()); err != nil {
 		return
 	}
+	resp.ParentResumeAfterSec = exchange.ChartTimeSec(win.ParentResumeAfterMs)
 	// Opt-in TipSSOT probe (DEBUG_TIP_SSOT=1) — dormant after ADR-016.
 	if DebugTipSSOT() {
 		d.logTipSSOTProbe(r.Context(), spec.ID, candleLimit)

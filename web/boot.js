@@ -90,6 +90,8 @@
 	let sparseViewIntent = null;
 	let lastGapHealAt = 0;
 	const GAP_HEAL_COOLDOWN_MS = 10000;
+	/** Sparse-child source watermark (1s OpenTime sec). 0 = next right page is startTime only. */
+	let sparseParentResumeAfterSec = 0;
 
   /** ADR-018 owner — constructed after helpers exist (see initTimelineRecovery). */
   let timelineRecovery = null;
@@ -826,6 +828,7 @@
     window.historyHasMore = true;
     window.historyHasNewer = true;
     window.isLoadingHistory = false;
+    sparseParentResumeAfterSec = 0;
   }
 
   function collectManifestScalarSlotIds(manifest) {
@@ -1054,7 +1057,15 @@
           symbol,
         };
         const req = isSecondsHistoryNavChart(window.currentTf)
-          ? API.fetchColumnarHistory({ ...base, startTimeSec: cursorSec })
+          ? API.fetchColumnarHistory({
+            ...base,
+            startTimeSec: cursorSec,
+            ...(typeof isSparseSecondChart === 'function'
+              && isSparseSecondChart(window.currentTf)
+              && sparseParentResumeAfterSec > 0
+              ? { parentResumeAfterSec: sparseParentResumeAfterSec }
+              : {}),
+          })
           : API.fetchColumnarHistory({ ...base, endTimeSec: cursorSec });
         return req;
       },
@@ -1157,6 +1168,7 @@
             && data && typeof data.hasNewer === 'boolean') {
           window.historyHasNewer = data.hasNewer === true;
         }
+        sparseParentResumeAfterSec = 0;
         return { added, viewportRange, viewportAnchor };
       },
       rightEmptyClearsDetached: () => (
@@ -1164,6 +1176,42 @@
       ),
       onRightSourceTail: () => {
         window.historyHasNewer = false;
+        sparseParentResumeAfterSec = 0;
+      },
+      onSparseRightNoProgress: (data) => {
+        if (typeof isSparseSecondChart !== 'function' || !isSparseSecondChart(window.currentTf)) {
+          return 'stall';
+        }
+        const wm = Number(data?.parentResumeAfterSec);
+        const prev = Number(sparseParentResumeAfterSec) || 0;
+        if (data && data.hasNewer === false) {
+          sparseParentResumeAfterSec = 0;
+          return 'eof';
+        }
+        if (Number.isFinite(wm) && wm > prev) {
+          sparseParentResumeAfterSec = wm;
+          return 'continue';
+        }
+        console.warn('[SECONDS-HISTORY] parent resume watermark stuck', {
+          parentResumeAfterSec: wm,
+          previous: prev,
+          hasNewer: data?.hasNewer,
+        });
+        return 'stop';
+      },
+      logRightAppendDiag: (data, meta) => {
+        if (typeof isSparseSecondChart !== 'function' || !isSparseSecondChart(window.currentTf)) {
+          return;
+        }
+        const folded = Array.isArray(data?.times) ? data.times.length : 0;
+        console.log('[SECONDS-HISTORY] right append', {
+          parentResumeAfterSec: data?.parentResumeAfterSec ?? 0,
+          folded,
+          added: meta?.added ?? 0,
+          tipBefore: meta?.tipBefore ?? null,
+          tipAfter: meta?.tipAfter ?? null,
+          hasNewer: data?.hasNewer,
+        });
       },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
       processTick: (tick) => pushLiveTickDelta(tick),
@@ -1630,15 +1678,15 @@
         bars: histTimes.length,
         windowMode: liveColumnarStore.windowMode,
       });
+      window.historyHasMore = columnar.hasMore !== false;
+      if (isSecondsHistoryNavChart(window.currentTf)) {
+        window.historyHasNewer = columnar.hasNewer === true;
+      }
+      sparseParentResumeAfterSec = 0;
       flushLiveTickBuffer();
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());
         return;
-      }
-
-      window.historyHasMore = columnar.hasMore !== false;
-      if (isSecondsHistoryNavChart(window.currentTf)) {
-        window.historyHasNewer = columnar.hasNewer === true;
       }
       await mountDDRLiveCutover();
       if (!isCurrentEpoch(epoch)) return;
