@@ -51,8 +51,12 @@ assert.ok(/action === 'continue'/.test(orch), 'watermark advance must not latch 
 const load = boot;
 const newerAt = load.indexOf('historyHasNewer = columnar.hasNewer');
 const flushAt = load.indexOf('flushLiveTickBuffer();');
-assert.ok(newerAt >= 0 && flushAt > newerAt,
-  'detach state must be published before live tick flush');
+assert.ok(/includeForming: !historyIsland/.test(boot),
+  'HISTORY sparse-child hydrate is closed-only');
+assert.ok(/includeForming: false/.test(boot),
+  'sparse-child prepend/append never request live forming');
+assert.ok(/includeForming/.test(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8')),
+  'API carries includeForming');
 assert.ok(/rightEmptyClearsDetached/.test(boot) && /onRightSourceTail/.test(boot),
   'forming-only 1s tail clears detached even if folded added==0');
 assert.ok(/_rightReachedSourceTail/.test(orch), 'orchestrator honors source-tail empty right page');

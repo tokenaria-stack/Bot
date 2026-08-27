@@ -1060,13 +1060,22 @@
           ? API.fetchColumnarHistory({
             ...base,
             startTimeSec: cursorSec,
+            ...(typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+              ? { includeForming: false }
+              : {}),
             ...(typeof isSparseSecondChart === 'function'
               && isSparseSecondChart(window.currentTf)
               && sparseParentResumeAfterSec > 0
               ? { parentResumeAfterSec: sparseParentResumeAfterSec }
               : {}),
           })
-          : API.fetchColumnarHistory({ ...base, endTimeSec: cursorSec });
+          : API.fetchColumnarHistory({
+            ...base,
+            endTimeSec: cursorSec,
+            ...(typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+              ? { includeForming: false }
+              : {}),
+          });
         return req;
       },
       fetchColumnar: (endTimeSec) => {
@@ -1078,6 +1087,9 @@
           slots: resolveLiveSlotIds(),
           rsxSettings: resolveLiveRsxSettings(),
           symbol,
+          ...(typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+            ? { includeForming: false }
+            : {}),
         });
       },
       mergeIntoStore: (data) => {
@@ -1604,6 +1616,10 @@
       // Sparse explicit history: same centered BeforeEnd window as native.
       // Explicit Return-to-Live: latest tail, never a historical endTime.
       let endTimeSec = nowSec;
+      const historyIsland = !returnToLiveJump
+        && viewportAnchor?.intent === 'HISTORY'
+        && Number.isFinite(Number(viewportAnchor.centerTimeMs))
+        && (!sparseTf || sparseHistory);
       if (!returnToLiveJump
         && viewportAnchor?.intent === 'HISTORY'
         && Number.isFinite(Number(viewportAnchor.centerTimeMs))
@@ -1634,6 +1650,9 @@
           slots: resolveLiveSlotIds(),
           rsxSettings: resolveLiveRsxSettings(),
           symbol,
+          ...(typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+            ? { includeForming: !historyIsland }
+            : {}),
         }),
         API.fetchLiveState({ navigatorsOnly: true }),
       ]);
@@ -1661,10 +1680,6 @@
       // windowMode = which data window was fetched. TimeCamera intent = paint.
       // Dense HISTORY island: windowMode=history (Debt #69A). Sparse explicit
       // history: same label, but live ticks still ingest (MICRO-2C).
-      const historyIsland = !returnToLiveJump
-        && viewportAnchor?.intent === 'HISTORY'
-        && Number.isFinite(Number(viewportAnchor.centerTimeMs))
-        && (!sparseTf || sparseHistory);
       liveColumnarStore.replaceMonolith(columnar, {
         commitPaired: true,
         windowMode: historyIsland ? 'history' : 'live',

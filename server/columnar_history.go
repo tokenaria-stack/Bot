@@ -136,6 +136,16 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	}
 
 	if len(klines) == 0 {
+		if !projectForming {
+			return columnarHistoryResponse{
+				Format:    "columnar",
+				Status:    "ready",
+				Timeframe: timeframe,
+				Times:     []int64{},
+				HasMore:   hasMore,
+				HasNewer:  hasNewer,
+			}, true
+		}
 		return d.packSparseSecondFormingOnly(timeframe, hasMore, hasNewer)
 	}
 
@@ -406,6 +416,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		return
 	}
 	win := delivered.Win
+	includeForming := parseIncludeFormingQuery(r)
 	if len(win.Klines) == 0 {
 		if q.StartTimeMs > 0 {
 			writeJSON(w, columnarHistoryResponse{
@@ -436,7 +447,7 @@ func (d *DashboardServer) writeColumnarHistory(
 		win.HasNewer,
 		spec.ID,
 		spec.BinanceInterval,
-		q.StartTimeMs <= 0,
+		includeForming,
 	)
 	if !ok {
 		log.Printf("[Dashboard] columnar history empty for %s %s (%d klines)", d.symbol, spec.BinanceInterval, len(win.Klines))
@@ -452,4 +463,20 @@ func (d *DashboardServer) writeColumnarHistory(
 		d.logTipSSOTProbe(r.Context(), spec.ID, candleLimit)
 	}
 	writeJSON(w, resp)
+}
+
+func parseIncludeFormingQuery(r *http.Request) bool {
+	if r == nil {
+		return true
+	}
+	raw := strings.TrimSpace(r.URL.Query().Get("includeForming"))
+	if raw == "" {
+		return true
+	}
+	switch strings.ToLower(raw) {
+	case "0", "false", "no":
+		return false
+	default:
+		return true
+	}
 }

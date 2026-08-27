@@ -187,7 +187,7 @@ const API = {
     return { warmingUp: false, data };
   },
 
-  async fetchColumnarHistory({ tf, endTimeSec, startTimeSec, parentResumeAfterSec, limit = 3000, slots, rsxSettings, symbol, signal }) {
+  async fetchColumnarHistory({ tf, endTimeSec, startTimeSec, parentResumeAfterSec, includeForming, limit = 3000, slots, rsxSettings, symbol, signal }) {
     const hasEnd = Number.isFinite(Number(endTimeSec)) && Number(endTimeSec) > 0;
     const hasStart = Number.isFinite(Number(startTimeSec)) && Number(startTimeSec) > 0;
     if (hasEnd === hasStart) {
@@ -211,6 +211,12 @@ const API = {
     const resume = Number(parentResumeAfterSec);
     if (hasStart && Number.isFinite(resume) && resume > 0) {
       params.set('parentResumeAfterSec', String(resume));
+    }
+    if (includeForming === false) {
+      params.set('includeForming', 'false');
+    }
+    if (includeForming === true) {
+      params.set('includeForming', 'true');
     }
     if (Array.isArray(slots) && slots.length > 0) {
       params.set('slots', slots.join(','));
