@@ -237,7 +237,7 @@ async function run() {
     return orch;
   }
 
-  await test('A. real tip advancement is success and may continue', async () => {
+  await test('A. real tip advancement paints; next RIGHT page is post-restore not merge-finally', async () => {
     const state = {
       tip: 100,
       fetchEnd: 1781360100,
@@ -253,10 +253,13 @@ async function run() {
     const orch = makeTipOrch(state);
     orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
     await new Promise((r) => setTimeout(r, 20));
-    assert.ok(state.fetchCount >= 2, 'real progress may continue RIGHT');
+    assert.strictEqual(state.fetchCount, 1, 'merge must not eager-continue RIGHT');
     assert.ok(state.tip > 100);
     assert.ok(state.dirty >= 1, 'real progress must paint');
     assert.strictEqual(orch.isRightTipBlocked(), false);
+    orch.noteRightHistoryIntent({ from: 40, to: 95 }, { force: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(state.fetchCount >= 2, 'canonical post-restore range may load another RIGHT page');
   });
 
   await test('B. added>0 but tip unchanged is zero-progress (no paint, no continue)', async () => {

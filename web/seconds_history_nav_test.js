@@ -46,7 +46,9 @@ assert.ok(/parentResumeAfterSec/.test(boot) && /onSparseRightNoProgress/.test(bo
   'zero-child page continues from parent watermark');
 assert.ok(/parentResumeAfterSec/.test(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8')),
   'API carries parentResumeAfterSec');
-assert.ok(/action === 'continue'/.test(orch), 'watermark advance must not latch the child tip');
+assert.ok(/_queueSourceRightContinue/.test(orch), 'zero-fold parent watermark continues without VIEW runway');
+assert.ok(!/_noteContinuationIfNeeded\(/.test(orch) && !/_noteRightContinuationIfNeeded\(/.test(orch),
+  'merge-finally must not VIEW-continue before restore');
 
 const load = boot;
 const newerAt = load.indexOf('historyHasNewer = columnar.hasNewer');

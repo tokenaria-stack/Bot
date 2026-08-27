@@ -299,16 +299,8 @@ class HydrationOrchestrator {
       return;
     }
 
-    // Preserve remaps logical from upward (≈ from + addedBars). That must not
-    // cancel a remembered left-void need that was valid when noted.
-    const pendingOk = this._deps.shouldLoad(pending.range, options);
-    if (pendingOk && this._looksLikePreserveRemap(liveRange, pending.range)) {
-      this._pendingLeftIntent = null;
-      this.schedulePrepend(pending.range, options);
-      return;
-    }
-
-    // Need no longer valid — explicit cancel (not busy-drop).
+    // Canonical live VIEW is the owner. Do not restart LEFT from a pre-restore
+    // pending range (mixed-generation geometry).
     this._pendingLeftIntent = null;
   }
 
@@ -340,6 +332,12 @@ class HydrationOrchestrator {
       return;
     }
 
+    if (options.sourceContinue === true) {
+      this._pendingRightIntent = null;
+      this.scheduleAppend(liveRange, { ...options, force: true });
+      return;
+    }
+
     if (this._deps.shouldLoadRight(liveRange, options)) {
       this._pendingRightIntent = null;
       this.scheduleAppend(liveRange, options);
@@ -350,63 +348,22 @@ class HydrationOrchestrator {
   }
 
   /**
-   * True when live.from jumped above pending.from in the way preserve remaps indices.
-   * @param {{ from: number, to: number }} liveRange
-   * @param {{ from: number, to: number }} pendingRange
+   * Sparse-child source tail: zero folded bars but parent watermark advanced.
+   * Not a VIEW-geometry continuation — do not sample camera runways.
    */
-  _looksLikePreserveRemap(liveRange, pendingRange) {
-    if (!liveRange || !pendingRange) return false;
-    const liveFrom = Number(liveRange.from);
-    const pendingFrom = Number(pendingRange.from);
-    if (!Number.isFinite(liveFrom) || !Number.isFinite(pendingFrom)) return false;
-    return liveFrom > pendingFrom;
-  }
-
-  /**
-   * After a successful left-history prepend: if VIEW still needs older history
-   * and hasMore, re-note via Wave 2 pending (no timers / poll / second owner).
-   * Continuation policy lives in Boot (`shouldContinueLeftHistory`); without it,
-   * Hydration does not invent a second detector.
-   */
-  _noteContinuationIfNeeded() {
-    const deps = this._deps;
-    if (!deps) return;
-    if (typeof deps.shouldContinueLeftHistory !== 'function') return;
-    if (typeof deps.getHistoryHasMore === 'function' && deps.getHistoryHasMore() === false) {
-      return;
-    }
-
-    const liveRange = typeof deps.getVisibleRange === 'function'
-      ? deps.getVisibleRange()
+  _queueSourceRightContinue() {
+    const liveRange = typeof this._deps?.getVisibleRange === 'function'
+      ? this._deps.getVisibleRange()
       : null;
-    if (!deps.shouldContinueLeftHistory(liveRange)) return;
-
-    const noteRange = liveRange
+    const range = liveRange
       && Number.isFinite(liveRange.from)
       && Number.isFinite(liveRange.to)
       ? { from: liveRange.from, to: liveRange.to }
       : { from: 0, to: 50 };
-
-    this.noteLeftHistoryIntent(noteRange, { continuation: true, force: true });
-  }
-
-  _noteRightContinuationIfNeeded() {
-    const deps = this._deps;
-    if (!deps) return;
-    if (typeof deps.shouldContinueRightHistory !== 'function') return;
-
-    const liveRange = typeof deps.getVisibleRange === 'function'
-      ? deps.getVisibleRange()
-      : null;
-    if (!deps.shouldContinueRightHistory(liveRange)) return;
-
-    const noteRange = liveRange
-      && Number.isFinite(liveRange.from)
-      && Number.isFinite(liveRange.to)
-      ? { from: liveRange.from, to: liveRange.to }
-      : { from: 0, to: 50 };
-
-    this.noteRightHistoryIntent(noteRange, { continuation: true, force: true });
+    this._pendingRightIntent = {
+      range,
+      options: { sourceContinue: true, force: true },
+    };
   }
 
   schedulePrepend(range, options = {}) {
@@ -602,9 +559,7 @@ class HydrationOrchestrator {
       if (completed) {
         this.state = HydrationState.LIVE;
         this.flushQueue();
-        // Re-note left-history need after success so preserve-remapped `from`
-        // cannot convert "still need history" into "no need".
-        this._noteContinuationIfNeeded();
+        // VIEW continuation is owned by post-restore scheduleHistoryLoad, not merge finally.
       } else {
         this.wsQueue = [];
         this.state = HydrationState.IDLE;
@@ -683,6 +638,7 @@ class HydrationOrchestrator {
         if (action === 'continue') {
           this._zeroProgressRightTipSec = null;
           completed = true;
+          this._queueSourceRightContinue();
           return;
         }
         if (tipSec != null) this._zeroProgressRightTipSec = tipSec;
@@ -725,6 +681,7 @@ class HydrationOrchestrator {
           if (action === 'continue') {
             this._zeroProgressRightTipSec = null;
             completed = true;
+            this._queueSourceRightContinue();
             return;
           }
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
@@ -781,7 +738,6 @@ class HydrationOrchestrator {
       if (completed) {
         this.state = HydrationState.LIVE;
         this.flushQueue();
-        this._noteRightContinuationIfNeeded();
       } else {
         this.wsQueue = [];
         this.state = HydrationState.IDLE;

@@ -96,7 +96,7 @@ async function waitDebounce(ms = 250) {
 }
 
 async function run() {
-  await test('A: LEFT edge + hasMore → continuation requested and next chunk consumed', async () => {
+  await test('A: merge does not eager-continue; restored VIEW still at LEFT may load next page', async () => {
     const orch = makeOrch();
     let chunks = 0;
     orch._test.fetchImpl = async () => {
@@ -109,25 +109,28 @@ async function run() {
     };
 
     await orch.requestPrepend({ from: 5, to: 80 }, {});
-    assert.ok(orch._test.fetchCount >= 1);
+    assert.strictEqual(orch._test.fetchCount, 1, 'first prepend only');
     assert.ok(
-      orch._test.notes.some((n) => n.options.continuation === true && n.options.force === true),
-      'VIEW still near LEFT must re-note continuation',
+      !orch._test.notes.some((n) => n.options.continuation === true),
+      'must not merge-finally re-note continuation',
     );
+
+    // Simulate post-restore: VIEW still at loaded left edge (canonical geometry).
+    orch._test.setVisible({ from: 5, to: 80 });
+    orch.noteLeftHistoryIntent({ from: 5, to: 80 }, { force: true });
     await waitDebounce(50);
     assert.ok(
       orch._test.fetchCount >= 2,
-      `LEFT-edge continuation must consume next chunk (got fetchCount=${orch._test.fetchCount})`,
+      `canonical post-restore LEFT may load next chunk (got fetchCount=${orch._test.fetchCount})`,
     );
     orch.reset();
   });
 
-  await test('preserve remap must not cancel pending left need noted during busy', async () => {
+  await test('stale pending range must not override restored VIEW off the left edge', async () => {
     const orch = makeOrch();
-    // One shot — avoid post-success continuation keeping the event loop alive.
     orch._test.fetchImpl = async () => ({
       times: [1, 2, 3],
-      hasMore: false,
+      hasMore: true,
       candles: {},
     });
     orch._test.mergeAdded = 3;
@@ -135,16 +138,18 @@ async function run() {
     orch.noteLeftHistoryIntent({ from: 5, to: 60 });
     assert.strictEqual(orch.hasPendingLeftIntent(), true);
 
-    // Paint/preserve remaps live from above threshold while pending still encodes left need.
+    // Market-time restore shifted logical from; canonical VIEW is no longer at LEFT.
     orch._test.setVisible({ from: 3004, to: 3079 });
     orch._test.setRenderBusy(false);
     orch.tryConsumePending();
     await waitDebounce();
 
-    assert.ok(
-      orch._test.fetchCount >= 1,
-      'pending left need must survive preserve remap of live from',
+    assert.strictEqual(
+      orch._test.fetchCount,
+      0,
+      'must not fetch LEFT from pre-restore pending geometry',
     );
+    assert.strictEqual(orch.hasPendingLeftIntent(), false);
     orch.reset();
   });
 

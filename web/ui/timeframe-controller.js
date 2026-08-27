@@ -201,7 +201,11 @@ const TimeframeController = (() => {
       }
     }
 
-    loadDashboard({ userTfChange: changed, viewportAnchor });
+    loadDashboard({
+      userTfChange: changed,
+      viewportAnchor,
+      switchFromTf: changed ? prevTf : undefined,
+    });
 
     if (refreshTimer) clearInterval(refreshTimer);
     if (orderFlowPollTimer) clearInterval(orderFlowPollTimer);
