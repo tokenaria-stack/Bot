@@ -894,6 +894,21 @@ class ColumnarStore {
     this._clampRetainedNeighborhoodToSeries();
   }
 
+  /**
+   * History island cap: prune from the acquisition-opposite side only.
+   * VIEW / Mutation must not veto this — camera restores by market time after merge.
+   * Live appendTick keeps _enforceBudget (VIEW-protected).
+   * @param {'oldest'|'newest'} direction
+   */
+  _slideHistoryIslandCap(direction) {
+    if (this._times.length <= ColumnarStore.BUDGET_TARGET) {
+      this._clampRetainedNeighborhoodToSeries();
+      return;
+    }
+    this._pruneToCount(ColumnarStore.BUDGET_TARGET, direction);
+    this._clampRetainedNeighborhoodToSeries();
+  }
+
   /** After capacity prune, keep RN inside the remaining series (or clear). */
   _clampRetainedNeighborhoodToSeries() {
     if (this._times.length === 0) {
@@ -1071,6 +1086,10 @@ class ColumnarStore {
     return { candle, isNewBar, barCount: this._times.length, tick, delta };
   }
 
+  /**
+   * Prepend older monolith bars before the current head (left-edge history island fill).
+   * ISLAND-SLIDE: keep acquired LEFT; if over cap prune NEWEST. VIEW does not veto.
+   */
   prependMonolith(columnarJson, options = {}) {
     const data = columnarJson && typeof columnarJson === 'object' ? columnarJson : {};
     const incomingTimes = Array.isArray(data.times) ? data.times : [];
@@ -1090,6 +1109,9 @@ class ColumnarStore {
     }
 
     if (indices.length === 0) return { added: 0 };
+
+    const headBefore = Number.isFinite(Number(anchorTime)) ? Number(anchorTime) : null;
+    const tipBefore = this.lastTimeSec();
 
     let useIndices = indices;
     if (Number.isFinite(data.added) && data.added > 0 && data.added < indices.length) {
@@ -1155,26 +1177,25 @@ class ColumnarStore {
       added: this._times.length,
     };
 
-    // Moving-window: LEFT growth discards RIGHT (newest). Explicit override allowed.
-    const direction = (options.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST
-      || options.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST)
-      ? options.pruneDirection
-      : ColumnarStore.PRUNE_FROM_NEWEST;
+    // History PREPEND: keep newly acquired LEFT; if over cap prune NEWEST/right.
+    const direction = ColumnarStore.PRUNE_FROM_NEWEST;
     const mutationFromSec = Number(prependTimes[0]);
     const mutationToSec = Number(prependTimes[added - 1]);
     const lengthAfterPrepend = this._times.length;
     this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
-    this._enforceBudget(direction, {
-      viewFromSec: options.viewFromSec,
-      viewToSec: options.viewToSec,
-      mutationFromSec,
-      mutationToSec,
-    });
+    this._slideHistoryIslandCap(direction);
     const lengthAfter = this._times.length;
     const prunedTotal = Math.max(0, lengthAfterPrepend - lengthAfter);
-    // LEFT growth → opposite-side (RIGHT) prune under the moving-window policy.
-    const prunedRightCount = direction === ColumnarStore.PRUNE_FROM_NEWEST ? prunedTotal : 0;
-    const prunedLeftCount = direction === ColumnarStore.PRUNE_FROM_OLDEST ? prunedTotal : 0;
+    const prunedRightCount = prunedTotal;
+    const prunedLeftCount = 0;
+    const headAfter = this.firstTimeSec();
+    const tipAfter = this.lastTimeSec();
+    if (added > 0 && Number.isFinite(headBefore) && Number.isFinite(headAfter)
+        && !(headAfter < headBefore)) {
+      console.warn('[ColumnarStore] ISLAND-SLIDE invariant: prepend did not advance head', {
+        headBefore, headAfter, added,
+      });
+    }
 
     return {
       added,
@@ -1183,13 +1204,17 @@ class ColumnarStore {
       prunedRightCount,
       pruneDirection: direction,
       windowMode: this.windowMode,
+      headBefore,
+      headAfter,
+      tipBefore,
+      tipAfter,
     };
   }
 
   /**
    * Append newer monolith bars after the current tip (right-edge history island fill).
    * Symmetric to prependMonolith: only times strictly after lastTimeSec are accepted.
-   * Moving-window: RIGHT growth discards LEFT (oldest) under MAX_STORE.
+   * ISLAND-SLIDE: keep acquired RIGHT; if over cap prune OLDEST. VIEW does not veto.
    * @param {object} columnarJson
    * @param {{
    *   focalTimeSec?: number|null,
@@ -1220,6 +1245,9 @@ class ColumnarStore {
     }
 
     if (indices.length === 0) return { added: 0 };
+
+    const headBefore = this.firstTimeSec();
+    const tipBefore = Number.isFinite(Number(tipTime)) ? Number(tipTime) : this.lastTimeSec();
 
     const added = indices.length;
     const appendTimes = new Array(added);
@@ -1279,29 +1307,29 @@ class ColumnarStore {
       added: this._times.length,
     };
 
-    // Moving-window: RIGHT growth discards LEFT (oldest). Explicit override allowed.
-    const direction = (options.pruneDirection === ColumnarStore.PRUNE_FROM_OLDEST
-      || options.pruneDirection === ColumnarStore.PRUNE_FROM_NEWEST)
-      ? options.pruneDirection
-      : ColumnarStore.PRUNE_FROM_OLDEST;
+    // History APPEND: keep newly acquired RIGHT; if over cap prune OLDEST/left.
+    const direction = ColumnarStore.PRUNE_FROM_OLDEST;
     const mutationFromSec = Number(appendTimes[0]);
     const mutationToSec = Number(appendTimes[added - 1]);
     const lengthAfterAppend = this._times.length;
     this._absorbIntoRetainedNeighborhood(mutationFromSec, mutationToSec);
-    this._enforceBudget(direction, {
-      viewFromSec: options.viewFromSec,
-      viewToSec: options.viewToSec,
-      mutationFromSec,
-      mutationToSec,
-    });
+    this._slideHistoryIslandCap(direction);
 
     // Right-edge fill reached wall-clock tip → resume live WS ingest (Debt #69A).
     this._maybePromoteLiveWindow();
 
     const lengthAfter = this._times.length;
     const prunedTotal = Math.max(0, lengthAfterAppend - lengthAfter);
-    const prunedLeftCount = direction === ColumnarStore.PRUNE_FROM_OLDEST ? prunedTotal : 0;
-    const prunedRightCount = direction === ColumnarStore.PRUNE_FROM_NEWEST ? prunedTotal : 0;
+    const prunedLeftCount = prunedTotal;
+    const prunedRightCount = 0;
+    const headAfter = this.firstTimeSec();
+    const tipAfter = this.lastTimeSec();
+    if (added > 0 && Number.isFinite(tipBefore) && Number.isFinite(tipAfter)
+        && !(tipAfter > tipBefore)) {
+      console.warn('[ColumnarStore] ISLAND-SLIDE invariant: append did not advance tip', {
+        tipBefore, tipAfter, added,
+      });
+    }
 
     return {
       added,
@@ -1310,6 +1338,10 @@ class ColumnarStore {
       prunedRightCount,
       pruneDirection: direction,
       windowMode: this.windowMode,
+      headBefore,
+      headAfter,
+      tipBefore,
+      tipAfter,
     };
   }
 

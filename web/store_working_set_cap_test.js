@@ -92,27 +92,24 @@ test('LEFT prepend over cap prunes RIGHT; head retreats left; store <= cap', () 
   assert.ok(store.lastTimeSec() >= viewTo);
 });
 
-test('viewport sacred: visible bars never dropped under cap prune', () => {
+test('ISLAND-SLIDE: RIGHT append over cap prunes LEFT even if VIEW sat on oldest', () => {
   setCap(80);
   const store = new ColumnarStore();
   store.replaceMonolith(monolith(70, 1_700_000_000), { commitPaired: true });
-  const viewFrom = store.firstTimeSec() + 20 * 60;
-  const viewTo = store.firstTimeSec() + 60 * 60;
+  const firstBefore = store.firstTimeSec();
+  const viewFrom = firstBefore + 20 * 60;
+  const viewTo = firstBefore + 60 * 60;
   const tip = store.lastTimeSec();
 
-  store.appendMonolith(monolith(40, tip + 60), {
+  const r = store.appendMonolith(monolith(40, tip + 60), {
     viewFromSec: viewFrom,
     viewToSec: viewTo,
   });
 
-  // VIEW ∪ Mutation may briefly exceed TARGET; hard rule is viewport bars retained.
-  const times = store.timesSec();
-  for (let t = viewFrom; t <= viewTo; t += 60) {
-    assert.ok(times.includes(t), `viewport bar ${t} retained`);
-  }
-  assert.ok(store.barCount() <= 110, 'must not keep full unpruned growth');
-  assert.ok(store.barCount() < 110 || store.firstTimeSec() > 1_700_000_000,
-    'some LEFT prune expected when possible');
+  assert.ok(store.barCount() <= 80, `store ${store.barCount()} <= 80`);
+  assert.ok(store.lastTimeSec() > tip, 'acquired RIGHT tip kept');
+  assert.ok(store.firstTimeSec() > firstBefore, 'LEFT pruned');
+  assert.strictEqual(r.pruneDirection, ColumnarStore.PRUNE_FROM_OLDEST);
 });
 
 test('continued RIGHT appends stay at cap (moving window)', () => {

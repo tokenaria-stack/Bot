@@ -59,6 +59,8 @@ assert.ok(/includeForming/.test(fs.readFileSync(path.join(__dirname, 'api.js'), 
   'API carries includeForming');
 assert.ok(/rightEmptyClearsDetached/.test(boot) && /onRightSourceTail/.test(boot),
   'forming-only 1s tail clears detached even if folded added==0');
+assert.ok(/rightEmptyClearsDetached: \(\) => isSecondsHistoryNavChart/.test(boot),
+  '1s and sparse-second children both clear detach on hasNewer=false');
 assert.ok(/_rightReachedSourceTail/.test(orch), 'orchestrator honors source-tail empty right page');
 const tailFn = orch.indexOf('_clearRightDetachedOnSourceTail');
 assert.ok(tailFn >= 0, 'missing _clearRightDetachedOnSourceTail');

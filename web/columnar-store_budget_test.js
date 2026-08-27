@@ -211,14 +211,14 @@ fullView.prependMonolith(olderFull, {
   focalTimeSec: fullFrom,
   atLiveEdge: false,
 });
-assert(fullView.lastTimeSec() === fullTo, 'WS-02: full VIEW tip must survive prune');
-assert(fullView.timesSec().includes(fullFrom), 'WS-02: VIEW oldest survives');
-assert(fullView.barCount() <= 120, 'P-02 contiguous prune respects HARD_CAP (no soft 150 overage)');
+assert(fullView.lastTimeSec() < fullTo, 'ISLAND-SLIDE prepend: newest pruned even if VIEW covered tip');
+assert(fullView.firstTimeSec() === olderFull.times[0], 'ISLAND-SLIDE prepend: acquired LEFT kept');
+assert(fullView.barCount() === 100, 'ISLAND-SLIDE prepend: prune to TARGET from newest');
 {
   const ts = fullView.timesSec();
   let maxGap = 0;
   for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
-  assert(maxGap === 60, `P-02: no artificial hole after protected prune (gap=${maxGap})`);
+  assert(maxGap === 60, `P-02: no artificial hole after island prune (gap=${maxGap})`);
 }
 assert(fullView.invariantOk(), 'invariant after VIEW-preserving prune');
 
@@ -257,8 +257,8 @@ hole.prependMonolith(makeOlderChunk(50, hole.firstTimeSec()), {
   let maxGap = 0;
   for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
   assert(maxGap === 60, `P-02: no Frankenstein hole after mid-VIEW prepend (gap=${maxGap})`);
-  assert(ts.includes(holeViewFrom) && ts.includes(holeViewTo), 'P-02: VIEW times retained');
   assert(hole.barCount() <= 100, 'P-02: hard cap holds');
+  assert(hole.firstTimeSec() < holeViewFrom, 'ISLAND-SLIDE: acquired older head kept');
 }
 
 const bounds = ColumnarStore.logicalRangeToViewTimes(
@@ -283,9 +283,9 @@ mutPre.prependMonolith(mutOlder, {
   focalTimeSec: mutPreFrom,
   atLiveEdge: false,
 });
-assert(mutPre.lastTimeSec() === mutPreTo, 'TB1 prepend: VIEW tip retained');
-assert(mutPre.timesSec().includes(mutPreFrom), 'TB1 prepend: VIEW oldest retained');
-assert(mutPre.barCount() <= 120, 'TB1 prepend: HARD_CAP holds without punching holes');
+assert(mutPre.lastTimeSec() < mutPreTo, 'TB1 prepend: newest pruned (history island slide)');
+assert(mutPre.firstTimeSec() === mutOlder.times[0], 'TB1 prepend: Mutation LEFT retained');
+assert(mutPre.barCount() === 100, 'TB1 prepend: TARGET after FROM_NEWEST slide');
 {
   const ts = mutPre.timesSec();
   let maxGap = 0;
@@ -384,8 +384,7 @@ rnStore.prependMonolith(chunkA, {
   viewToSec: rnViewTo,
 });
 assert(rnStore.barCount() <= 100, `TB2 after A: store at/under target (${rnStore.barCount()})`);
-assert(rnStore.timesSec().includes(rnViewFrom) && rnStore.timesSec().includes(rnViewTo),
-  'TB2 after A: VIEW retained');
+assert(rnStore.firstTimeSec() === chunkA.times[0], 'TB2 after A: acquired LEFT kept');
 
 const chunkB = makeOlderChunk(50, rnStore.firstTimeSec());
 const bFirst = chunkB.times[0];
@@ -394,11 +393,7 @@ rnStore.prependMonolith(chunkB, {
   viewToSec: rnViewTo,
 });
 assert(rnStore.barCount() <= 100, `TB2 after B: hard cap holds (${rnStore.barCount()})`);
-assert(rnStore.timesSec().includes(rnViewFrom) && rnStore.timesSec().includes(rnViewTo),
-  'TB2 after B: VIEW still sacred');
-assert(rnStore.firstTimeSec() <= bFirst || rnStore.timesSec().includes(bFirst)
-  || rnStore.barCount() <= 100,
-  'TB2 after B: moving window under cap');
+assert(rnStore.firstTimeSec() <= bFirst, 'TB2 after B: newer LEFT acquisition kept or at cap window');
 
 // World replacement resets RN; S6 retains full commit-paired payload (no TARGET amputate)
 rnStore.replaceMonolith({
@@ -441,8 +436,7 @@ lazy.prependMonolith(lazyB, {
   viewToSec: lazyViewTo,
 });
 assert(lazy.barCount() <= 100, 'TB3: hard cap after second prepend');
-assert(lazy.timesSec().includes(lazyViewFrom) && lazy.timesSec().includes(lazyViewTo),
-  'TB3: VIEW sacred after growth');
+assert(lazy.firstTimeSec() <= lazyB.times[0], 'TB3: LEFT acquisition kept under cap');
 
 Object.defineProperty(ColumnarStore, 'BUDGET_TARGET', { get: () => 10, configurable: true });
 Object.defineProperty(ColumnarStore, 'BUDGET_HARD_CAP', {
@@ -555,7 +549,6 @@ s6p.prependMonolith(s6pB, {
   viewToSec: s6pViewTo,
 });
 assert(s6p.barCount() <= 100, `S6/P2: exploration stays at hard working-set (${s6p.barCount()})`);
-assert(s6p.timesSec().includes(s6pViewFrom) && s6p.timesSec().includes(s6pViewTo),
-  'S6/P2: VIEW retained under hard cap');
+assert(s6p.firstTimeSec() <= s6pB.times[0], 'S6/P2: acquired LEFT kept under hard cap');
 
 console.log('columnar-store_budget_test: OK');

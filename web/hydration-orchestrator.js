@@ -527,9 +527,23 @@ class HydrationOrchestrator {
           : null;
 
         const mergeResult = deps.mergeIntoStore(data);
-        // Wave 3: zero-overlap / no-add is recoverable — never infer EOF.
+        // Latch left only on added == 0 (zero overlap / empty merge).
         if (!mergeResult || mergeResult.added <= 0) {
           console.warn('[HydrationOrchestrator] prepend stalled: zero overlap (recoverable, not EOF)');
+          this._zeroProgressLeftHeadSec = endTimeSec;
+          this._pendingLeftIntent = null;
+          return;
+        }
+
+        const headBeforeN = Number(mergeResult.headBefore);
+        const headAfterN = Number(mergeResult.headAfter);
+        if (Number.isFinite(headBeforeN) && Number.isFinite(headAfterN)
+            && !(headAfterN < headBeforeN)) {
+          console.warn('[HydrationOrchestrator] ISLAND-SLIDE invariant: prepend added bars but head did not advance', {
+            headBefore: mergeResult.headBefore,
+            headAfter: mergeResult.headAfter,
+            added: mergeResult.added,
+          });
           this._zeroProgressLeftHeadSec = endTimeSec;
           this._pendingLeftIntent = null;
           return;
@@ -686,8 +700,6 @@ class HydrationOrchestrator {
           : null;
 
         const mergeResult = deps.mergeAppendIntoStore(data);
-        // Durable RIGHT progress = store tip advanced. `added` is insert count
-        // before capacity prune and must not by itself mean success (Fix G).
         const afterTipSec = this._currentRightTipSec();
         const tipAdvanced = tipSec != null
           && afterTipSec != null
@@ -700,7 +712,8 @@ class HydrationOrchestrator {
             tipAfter: afterTipSec,
           });
         }
-        if (!mergeResult || added <= 0 || !tipAdvanced) {
+        // Latch right only on added == 0.
+        if (!mergeResult || added <= 0) {
           this._pendingRightIntent = null;
           if (this._rightReachedSourceTail(data)) {
             this._clearRightDetachedOnSourceTail();
@@ -715,6 +728,18 @@ class HydrationOrchestrator {
             return;
           }
           console.warn('[HydrationOrchestrator] append stalled: no newer bars (recoverable)');
+          const blockTip = afterTipSec != null ? afterTipSec : tipSec;
+          if (blockTip != null) this._zeroProgressRightTipSec = blockTip;
+          return;
+        }
+        if (!tipAdvanced) {
+          console.warn('[HydrationOrchestrator] ISLAND-SLIDE invariant: append added bars but tip did not advance', {
+            tipBefore: tipSec,
+            tipAfter: afterTipSec,
+            added,
+            hasNewer: data?.hasNewer,
+          });
+          this._pendingRightIntent = null;
           const blockTip = afterTipSec != null ? afterTipSec : tipSec;
           if (blockTip != null) this._zeroProgressRightTipSec = blockTip;
           return;

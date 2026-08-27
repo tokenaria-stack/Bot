@@ -1114,6 +1114,9 @@
           ? ChartCompositor.captureViewportAnchor(preSnap?.times, viewportRange)
           : null;
         const storeBefore = liveColumnarStore?.barCount?.() ?? 0;
+        const headBefore = typeof liveColumnarStore?.firstTimeSec === 'function'
+          ? liveColumnarStore.firstTimeSec()
+          : null;
         const tipBefore = typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
           : null;
@@ -1128,10 +1131,13 @@
           return null;
         }
         const storeAfter = liveColumnarStore?.barCount?.() ?? 0;
-        const tipAfter = typeof liveColumnarStore?.lastTimeSec === 'function'
+        const headAfter = merge.headAfter ?? (typeof liveColumnarStore?.firstTimeSec === 'function'
+          ? liveColumnarStore.firstTimeSec()
+          : null);
+        const tipAfter = merge.tipAfter ?? (typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
-          : null;
-        // Detached island: prune dropped the FE tip. Page-level hasNewer is not this signal.
+          : null);
+        // Detached island: prune dropped the FE tip. Do not glue live now onto it.
         if (isSecondsHistoryNavChart(window.currentTf)
             && Number.isFinite(tipBefore) && Number.isFinite(tipAfter)
             && tipAfter < tipBefore) {
@@ -1142,6 +1148,8 @@
           prependedCount: merge.prependedCount ?? added,
           prunedRightCount: merge.prunedRightCount ?? 0,
           prunedLeftCount: merge.prunedLeftCount ?? 0,
+          headBefore: merge.headBefore ?? headBefore,
+          headAfter,
           tipBefore,
           tipAfter,
           viewportRange,
@@ -1169,28 +1177,47 @@
           && ChartCompositor.captureViewportAnchor)
           ? ChartCompositor.captureViewportAnchor(preSnap?.times, viewportRange)
           : null;
-        const { added } = liveColumnarStore.appendMonolith(data, {
+        const tipBefore = typeof liveColumnarStore?.lastTimeSec === 'function'
+          ? liveColumnarStore.lastTimeSec()
+          : null;
+        const merge = liveColumnarStore.appendMonolith(data, {
           focalTimeSec,
           atLiveEdge: false,
           viewFromSec: viewTimes?.viewFromSec,
           viewToSec: viewTimes?.viewToSec,
         });
+        const added = Number(merge?.added) || 0;
         if (added <= 0) return null;
         if (isSecondsHistoryNavChart(window.currentTf)
             && data && typeof data.hasNewer === 'boolean') {
           window.historyHasNewer = data.hasNewer === true;
         }
         sparseParentResumeAfterSec = 0;
-        return { added, viewportRange, viewportAnchor };
+        return {
+          added,
+          viewportRange,
+          viewportAnchor,
+          tipBefore: merge.tipBefore ?? tipBefore,
+          tipAfter: merge.tipAfter ?? (typeof liveColumnarStore?.lastTimeSec === 'function'
+            ? liveColumnarStore.lastTimeSec()
+            : null),
+          headBefore: merge.headBefore,
+          headAfter: merge.headAfter,
+        };
       },
-      rightEmptyClearsDetached: () => (
-        typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
-      ),
+      rightEmptyClearsDetached: () => isSecondsHistoryNavChart(window.currentTf),
       onRightSourceTail: () => {
         window.historyHasNewer = false;
         sparseParentResumeAfterSec = 0;
       },
       onSparseRightNoProgress: (data) => {
+        if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(window.currentTf)) {
+          if (data && data.hasNewer === true) {
+            console.warn('[HydrationOrchestrator] 1s right page added==0 but hasNewer=true (source/merge inconsistency)');
+            return 'stop';
+          }
+          return 'stall';
+        }
         if (typeof isSparseSecondChart !== 'function' || !isSparseSecondChart(window.currentTf)) {
           return 'stall';
         }
