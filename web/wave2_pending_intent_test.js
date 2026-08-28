@@ -204,4 +204,111 @@ test('both pending: pickHistoryPrefetchEdge right starts append not prepend', as
   assert.strictEqual(order[0], 'right');
 });
 
+test('human LEFT clears stale pending RIGHT', () => {
+  const orch = new HydrationOrchestrator();
+  orch.init({
+    getEpoch: () => 1,
+    shouldLoad: () => true,
+    getAnchorEndTimeSec: () => 1000,
+    isRenderBusy: () => true,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 5, to: 60 }),
+    pickHistoryPrefetchEdge: () => 'left',
+    fetchColumnar: async () => ({ times: [] }),
+    mergeIntoStore: () => null,
+    markDirty: () => {},
+    processTick: () => {},
+    shouldLoadRight: () => true,
+    getRightFetchEndSec: () => 2000,
+    mergeAppendIntoStore: () => ({ added: 1 }),
+  });
+  orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true, cause: 'userNav' });
+  assert.strictEqual(orch.hasPendingRightIntent(), true);
+  orch.noteLeftHistoryIntent({ from: 5, to: 60 }, { force: true, cause: 'userNav' });
+  assert.strictEqual(orch.hasPendingLeftIntent(), true);
+  assert.strictEqual(orch.hasPendingRightIntent(), false);
+});
+
+test('userNav opposite note while LEFT in-flight supersedes; echo opposite is ignored', async () => {
+  const orch = new HydrationOrchestrator();
+  let fetchCount = 0;
+  let releaseFetch;
+  let pick = 'left';
+  orch.init({
+    getEpoch: () => 1,
+    getReqId: () => 1,
+    shouldLoad: () => true,
+    getAnchorEndTimeSec: () => 1000,
+    isRenderBusy: () => false,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 40, to: 90 }),
+    pickHistoryPrefetchEdge: () => pick,
+    fetchColumnar: () => {
+      fetchCount += 1;
+      return new Promise((resolve) => { releaseFetch = resolve; });
+    },
+    mergeIntoStore: () => ({ added: 3, headBefore: 1000, headAfter: 900 }),
+    markDirty: () => {},
+    processTick: () => {},
+    shouldLoadRight: () => true,
+    shouldContinueRightHistory: () => true,
+    getRightFetchEndSec: () => 2000,
+    fetchRightColumnar: async () => {
+      fetchCount += 1;
+      return { times: [1], hasNewer: true, candles: { open: [], high: [], low: [], close: [], volume: [] } };
+    },
+    mergeAppendIntoStore: () => ({ added: 3, tipBefore: 2000, tipAfter: 2100 }),
+  });
+
+  orch.noteLeftHistoryIntent({ from: 5, to: 60 }, { force: true, cause: 'userNav' });
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(orch.isBusy(), true);
+
+  orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true });
+  assert.strictEqual(orch.hasPendingRightIntent(), false, 'paint/echo opposite ignored');
+
+  pick = 'right';
+  orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true, cause: 'userNav' });
+  assert.strictEqual(orch.hasPendingRightIntent(), true, 'human reverse recorded');
+  assert.strictEqual(orch.hasPendingLeftIntent(), false, 'stale LEFT pending discarded');
+
+  releaseFetch({
+    times: [1, 2, 3],
+    hasMore: true,
+    candles: { open: [], high: [], low: [], close: [], volume: [] },
+  });
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok(fetchCount >= 2, 'latest RIGHT should run after LEFT finishes');
+});
+
+test('pick NONE clears both slots and does not fall through to leftover LEFT', () => {
+  const orch = new HydrationOrchestrator();
+  let started = 0;
+  orch.init({
+    getEpoch: () => 1,
+    shouldLoad: () => { started += 1; return true; },
+    shouldLoadRight: () => { started += 1; return true; },
+    getAnchorEndTimeSec: () => 1000,
+    getRightFetchEndSec: () => 2000,
+    isRenderBusy: () => false,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 100, to: 200 }),
+    pickHistoryPrefetchEdge: () => null,
+    fetchColumnar: async () => ({ times: [1], hasMore: true, candles: {} }),
+    fetchRightColumnar: async () => ({ times: [1], hasNewer: true, candles: {} }),
+    mergeIntoStore: () => ({ added: 1 }),
+    mergeAppendIntoStore: () => ({ added: 1 }),
+    markDirty: () => {},
+    processTick: () => {},
+  });
+  orch._pendingLeftIntent = { range: { from: 100, to: 200 }, options: { force: true } };
+  orch._pendingRightIntent = { range: { from: 100, to: 200 }, options: { force: true } };
+  orch.tryConsumePending();
+  assert.strictEqual(orch.hasPendingLeftIntent(), false);
+  assert.strictEqual(orch.hasPendingRightIntent(), false);
+  assert.strictEqual(started, 0);
+});
+
 console.log('wave2_pending_intent_test: ALL PASS');

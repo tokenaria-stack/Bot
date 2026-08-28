@@ -679,14 +679,10 @@
       store: liveColumnarStore,
       shouldPaint: () => (typeof window.shouldPaintLiveChart === 'function' ? window.shouldPaintLiveChart() : true),
       getNavigatorResult: () => liveNavigatorResult,
-      onAfterFlush: (intent) => {
+      onAfterFlush: () => {
         updateBufferingOverlay();
-        // After prepend/append paint + market-time restore, canonical VIEW may
-        // request another page. Do not decide that from merge-finally geometry.
+        // Service existing HUMAN pending only. Paint must not invent another page.
         queueMicrotask(() => {
-          if (intent?.mode === 'prepend') {
-            scheduleHistoryLoad();
-          }
           liveHydrationOrchestrator?.tryConsumePending?.();
         });
       },
@@ -990,7 +986,7 @@
         if (options.continuation === true) {
           return isApproachingLoadedLeftEdge(range);
         }
-        if (!liveHistoryScrollArmed) return false;
+        if (!liveHistoryScrollArmed && options.cause !== 'userNav') return false;
         // Edge validity always — force only skips debounce in schedule*, not this gate.
         if (!isApproachingLoadedLeftEdge(range)) return false;
         return true;
@@ -1014,6 +1010,9 @@
         return null;
       },
       pickHistoryPrefetchEdge,
+      consumeViewportHistoryAuth: () => {
+        liveHistoryScrollArmed = false;
+      },
       shouldLoadRight: (range, options = {}) => {
         if (!ChartAdapter.isInitialized('live')) return false;
         if (!range || (liveColumnarStore?.barCount?.() ?? 0) === 0) return false;
@@ -1023,7 +1022,7 @@
         if (options.continuation === true) {
           return isApproachingLoadedRightEdge(range);
         }
-        if (!liveHistoryScrollArmed) return false;
+        if (!liveHistoryScrollArmed && options.cause !== 'userNav') return false;
         return isApproachingLoadedRightEdge(range);
       },
       shouldContinueRightHistory: (range) => {
@@ -1269,6 +1268,9 @@
     if (!root || root._historyScrollArmBound) return;
     root._historyScrollArmBound = true;
     const arm = (ev) => {
+      // Hover must not authorize pages. Drag (primary button) refreshes arm
+      // after consumeViewportHistoryAuth so in-flight travel can coalesce.
+      if (ev && ev.type === 'pointermove' && !(ev.buttons & 1)) return;
       liveHistoryScrollArmed = true;
       // User gesture takes camera ownership immediately (ends system preserve txn).
       if (typeof TimeCamera !== 'undefined' && TimeCamera.releasePreserveTransaction) {
@@ -1277,6 +1279,7 @@
     };
     root.addEventListener('wheel', arm, { passive: true });
     root.addEventListener('pointerdown', arm, { passive: true });
+    root.addEventListener('pointermove', arm, { passive: true });
   }
 
   function resolveCanonicalPrefetchView() {
@@ -1332,9 +1335,9 @@
 
     const edge = pickHistoryPrefetchEdge(range);
     if (edge === 'left') {
-      liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range, { force: true });
+      liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range, { force: true, cause: 'userNav' });
     } else if (edge === 'right') {
-      liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true });
+      liveHydrationOrchestrator?.noteRightHistoryIntent?.(range, { force: true, cause: 'userNav' });
     }
   }
 
@@ -1821,8 +1824,8 @@
       attachLiveHistoryScrollArm();
       const priceChart = ChartAdapter.getChart('live', 'price');
       priceChart?.timeScale()?.subscribeVisibleLogicalRangeChange((range) => {
-        // Mid-paint LWC echoes are not user navigation. Post-flush onAfterFlush
-        // calls scheduleHistoryLoad after setLiveUpdating(false).
+        // Mid-paint LWC echoes are not user navigation. Paint must not re-arm
+        // viewport history; onAfterFlush only consumes existing human pending.
         if (typeof ChartAdapter !== 'undefined' && ChartAdapter.isLiveUpdating()) {
           return;
         }

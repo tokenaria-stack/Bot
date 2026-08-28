@@ -130,10 +130,12 @@ class HydrationOrchestrator {
 
   /**
    * True when an opposite-edge note would only rearm ping-pong (prune/setData echo).
-   * Same-direction pending/continuation is unchanged.
+   * Human navigation (cause userNav) is allowed to reverse and supersede.
    * @param {'left'|'right'} edge
+   * @param {object} [options]
    */
-  _shouldIgnoreOppositeEdgeNote(edge) {
+  _shouldIgnoreOppositeEdgeNote(edge, options = {}) {
+    if (options.cause === 'userNav' || options.sourceContinue === true) return false;
     const other = edge === 'left' ? 'right' : 'left';
     if (this._inFlight && this._hydrateEdge === other) return true;
     if (this.isBusy() && this._hydrateEdge === other) return true;
@@ -143,6 +145,50 @@ class HydrationOrchestrator {
       return true;
     }
     return false;
+  }
+
+  _isSourceContinuePending(pending) {
+    return pending != null && pending.options && pending.options.sourceContinue === true;
+  }
+
+  /** Human viewport notes are latest-wins: one speculative direction at a time. */
+  _applyHumanNavNote(edge, range, options) {
+    const intent = {
+      range: { from: range.from, to: range.to },
+      options: { ...options },
+    };
+    if (edge === 'left') {
+      this._pendingLeftIntent = intent;
+      if (!this._isSourceContinuePending(this._pendingRightIntent)) {
+        this._pendingRightIntent = null;
+      }
+      return;
+    }
+    this._pendingRightIntent = intent;
+    this._pendingLeftIntent = null;
+  }
+
+  _consumeViewportHistoryAuth(options) {
+    if (options && options.sourceContinue === true) return;
+    if (typeof this._deps?.consumeViewportHistoryAuth === 'function') {
+      this._deps.consumeViewportHistoryAuth();
+    }
+  }
+
+  _logViewportHistoryProgress(direction, options, cursor, data, mergeResult) {
+    const cause = options && options.sourceContinue === true ? 'sourceContinue' : 'userNav';
+    const times = data && Array.isArray(data.times) ? data.times : null;
+    console.log('[HISTORY-IDLE]', {
+      cause,
+      direction,
+      requestCursor: cursor,
+      headBefore: mergeResult?.headBefore ?? null,
+      headAfter: mergeResult?.headAfter ?? null,
+      tipBefore: mergeResult?.tipBefore ?? null,
+      tipAfter: mergeResult?.tipAfter ?? null,
+      responseBars: times ? times.length : null,
+      uniqueAdded: mergeResult?.added ?? 0,
+    });
   }
 
   /** Drop queued ticks without replay (epoch/TF abort). */
@@ -186,12 +232,16 @@ class HydrationOrchestrator {
       || !Number.isFinite(range.to)) {
       return;
     }
-    if (this._shouldIgnoreOppositeEdgeNote('left')) return;
+    if (this._shouldIgnoreOppositeEdgeNote('left', options)) return;
     if (this.isLeftHeadBlocked()) return;
-    this._pendingLeftIntent = {
-      range: { from: range.from, to: range.to },
-      options: { ...options },
-    };
+    if (options.cause === 'userNav') {
+      this._applyHumanNavNote('left', range, options);
+    } else {
+      this._pendingLeftIntent = {
+        range: { from: range.from, to: range.to },
+        options: { ...options },
+      };
+    }
     this.tryConsumePending();
   }
 
@@ -212,12 +262,16 @@ class HydrationOrchestrator {
       || typeof this._deps.mergeAppendIntoStore !== 'function') {
       return;
     }
-    if (this._shouldIgnoreOppositeEdgeNote('right')) return;
+    if (this._shouldIgnoreOppositeEdgeNote('right', options)) return;
     if (this.isRightTipBlocked()) return;
-    this._pendingRightIntent = {
-      range: { from: range.from, to: range.to },
-      options: { ...options },
-    };
+    if (options.cause === 'userNav') {
+      this._applyHumanNavNote('right', range, options);
+    } else {
+      this._pendingRightIntent = {
+        range: { from: range.from, to: range.to },
+        options: { ...options },
+      };
+    }
     this.tryConsumePending();
   }
 
@@ -243,28 +297,64 @@ class HydrationOrchestrator {
     if (!this._deps) return;
     if (!this._canStartNow()) return;
 
-    if (this._pendingLeftIntent && this._pendingRightIntent
-        && typeof this._deps.pickHistoryPrefetchEdge === 'function') {
-      const range = (typeof this._deps.getVisibleRange === 'function'
-        ? this._deps.getVisibleRange()
-        : null) || this._pendingLeftIntent.range;
-      const edge = this._deps.pickHistoryPrefetchEdge(range);
+    if (this._isSourceContinuePending(this._pendingRightIntent)) {
+      this._tryStartRightPending();
+      return;
+    }
+
+    const left = this._pendingLeftIntent;
+    const right = this._pendingRightIntent;
+    if (!left && !right) return;
+
+    const liveRange = (typeof this._deps.getVisibleRange === 'function'
+      ? this._deps.getVisibleRange()
+      : null) || left?.range || right?.range;
+
+    const humanPending = (left && left.options && left.options.cause === 'userNav')
+      || (right && right.options && right.options.cause === 'userNav');
+    const pickOnce = (left && right) || humanPending;
+
+    if (pickOnce && typeof this._deps.pickHistoryPrefetchEdge === 'function') {
+      const edge = this._deps.pickHistoryPrefetchEdge(liveRange);
       if (edge === 'right') {
+        this._pendingLeftIntent = null;
+        if (!this._pendingRightIntent && liveRange
+          && Number.isFinite(liveRange.from) && Number.isFinite(liveRange.to)) {
+          this._pendingRightIntent = {
+            range: { from: liveRange.from, to: liveRange.to },
+            options: { force: true, cause: 'userNav' },
+          };
+        }
         this._tryStartRightPending();
         return;
       }
       if (edge === 'left') {
+        this._pendingRightIntent = null;
+        if (!this._pendingLeftIntent && liveRange
+          && Number.isFinite(liveRange.from) && Number.isFinite(liveRange.to)) {
+          this._pendingLeftIntent = {
+            range: { from: liveRange.from, to: liveRange.to },
+            options: { force: true, cause: 'userNav' },
+          };
+        }
         this._tryStartLeftPending();
         return;
       }
+      this._pendingLeftIntent = null;
+      this._pendingRightIntent = null;
+      return;
     }
-    if (this._pendingLeftIntent) {
+
+    if (left && right) {
+      this._pendingLeftIntent = null;
+      this._pendingRightIntent = null;
+      return;
+    }
+    if (left) {
       this._tryStartLeftPending();
       return;
     }
-    if (this._pendingRightIntent) {
-      this._tryStartRightPending();
-    }
+    this._tryStartRightPending();
   }
 
   _tryStartLeftPending() {
@@ -456,6 +546,7 @@ class HydrationOrchestrator {
     this._inFlight = true;
     this._hydrateEdge = 'left';
     this.state = HydrationState.PREPENDING;
+    this._consumeViewportHistoryAuth(options);
     let completed = false;
 
     try {
@@ -508,6 +599,8 @@ class HydrationOrchestrator {
 
         this._zeroProgressLeftHeadSec = null;
 
+        this._logViewportHistoryProgress('left', options, endTimeSec, data, mergeResult);
+
         const addedBars = Number(mergeResult.added) > 0
           ? Number(mergeResult.added)
           : (Number.isFinite(data.added) && data.added > 0 ? data.added : 0);
@@ -559,7 +652,7 @@ class HydrationOrchestrator {
       if (completed) {
         this.state = HydrationState.LIVE;
         this.flushQueue();
-        // VIEW continuation is owned by post-restore scheduleHistoryLoad, not merge finally.
+        // VIEW continuation is human-pending only (onAfterFlush tryConsumePending).
       } else {
         this.wsQueue = [];
         this.state = HydrationState.IDLE;
@@ -612,6 +705,7 @@ class HydrationOrchestrator {
     this._inFlight = true;
     this._hydrateEdge = 'right';
     this.state = HydrationState.PREPENDING;
+    this._consumeViewportHistoryAuth(options);
     let completed = false;
 
     try {
@@ -703,6 +797,14 @@ class HydrationOrchestrator {
         }
 
         this._zeroProgressRightTipSec = null;
+
+        this._logViewportHistoryProgress('right', options, endTimeSec, data, {
+          headBefore: mergeResult.headBefore ?? null,
+          headAfter: mergeResult.headAfter ?? null,
+          tipBefore: mergeResult.tipBefore ?? tipSec,
+          tipAfter: mergeResult.tipAfter ?? afterTipSec,
+          added,
+        });
 
         const addedBars = Number(mergeResult.added) > 0 ? Number(mergeResult.added) : 0;
 

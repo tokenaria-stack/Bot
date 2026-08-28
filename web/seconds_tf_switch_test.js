@@ -110,8 +110,10 @@ assert.ok(/shouldContinueRightHistory[\s\S]*isSecondsHistoryNavChart[\s\S]*liveH
   'seconds right continuation requires user-scroll arm');
 
 const arm = extractFn(boot, 'attachLiveHistoryScrollArm');
-assert.ok(/addEventListener\('wheel'/.test(arm) && /addEventListener\('pointerdown'/.test(arm),
-  'history arm is user gesture, not restore paint');
+assert.ok(/addEventListener\('wheel'/.test(arm)
+  && /addEventListener\('pointerdown'/.test(arm)
+  && /addEventListener\('pointermove'/.test(arm),
+  'history arm is user gesture (wheel/drag), not restore paint');
 assert.ok(!/setTimeout/.test(extractFn(boot, 'scheduleHistoryLoad')),
   'no settle timer on prefetch');
 

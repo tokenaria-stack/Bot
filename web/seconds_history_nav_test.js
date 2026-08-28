@@ -88,9 +88,13 @@ assert.ok(!/LIVE-TF-DIAG/.test(boot), 'temporary LIVE-TF-DIAG tracer must be gon
 assert.ok(/subscribeVisibleLogicalRangeChange[\s\S]{0,400}isLiveUpdating[\s\S]{0,200}scheduleHistoryLoad/.test(boot),
   'LWC range echo must skip history nav while compositor live-updating');
 assert.ok(!/isLiveUpdating/.test(extractFn(boot, 'scheduleHistoryLoad')),
-  'post-flush scheduleHistoryLoad must not inherit the echo gate');
-assert.ok(/queueMicrotask\(\(\) => \{[\s\S]*intent\?\.mode === 'prepend'[\s\S]*scheduleHistoryLoad\(\)/.test(boot),
-  'prepend continuation stays onAfterFlush, not merge-finally');
+  'scheduleHistoryLoad must not inherit the echo gate');
+assert.ok(/queueMicrotask\(\(\) => \{[\s\S]*tryConsumePending/.test(boot),
+  'onAfterFlush consumes human pending only');
+assert.ok(!/queueMicrotask\(\(\) => \{[\s\S]*scheduleHistoryLoad\(\)/.test(boot),
+  'paint must not invent viewport history demand');
+assert.ok(/cause: 'userNav'/.test(extractFn(boot, 'scheduleHistoryLoad')),
+  'viewport notes are human-owned');
 
 const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
 assert.ok(/isLiveUpdating\(\)\s*\{\s*return _liveUpdating === true;/.test(core),
