@@ -1460,6 +1460,11 @@
       _liveUpdating = !!flag;
     },
 
+    /** Read-only: compositor/setData in flight. Same SSOT as pane range-echo skip. */
+    isLiveUpdating() {
+      return _liveUpdating === true;
+    },
+
     getVisibleLogicalRange(context) {
       if (context !== 'live' || !_live?.charts?.price) return null;
       return _live.charts.price.timeScale().getVisibleLogicalRange();

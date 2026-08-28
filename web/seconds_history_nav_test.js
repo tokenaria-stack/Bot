@@ -84,4 +84,16 @@ assert.ok(/isSecondsHistoryNavChart/.test(push) && /historyHasNewer === true/.te
 assert.ok(push.indexOf('historyHasNewer') < push.indexOf('appendTick'),
   'detach gate is before appendTick');
 
+assert.ok(!/LIVE-TF-DIAG/.test(boot), 'temporary LIVE-TF-DIAG tracer must be gone');
+assert.ok(/subscribeVisibleLogicalRangeChange[\s\S]{0,400}isLiveUpdating[\s\S]{0,200}scheduleHistoryLoad/.test(boot),
+  'LWC range echo must skip history nav while compositor live-updating');
+assert.ok(!/isLiveUpdating/.test(extractFn(boot, 'scheduleHistoryLoad')),
+  'post-flush scheduleHistoryLoad must not inherit the echo gate');
+assert.ok(/queueMicrotask\(\(\) => \{[\s\S]*intent\?\.mode === 'prepend'[\s\S]*scheduleHistoryLoad\(\)/.test(boot),
+  'prepend continuation stays onAfterFlush, not merge-finally');
+
+const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+assert.ok(/isLiveUpdating\(\)\s*\{\s*return _liveUpdating === true;/.test(core),
+  'ChartAdapter.isLiveUpdating reads existing _liveUpdating');
+
 console.log('seconds_history_nav_test: OK');

@@ -34,167 +34,6 @@
 
   let backendTradingTimeframe = null;
   let liveHistoryScrollArmed = false;
-  /** LIVE-TF-FIRST-GESTURE-DIAG — one-shot; does not change control flow. */
-  const liveTfDiag = {
-    seq: 0,
-    sourceTf: '',
-    targetTf: '',
-    gestureSeen: false,
-    loggedRestore: false,
-    loggedGesture: false,
-    loggedPrefetch: false,
-    loggedMerge: false,
-    loggedContinuation: false,
-    loggedPostRestore: false,
-  };
-
-  function liveTfDiagPreserveActive() {
-    return typeof TimeCamera !== 'undefined'
-      && typeof TimeCamera.hasOpenPreserveTransaction === 'function'
-      && TimeCamera.hasOpenPreserveTransaction() === true;
-  }
-
-  function liveTfDiagViewTimes() {
-    const vt = typeof captureStoreViewTimes === 'function' ? captureStoreViewTimes() : null;
-    return vt || null;
-  }
-
-  function liveTfDiagBegin(sourceTf, targetTf) {
-    liveTfDiag.seq += 1;
-    liveTfDiag.sourceTf = String(sourceTf || '');
-    liveTfDiag.targetTf = String(targetTf || '');
-    liveTfDiag.gestureSeen = false;
-    liveTfDiag.loggedRestore = false;
-    liveTfDiag.loggedGesture = false;
-    liveTfDiag.loggedPrefetch = false;
-    liveTfDiag.loggedMerge = false;
-    liveTfDiag.loggedContinuation = false;
-    liveTfDiag.loggedPostRestore = false;
-  }
-
-  function liveTfDiagLogRestore(anchor) {
-    if (!liveTfDiag.seq || liveTfDiag.loggedRestore) return;
-    liveTfDiag.loggedRestore = true;
-    const n = liveColumnarStore?.barCount?.() ?? 0;
-    const cap = (typeof ViewportManager !== 'undefined' && ViewportManager.capture)
-      ? ViewportManager.capture('live')
-      : null;
-    const range = resolveCanonicalPrefetchView();
-    console.log('[LIVE-TF-DIAG] switch-restored', {
-      seq: liveTfDiag.seq,
-      sourceTf: liveTfDiag.sourceTf,
-      targetTf: liveTfDiag.targetTf || window.currentTf,
-      visibleBars: cap?.visibleBars ?? anchor?.visibleBars ?? null,
-      storeLen: n,
-      storeHeadOpenTime: liveColumnarStore?.firstTimeSec?.() ?? null,
-      storeTipOpenTime: liveColumnarStore?.lastTimeSec?.() ?? null,
-      cameraIntent: cap?.intent ?? anchor?.intent ?? null,
-      viewTimes: liveTfDiagViewTimes(),
-      logicalFromTo: range,
-      preserveActive: liveTfDiagPreserveActive(),
-      liveHistoryScrollArmed,
-      historyHasMore: window.historyHasMore,
-      historyHasNewer: window.historyHasNewer,
-      windowMode: liveColumnarStore?.windowMode ?? null,
-    });
-  }
-
-  function liveTfDiagOnGesture(eventType) {
-    if (!liveTfDiag.seq || liveTfDiag.loggedGesture) return;
-    const preserveBefore = liveTfDiagPreserveActive();
-    const armedBefore = liveHistoryScrollArmed;
-    liveTfDiag.loggedGesture = true;
-    liveTfDiag.gestureSeen = true;
-    console.log('[LIVE-TF-DIAG] first-gesture', {
-      seq: liveTfDiag.seq,
-      eventType,
-      preserveActiveBefore: preserveBefore,
-      liveHistoryScrollArmedBefore: armedBefore,
-      gestureCallsReleasePreserveTransaction: true,
-      liveHistoryScrollArmedAfter: true,
-    });
-  }
-
-  function liveTfDiagOnPrefetch(range, edge) {
-    if (!liveTfDiag.seq || !liveTfDiag.gestureSeen || liveTfDiag.loggedPrefetch) return;
-    liveTfDiag.loggedPrefetch = true;
-    const run = range ? remainingIslandRunway(range) : { left: null, right: null };
-    const vis = range && Number.isFinite(range.from) && Number.isFinite(range.to)
-      ? Number(range.to) - Number(range.from)
-      : null;
-    const leftEdge = range ? isApproachingLoadedLeftEdge(range) : false;
-    const rightEdge = range ? isApproachingLoadedRightEdge(range) : false;
-    console.log('[LIVE-TF-DIAG] first-prefetch', {
-      seq: liveTfDiag.seq,
-      logicalFrom: range?.from ?? null,
-      logicalTo: range?.to ?? null,
-      visibleBars: vis,
-      leftRunway: run.left,
-      rightRunway: run.right,
-      selectedPrefetchEdge: edge || 'NONE',
-      approachingLeft: leftEdge,
-      approachingRight: rightEdge,
-      historyHasMore: window.historyHasMore,
-      historyHasNewer: window.historyHasNewer,
-      preserveActive: liveTfDiagPreserveActive(),
-      liveHistoryScrollArmed,
-    });
-  }
-
-  function liveTfDiagOnMerge(direction, meta) {
-    if (!liveTfDiag.seq || !liveTfDiag.gestureSeen || liveTfDiag.loggedMerge) return;
-    liveTfDiag.loggedMerge = true;
-    const incoming = Number(meta?.incoming ?? meta?.added) || 0;
-    const storeBefore = Number(meta?.storeBefore);
-    console.log('[LIVE-TF-DIAG] first-merge', {
-      seq: liveTfDiag.seq,
-      direction,
-      incoming,
-      storeBefore,
-      mergedBeforeCap: Number.isFinite(storeBefore) ? storeBefore + incoming : null,
-      storeAfter: meta?.storeAfter ?? liveColumnarStore?.barCount?.() ?? null,
-      headBefore: meta?.headBefore ?? null,
-      headAfter: meta?.headAfter ?? null,
-      tipBefore: meta?.tipBefore ?? null,
-      tipAfter: meta?.tipAfter ?? null,
-      prunedLeftCount: meta?.prunedLeftCount ?? 0,
-      prunedRightCount: meta?.prunedRightCount ?? 0,
-      viewTimesAfter: liveTfDiagViewTimes(),
-      preserveActive: liveTfDiagPreserveActive(),
-    });
-  }
-
-  function liveTfDiagOnContinuation(direction, range) {
-    if (!liveTfDiag.seq || !liveTfDiag.gestureSeen || !liveTfDiag.loggedMerge) return;
-    if (liveTfDiag.loggedContinuation) return;
-    liveTfDiag.loggedContinuation = true;
-    const run = range && Number.isFinite(range.from) ? remainingIslandRunway(range) : { left: null, right: null };
-    console.log('[LIVE-TF-DIAG] auto-continuation', {
-      seq: liveTfDiag.seq,
-      direction,
-      leftRunway: run.left,
-      rightRunway: run.right,
-      storeLen: liveColumnarStore?.barCount?.() ?? null,
-      head: liveColumnarStore?.firstTimeSec?.() ?? null,
-      tip: liveColumnarStore?.lastTimeSec?.() ?? null,
-      liveHistoryScrollArmed,
-    });
-  }
-
-  function liveTfDiagOnPostRestore(range, edge) {
-    if (!liveTfDiag.seq || !liveTfDiag.loggedMerge || liveTfDiag.loggedPostRestore) return;
-    liveTfDiag.loggedPostRestore = true;
-    const run = range ? remainingIslandRunway(range) : { left: null, right: null };
-    console.log('[LIVE-TF-DIAG] post-restore-prefetch', {
-      seq: liveTfDiag.seq,
-      storeLen: liveColumnarStore?.barCount?.() ?? null,
-      logicalFrom: range?.from ?? null,
-      logicalTo: range?.to ?? null,
-      leftRunway: run.left,
-      rightRunway: run.right,
-      selectedPrefetchEdge: edge || 'NONE',
-    });
-  }
 
   let liveNavigatorResult = null;
   let liveHydrationOrchestrator = null;
@@ -1160,9 +999,7 @@
         if (isSecondsHistoryNavChart(window.currentTf) && !liveHistoryScrollArmed) return false;
         if (!window.historyHasMore) return false;
         if (liveHydrationOrchestrator?.isLeftHeadBlocked?.()) return false;
-        const ok = isApproachingLoadedLeftEdge(range);
-        if (ok) liveTfDiagOnContinuation('left', range);
-        return ok;
+        return isApproachingLoadedLeftEdge(range);
       },
       getAnchorEndTimeSec: () => liveColumnarStore?.firstTimeSec?.() ?? null,
       getRightTipSec: () => liveColumnarStore?.lastTimeSec?.() ?? null,
@@ -1193,14 +1030,10 @@
         if (isSecondsHistoryNavChart(window.currentTf) && !liveHistoryScrollArmed) return false;
         if (!canExtendHistoryRight()) return false;
         if (liveHydrationOrchestrator?.isRightTipBlocked?.()) return false;
-        let ok;
         if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) {
-          ok = true;
-        } else {
-          ok = isApproachingLoadedRightEdge(range);
+          return true;
         }
-        if (ok) liveTfDiagOnContinuation('right', range);
-        return ok;
+        return isApproachingLoadedRightEdge(range);
       },
       getRightFetchEndSec: () => {
         const last = liveColumnarStore?.lastTimeSec?.();
@@ -1311,17 +1144,6 @@
         const tipAfter = merge.tipAfter ?? (typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
           : null);
-        liveTfDiagOnMerge('prepend', {
-          incoming: added,
-          storeBefore,
-          storeAfter,
-          headBefore: merge.headBefore ?? headBefore,
-          headAfter,
-          tipBefore,
-          tipAfter,
-          prunedLeftCount: merge.prunedLeftCount ?? 0,
-          prunedRightCount: merge.prunedRightCount ?? 0,
-        });
         // Detached island: prune dropped the FE tip. Do not glue live now onto it.
         if (isSecondsHistoryNavChart(window.currentTf)
             && Number.isFinite(tipBefore) && Number.isFinite(tipAfter)
@@ -1365,7 +1187,6 @@
         const tipBefore = typeof liveColumnarStore?.lastTimeSec === 'function'
           ? liveColumnarStore.lastTimeSec()
           : null;
-        const storeBefore = liveColumnarStore?.barCount?.() ?? 0;
         const merge = liveColumnarStore.appendMonolith(data, {
           focalTimeSec,
           atLiveEdge: false,
@@ -1374,17 +1195,6 @@
         });
         const added = Number(merge?.added) || 0;
         if (added <= 0) return null;
-        liveTfDiagOnMerge('append', {
-          incoming: added,
-          storeBefore,
-          storeAfter: liveColumnarStore?.barCount?.() ?? null,
-          headBefore: merge.headBefore,
-          headAfter: merge.headAfter,
-          tipBefore: merge.tipBefore ?? tipBefore,
-          tipAfter: merge.tipAfter,
-          prunedLeftCount: merge.prunedLeftCount ?? 0,
-          prunedRightCount: merge.prunedRightCount ?? 0,
-        });
         if (isSecondsHistoryNavChart(window.currentTf)
             && data && typeof data.hasNewer === 'boolean') {
           window.historyHasNewer = data.hasNewer === true;
@@ -1459,7 +1269,6 @@
     if (!root || root._historyScrollArmBound) return;
     root._historyScrollArmBound = true;
     const arm = (ev) => {
-      liveTfDiagOnGesture(ev && ev.type ? ev.type : 'unknown');
       liveHistoryScrollArmed = true;
       // User gesture takes camera ownership immediately (ends system preserve txn).
       if (typeof TimeCamera !== 'undefined' && TimeCamera.releasePreserveTransaction) {
@@ -1522,8 +1331,6 @@
     if (!range) return;
 
     const edge = pickHistoryPrefetchEdge(range);
-    liveTfDiagOnPrefetch(range, edge);
-    liveTfDiagOnPostRestore(range, edge);
     if (edge === 'left') {
       liveHydrationOrchestrator?.noteLeftHistoryIntent?.(range, { force: true });
     } else if (edge === 'right') {
@@ -1789,14 +1596,6 @@
 
   async function loadDashboard(options = {}) {
     const viewportAnchor = options.viewportAnchor ?? null;
-    const liveSecondsTfSwitch = options.userTfChange === true
-      && typeof isSecondsFamilyChart === 'function'
-      && isSecondsFamilyChart(options.switchFromTf)
-      && isSecondsFamilyChart(window.currentTf)
-      && viewportAnchor?.intent !== 'HISTORY';
-    if (liveSecondsTfSwitch) {
-      liveTfDiagBegin(options.switchFromTf, window.currentTf);
-    }
     const epoch = bumpProjectionEpoch();
     if (!ChartAdapter.isInitialized('live') && !ChartAdapter.initLiveCharts()) {
       setTimeout(() => loadDashboard(options), 500);
@@ -1950,11 +1749,6 @@
           viewport: restoreLive ? 'restore' : (viewportAnchor ? 'restore' : 'fresh'),
           anchor: viewportAnchor,
         });
-        if (liveSecondsTfSwitch && restoreLive) {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => liveTfDiagLogRestore(viewportAnchor));
-          });
-        }
       } finally {
         endDataUpdate();
       }
@@ -2027,6 +1821,11 @@
       attachLiveHistoryScrollArm();
       const priceChart = ChartAdapter.getChart('live', 'price');
       priceChart?.timeScale()?.subscribeVisibleLogicalRangeChange((range) => {
+        // Mid-paint LWC echoes are not user navigation. Post-flush onAfterFlush
+        // calls scheduleHistoryLoad after setLiveUpdating(false).
+        if (typeof ChartAdapter !== 'undefined' && ChartAdapter.isLiveUpdating()) {
+          return;
+        }
         scheduleHistoryLoad(range);
         maybeReturnToLiveFromHistory(range);
       });
