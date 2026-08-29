@@ -32,6 +32,7 @@ const SettingsRenderer = (() => {
         if (!c || c.configurable !== true) continue;
         if (String(c.hostId || '') !== 'wozduh') continue;
         if (String(c.kind || 'line').toLowerCase() === 'marker') continue;
+        if (String(c.kind || '').toLowerCase() === 'plot') continue;
         if (c.dataMode === 'annotations') continue;
         if (!c.id) continue;
         out.push(c);
@@ -82,13 +83,21 @@ const SettingsRenderer = (() => {
       macdRsi: 'woz_macd_rsi',
       rsiAd: 'woz_rsi_ad',
       rsiHl2Vol: 'woz_rsi_hl2_vol',
-      priceChan: 'woz_price_chan_mid',
+      priceChan: 'woz_price_chan',
     };
     for (const [legacy, id] of Object.entries(legacyToId)) {
       if (typeof prefs[legacy] === 'boolean' && next[id] === undefined) {
         next[id] = prefs[legacy];
       }
     }
+    const collapse = (newId, oldIds) => {
+      if (typeof next[newId] === 'boolean') return;
+      const flags = oldIds.map((id) => prefs[id]).filter((v) => typeof v === 'boolean');
+      if (!flags.length) return;
+      next[newId] = flags.some(Boolean);
+    };
+    collapse('woz_vol_chan', ['woz_vol_chan_mid', 'woz_vol_chan_up', 'woz_vol_chan_dn']);
+    collapse('woz_price_chan', ['woz_price_chan_mid', 'woz_price_chan_up', 'woz_price_chan_dn']);
     for (const c of components) {
       if (typeof next[c.id] !== 'boolean') {
         next[c.id] = defaultVisibleFor(c);

@@ -34,19 +34,48 @@ func WozduhComponents() []core.UIComponent {
 			`{"color":"maroon","lineWidth":1,"title":"RSI AD (Maroon)","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
 		wozLine("woz_rsi_hl2_vol", core.SlotWozduhRsiHl2Vol, scaleIgnore,
 			`{"color":"navy","lineWidth":1,"title":"RSI HL2×Vol (Navy)","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_vol_chan_mid", core.SlotWozduhVolChanMid, scaleIgnore,
-			`{"color":"orange","lineWidth":1,"title":"Vol Chan Mid","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_vol_chan_up", core.SlotWozduhVolChanUp, scaleIgnore,
-			`{"color":"blue","lineWidth":1,"lineStyle":2,"title":"Vol Chan Up","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_vol_chan_dn", core.SlotWozduhVolChanDn, scaleIgnore,
-			`{"color":"blue","lineWidth":1,"lineStyle":2,"title":"Vol Chan Dn","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_price_chan_mid", core.SlotWozduhPriceChanMid, scaleIgnore,
-			`{"color":"maroon","lineWidth":1,"title":"Price Chan Mid","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_price_chan_up", core.SlotWozduhPriceChanUp, scaleIgnore,
-			`{"color":"blue","lineWidth":1,"lineStyle":2,"title":"Price Chan Up","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_price_chan_dn", core.SlotWozduhPriceChanDn, scaleIgnore,
-			`{"color":"blue","lineWidth":1,"lineStyle":2,"title":"Price Chan Dn","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
+		wozPlot("woz_vol_chan_mid", core.SlotWozduhVolChanMid),
+		wozPlot("woz_vol_chan_up", core.SlotWozduhVolChanUp),
+		wozPlot("woz_vol_chan_dn", core.SlotWozduhVolChanDn),
+		wozPlot("woz_price_chan_mid", core.SlotWozduhPriceChanMid),
+		wozPlot("woz_price_chan_up", core.SlotWozduhPriceChanUp),
+		wozPlot("woz_price_chan_dn", core.SlotWozduhPriceChanDn),
+		wozChannel("woz_vol_chan",
+			`{"title":"Vol Chan","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false,"plots":{"upper":"woz_vol_chan_up","mid":"woz_vol_chan_mid","lower":"woz_vol_chan_dn"},"upperColor":"blue","midColor":"orange","lowerColor":"blue","fillColor":"rgba(0,136,255,0.12)","lineWidth":1,"midLineWidth":1,"upperLineStyle":2,"lowerLineStyle":2}`),
+		wozChannel("woz_price_chan",
+			`{"title":"Price Chan","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false,"plots":{"upper":"woz_price_chan_up","mid":"woz_price_chan_mid","lower":"woz_price_chan_dn"},"upperColor":"blue","midColor":"maroon","lowerColor":"blue","fillColor":"rgba(128,0,0,0.12)","lineWidth":1,"midLineWidth":1,"upperLineStyle":2,"lowerLineStyle":2}`),
 		// VolCross is a marker/code atom — not mounted as an LWC line (Stage 4+ annotations).
+	}
+}
+
+// wozPlot is a projector-only scalar column (wire/store id). DDR does not mount it as a LineSeries.
+func wozPlot(id string, slot core.Slot) core.UIComponent {
+	opts := mergeScaleContribution(
+		`{"defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`,
+		scaleIgnore,
+	)
+	return core.UIComponent{
+		ID:           id,
+		Pane:         "pane_osc",
+		HostID:       "wozduh",
+		Kind:         "plot",
+		DataMode:     "scalar",
+		Slot:         slot,
+		Configurable: false,
+		RenderOpts:   opts,
+	}
+}
+
+func wozChannel(id, renderOpts string) core.UIComponent {
+	opts := mergeScaleContribution(renderOpts, scaleIgnore)
+	return core.UIComponent{
+		ID:           id,
+		Pane:         "pane_osc",
+		HostID:       "wozduh",
+		Kind:         "channel",
+		DataMode:     "compose",
+		Configurable: true,
+		RenderOpts:   opts,
 	}
 }
 

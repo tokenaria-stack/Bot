@@ -80,7 +80,7 @@ class DDRFactory {
       limit: String(options.limit ?? (typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000)),
       format: 'columnar',
     });
-    const slotKeys = options.slots ?? [...this.seriesMap.keys()];
+    const slotKeys = options.slots ?? this.requestedPlotIds();
     if (slotKeys.length > 0) {
       params.set('slots', slotKeys.join(','));
     }
@@ -135,8 +135,11 @@ class DDRFactory {
     }
     for (const [id, entry] of this.seriesMap) {
       const series = DDRFactory._seriesFromEntry(entry);
-      const points = source instanceof Map ? source.get(id) : this.hydratedData.get(id);
-      if (!series || !points?.length) continue;
+      if (!series) continue;
+      const points = entry.kind === 'channel'
+        ? DDRFactory.zipChannelFromHydrated(this.hydratedData, entry.plots)
+        : (source instanceof Map ? source.get(id) : this.hydratedData.get(id));
+      if (!points?.length) continue;
       try {
         series.setData(points);
       } catch {
@@ -176,17 +179,89 @@ class DDRFactory {
     return this.hydratedData.get(id);
   }
 
+  /** Plot column ids to request from /api/history (channel sources, not render ids). */
+  requestedPlotIds() {
+    const ids = [];
+    const seen = new Set();
+    const push = (id) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      ids.push(id);
+    };
+    for (const [id, entry] of this.seriesMap) {
+      if (entry?.kind === 'channel' && entry.plots) {
+        push(entry.plots.upper);
+        push(entry.plots.mid);
+        push(entry.plots.lower);
+        continue;
+      }
+      push(id);
+    }
+    return ids;
+  }
+
+  /**
+   * Zip three already-hydrated LWC line columns into ChannelSeries points.
+   * Any missing value at an index → whitespace { time } (breaks fill).
+   */
+  static zipChannelFromHydrated(hydrated, plots) {
+    if (!hydrated || !plots) return [];
+    const up = hydrated.get(plots.upper) || [];
+    const mid = hydrated.get(plots.mid) || [];
+    const dn = hydrated.get(plots.lower) || [];
+    const n = Math.min(up.length, mid.length, dn.length);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const tu = up[i]?.time;
+      const tm = mid[i]?.time;
+      const td = dn[i]?.time;
+      const time = tu ?? tm ?? td;
+      if (time == null) continue;
+      const uv = up[i]?.value;
+      const mv = mid[i]?.value;
+      const lv = dn[i]?.value;
+      if (!Number.isFinite(uv) || !Number.isFinite(mv) || !Number.isFinite(lv)) {
+        out.push({ time });
+        continue;
+      }
+      out.push({ time, upper: uv, mid: mv, lower: lv });
+    }
+    return out;
+  }
+
+  static channelPointFromPlots(plots, binding, absent) {
+    if (!plots || !binding) return null;
+    const upper = Number(plots[binding.upper]);
+    const mid = Number(plots[binding.mid]);
+    const lower = Number(plots[binding.lower]);
+    const bad = (v) => !Number.isFinite(v) || v >= absent;
+    if (bad(upper) || bad(mid) || bad(lower)) return { whitespace: true };
+    return { upper, mid, lower };
+  }
+
   updateTick(time, plots) {
     const chartTime = this.normalizeTime(time);
     if (chartTime == null || !plots || typeof plots !== 'object') {
       return;
     }
     const absent = DDRFactory.HISTORY_ABSENT;
-    for (const [key, rawValue] of Object.entries(plots)) {
-      const series = DDRFactory._seriesFromEntry(this.seriesMap.get(key));
+    for (const [id, entry] of this.seriesMap) {
+      const series = DDRFactory._seriesFromEntry(entry);
       if (!series) continue;
+      if (entry.kind === 'channel') {
+        const composed = DDRFactory.channelPointFromPlots(plots, entry.plots, absent);
+        if (!composed) continue;
+        try {
+          if (composed.whitespace) series.update({ time: chartTime });
+          else series.update({ time: chartTime, upper: composed.upper, mid: composed.mid, lower: composed.lower });
+        } catch {
+          /* skip invalid LWC updates */
+        }
+        continue;
+      }
+      const rawValue = plots[id];
+      if (rawValue == null) continue;
       const value = Number(rawValue);
-      // Shot 11D-HOTFIX: same isAbsent contract as columnToLWC — never feed Sentinel into LWC.
       if (!Number.isFinite(value) || value >= absent) continue;
       try {
         series.update({ time: chartTime, value });
@@ -230,7 +305,7 @@ class DDRFactory {
     if (this.seriesMap.has(component.id)) return;
 
     const kind = String(component.kind || 'line').toLowerCase();
-    if (kind === 'marker' || component.dataMode === 'annotations') {
+    if (kind === 'marker' || kind === 'plot' || component.dataMode === 'annotations') {
       return;
     }
 
@@ -257,6 +332,7 @@ class DDRFactory {
       }
     }
 
+    delete seriesOpts.plots;
     let series;
     switch (kind) {
       case 'area':
@@ -265,6 +341,26 @@ class DDRFactory {
       case 'histogram':
         series = chart.addHistogramSeries(seriesOpts);
         break;
+      case 'channel': {
+        const ChannelCtor = (typeof ChannelSeriesApi !== 'undefined' && ChannelSeriesApi.ChannelSeries)
+          ? ChannelSeriesApi.ChannelSeries
+          : (typeof require === 'function'
+            ? (() => { try { return require('./channel-series.js').ChannelSeries; } catch { return null; } })()
+            : null);
+        if (!ChannelCtor || typeof chart.addCustomSeries !== 'function') return;
+        const plots = renderOpts.plots && typeof renderOpts.plots === 'object' ? renderOpts.plots : null;
+        if (!plots?.upper || !plots?.mid || !plots?.lower) return;
+        series = chart.addCustomSeries(new ChannelCtor(), seriesOpts);
+        this.seriesMap.set(component.id, { chart, series, kind: 'channel', plots: {
+          upper: String(plots.upper),
+          mid: String(plots.mid),
+          lower: String(plots.lower),
+        } });
+        if (scaleMargins && priceScaleId !== '' && priceScaleId != null) {
+          series.priceScale()?.applyOptions?.({ scaleMargins });
+        }
+        return;
+      }
       case 'line':
       default:
         series = chart.addLineSeries(seriesOpts);

@@ -838,7 +838,9 @@
       if (!Array.isArray(components)) continue;
       for (const c of components) {
         if (String(c?.kind || 'line').toLowerCase() === 'marker') continue;
+        if (String(c?.kind || '').toLowerCase() === 'channel') continue;
         if (c?.dataMode === 'annotations') continue;
+        if (c?.dataMode && c.dataMode !== 'scalar') continue;
         if (c?.id) ids.push(c.id);
       }
     }
@@ -846,6 +848,10 @@
   }
 
   function resolveLiveSlotIds() {
+    if (typeof window.DDRFactory?.requestedPlotIds === 'function') {
+      const fromFactory = window.DDRFactory.requestedPlotIds();
+      if (fromFactory.length) return fromFactory;
+    }
     const fromMap = window.DDRFactory ? [...window.DDRFactory.seriesMap.keys()] : [];
     if (fromMap.length) return fromMap;
     return collectManifestScalarSlotIds(window.DDRFactory?.manifest);

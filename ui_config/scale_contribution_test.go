@@ -90,3 +90,29 @@ func TestWozduhFastBoundedPeersIgnore(t *testing.T) {
 		t.Fatalf("expected many ignore peers, got %d", ignoreCount)
 	}
 }
+
+func TestWozduhChannelPaintComponents(t *testing.T) {
+	comps := WozduhComponents()
+	kind := map[string]string{}
+	mode := map[string]string{}
+	for _, c := range comps {
+		kind[c.ID] = c.Kind
+		mode[c.ID] = c.DataMode
+	}
+	for _, id := range []string{
+		"woz_vol_chan_mid", "woz_vol_chan_up", "woz_vol_chan_dn",
+		"woz_price_chan_mid", "woz_price_chan_up", "woz_price_chan_dn",
+	} {
+		if kind[id] != "plot" || mode[id] != "scalar" {
+			t.Fatalf("%s kind=%s mode=%s", id, kind[id], mode[id])
+		}
+	}
+	for _, id := range []string{"woz_vol_chan", "woz_price_chan"} {
+		if kind[id] != "channel" || mode[id] != "compose" {
+			t.Fatalf("%s kind=%s mode=%s", id, kind[id], mode[id])
+		}
+		if kind[id] == "line" {
+			t.Fatalf("%s must not be a LineSeries component", id)
+		}
+	}
+}
