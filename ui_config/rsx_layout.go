@@ -17,7 +17,7 @@ func RSXComponents() []core.UIComponent {
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikRSX,
-			RenderOpts: json.RawMessage(`{"color":"#E1D2B5","lineWidth":2,"title":"RSX","scaleContribution":{"type":"bounded","min":-5,"max":105}}`),
+			RenderOpts: json.RawMessage(`{"color":"#E1D2B5","lineWidth":2,"title":"RSX","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded","min":-5,"max":105}}`),
 		},
 		{
 			ID:         "line_rsx_signal",
@@ -26,7 +26,7 @@ func RSXComponents() []core.UIComponent {
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikSignal,
-			RenderOpts: json.RawMessage(`{"color":"#8B9BB4","lineWidth":1,"title":"RSX Signal","scaleContribution":{"type":"ignore"}}`),
+			RenderOpts: json.RawMessage(`{"color":"#8B9BB4","lineWidth":1,"title":"RSX Signal","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}}`),
 		},
 		{
 			// Shot 9I: Projector packs SlotDivState → LWC markers; DAG never knows colors/shapes.

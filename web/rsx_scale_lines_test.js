@@ -76,8 +76,10 @@ test('B. private host autoscale is null; line_rsx stays bounded owner', () => {
   const layout = fs.readFileSync(path.join(__dirname, '../ui_config/rsx_layout.go'), 'utf8');
   assert.ok(layout.includes('"ID":         "line_rsx"') || layout.includes('ID:         "line_rsx"'));
   assert.ok(layout.includes('"scaleContribution":{"type":"bounded","min":-5,"max":105}'));
+  assert.ok(layout.includes('"lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded"'));
   assert.ok(layout.includes('"ID":         "line_rsx_signal"') || layout.includes('ID:         "line_rsx_signal"'));
   assert.ok(layout.includes('"scaleContribution":{"type":"ignore"}'));
+  assert.ok(layout.includes('"lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}'));
   assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('line_rsx'), true);
 });
 

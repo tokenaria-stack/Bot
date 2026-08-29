@@ -55,6 +55,12 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	if s["type"] != "ignore" {
 		t.Fatalf("signal=%v", s)
 	}
+	if primary["lastValueVisible"] != false || primary["priceLineVisible"] != false {
+		t.Fatalf("line_rsx last-value chrome=%v %v", primary["lastValueVisible"], primary["priceLineVisible"])
+	}
+	if signal["lastValueVisible"] != false || signal["priceLineVisible"] != false {
+		t.Fatalf("line_rsx_signal last-value chrome=%v %v", signal["lastValueVisible"], signal["priceLineVisible"])
+	}
 }
 
 func TestWozduhSlowBoundedPeersIgnore(t *testing.T) {
