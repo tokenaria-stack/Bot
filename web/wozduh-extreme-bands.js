@@ -2,7 +2,7 @@
  * WOZDUH-SCALE-1 — Pine urvol extreme bands as Wozduh pane chrome.
  * Private host + ISeriesPrimitive. Not DDR, not store, not settings.
  *
- * Public: attach / dispose. No series getters, no setData/update pipeline.
+ * Public: attach / refresh / dispose. refresh() seeds one priced host point.
  */
 (function (global) {
   'use strict';
@@ -16,6 +16,9 @@
     highInner: 89,
     highOuter: 92,
   });
+
+  /** Inert Y on the Wozduh domain; host does not contribute to Auto. */
+  const HOST_VALUE = 50;
 
   const FILL = 'rgba(255, 255, 0, 0.2)';
   /** Pine hline has no color= — TV default grey. */
@@ -168,6 +171,33 @@
     return true;
   }
 
+  /**
+   * Seed the private host with one priced point so priceToCoordinate works.
+   * @param {*} realTipTime painted candle tip (same identity as LWC candles)
+   * @returns {boolean}
+   */
+  function refresh(realTipTime) {
+    if (!attachments.length) return false;
+    let time = realTipTime;
+    if (time != null && typeof time === 'object' && Object.prototype.hasOwnProperty.call(time, 'time')) {
+      time = time.time;
+    }
+    if (time == null || time === '') return false;
+    const n = Number(time);
+    if (Number.isFinite(n) && String(n) === String(time)) time = n;
+    const point = { time, value: HOST_VALUE };
+    let ok = false;
+    for (let i = 0; i < attachments.length; i++) {
+      const series = attachments[i].series;
+      if (!series || typeof series.setData !== 'function') continue;
+      try {
+        series.setData([point]);
+        ok = true;
+      } catch { /* disposed */ }
+    }
+    return ok;
+  }
+
   function dispose() {
     if (!attachments.length) return false;
     const prev = attachments;
@@ -196,8 +226,10 @@
 
   const api = {
     attach,
+    refresh,
     dispose,
     LEVELS,
+    HOST_VALUE,
     FILL,
     STROKE,
     HOST_TITLE,

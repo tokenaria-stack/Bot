@@ -24,9 +24,11 @@ function fakeWozChart() {
         opts,
         primitive: null,
         removed: false,
+        data: null,
         attachPrimitive(p) { this.primitive = p; if (p && typeof p.attached === 'function') p.attached({ chart: this, series }); },
         detachPrimitive() { this.primitive = null; },
         remove() { this.removed = true; },
+        setData(d) { this.data = d; },
         priceToCoordinate(price) { return Number(price); },
       };
       created.push(series);
@@ -50,6 +52,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(!factory.requestedPlotIds().includes('__wozduh_extreme_bands__'));
   const keys = Object.keys(WozduhExtremeBands).filter((k) => !k.startsWith('_'));
   assert.ok(keys.includes('attach'));
+  assert.ok(keys.includes('refresh'));
   assert.ok(keys.includes('dispose'));
   assert.ok(!keys.includes('getSeries'));
   assert.ok(!keys.includes('setData'));
@@ -114,6 +117,26 @@ test('F. lifecycle: one host + one primitive; dispose clears', () => {
   assert.strictEqual(WozduhExtremeBands.attach(chart2), true);
   assert.strictEqual(chart2.created.length, 1);
   WozduhExtremeBands.dispose();
+});
+
+test('refresh seeds one priced point (not whitespace-only)', () => {
+  WozduhExtremeBands._resetForTests();
+  const chart = fakeWozChart();
+  WozduhExtremeBands.attach(chart);
+  assert.strictEqual(WozduhExtremeBands.refresh(1700000000), true);
+  assert.deepStrictEqual(chart.created[0].data, [{ time: 1700000000, value: 50 }]);
+  assert.strictEqual(WozduhExtremeBands.HOST_VALUE, 50);
+  assert.strictEqual(WozduhExtremeBands.refresh(null), false);
+  WozduhExtremeBands.dispose();
+});
+
+test('paintCandles reseeds even when skipDecoration; updateCandle does not refresh bands', () => {
+  const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  const paint = core.slice(core.indexOf('function paintCandles'), core.indexOf('function isOlderThanPaintedTip'));
+  const update = core.slice(core.indexOf('function updateCandle'), core.indexOf('const ChartAdapter'));
+  assert.ok(paint.includes('WozduhExtremeBands.refresh(state._lastRealCandleTime)'));
+  assert.ok(paint.indexOf('skipDecoration') < paint.indexOf('WozduhExtremeBands.refresh'));
+  assert.ok(!update.includes('WozduhExtremeBands.refresh'));
 });
 
 test('zOrder is bottom; chart-core wires Wozduh chart only', () => {

@@ -1338,8 +1338,12 @@
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);
     }
+    // ADR-027 future strip — skipped on prepend F1 (camera settle). Band host is not that strip.
     if (paintOpts.skipDecoration !== true) {
       refreshDecorationFromState(state);
+    }
+    if (typeof WozduhExtremeBands !== 'undefined' && typeof WozduhExtremeBands.refresh === 'function') {
+      WozduhExtremeBands.refresh(state._lastRealCandleTime);
     }
     refreshRulerOverlay();
   }
