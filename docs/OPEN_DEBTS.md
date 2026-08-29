@@ -26,8 +26,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
-4. Later: indicator paint reduction / LOD  
-5. Then: ScoreNodes / clean strategy + indicator rebuild  
+4. FE indicator paint skip is **enough for now** (HIDDEN-RENDER-SKIP-1 `40dca59` + WOZDUH-OWNER-1 `3722baf`). User accepted live `updateTick` ~2× cheaper with most Wozduh lines unchecked; laptop load down. Do **not** start wire skip, lazy `removeSeries`, or LOD from this.  
+5. **Later (parked):** proper **backend** indicator optimisation — DAG/compute + pack/wire only for subscribed plots. Not a FE workaround. Not this freeze.  
+6. Then: ScoreNodes / clean strategy + indicator rebuild  
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 
@@ -141,6 +142,7 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | **35** (charts) | Phase 8B annotations UI on prepend | 🔜 | `applyUniversalAnnotations` |
 | **29** | Backtest history bypasses Projection | 🟡 | Asymmetry vs live Atomic |
 | **82** | `prependMonolith` times not normalized via `chartTime` | 🟢 | Latent; server sends seconds |
+| **92** | **Backend indicator opt** (DAG/wire skip unused plots) | ⏸ later | FE skip accepted. Store/wire still full. Do not start from rAF symptoms. |
 
 ---
 
