@@ -1248,6 +1248,14 @@
       });
     }
 
+    if (typeof WozduhExtremeBands !== 'undefined') {
+      WozduhExtremeBands.dispose();
+      WozduhExtremeBands.attach(wozduhChart);
+      state._disposers.push(() => {
+        if (typeof WozduhExtremeBands !== 'undefined') WozduhExtremeBands.dispose();
+      });
+    }
+
     bindTimeCamera();
     bindResize(priceHost, priceChart, state._disposers);
     bindResize(wozHost, wozduhChart, state._disposers);
