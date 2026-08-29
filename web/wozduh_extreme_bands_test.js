@@ -61,6 +61,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
 
 test('B. private host autoscale is null; woz_slow stays bounded owner in layout', () => {
   const opts = WozduhExtremeBands._hostSeriesOptionsForTests();
+  assert.strictEqual(opts.title, '');
   assert.strictEqual(typeof opts.autoscaleInfoProvider, 'function');
   assert.strictEqual(opts.autoscaleInfoProvider(), null);
   assert.strictEqual(opts.lineVisible, false);
@@ -72,32 +73,47 @@ test('B. private host autoscale is null; woz_slow stays bounded owner in layout'
   assert.ok(layout.includes('wozLine("woz_fast", core.SlotWozduhFast, scaleIgnore'));
 });
 
-test('C. primitive constants match Pine urvol bands', () => {
+test('C. primitive constants: yellow extremes + 27/30/50/67/70', () => {
   assert.deepStrictEqual(WozduhExtremeBands.LEVELS, {
     lowInner: 5,
     lowOuter: 8,
+    redInner: 27,
+    redOuter: 30,
+    mid: 50,
+    greenInner: 67,
+    greenOuter: 70,
     highInner: 89,
     highOuter: 92,
   });
 });
 
-test('D. styles: inner solid, outer dotted, yellow ~20% fill', () => {
-  assert.strictEqual(WozduhExtremeBands.FILL, 'rgba(255, 255, 0, 0.2)');
+test('D. styles: yellow solids/dots; 27-70 dashed; no host title leak', () => {
+  assert.strictEqual(WozduhExtremeBands.FILL_YELLOW, 'rgba(255, 255, 0, 0.2)');
   const src = fs.readFileSync(path.join(__dirname, 'wozduh-extreme-bands.js'), 'utf8');
-  assert.ok(src.includes('strokeH(ctx, w, yLi, false)'));
-  assert.ok(src.includes('strokeH(ctx, w, yLo, true)'));
-  assert.ok(src.includes('strokeH(ctx, w, yHi, false)'));
-  assert.ok(src.includes('strokeH(ctx, w, yHo, true)'));
-  assert.ok(src.includes('DOTTED_DASH'));
+  assert.ok(!src.includes('__wozduh_extreme_bands__'));
+  assert.ok(src.includes("strokeH(ctx, w, y5, 'solid')"));
+  assert.ok(src.includes("strokeH(ctx, w, y8, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y89, 'solid')"));
+  assert.ok(src.includes("strokeH(ctx, w, y92, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y27, 'dashed')"));
+  assert.ok(src.includes("strokeH(ctx, w, y30, 'dashed')"));
+  assert.ok(src.includes("strokeH(ctx, w, y50, 'dashed')"));
+  assert.ok(src.includes("strokeH(ctx, w, y67, 'dashed')"));
+  assert.ok(src.includes("strokeH(ctx, w, y70, 'dashed')"));
+  assert.ok(src.includes('createLinearGradient'));
+  assert.ok(src.includes('fillSolidBand(ctx, w, y89, y92'));
   assert.ok(!src.includes('createPriceLine'));
 });
 
 test('E. renderer is O(1): no store/history/bar walk', () => {
   const src = fs.readFileSync(path.join(__dirname, 'wozduh-extreme-bands.js'), 'utf8');
-  const draw = src.slice(src.indexOf('draw(target)'), src.indexOf('fillBand'));
+  const draw = src.slice(src.indexOf('draw(target)'), src.indexOf('fillSolidBand'));
   assert.ok(!/ColumnarStore|hydratedData|requestedPlotIds|visibleRange|bars\.length/.test(draw));
   assert.ok(!/for\s*\(/.test(draw));
   assert.ok(src.includes('priceToCoordinate(LEVELS.lowInner)'));
+  assert.ok(src.includes('priceToCoordinate(LEVELS.mid)'));
+  assert.ok(src.includes('priceToCoordinate(LEVELS.redInner)'));
+  assert.ok(src.includes('priceToCoordinate(LEVELS.greenOuter)'));
 });
 
 test('F. lifecycle: one host + one primitive; dispose clears', () => {

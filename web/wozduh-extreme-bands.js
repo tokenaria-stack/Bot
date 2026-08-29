@@ -7,12 +7,15 @@
 (function (global) {
   'use strict';
 
-  const HOST_TITLE = '__wozduh_extreme_bands__';
-
-  /** Pine: urvol=8; inner = urvol-3; high = 100-urvol. */
+  /** Pine urvol extremes + TV 27–30 / 50 / 67–70 chrome. */
   const LEVELS = Object.freeze({
     lowInner: 5,
     lowOuter: 8,
+    redInner: 27,
+    redOuter: 30,
+    mid: 50,
+    greenInner: 67,
+    greenOuter: 70,
     highInner: 89,
     highOuter: 92,
   });
@@ -20,14 +23,19 @@
   /** Inert Y on the Wozduh domain; host does not contribute to Auto. */
   const HOST_VALUE = 50;
 
-  const FILL = 'rgba(255, 255, 0, 0.2)';
+  const FILL_YELLOW = 'rgba(255, 255, 0, 0.2)';
+  const GREEN_HI = 'rgba(8, 153, 129, 0.28)';
+  const GREEN_LO = 'rgba(8, 153, 129, 0.06)';
+  const RED_HI = 'rgba(242, 54, 69, 0.28)';
+  const RED_LO = 'rgba(242, 54, 69, 0.06)';
   /** Pine hline has no color= — TV default grey. */
   const STROKE = 'rgba(120, 123, 134, 0.85)';
   const DOTTED_DASH = [1, 2];
+  const DASHED_DASH = [5, 3];
 
   function hostSeriesOptions() {
     return {
-      title: HOST_TITLE,
+      title: '',
       color: 'rgba(0,0,0,0)',
       lineWidth: 1,
       lineVisible: false,
@@ -48,38 +56,69 @@
       const series = this._source._series;
       if (!series || typeof series.priceToCoordinate !== 'function') return;
       if (typeof target.useMediaCoordinateSpace !== 'function') return;
-      const yLi = series.priceToCoordinate(LEVELS.lowInner);
-      const yLo = series.priceToCoordinate(LEVELS.lowOuter);
-      const yHi = series.priceToCoordinate(LEVELS.highInner);
-      const yHo = series.priceToCoordinate(LEVELS.highOuter);
+      const y5 = series.priceToCoordinate(LEVELS.lowInner);
+      const y8 = series.priceToCoordinate(LEVELS.lowOuter);
+      const y27 = series.priceToCoordinate(LEVELS.redInner);
+      const y30 = series.priceToCoordinate(LEVELS.redOuter);
+      const y50 = series.priceToCoordinate(LEVELS.mid);
+      const y67 = series.priceToCoordinate(LEVELS.greenInner);
+      const y70 = series.priceToCoordinate(LEVELS.greenOuter);
+      const y89 = series.priceToCoordinate(LEVELS.highInner);
+      const y92 = series.priceToCoordinate(LEVELS.highOuter);
       target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
         if (!ctx || !mediaSize) return;
         const w = mediaSize.width;
         if (!(w > 0)) return;
-        fillBand(ctx, w, yLi, yLo);
-        fillBand(ctx, w, yHi, yHo);
-        strokeH(ctx, w, yLi, false);
-        strokeH(ctx, w, yLo, true);
-        strokeH(ctx, w, yHi, false);
-        strokeH(ctx, w, yHo, true);
+        fillSolidBand(ctx, w, y5, y8, FILL_YELLOW);
+        fillSolidBand(ctx, w, y89, y92, FILL_YELLOW);
+        fillGradientBand(ctx, w, y67, y70, GREEN_LO, GREEN_HI);
+        fillGradientBand(ctx, w, y27, y30, RED_LO, RED_HI);
+        strokeH(ctx, w, y5, 'solid');
+        strokeH(ctx, w, y8, 'dotted');
+        strokeH(ctx, w, y27, 'dashed');
+        strokeH(ctx, w, y30, 'dashed');
+        strokeH(ctx, w, y50, 'dashed');
+        strokeH(ctx, w, y67, 'dashed');
+        strokeH(ctx, w, y70, 'dashed');
+        strokeH(ctx, w, y89, 'solid');
+        strokeH(ctx, w, y92, 'dotted');
       });
     }
   }
 
-  function fillBand(ctx, width, ya, yb) {
+  function fillSolidBand(ctx, width, ya, yb, color) {
     if (ya == null || yb == null || !Number.isFinite(ya) || !Number.isFinite(yb)) return;
     const top = Math.min(ya, yb);
     const h = Math.abs(yb - ya);
     if (!(h > 0)) return;
-    ctx.fillStyle = FILL;
+    ctx.fillStyle = color;
     ctx.fillRect(0, top, width, h);
   }
 
-  function strokeH(ctx, width, y, dotted) {
+  function fillGradientBand(ctx, width, yInner, yOuter, colorInner, colorOuter) {
+    if (yInner == null || yOuter == null || !Number.isFinite(yInner) || !Number.isFinite(yOuter)) return;
+    if (typeof ctx.createLinearGradient !== 'function') return;
+    const top = Math.min(yInner, yOuter);
+    const bot = Math.max(yInner, yOuter);
+    if (!(bot - top > 0)) return;
+    const g = ctx.createLinearGradient(0, yOuter, 0, yInner);
+    g.addColorStop(0, colorOuter);
+    g.addColorStop(1, colorInner);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, top, width, bot - top);
+  }
+
+  function dashFor(style) {
+    if (style === 'dotted') return DOTTED_DASH;
+    if (style === 'dashed') return DASHED_DASH;
+    return [];
+  }
+
+  function strokeH(ctx, width, y, style) {
     if (y == null || !Number.isFinite(y)) return;
     ctx.strokeStyle = STROKE;
     ctx.lineWidth = 1;
-    ctx.setLineDash(dotted ? DOTTED_DASH : []);
+    ctx.setLineDash(dashFor(style));
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
@@ -230,9 +269,8 @@
     dispose,
     LEVELS,
     HOST_VALUE,
-    FILL,
+    FILL_YELLOW,
     STROKE,
-    HOST_TITLE,
     _resetForTests,
     _hostSeriesOptionsForTests: hostSeriesOptions,
     _attachmentCountForTests,
