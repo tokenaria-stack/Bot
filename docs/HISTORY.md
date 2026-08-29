@@ -10,8 +10,9 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## SPARSE-LIVE-INGEST-1 — 5s–45s WS ingest uses windowMode (Aug 2026) ✅
 
-- Frozen after smoke: LIVE 5s/15s forming bar stays alive with `historyHasNewer=true`; no history unlock required.
-- `pushLiveTickDelta`: 1s keeps `historyHasNewer` veto; 5s–45s (`isSparseSecondChart`) ingest by `windowMode` only. TimeCamera stays paint-only. Producers / ISLAND-SLIDE / `_maybePromoteLiveWindow` unchanged.
+- **Frozen.** User-confirmed: LIVE 5s–45s stay alive without mouse movement. Commit `1b67400`.
+- `pushLiveTickDelta`: 1s keeps `historyHasNewer` veto; 5s–45s (`isSparseSecondChart`) ingest by `windowMode` only. TimeCamera stays paint-only.
+- Do not reopen unless a real regression: `_maybePromoteLiveWindow`, ISLAND-SLIDE, HISTORY-IDLE-PUMP, source continuation, camera.
 
 ---
 

@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SPARSE-LIVE-INGEST-1 — island identity owns 5s–45s WS ingest (Aug 2026)
+
+**Context:** LIVE 5s–45s hydrate arrived with `windowMode=live`, TimeCamera LIVE, and `historyHasNewer=true` (1s source after last closed child while the current child is forming). `pushLiveTickDelta` treated `hasNewer` as a detach veto. WS ticks arrived; the store tip did not move until history interaction.
+
+**Decision:** Consumer-only. 1s keeps the `historyHasNewer` ingest veto. 5s–45s (`isSparseSecondChart`) ingest iff `windowMode === 'live'`. `historyHasNewer` remains paging/source. TimeCamera remains paint-only. Producers and ISLAND-SLIDE `droppedNewest` → `windowMode=history` unchanged.
+
+**Rejected:**
+- Wall-clock / `2 * interval` ingest guard — **Reason:** sparse silence is legal; a quiet LIVE tail must accept the next trade.
+- New `detachedHistoryIsland` flag — **Reason:** `windowMode` already is island identity.
+- Auto right-page / re-arm / fake tick / camera nudge — **Reason:** crutches around the wrong consumer.
+- Using TimeCamera HISTORY to veto ingest — **Reason:** MICRO-2C: pan-left on a LIVE island must still ingest off-screen.
+
+**Consequences:** Frozen (`1b67400`). Do not touch `_maybePromoteLiveWindow` unless a later rejoin-after-right-fill regression is proven.
+
+---
+
 ## HISTORY-IDLE-PUMP-1 — viewport history demand is human-owned (Aug 2026)
 
 **Context:** Parked near an edge, `onAfterFlush` → `scheduleHistoryLoad()` re-armed from the current runway while scroll-arm stayed sticky. Infinite 3000-bar pages, WS/HTTP spam, rAF violations, last-price blink from island slide. Not a last-price or cursor bug.

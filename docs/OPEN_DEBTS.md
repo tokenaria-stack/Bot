@@ -15,6 +15,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **HISTORY-IDLE-PUMP-1 ✅ frozen** (`636ff55`). Do not reopen viewport-history demand, cursor-overlap, or last-price-line work from idle-pump / rAF symptoms.
 
+**SPARSE-LIVE-INGEST-1 ✅ frozen** (`1b67400`). Do not reopen 5s–45s WS ingest, `_maybePromoteLiveWindow`, ISLAND-SLIDE, or `historyHasNewer` producers unless a real regression appears.
+
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
 
 **NEXT order (do not start inside this freeze):**
