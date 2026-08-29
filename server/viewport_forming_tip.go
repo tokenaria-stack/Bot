@@ -100,7 +100,7 @@ func (d *DashboardServer) packSparseSecondFormingOnly(
 		HasMore:     hasMore,
 		HasNewer:    hasNewer,
 	}
-	if d.projectSparseSecondFormingTip(&resp, timeframe) == viewportProjNone {
+	if d.projectSparseSecondFormingTip(&resp, timeframe, 0, true) == viewportProjNone {
 		return columnarHistoryResponse{}, false
 	}
 	if !columnarLenInvariant(resp.Times, resp.Candles, resp.Plots) {
@@ -109,13 +109,16 @@ func (d *DashboardServer) packSparseSecondFormingOnly(
 	return resp, true
 }
 
-// projectSparseSecondFormingTip overlays the Frame tip without calendar CloseTime.
-// Empty closed history + one forming child is a valid viewport.
+// projectSparseSecondFormingTip seeds at most one Frame forming child after closed Replay
+// (SPARSE-ADR010-TIP-1). Replay rows are never overwritten. Identity is OpenTime ms.
+// Empty Replay + forming child remains a valid live-tail pack.
 func (d *DashboardServer) projectSparseSecondFormingTip(
 	resp *columnarHistoryResponse,
 	timeframe string,
+	replayClosedOpenMs int64,
+	includeForming bool,
 ) viewportProjectionMode {
-	if d == nil || d.projector == nil || resp == nil {
+	if !includeForming || d == nil || d.projector == nil || resp == nil {
 		return viewportProjNone
 	}
 	frame := d.frameForTimeframe(timeframe)
@@ -127,20 +130,20 @@ func (d *DashboardServer) projectSparseSecondFormingTip(
 		return viewportProjNone
 	}
 	tip := raw[len(raw)-1]
-	tipSec := exchange.ChartTimeSec(tip.OpenTime)
+	frameCommitted := frame.LastCommittedOpenTime()
+	if tip.OpenTime == frameCommitted {
+		return viewportProjNone
+	}
+	formingOpen := tip.OpenTime
+	tipSec := exchange.ChartTimeSec(formingOpen)
 	tickPlots := d.projector.BuildTickJSON(frame.DAGTickFrame())
 	if len(resp.Times) == 0 {
 		return d.appendFormingTip(resp, tip, tipSec, tickPlots)
 	}
-	lastSec := resp.Times[len(resp.Times)-1]
-	switch {
-	case tipSec > lastSec:
-		return d.appendFormingTip(resp, tip, tipSec, tickPlots)
-	case tipSec == lastSec:
-		return d.overwriteFormingTip(resp, tip, tickPlots)
-	default:
+	if replayClosedOpenMs != frameCommitted || formingOpen <= replayClosedOpenMs {
 		return viewportProjNone
 	}
+	return d.appendFormingTip(resp, tip, tipSec, tickPlots)
 }
 
 func (d *DashboardServer) appendFormingTip(

@@ -209,9 +209,7 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	closedBars := len(resp.Times)
 	var mode viewportProjectionMode
 	if sparseChild {
-		if projectForming {
-			mode = d.projectSparseSecondFormingTip(&resp, timeframe)
-		}
+		mode = d.projectSparseSecondFormingTip(&resp, timeframe, display[len(display)-1].OpenTime, projectForming)
 	} else {
 		mode = d.projectViewportFormingTip(&resp, timeframe, binanceInterval)
 	}

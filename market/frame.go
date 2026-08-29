@@ -367,6 +367,13 @@ func (a *Frame) GetKlines() []exchange.Kline {
 	return copied
 }
 
+// LastCommittedOpenTime returns the OpenTime (ms) of the last Save-committed bar.
+func (a *Frame) LastCommittedOpenTime() int64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.lastCommittedOpenTime
+}
+
 // UpdateIndicators is retained for pipeline compatibility; AO is updated in the streaming path.
 func (a *Frame) UpdateIndicators() {}
 
