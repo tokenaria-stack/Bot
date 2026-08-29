@@ -31,7 +31,6 @@
   /** Pine hline has no color= — TV default grey. */
   const STROKE = 'rgba(120, 123, 134, 0.85)';
   const DOTTED_DASH = [1, 2];
-  const DASHED_DASH = [5, 3];
 
   function hostSeriesOptions() {
     return {
@@ -75,11 +74,11 @@
         fillGradientBand(ctx, w, y27, y30, RED_LO, RED_HI);
         strokeH(ctx, w, y5, 'solid');
         strokeH(ctx, w, y8, 'dotted');
-        strokeH(ctx, w, y27, 'dashed');
-        strokeH(ctx, w, y30, 'dashed');
-        strokeH(ctx, w, y50, 'dashed');
-        strokeH(ctx, w, y67, 'dashed');
-        strokeH(ctx, w, y70, 'dashed');
+        strokeH(ctx, w, y27, 'dotted');
+        strokeH(ctx, w, y30, 'dotted');
+        strokeH(ctx, w, y50, 'dotted');
+        strokeH(ctx, w, y67, 'dotted');
+        strokeH(ctx, w, y70, 'dotted');
         strokeH(ctx, w, y89, 'solid');
         strokeH(ctx, w, y92, 'dotted');
       });
@@ -110,7 +109,6 @@
 
   function dashFor(style) {
     if (style === 'dotted') return DOTTED_DASH;
-    if (style === 'dashed') return DASHED_DASH;
     return [];
   }
 

@@ -87,7 +87,7 @@ test('C. primitive constants: yellow extremes + 27/30/50/67/70', () => {
   });
 });
 
-test('D. styles: yellow solids/dots; 27-70 dashed; no host title leak', () => {
+test('D. styles: yellow solids/dots; 27-70 same dotted as yellow outer', () => {
   assert.strictEqual(WozduhExtremeBands.FILL_YELLOW, 'rgba(255, 255, 0, 0.2)');
   const src = fs.readFileSync(path.join(__dirname, 'wozduh-extreme-bands.js'), 'utf8');
   assert.ok(!src.includes('__wozduh_extreme_bands__'));
@@ -95,11 +95,12 @@ test('D. styles: yellow solids/dots; 27-70 dashed; no host title leak', () => {
   assert.ok(src.includes("strokeH(ctx, w, y8, 'dotted')"));
   assert.ok(src.includes("strokeH(ctx, w, y89, 'solid')"));
   assert.ok(src.includes("strokeH(ctx, w, y92, 'dotted')"));
-  assert.ok(src.includes("strokeH(ctx, w, y27, 'dashed')"));
-  assert.ok(src.includes("strokeH(ctx, w, y30, 'dashed')"));
-  assert.ok(src.includes("strokeH(ctx, w, y50, 'dashed')"));
-  assert.ok(src.includes("strokeH(ctx, w, y67, 'dashed')"));
-  assert.ok(src.includes("strokeH(ctx, w, y70, 'dashed')"));
+  assert.ok(src.includes("strokeH(ctx, w, y27, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y30, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y50, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y67, 'dotted')"));
+  assert.ok(src.includes("strokeH(ctx, w, y70, 'dotted')"));
+  assert.ok(!src.includes("'dashed'"));
   assert.ok(src.includes('createLinearGradient'));
   assert.ok(src.includes('fillSolidBand(ctx, w, y89, y92'));
   assert.ok(!src.includes('createPriceLine'));
