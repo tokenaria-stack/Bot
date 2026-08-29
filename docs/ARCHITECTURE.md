@@ -22,6 +22,8 @@ Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining l
 
 **SPARSE-LIVE-INGEST-1 (frozen):** 5s–45s WS ingest follows `windowMode` (island identity). `historyHasNewer` is paging/source only. 1s keeps the `historyHasNewer` detach veto.
 
+**SPARSE-ADR010-TIP-1 (frozen):** 5s–45s HTTP tip is append-only after a matching Frame committed frontier. Closed Replay prefix is immutable. Native / 1s stay on `projectViewportFormingTip`.
+
 ---
 
 ## SSOT map
@@ -199,7 +201,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `Projector` | Slot → wire packer for live plots + columnar history |
 | `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
-| `Tip Ownership` | History = Cap-closed only; Viewport may seed Frame forming tip (ADR-010 / TV Model 2); WS overwrites that tip; Frame replay = closed→forming (ADR-016) |
+| `Tip Ownership` | Native/1s: Cap-closed History + ADR-010 overlay (WS OVERWRITE same forming open). 5s–45s HTTP: SPARSE-ADR010-TIP-1 append-only forming row (no Replay overwrite). Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
 | `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived `2m/10m/45m/3h` plus live `1s` from aggTrade (`exchange/timeframe_catalog.go`, ADR-031). Durable 1s lives in `micro_klines` (24h, sparse), not `historical_klines`. `3d` unsupported. Other seconds/ticks remain placeholders |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
@@ -396,7 +398,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Camera | Sticky Live Edge / Microscope (`viewport-manager.js`) — TF mechanics CLOSED |
 | Scale | `ScaleController` = Auto/Manual/Log; DDR `scaleContribution` = what Auto measures (ADR-022) |
 
-**Tip Ownership:** History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip after projection (ADR-010). WS updates that tip (OVERWRITE). Frame runtime replay = closed→forming lifecycle (ADR-016); never commit forming during replay.  
+**Tip Ownership:** Native/1s History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip (ADR-010); WS OVERWRITE same open. 5s–45s HTTP: closed Replay immutable; at most one Frame forming row appended (`projectSparseSecondFormingTip`, SPARSE-ADR010-TIP-1). Frame runtime replay = closed→forming (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner via ADR-023 `timeScale.visible`; future strip via ADR-027 Decoration Plane; crosshair time label always rendered on that owner (not the hovered pane).  
 **Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics).  

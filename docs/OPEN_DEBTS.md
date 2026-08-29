@@ -17,6 +17,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **SPARSE-LIVE-INGEST-1 ✅ frozen** (`1b67400`). Do not reopen 5s–45s WS ingest, `_maybePromoteLiveWindow`, ISLAND-SLIDE, or `historyHasNewer` producers unless a real regression appears.
 
+**SPARSE-ADR010-TIP-1 ✅ frozen** (`a452cb5`). Do not reopen `projectSparseSecondFormingTip`, sparse OVERWRITE, or calendar `isFormingKline` on 5s–45s. Native `projectViewportFormingTip` stays isolated.
+
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
 
 **NEXT order (do not start inside this freeze):**

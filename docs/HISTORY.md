@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SPARSE-ADR010-TIP-1 — sparse HTTP forming tip append-only (Aug 2026) ✅
+
+- **Frozen.** User smoke green: 5s/15s RSX closed points stable; only the forming row moves. Commit `a452cb5`.
+- 5s–45s: Replay closed prefix immutable; Frame forming child APPEND-only after `replayClosedOpenMs == Frame.LastCommittedOpenTime()`. No sparse OVERWRITE. Forming identity is Frame lifecycle, not `CloseTime`.
+- Native / 1s / HTF remain on `projectViewportFormingTip`. Do not reopen unless a real regression.
+
+---
+
 ## SPARSE-LIVE-INGEST-1 — 5s–45s WS ingest uses windowMode (Aug 2026) ✅
 
 - **Frozen.** User-confirmed: LIVE 5s–45s stay alive without mouse movement. Commit `1b67400`.

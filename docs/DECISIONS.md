@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SPARSE-ADR010-TIP-1 — sparse HTTP tip is append-only (Aug 2026)
+
+**Context:** Native ADR-010 uses Cap + OVERWRITE. Sparse HTTP rebuild always Replays closed rows first, then overlaid Frame Cur via same-open OVERWRITE when `OpenTime` matched the last Replay bar. That rewrote finalized RSX/Jurik with live DAG Cur. Calendar `isFormingKline` is wrong for quiet 5s–45s.
+
+**Decision:** Same truth model as ADR-010, not the native implementation. `projectSparseSecondFormingTip` is APPEND or NONE. Compare OpenTime ms (`replayClosedOpenMs`, `LastCommittedOpenTime`, forming last kline). Empty Replay + forming child still packs. WS still updates the forming row after seed.
+
+**Rejected:**
+- Copy Cap / `now <= CloseTime` onto 5s–45s — **Reason:** silence is legal.
+- Native-style OVERWRITE on the sparse projector — **Reason:** after Replay every existing row is closed truth.
+- FE RSX clamp / shared native-sparse helper / origin metadata — **Reason:** Rule 1 / Rule 6; isolation.
+
+**Consequences:** Frozen (`a452cb5`). Do not touch `projectViewportFormingTip`, reducer close law, or RSX math from this chapter.
+
+---
+
 ## SPARSE-LIVE-INGEST-1 — island identity owns 5s–45s WS ingest (Aug 2026)
 
 **Context:** LIVE 5s–45s hydrate arrived with `windowMode=live`, TimeCamera LIVE, and `historyHasNewer=true` (1s source after last closed child while the current child is forming). `pushLiveTickDelta` treated `hasNewer` as a detach veto. WS ticks arrived; the store tip did not move until history interaction.
