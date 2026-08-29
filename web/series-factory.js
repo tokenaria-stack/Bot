@@ -14,6 +14,11 @@ class DDRFactory {
     return 1.7976931348623157e+308;
   }
 
+  /** Pane crosshair anchors — feed LWC even when the stroke is unchecked. */
+  static get CROSSHAIR_ANCHORS() {
+    return DDRFactory._CROSSHAIR_ANCHORS;
+  }
+
   constructor(options = {}) {
     /** @type {Map<string, { chart: import('lightweight-charts').IChartApi, series: import('lightweight-charts').ISeriesApi }>} */
     this.seriesMap = new Map();
@@ -21,10 +26,15 @@ class DDRFactory {
     this.manifest = null;
     /** @type {Map<string, Array<{time: number, value: number}>>} */
     this.hydratedData = new Map();
+    /** Last boolean written by setSeriesVisible / mount defaultVisible. */
+    this._feedVisible = new Map();
     this.cutoverActive = false;
     this.normalizeTime = typeof options.normalizeTime === 'function'
       ? options.normalizeTime
       : DDRFactory.defaultNormalizeTime;
+    this.getColumnarSnapshot = typeof options.getColumnarSnapshot === 'function'
+      ? options.getColumnarSnapshot
+      : DDRFactory.defaultColumnarSnapshot;
   }
 
   static defaultNormalizeTime(raw) {
@@ -34,6 +44,28 @@ class DDRFactory {
     const t = Number(raw);
     if (!Number.isFinite(t)) return null;
     return Math.floor(t);
+  }
+
+  static defaultColumnarSnapshot() {
+    try {
+      const store = (typeof window !== 'undefined') ? window.liveColumnarStore : null;
+      if (!store || typeof store.snapshot !== 'function') return null;
+      const snap = store.snapshot();
+      if (!snap) return null;
+      return {
+        times: snap.times,
+        plots: snap.plots,
+        sentinel: DDRFactory.HISTORY_ABSENT,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  needsLwcData(id) {
+    if (!id) return false;
+    if (DDRFactory._CROSSHAIR_ANCHORS.has(id)) return true;
+    return this._feedVisible.get(id) !== false;
   }
 
   async fetchManifest(url = '/api/ui/manifest') {
@@ -114,8 +146,11 @@ class DDRFactory {
     const plots = data.plots && typeof data.plots === 'object' ? data.plots : {};
 
     this.hydratedData.clear();
+    const needed = this._neededPlotIds();
+    const restrict = this.seriesMap.size > 0;
     for (const [plotId, values] of Object.entries(plots)) {
       if (!Array.isArray(values)) continue;
+      if (restrict && !needed.has(plotId)) continue;
       this.hydratedData.set(
         plotId,
         DDRFactory.columnToLWC(times, values, sentinel, this.normalizeTime),
@@ -134,6 +169,7 @@ class DDRFactory {
       }
     }
     for (const [id, entry] of this.seriesMap) {
+      if (!this.needsLwcData(id)) continue;
       const series = DDRFactory._seriesFromEntry(entry);
       if (!series) continue;
       const points = entry.kind === 'channel'
@@ -246,6 +282,7 @@ class DDRFactory {
     }
     const absent = DDRFactory.HISTORY_ABSENT;
     for (const [id, entry] of this.seriesMap) {
+      if (!this.needsLwcData(id)) continue;
       const series = DDRFactory._seriesFromEntry(entry);
       if (!series) continue;
       if (entry.kind === 'channel') {
@@ -278,8 +315,72 @@ class DDRFactory {
   setSeriesVisible(id, visible) {
     const series = DDRFactory._seriesFromEntry(this.seriesMap.get(id));
     if (!series) return false;
-    series.applyOptions({ visible: visible !== false });
+    const want = visible !== false;
+    this._feedVisible.set(id, want);
+    if (want) {
+      if (!DDRFactory._CROSSHAIR_ANCHORS.has(id)) {
+        this._hydrateRenderComponent(id);
+      }
+      series.applyOptions({ visible: true });
+    } else {
+      series.applyOptions({ visible: false });
+    }
     return true;
+  }
+
+  _neededPlotIds() {
+    const ids = new Set();
+    for (const [id, entry] of this.seriesMap) {
+      if (!this.needsLwcData(id)) continue;
+      if (entry?.kind === 'channel' && entry.plots) {
+        if (entry.plots.upper) ids.add(entry.plots.upper);
+        if (entry.plots.mid) ids.add(entry.plots.mid);
+        if (entry.plots.lower) ids.add(entry.plots.lower);
+        continue;
+      }
+      ids.add(id);
+    }
+    return ids;
+  }
+
+  _readAuthoritativeColumnar() {
+    const fn = this.getColumnarSnapshot;
+    if (typeof fn !== 'function') return null;
+    try {
+      const snap = fn();
+      if (!snap || !Array.isArray(snap.times) || !snap.plots || typeof snap.plots !== 'object') {
+        return null;
+      }
+      return snap;
+    } catch {
+      return null;
+    }
+  }
+
+  _hydrateRenderComponent(id) {
+    const entry = this.seriesMap.get(id);
+    const series = DDRFactory._seriesFromEntry(entry);
+    if (!series) return;
+    const snap = this._readAuthoritativeColumnar();
+    if (!snap) return;
+    const sentinel = Number(snap.sentinel ?? DDRFactory.HISTORY_ABSENT);
+    const times = snap.times;
+    let points;
+    if (entry.kind === 'channel' && entry.plots) {
+      const tmp = new Map();
+      tmp.set(entry.plots.upper, DDRFactory.columnToLWC(times, snap.plots[entry.plots.upper] || [], sentinel, this.normalizeTime));
+      tmp.set(entry.plots.mid, DDRFactory.columnToLWC(times, snap.plots[entry.plots.mid] || [], sentinel, this.normalizeTime));
+      tmp.set(entry.plots.lower, DDRFactory.columnToLWC(times, snap.plots[entry.plots.lower] || [], sentinel, this.normalizeTime));
+      points = DDRFactory.zipChannelFromHydrated(tmp, entry.plots);
+    } else {
+      points = DDRFactory.columnToLWC(times, snap.plots[id] || [], sentinel, this.normalizeTime);
+    }
+    if (!points?.length) return;
+    try {
+      series.setData(points);
+    } catch {
+      /* skip invalid setData */
+    }
   }
 
   clear() {
@@ -295,6 +396,7 @@ class DDRFactory {
     }
     this.seriesMap.clear();
     this.hydratedData.clear();
+    this._feedVisible.clear();
     this.manifest = null;
     this.cutoverActive = false;
   }
@@ -310,10 +412,13 @@ class DDRFactory {
     }
 
     const renderOpts = DDRFactory._parseRenderOpts(component.renderOptions);
+    const feedVisible = renderOpts.defaultVisible !== false;
+    this._feedVisible.set(component.id, feedVisible);
     const priceScaleId = DDRFactory.resolvePriceScaleId(component, chartEntry, renderOpts);
     const seriesOpts = {
       ...renderOpts,
       priceScaleId,
+      visible: feedVisible,
       crosshairMarkerVisible: false,
       crosshairMarkerRadius: 0,
     };
@@ -393,6 +498,8 @@ class DDRFactory {
     }
   }
 }
+
+DDRFactory._CROSSHAIR_ANCHORS = new Set(['woz_fast', 'line_rsx']);
 
 if (typeof window !== 'undefined') {
   window.DDRFactory = DDRFactory;
