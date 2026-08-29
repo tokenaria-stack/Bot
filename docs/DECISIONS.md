@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## HISTORY-IDLE-PUMP-1 — viewport history demand is human-owned (Aug 2026)
+
+**Context:** Parked near an edge, `onAfterFlush` → `scheduleHistoryLoad()` re-armed from the current runway while scroll-arm stayed sticky. Infinite 3000-bar pages, WS/HTTP spam, rAF violations, last-price blink from island slide. Not a last-price or cursor bug.
+
+**Decision:** Human movement owns one latest coalesced viewport intent (`cause: 'userNav'`). Paint/restore/range echo consume only. Consume scroll-arm when a viewport request starts so LWC echo cannot re-page. Drag re-arms on primary-button `pointermove` (hover does not). Consume pending with one `pickHistoryPrefetchEdge`. `sourceContinue` is not gated.
+
+**Rejected:**
+- UI clamps / skip paints to hide idle heat — **Reason:** Rule 1; owning layer is demand.
+- One chunk per flick (drop Wave 2 pending) — **Reason:** starves fast travel.
+- Dual LEFT then RIGHT pending fall-through — **Reason:** stale opposite aftershock.
+- Treating `[Violation]` / last-price blink as the next chapter — **Reason:** idle pump was the cause; smoke closed it.
+
+**Consequences:** Chapter frozen (`636ff55`). Do not “fix” cursor overlap or the last-price line unless a regression remains after idle traffic is gone.
+
+---
+
 ## Chart freeze — stop camera/cap/RAF experiments (`CHART_FROZEN`)
 
 **Context:** HISTORY/LEFT/RIGHT and Fix C–G are stable. Store 9k / visible 5k is an acceptable live experiment. Remaining tick `[Violation]` logs are LWC paint cost.

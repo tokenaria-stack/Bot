@@ -508,17 +508,22 @@ func (m *Runtime) applyAggTrade(t exchange.AggTrade) {
 		return
 	}
 	closed, forming, didClose, hasForming := m.secondBar.OnAggTrade(t)
+	secondsHot.aggTrades.Add(1)
 	if didClose {
+		secondsHot.sec1Closed.Add(1)
 		frame.UpdateKlineTick(closed, true)
 		if cb != nil {
+			secondsHot.onKlineBarCall.Add(1)
 			cb(exchange.SecondTF, closed, true)
 		}
 		frame.UpdateIndicators()
 		m.fanoutSparseSeconds(closed)
 	}
 	if hasForming {
+		secondsHot.sec1Forming.Add(1)
 		frame.UpdateKlineTick(forming, false)
 		if cb != nil {
+			secondsHot.onKlineBarCall.Add(1)
 			cb(exchange.SecondTF, forming, false)
 		}
 		m.fanoutSparseSeconds(forming)
@@ -639,6 +644,7 @@ func (m *Runtime) StartDataFeed(ctx context.Context, wsOutCh <-chan exchange.WsT
 	m.mu.Unlock()
 	go func() {
 		log.Println("[Master] Data feed router started...")
+		m.startSecondsHotAudit(ctx)
 		for {
 			select {
 			case <-ctx.Done():

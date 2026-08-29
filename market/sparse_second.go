@@ -103,15 +103,19 @@ func (m *Runtime) fanoutSparseSeconds(parent exchange.Kline) {
 		}
 		closed, forming, didClose, ok := acc.OnParent(parent)
 		if didClose {
+			secondsHot.sparseClosed.Add(1)
 			frame.UpdateKlineTick(closed, true)
 			if cb != nil {
+				secondsHot.onKlineBarCall.Add(1)
 				cb(e.Name, closed, true)
 			}
 			frame.UpdateIndicators()
 		}
 		if ok {
+			secondsHot.sparseForming.Add(1)
 			frame.UpdateKlineTick(forming, false)
 			if cb != nil {
+				secondsHot.onKlineBarCall.Add(1)
 				cb(e.Name, forming, false)
 			}
 		}
