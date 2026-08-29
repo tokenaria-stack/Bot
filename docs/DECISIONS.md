@@ -534,7 +534,7 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 **Wire:**
 
 - `line_rsx` → `bounded(-5,105)`; `line_rsx_signal` → `ignore`.
-- `woz_fast` → `bounded(-5,105)`; other Wozduh lines → `ignore`.
+- `woz_slow` → `bounded(-5,105)`; other Wozduh lines → `ignore`.
 
 **Rejected:** ScaleController range freeze; `hostId === "rsx"`; `isPrimaryLine`; parallel `INDICATORS_CONFIG`.
 

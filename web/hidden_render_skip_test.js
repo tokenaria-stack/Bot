@@ -201,17 +201,17 @@ test('F. TF switch while hidden: enable gets TF B, never TF A', () => {
   assert.deepStrictEqual(set[0].points, [{ time: 9, value: 200 }]);
 });
 
-test('G. hidden woz_fast and line_rsx still receive full/live data', () => {
+test('G. hidden woz_slow and line_rsx still receive full/live data', () => {
   const events = [];
   const factory = new DDRFactory();
   factory.buildPanes(
     {
-      wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_fast'); } } },
+      wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_slow'); } } },
       rsx: { chart: { addLineSeries() { return fakeLine(events, 'line_rsx'); } } },
     },
     {
       pane_osc: [{
-        id: 'woz_fast',
+        id: 'woz_slow',
         hostId: 'wozduh',
         kind: 'line',
         renderOptions: { defaultVisible: false, scaleContribution: { type: 'bounded', min: -5, max: 105 } },
@@ -224,17 +224,17 @@ test('G. hidden woz_fast and line_rsx still receive full/live data', () => {
       }],
     },
   );
-  factory.setSeriesVisible('woz_fast', false);
+  factory.setSeriesVisible('woz_slow', false);
   factory.setSeriesVisible('line_rsx', false);
   factory.hydrateFromColumnar({
     times: [1],
-    plots: { woz_fast: [40], line_rsx: [55] },
+    plots: { woz_slow: [40], line_rsx: [55], woz_fast: [10] },
   });
   factory.applyHydratedData();
-  factory.updateTick(2, { woz_fast: 41, line_rsx: 56 });
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_fast'));
+  factory.updateTick(2, { woz_slow: 41, line_rsx: 56, woz_fast: 11 });
+  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_slow'));
   assert.ok(events.some((e) => e.op === 'setData' && e.id === 'line_rsx'));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_fast' && e.pt.value === 41));
+  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_slow' && e.pt.value === 41));
   assert.ok(events.some((e) => e.op === 'update' && e.id === 'line_rsx' && e.pt.value === 56));
 });
 
@@ -259,14 +259,16 @@ test('H. hidden non-anchor Wozduh receives no LWC data work', () => {
 test('I. setSeriesVisible remains the visibility SSOT (no extra FSM)', () => {
   const factory = new DDRFactory();
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine([], 'woz_slow'); } } } },
-    { pane_osc: [{ id: 'woz_slow', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
+    { wozduh: { chart: { addLineSeries() { return fakeLine([], 'woz_fast'); } } } },
+    { pane_osc: [{ id: 'woz_fast', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
   );
-  assert.strictEqual(factory.needsLwcData('woz_slow'), true);
-  factory.setSeriesVisible('woz_slow', false);
-  assert.strictEqual(factory.needsLwcData('woz_slow'), false);
-  factory.setSeriesVisible('woz_slow', true);
-  assert.strictEqual(factory.needsLwcData('woz_slow'), true);
+  assert.strictEqual(factory.needsLwcData('woz_fast'), true);
+  factory.setSeriesVisible('woz_fast', false);
+  assert.strictEqual(factory.needsLwcData('woz_fast'), false);
+  factory.setSeriesVisible('woz_fast', true);
+  assert.strictEqual(factory.needsLwcData('woz_fast'), true);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_slow'), true);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_fast'), false);
 });
 
 console.log('hidden_render_skip_test: ALL PASS');

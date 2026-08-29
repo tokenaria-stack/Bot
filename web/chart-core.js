@@ -450,13 +450,13 @@
     if (chart === state.charts.price) return state.candleSeries;
     const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
     if (!factory?.cutoverActive || typeof factory.getSeries !== 'function') return null;
-    if (chart === state.charts.wozduh) return factory.getSeries('woz_fast');
+    if (chart === state.charts.wozduh) return factory.getSeries('woz_slow');
     if (chart === state.charts.rsx) return factory.getSeries('line_rsx');
     return null;
   }
 
   function crosshairAnchorId(state, chart) {
-    if (chart === state.charts.wozduh) return 'woz_fast';
+    if (chart === state.charts.wozduh) return 'woz_slow';
     if (chart === state.charts.rsx) return 'line_rsx';
     return null;
   }

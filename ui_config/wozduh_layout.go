@@ -13,7 +13,7 @@ const (
 
 // WozduhComponents returns DDR bindings for the full Wozduh Pine atom set.
 // Visibility toggles are driven by Configurable + SettingsRenderer (no FE line hardcode).
-// ADR-022: woz_fast is the bounded Auto anchor; peers declare ignore (no heuristics).
+// ADR-022: woz_slow is the bounded Auto anchor; peers declare ignore (no heuristics).
 func WozduhComponents() []core.UIComponent {
 	return []core.UIComponent{
 		wozLine("woz_rsi_price", core.SlotWozduhRsiPrice, scaleIgnore,
@@ -26,9 +26,9 @@ func WozduhComponents() []core.UIComponent {
 			`{"color":"purple","lineWidth":2,"title":"RSI HL2 (Purple)","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),
 		wozLine("woz_macd_rsi", core.SlotWozduhMacdRsi, scaleIgnore,
 			`{"color":"black","lineWidth":2,"title":"MACD RSI (Black)","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_fast", core.SlotWozduhFast, scaleBoundedOsc,
+		wozLine("woz_fast", core.SlotWozduhFast, scaleIgnore,
 			`{"color":"blue","lineWidth":2,"title":"wt11 (Blue)","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_slow", core.SlotWozduhSlow, scaleIgnore,
+		wozLine("woz_slow", core.SlotWozduhSlow, scaleBoundedOsc,
 			`{"color":"aqua","lineWidth":2,"title":"wt22 (Aqua)","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),
 		wozLine("woz_rsi_ad", core.SlotWozduhRsiAd, scaleIgnore,
 			`{"color":"maroon","lineWidth":1,"title":"RSI AD (Maroon)","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),

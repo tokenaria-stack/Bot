@@ -57,9 +57,10 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	}
 }
 
-func TestWozduhFastBoundedPeersIgnore(t *testing.T) {
+func TestWozduhSlowBoundedPeersIgnore(t *testing.T) {
 	comps := WozduhComponents()
-	var fastType string
+	var slowType string
+	boundedCount := 0
 	ignoreCount := 0
 	for _, c := range comps {
 		var m map[string]any
@@ -71,10 +72,11 @@ func TestWozduhFastBoundedPeersIgnore(t *testing.T) {
 			t.Fatalf("%s missing scaleContribution", c.ID)
 		}
 		typ, _ := sc["type"].(string)
-		if c.ID == "woz_fast" {
-			fastType = typ
+		if c.ID == "woz_slow" {
+			slowType = typ
+			boundedCount++
 			if sc["min"].(float64) != -5 || sc["max"].(float64) != 105 {
-				t.Fatalf("woz_fast bounds=%v", sc)
+				t.Fatalf("woz_slow bounds=%v", sc)
 			}
 			continue
 		}
@@ -83,8 +85,11 @@ func TestWozduhFastBoundedPeersIgnore(t *testing.T) {
 		}
 		ignoreCount++
 	}
-	if fastType != "bounded" {
-		t.Fatalf("woz_fast type=%q", fastType)
+	if slowType != "bounded" {
+		t.Fatalf("woz_slow type=%q", slowType)
+	}
+	if boundedCount != 1 {
+		t.Fatalf("expected exactly one bounded Wozduh owner, got %d", boundedCount)
 	}
 	if ignoreCount < 10 {
 		t.Fatalf("expected many ignore peers, got %d", ignoreCount)
