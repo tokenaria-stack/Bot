@@ -1255,6 +1255,13 @@
         if (typeof WozduhExtremeBands !== 'undefined') WozduhExtremeBands.dispose();
       });
     }
+    if (typeof RsxScaleLines !== 'undefined') {
+      RsxScaleLines.dispose();
+      RsxScaleLines.attach(rsxChart);
+      state._disposers.push(() => {
+        if (typeof RsxScaleLines !== 'undefined') RsxScaleLines.dispose();
+      });
+    }
 
     bindTimeCamera();
     bindResize(priceHost, priceChart, state._disposers);
@@ -1344,6 +1351,9 @@
     }
     if (typeof WozduhExtremeBands !== 'undefined' && typeof WozduhExtremeBands.refresh === 'function') {
       WozduhExtremeBands.refresh(state._lastRealCandleTime);
+    }
+    if (typeof RsxScaleLines !== 'undefined' && typeof RsxScaleLines.refresh === 'function') {
+      RsxScaleLines.refresh(state._lastRealCandleTime);
     }
     refreshRulerOverlay();
   }
