@@ -121,3 +121,63 @@ func TestWozduhChannelPaintComponents(t *testing.T) {
 		}
 	}
 }
+
+func TestWozduhPineRenderMountOrder(t *testing.T) {
+	comps := WozduhComponents()
+	var mounted []string
+	for _, c := range comps {
+		if c.Kind == "plot" {
+			continue
+		}
+		mounted = append(mounted, c.ID)
+	}
+	want := []string{
+		"woz_rsi_ad",
+		"woz_rsi_hl2",
+		"woz_slow",
+		"woz_fast",
+		"woz_vol_chan",
+		"woz_rsi_hl2_vol",
+		"woz_rsi_price",
+		"woz_price_chan",
+		"woz_rsi_rsi",
+		"woz_macd_rsi",
+		"woz_ema_rsi",
+	}
+	if len(mounted) != len(want) {
+		t.Fatalf("mounted=%v want=%v", mounted, want)
+	}
+	for i := range want {
+		if mounted[i] != want[i] {
+			t.Fatalf("mount[%d]=%s want %s (full=%v)", i, mounted[i], want[i], mounted)
+		}
+	}
+}
+
+func TestWozduhMenuTitlesAndSolidChannelBounds(t *testing.T) {
+	comps := WozduhComponents()
+	titles := map[string]string{}
+	for _, c := range comps {
+		var m map[string]any
+		if err := json.Unmarshal(c.RenderOpts, &m); err != nil {
+			t.Fatal(c.ID, err)
+		}
+		if title, ok := m["title"].(string); ok {
+			titles[c.ID] = title
+		}
+		if c.ID == "woz_vol_chan" || c.ID == "woz_price_chan" {
+			if m["upperLineStyle"] != float64(0) || m["lowerLineStyle"] != float64(0) {
+				t.Fatalf("%s line styles=%v %v", c.ID, m["upperLineStyle"], m["lowerLineStyle"])
+			}
+		}
+	}
+	if titles["woz_fast"] != "Woz fast (Blue)" {
+		t.Fatalf("woz_fast title=%q", titles["woz_fast"])
+	}
+	if titles["woz_slow"] != "Woz slow (Aqua)" {
+		t.Fatalf("woz_slow title=%q", titles["woz_slow"])
+	}
+	if titles["woz_fast"] == titles["woz_slow"] {
+		t.Fatal("titles must stay distinct")
+	}
+}

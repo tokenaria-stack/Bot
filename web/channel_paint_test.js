@@ -191,6 +191,12 @@ test('LIVE: any missing column → whitespace update, not interpolated band', ()
   assert.deepStrictEqual(updates[0], { time: 9 });
 });
 
+test('ChannelSeries defaults: solid upper/lower (style 0)', () => {
+  const opts = new ChannelSeries().defaultOptions();
+  assert.strictEqual(opts.upperLineStyle, 0);
+  assert.strictEqual(opts.lowerLineStyle, 0);
+});
+
 test('channel autoscaleInfoProvider is ignore (null)', () => {
   let captured;
   const fakeChart = {

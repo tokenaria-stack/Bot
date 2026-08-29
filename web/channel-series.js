@@ -140,8 +140,8 @@
         fillColor: 'rgba(0, 136, 255, 0.12)',
         lineWidth: 1,
         midLineWidth: 1,
-        upperLineStyle: 2,
-        lowerLineStyle: 2,
+        upperLineStyle: 0,
+        lowerLineStyle: 0,
       };
     }
 

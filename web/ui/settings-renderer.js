@@ -155,7 +155,12 @@ const SettingsRenderer = (() => {
         }
       });
       label.appendChild(input);
-      label.appendChild(document.createTextNode(` ${labelFor(c)}`));
+      const text = document.createElement('span');
+      text.textContent = ` ${labelFor(c)}`;
+      if (c.id === 'woz_slow') {
+        text.className = 'wozduh-pane-owner-label';
+      }
+      label.appendChild(text);
       menu.appendChild(label);
     }
 

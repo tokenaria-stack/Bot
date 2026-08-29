@@ -125,6 +125,10 @@
   margin-bottom: 0;
 }
 
+.wozduh-pane-owner-label {
+  text-decoration: underline;
+}
+
 /* ── Risk menu (header dropup) ── */
 .risk-menu-wrap {
   position: relative;
