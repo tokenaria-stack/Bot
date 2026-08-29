@@ -1244,20 +1244,6 @@
         });
         return 'stop';
       },
-      logRightAppendDiag: (data, meta) => {
-        if (typeof isSparseSecondChart !== 'function' || !isSparseSecondChart(window.currentTf)) {
-          return;
-        }
-        const folded = Array.isArray(data?.times) ? data.times.length : 0;
-        console.log('[SECONDS-HISTORY] right append', {
-          parentResumeAfterSec: data?.parentResumeAfterSec ?? 0,
-          folded,
-          added: meta?.added ?? 0,
-          tipBefore: meta?.tipBefore ?? null,
-          tipAfter: meta?.tipAfter ?? null,
-          hasNewer: data?.hasNewer,
-        });
-      },
       markDirty: (intent) => liveRenderScheduler?.markDirty(intent),
       processTick: (tick) => pushLiveTickDelta(tick),
     });

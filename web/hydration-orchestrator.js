@@ -175,22 +175,6 @@ class HydrationOrchestrator {
     }
   }
 
-  _logViewportHistoryProgress(direction, options, cursor, data, mergeResult) {
-    const cause = options && options.sourceContinue === true ? 'sourceContinue' : 'userNav';
-    const times = data && Array.isArray(data.times) ? data.times : null;
-    console.log('[HISTORY-IDLE]', {
-      cause,
-      direction,
-      requestCursor: cursor,
-      headBefore: mergeResult?.headBefore ?? null,
-      headAfter: mergeResult?.headAfter ?? null,
-      tipBefore: mergeResult?.tipBefore ?? null,
-      tipAfter: mergeResult?.tipAfter ?? null,
-      responseBars: times ? times.length : null,
-      uniqueAdded: mergeResult?.added ?? 0,
-    });
-  }
-
   /** Drop queued ticks without replay (epoch/TF abort). */
   discardQueue() {
     this.wsQueue = [];
@@ -599,8 +583,6 @@ class HydrationOrchestrator {
 
         this._zeroProgressLeftHeadSec = null;
 
-        this._logViewportHistoryProgress('left', options, endTimeSec, data, mergeResult);
-
         const addedBars = Number(mergeResult.added) > 0
           ? Number(mergeResult.added)
           : (Number.isFinite(data.added) && data.added > 0 ? data.added : 0);
@@ -719,9 +701,6 @@ class HydrationOrchestrator {
       if (!data || !Array.isArray(data.times) || data.times.length === 0) {
         // Empty right payload → stop right pending (no left EOF inference).
         this._pendingRightIntent = null;
-        if (typeof deps.logRightAppendDiag === 'function') {
-          deps.logRightAppendDiag(data, { added: 0, tipBefore: tipSec, tipAfter: tipSec });
-        }
         if (this._rightReachedSourceTail(data)) {
           this._clearRightDetachedOnSourceTail();
           return;
@@ -755,13 +734,6 @@ class HydrationOrchestrator {
           && afterTipSec != null
           && afterTipSec > tipSec;
         const added = Number(mergeResult?.added) || 0;
-        if (typeof deps.logRightAppendDiag === 'function') {
-          deps.logRightAppendDiag(data, {
-            added,
-            tipBefore: tipSec,
-            tipAfter: afterTipSec,
-          });
-        }
         // Latch right only on added == 0.
         if (!mergeResult || added <= 0) {
           this._pendingRightIntent = null;
@@ -797,14 +769,6 @@ class HydrationOrchestrator {
         }
 
         this._zeroProgressRightTipSec = null;
-
-        this._logViewportHistoryProgress('right', options, endTimeSec, data, {
-          headBefore: mergeResult.headBefore ?? null,
-          headAfter: mergeResult.headAfter ?? null,
-          tipBefore: mergeResult.tipBefore ?? tipSec,
-          tipAfter: mergeResult.tipAfter ?? afterTipSec,
-          added,
-        });
 
         const addedBars = Number(mergeResult.added) > 0 ? Number(mergeResult.added) : 0;
 
