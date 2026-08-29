@@ -18,6 +18,10 @@ HISTORY_EDGE_PREFETCH_FRAC = 0.25
 
 Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining live `[Violation]` RAF cost is accepted; later speed work is fewer painted indicator series, not more camera logic. Do not reopen TimeCamera, LEFT/RIGHT hydration, RenderScheduler, cap/chunk/prefetch, or tick throttling unless a real regression appears.
 
+**HISTORY-IDLE-PUMP-1 (frozen):** viewport history demand is human-owned. Wheel / drag / navigation may note `userNav`. Paint and LWC range echo must not schedule a new page. Post-flush consumes pending only. Sparse `sourceContinue` is separate.
+
+**SPARSE-LIVE-INGEST-1 (frozen):** 5s–45s WS ingest follows `windowMode` (island identity). `historyHasNewer` is paging/source only. 1s keeps the `historyHasNewer` detach veto.
+
 ---
 
 ## SSOT map

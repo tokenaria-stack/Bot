@@ -63,12 +63,12 @@ assert.ok(/historyHasNewer = data.hasNewer === true/.test(boot),
 assert.ok(!/historyHasNewer/.test(boot.slice(boot.indexOf('fetchRightColumnar:'), boot.indexOf('fetchColumnar:'))),
   'empty/failed right fetch must not reattach from page flags');
 
-const pushStart = boot.indexOf('function pushLiveTickDelta');
-assert.ok(pushStart >= 0, 'missing pushLiveTickDelta');
-const push = boot.slice(pushStart, boot.indexOf('function liveCameraViewIntent', pushStart));
-assert.ok(/historyHasNewer === true/.test(push) && /isSecondsHistoryNavChart/.test(push),
+const ingestStart = boot.indexOf('function shouldVetoSecondsLiveIngest');
+assert.ok(ingestStart >= 0, 'missing shouldVetoSecondsLiveIngest');
+const ingest = boot.slice(ingestStart, boot.indexOf('function liveCameraViewIntent', ingestStart));
+assert.ok(/historyHasNewer === true/.test(ingest) && /isLiveSecondChart/.test(ingest),
   'detached 1s island must not ingest live ticks');
-assert.ok(push.indexOf('historyHasNewer') < push.indexOf('appendTick'),
+assert.ok(ingest.indexOf('historyHasNewer') < ingest.indexOf('appendTick'),
   'detach gate is before appendTick');
 
 assert.ok(/returnToLive\(\)/.test(tf), 'same-TF 1s click is explicit RTL');

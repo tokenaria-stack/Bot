@@ -1365,19 +1365,40 @@
     await loadDashboard();
   }
 
+  /**
+   * Seconds WS ingest veto. historyHasNewer is paging/source only for 5s–45s.
+   * 1s keeps the detached-island hasNewer veto. TimeCamera is paint-only.
+   * @param {string} tf
+   * @param {string} windowMode
+   * @param {boolean} historyHasNewer
+   */
+  function shouldVetoSecondsLiveIngest(tf, windowMode, historyHasNewer) {
+    if (typeof isSparseSecondChart === 'function' && isSparseSecondChart(tf)) {
+      return windowMode === 'history';
+    }
+    if (typeof isLiveSecondChart === 'function' && isLiveSecondChart(tf)
+        && historyHasNewer === true) {
+      return true;
+    }
+    return false;
+  }
+
   function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
+    const tickTf = tick?.timeframe || window.currentTf;
     // Dense HISTORY island must not ingest live ticks (Debt #69A gap-heal yank).
     // Sparse 1s: MICRO-2C still ingests; paint is gated by TimeCamera VIEW.
     // Blocking ingest here deadlocks 1s: quiet seconds never promote windowMode.
+    // 5s–45s: windowMode is island identity (HISTORY microscope rejects "now").
     if (liveColumnarStore.windowMode === 'history') {
+      if (typeof isSparseSecondChart === 'function' && isSparseSecondChart(tickTf)) {
+        return false;
+      }
       const sparseTick = typeof isSparseLiveChart === 'function'
-        && isSparseLiveChart(tick?.timeframe || window.currentTf);
+        && isSparseLiveChart(tickTf);
       if (!sparseTick) return false;
     }
-    // Detached 1s island: live ticks must not append a "now" tip. Server + micro_klines remain truth.
-    if (isSecondsHistoryNavChart(tick?.timeframe || window.currentTf)
-        && window.historyHasNewer === true) {
+    if (shouldVetoSecondsLiveIngest(tickTf, liveColumnarStore.windowMode, window.historyHasNewer === true)) {
       return false;
     }
     // Preserve-paired: capture VIEW before append so budget cannot drop visible oldest bars.

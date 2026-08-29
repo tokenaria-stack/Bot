@@ -76,12 +76,14 @@ const rtl = extractFn(boot, 'returnToLive');
 assert.ok(/userReturnToLive: true/.test(rtl), 'RTL is latest-tail hydrate');
 assert.ok(!/reloadDashboard/.test(rtl) && !/cache\/clear/.test(rtl), 'RTL must not clear HTF cache');
 
-const pushStart = boot.indexOf('function pushLiveTickDelta');
-assert.ok(pushStart >= 0, 'missing pushLiveTickDelta');
-const push = boot.slice(pushStart, boot.indexOf('function liveCameraViewIntent', pushStart));
-assert.ok(/isSecondsHistoryNavChart/.test(push) && /historyHasNewer === true/.test(push),
-  'detached sparse-second island must not ingest live ticks');
-assert.ok(push.indexOf('historyHasNewer') < push.indexOf('appendTick'),
+const ingestStart = boot.indexOf('function shouldVetoSecondsLiveIngest');
+assert.ok(ingestStart >= 0, 'missing shouldVetoSecondsLiveIngest');
+const ingest = boot.slice(ingestStart, boot.indexOf('function liveCameraViewIntent', ingestStart));
+assert.ok(/isLiveSecondChart/.test(ingest) && /historyHasNewer === true/.test(ingest),
+  'detached 1s island must not ingest live ticks');
+assert.ok(/isSparseSecondChart/.test(ingest),
+  '5s–45s ingest uses island windowMode, not hasNewer');
+assert.ok(ingest.indexOf('historyHasNewer') < ingest.indexOf('appendTick'),
   'detach gate is before appendTick');
 
 assert.ok(!/LIVE-TF-DIAG/.test(boot), 'temporary LIVE-TF-DIAG tracer must be gone');

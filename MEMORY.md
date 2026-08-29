@@ -34,7 +34,7 @@ On request / only when the task needs them:
 | Packages | `market/` (state), `decision/` (contracts), `strategy/` = beacon |
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
-| Chart | **Frozen** — tag `CHART_FROZEN` (store 9k / visible 5k / chunk 3k / prefetch 25%) |
+| Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + **SPARSE-LIVE-INGEST-1 ✅** |
 | NEXT | **HIST-3** microscope matrix → **DATA-1** gaps → LOD / paint → **#76 ScoreNodes** |
 
 Update the owning SSOT file — do not duplicate content here.

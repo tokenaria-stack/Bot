@@ -8,6 +8,22 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SPARSE-LIVE-INGEST-1 — 5s–45s WS ingest uses windowMode (Aug 2026) ✅
+
+- Frozen after smoke: LIVE 5s/15s forming bar stays alive with `historyHasNewer=true`; no history unlock required.
+- `pushLiveTickDelta`: 1s keeps `historyHasNewer` veto; 5s–45s (`isSparseSecondChart`) ingest by `windowMode` only. TimeCamera stays paint-only. Producers / ISLAND-SLIDE / `_maybePromoteLiveWindow` unchanged.
+
+---
+
+## HISTORY-IDLE-PUMP-1 — human-owned viewport history demand (Aug 2026) ✅
+
+- **Frozen.** Smoke green: parked chart has no viewport-history spam; TF switch is good enough; travel/reversal still pages.
+- Law: human movement creates/refreshes one coalesced viewport-history intent. Paint / restore / `setData` / range echo may consume it; they must never invent a new speculative page. `sourceContinue` / `parentResumeAfter` stay automatic (sparse source fold, not camera prefetch).
+- `onAfterFlush` → `tryConsumePending()` only. Latest `cause: 'userNav'` wins (clears stale opposite slot; in-flight reverse is accepted). Paint/echo opposite notes stay ignored.
+- Commit `636ff55`. Do not start cursor-overlap, last-price-line, or RAF-violation “fixes” from idle-pump symptoms. Temporary `[HISTORY-IDLE]` travel logs are not a remaining defect (1m pages advance head by a full chunk, not ~1 bar).
+
+---
+
 ## MICRO-2A — durable sparse 1s history (Aug 2026) ✅
 
 - Closed 1s bars enqueue on the existing PersistenceQueue into `micro_klines` (same `history.db`, same writer). Forming bars and raw aggTrade are not stored.

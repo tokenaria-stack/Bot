@@ -109,14 +109,15 @@ test('boot: ingest still precedes the VIEW paint gate', () => {
     'sparse 1s must still ingest when windowMode is history');
   assert.ok(/liveCameraViewIntent/.test(pushBody),
     'paint gate must read TimeCamera VIEW, not windowMode');
-  assert.ok(/historyHasNewer === true/.test(pushBody),
-    'detached 1s island must skip live ingest');
-  assert.ok(pushBody.indexOf('historyHasNewer') < appendAt,
-    'detach skip is before appendTick');
-  assert.ok(/isSecondsHistoryNavChart/.test(pushBody),
-    'detach skip is 1s and sparse-second children, not all sparse');
-  assert.ok(!/isLiveSecondChart\(tick/.test(pushBody),
-    'must not widen isLiveSecondChart; use the seconds-history nav gate');
+  assert.ok(pushBody.indexOf('shouldVetoSecondsLiveIngest') < appendAt,
+    'seconds ingest veto is before appendTick');
+  assert.ok(/isSparseSecondChart/.test(pushBody),
+    '5s–45s HISTORY island rejects before append');
+  const veto = extractFn(boot, 'shouldVetoSecondsLiveIngest');
+  assert.ok(/isLiveSecondChart/.test(veto) && /historyHasNewer/.test(veto),
+    'hasNewer ingest veto is 1s-only');
+  assert.ok(/isSparseSecondChart/.test(veto),
+    '5s–45s ingest uses sparse-second island identity');
 });
 
 test('boot: TimeCamera shadow is the VIEW source', () => {
