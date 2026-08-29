@@ -55,6 +55,12 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	if s["type"] != "ignore" {
 		t.Fatalf("signal=%v", s)
 	}
+	if primary["color"] != "#512DA8" {
+		t.Fatalf("line_rsx default color=%v", primary["color"])
+	}
+	if signal["color"] != "#8B9BB4" {
+		t.Fatalf("line_rsx_signal color=%v", signal["color"])
+	}
 	if primary["lastValueVisible"] != false || primary["priceLineVisible"] != false {
 		t.Fatalf("line_rsx last-value chrome=%v %v", primary["lastValueVisible"], primary["priceLineVisible"])
 	}

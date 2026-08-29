@@ -17,7 +17,7 @@ func RSXComponents() []core.UIComponent {
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikRSX,
-			RenderOpts: json.RawMessage(`{"color":"#E1D2B5","lineWidth":2,"title":"RSX","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded","min":-5,"max":105}}`),
+			RenderOpts: json.RawMessage(`{"color":"#512DA8","lineWidth":2,"title":"RSX","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded","min":-5,"max":105}}`),
 		},
 		{
 			ID:         "line_rsx_signal",

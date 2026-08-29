@@ -7,6 +7,13 @@ const ScaleContributionApi = (typeof ScaleContribution !== 'undefined')
   : (typeof require === 'function'
     ? (() => { try { return require('./ui/scale-contribution.js'); } catch { return null; } })()
     : null);
+const RsxStrokeColorApi = (typeof RsxStrokeColor !== 'undefined')
+  ? RsxStrokeColor
+  : (typeof require === 'function'
+    ? (() => { try { return require('./rsx-stroke-color.js'); } catch { return null; } })()
+    : null);
+
+const LINE_RSX_ID = 'line_rsx';
 
 class DDRFactory {
   /** @type {number} Server-side sentinel (wire.HistoryAbsent / math.MaxFloat64). */
@@ -177,7 +184,7 @@ class DDRFactory {
         : (source instanceof Map ? source.get(id) : this.hydratedData.get(id));
       if (!points?.length) continue;
       try {
-        series.setData(points);
+        series.setData(DDRFactory.withRsxStrokeColors(id, points));
       } catch {
         /* skip invalid setData during cutover */
       }
@@ -190,6 +197,33 @@ class DDRFactory {
     if (entry.series && typeof entry.series.setData === 'function') return entry.series;
     if (typeof entry.setData === 'function') return entry;
     return null;
+  }
+
+  /**
+   * Pine OB/OS color on line_rsx points only. Whitespace unchanged.
+   * Does not mutate the source array / hydratedData.
+   */
+  static withRsxStrokeColors(id, points) {
+    if (id !== LINE_RSX_ID || !Array.isArray(points)) return points;
+    const colorOf = RsxStrokeColorApi && typeof RsxStrokeColorApi.rsxStrokeColor === 'function'
+      ? RsxStrokeColorApi.rsxStrokeColor
+      : null;
+    if (!colorOf) return points;
+    const out = new Array(points.length);
+    for (let i = 0; i < points.length; i++) {
+      const pt = points[i];
+      if (!pt || !Number.isFinite(pt.value)) {
+        out[i] = pt;
+        continue;
+      }
+      const color = colorOf(pt.value);
+      if (!color) {
+        out[i] = pt;
+        continue;
+      }
+      out[i] = { time: pt.time, value: pt.value, color };
+    }
+    return out;
   }
 
   static columnToLWC(times, values, sentinel, normalizeTime) {
@@ -301,7 +335,13 @@ class DDRFactory {
       const value = Number(rawValue);
       if (!Number.isFinite(value) || value >= absent) continue;
       try {
-        series.update({ time: chartTime, value });
+        if (id === LINE_RSX_ID && RsxStrokeColorApi && typeof RsxStrokeColorApi.rsxStrokeColor === 'function') {
+          const color = RsxStrokeColorApi.rsxStrokeColor(value);
+          if (color) series.update({ time: chartTime, value, color });
+          else series.update({ time: chartTime, value });
+        } else {
+          series.update({ time: chartTime, value });
+        }
       } catch {
         /* skip invalid LWC updates */
       }
@@ -377,7 +417,7 @@ class DDRFactory {
     }
     if (!points?.length) return;
     try {
-      series.setData(points);
+      series.setData(DDRFactory.withRsxStrokeColors(id, points));
     } catch {
       /* skip invalid setData */
     }
