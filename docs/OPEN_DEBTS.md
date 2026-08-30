@@ -36,7 +36,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-SIGNAL-1.1 ✅ frozen** (`b4ac2ae`). TV family closed.
 
-**RSX-SIGNAL-2A ✅ frozen** + **RSX-SIGNAL-2A.1 ✅ frozen** (`39d6f78`). ZigZag facts + one-walk/wrap collector + annotation revision gate. Idle LIVE a bit cooler. Do **not** reopen 2A plumbing. Next chapter when asked: **RSX-SIGNAL-2B** (DivState/DivScore audit). Not fractal, menu, or ScoreNodes.
+**RSX-SIGNAL-2A ✅ frozen** + **RSX-SIGNAL-2A.1 ✅ frozen** (`39d6f78`). ZigZag facts + one-walk/wrap collector + annotation revision gate. Do **not** reopen 2A plumbing.
+
+**RSX-SIGNAL-2B ✅** — obsolete ZigZag DivState/DivScore path deleted. Slot iota holes remain. Next small cleanup when asked: MicroPatternNode → ScoreNode → unused `SlotTotalScore`. Not fractal, menu, ScoreNodes, or slot compaction.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-SIGNAL-2B — delete DivergenceNode, do not compact slots (Aug 2026)
+
+**Context:** After 2A/2A.1, ZigZag meaning lived twice: truthful `rsx_zz_div` facts and a dead `DivergenceNode` → `SlotDivState`/`SlotDivScore` → unused `SlotTotalScore` path. Old L/S/LL/SS was unpublished. Production already forced `LongScore = 0`.
+
+**Decision:** Delete the node and DivState presentation helpers. Drop `SlotDivScore` from ScoreNode weights. Keep ScoreNode for Micro. Leave middle slot iota holes. Retarget `ann_rsx_div.Slot` to `SlotJurikRSX` for pane ownership only. Projector/history skip non-scalar components, so Jurik values cannot be read as DivState.
+
+**Rejected:**
+- Adapter/no-op DivergenceNode wrapping facts — **Reason:** parallel meaning.
+- Mapping L/S/LL/SS onto facts — **Reason:** 2A already owns truthful Pattern.
+- Compacting slot iota in this chapter — **Reason:** renumbers later slots.
+- Wiring `SlotTotalScore` into `LongScore` to keep an old test green — **Reason:** production does not do that.
+
+**Consequences:** Micro → ScoreNode → unused TotalScore remains a later small cleanup. Not ScoreNodes, fractal, or menu.
+
+---
+
 ## RSX-SIGNAL-2A.1 — collector + revision gate, not fingerprint (Aug 2026)
 
 **Context:** 2A semantics were green. History ran a second DAG for ZZ facts. Live `_flushDelta` sliced annotations and called `setMarkers` every tick. Session `BarIndex` + `ValueAtBar` failed after `dagHistoryCap` wrap.
@@ -17,7 +33,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Hashing times+labels every tick — **Reason:** O(n) work on idle LIVE.
 - Sampling RSX inside ZigZagNode or retrofitting DivergenceNode — **Reason:** mixes 2A.1 with 2B.
 
-**Consequences:** Frozen (`39d6f78`) with 2A. Next chapter is 2B (DivState/DivScore audit), not fractal.
+**Consequences:** Frozen (`39d6f78`) with 2A. 2B deleted the unused DivState/score coupling.
 
 ---
 
@@ -32,7 +48,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Reading `SlotDivScore` to classify — **Reason:** meaning, unproven weights.
 - Changing ZigZag RSX sensitivity in this chapter — **Reason:** geometry ownership.
 
-**Consequences:** Frozen (`39d6f78`). 2B may delete unused DivState/score coupling after a consumer audit. Menu later.
+**Consequences:** Frozen (`39d6f78`). 2B deleted unused DivState/score coupling. Menu later.
 
 ---
 

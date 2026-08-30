@@ -12,6 +12,8 @@ type ScoreConfig struct {
 }
 
 // ScoreNode aggregates weighted slot values into SlotTotalScore.
+// Remaining chain: MicroPatternNode → SlotMicroDivScore → ScoreNode → SlotTotalScore.
+// SlotTotalScore has no operational wire consumer (LongScore stays 0). Do not add one here.
 type ScoreNode struct {
 	bus     *core.Bus
 	weights map[core.Slot]float64

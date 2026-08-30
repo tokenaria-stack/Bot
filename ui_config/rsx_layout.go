@@ -29,13 +29,13 @@ func RSXComponents() []core.UIComponent {
 			RenderOpts: json.RawMessage(`{"color":"#8B9BB4","lineWidth":1,"title":"RSX Signal","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}}`),
 		},
 		{
-			// RSX-SIGNAL-1: projector packs rsx_tv_div facts → Bull/Bear markers.
+			// RSX pane marker host. Slot names the pane's scalar owner, not a divergence value.
 			ID:         "ann_rsx_div",
 			Pane:       "pane_osc",
 			HostID:     "rsx",
 			Kind:       "marker",
 			DataMode:   "annotations",
-			Slot:       core.SlotDivState,
+			Slot:       core.SlotJurikRSX,
 			RenderOpts: json.RawMessage(`{"title":"RSX Div"}`),
 		},
 	}

@@ -75,15 +75,6 @@ func (r *EventRing) RestoreState() {
 	r.buf = r.snapBuf
 }
 
-// DivState enum values stored in SlotDivState.
-const (
-	DivStateNone float64 = 0
-	DivStateS    float64 = -1
-	DivStateSS   float64 = -2
-	DivStateL    float64 = 1
-	DivStateLL   float64 = 2
-)
-
 // HistValueAtBar returns the oscillator value at barIndex using history lookback.
 // barsAgo = currentBarIndex - barIndex; uses Cur for the current (uncommitted) bar.
 // Returns NaN when lookback exceeds ring memory.

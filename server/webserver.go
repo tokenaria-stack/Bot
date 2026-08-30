@@ -96,9 +96,6 @@ type DashboardServer struct {
 	backtestRuns     *backtestRunManager
 	uiRegistry       *core.UIRegistry
 	projector        *wire.Projector
-	// Shot 9I: rising-edge DivState → WS annotation (per timeframe).
-	lastDivMu    sync.Mutex
-	lastDivState map[string]float64
 }
 
 // MarketState is the JSON payload for GET /api/state.
@@ -225,7 +222,7 @@ type tickPayload struct {
 	IsClosed         bool                            `json:"isClosed,omitempty"`
 	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
 	Plots            map[string]float64              `json:"plots,omitempty"`
-	// Shot 9I: DAG DivState → Projector markers (no Falcon).
+	// Markers come from IndicatorFactEvent projection, not SlotDivState.
 	Marker      string            `json:"marker,omitempty"`
 	Annotations []wire.Annotation `json:"annotations,omitempty"`
 }
@@ -290,7 +287,6 @@ func NewDashboardServer(
 		liveNavigators:   defaultLiveNavigatorPanes(),
 		uiRegistry:       uiReg,
 		projector:        wire.NewProjector(uiReg),
-		lastDivState:     make(map[string]float64),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -433,20 +429,6 @@ func (d *DashboardServer) closedRSTVAnnotations(timeframe string, openTimeMs int
 		}
 	}
 	return "", out
-}
-
-// risingEdgeDivAnnotations is retained for tests; ZigZag DivState is not published as RSX TV facts.
-func (d *DashboardServer) risingEdgeDivAnnotations(
-	timeframe string,
-	frame *core.TickFrame,
-	timeSec int64,
-	isClosed bool,
-) (string, []wire.Annotation) {
-	_ = timeframe
-	_ = frame
-	_ = timeSec
-	_ = isClosed
-	return "", nil
 }
 
 func jsonSafeDivState(v float64) bool {

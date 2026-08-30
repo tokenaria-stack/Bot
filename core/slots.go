@@ -16,9 +16,11 @@ const (
 	SlotWozduhFast
 	SlotWozduhSlow
 
+	// SlotDivScore / SlotDivState: unused holes (RSX-SIGNAL-2B). Do not compact iota.
 	SlotDivScore
 	SlotDivState
 	SlotMicroDivScore
+	// SlotTotalScore is still written by ScoreNode; unused on the wire (LongScore=0).
 	SlotTotalScore
 
 	// Chaos atoms (Layer 2) — DDR debt: slots reserved; DAG node wiring TBD.

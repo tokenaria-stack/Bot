@@ -8,7 +8,6 @@ import (
 	"trading_bot/core"
 	"trading_bot/exchange"
 	"trading_bot/market"
-	"trading_bot/server/wire"
 )
 
 // buildOHLCChartFromKlines materializes price candles without indicator replay (Order Flow SSOT).
@@ -74,29 +73,11 @@ func (d *DashboardServer) buildHistoryChartSeriesTrimmed(
 }
 
 func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times []int64) []market.ChartAnnotation {
-	if d == nil || d.projector == nil {
-		return nil
-	}
-	wireAnns := d.projector.BuildHistoryAnnotations(hist, times)
-	return strategyAnnotationsFromWire(wireAnns)
-}
-
-func strategyAnnotationsFromWire(anns []wire.Annotation) []market.ChartAnnotation {
-	if len(anns) == 0 {
-		return nil
-	}
-	out := make([]market.ChartAnnotation, len(anns))
-	for i, a := range anns {
-		out[i] = market.ChartAnnotation{
-			Time:     a.Time,
-			Pane:     a.Pane,
-			Label:    a.Label,
-			Color:    a.Color,
-			Position: a.Position,
-			Shape:    a.Shape,
-		}
-	}
-	return out
+	_ = d
+	_ = hist
+	_ = times
+	// RSX-SIGNAL-2B: ZigZag DivState is gone. Columnar history packs facts; this JSON path stays empty.
+	return nil
 }
 
 // dagOscillatorsFromHistory fills legacy ChartOscillator rows from DAG slots (no Falcon).

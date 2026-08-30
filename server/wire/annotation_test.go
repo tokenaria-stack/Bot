@@ -86,13 +86,10 @@ func TestAnnotationFromFact_ZigZagHiddenLabel(t *testing.T) {
 	}
 }
 
-func TestAnnotationFromFact_RejectsDivStateAndUnknown(t *testing.T) {
+func TestAnnotationFromFact_RejectsUnknown(t *testing.T) {
 	t.Parallel()
 	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_fractal_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
-		t.Fatal("fractal source must not project in SIGNAL-2A")
-	}
-	if _, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx"); ok {
-		t.Fatal("ZigZag DivState must not emit chart markers")
+		t.Fatal("fractal source must not project")
 	}
 	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{
 		Source:    indicators.FactSourceRSXZZDiv,
@@ -100,7 +97,7 @@ func TestAnnotationFromFact_RejectsDivStateAndUnknown(t *testing.T) {
 		Pattern:   indicators.FactPatternRegular,
 		AnchorAt:  1,
 	}, "rsx"); !ok {
-		t.Fatal("rsx_zz_div must project in SIGNAL-2A")
+		t.Fatal("rsx_zz_div must project")
 	}
 }
 
@@ -127,51 +124,51 @@ func TestAnnotationsFromFacts_FiltersToTimes(t *testing.T) {
 	}
 }
 
-func TestBuildHistoryAnnotations_DivStateUnpublished(t *testing.T) {
+func TestAnnotationsFromFacts_RSXPaneNotDivStateSlot(t *testing.T) {
 	t.Parallel()
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProjector(reg)
-
-	hist := core.NewHistoryBus(8)
-	states := []float64{
-		core.DivStateNone,
-		core.DivStateL,
-		core.DivStateS,
-		core.DivStateLL,
+	var comp core.UIComponent
+	found := false
+	for _, c := range reg.Components() {
+		if c.ID == "ann_rsx_div" {
+			comp = c
+			found = true
+			break
+		}
 	}
-	for _, st := range states {
-		frame := &core.TickFrame{}
-		frame.Set(core.SlotDivState, st)
-		hist.PushFrame(frame)
-		hist.Advance()
-	}
-	times := []int64{100, 200, 300, 400}
-	anns := p.BuildHistoryAnnotations(hist, times)
-	if len(anns) != 0 {
-		t.Fatalf("Phase F: want 0 annotations, got %+v", anns)
-	}
-}
-
-func TestBuildTickAnnotation_PhaseFEmpty(t *testing.T) {
-	t.Parallel()
-	reg, err := ui_config.BuildUIRegistry()
-	if err != nil {
-		t.Fatal(err)
+	if !found || comp.Slot != core.SlotJurikRSX || comp.DataMode != "annotations" || comp.HostID != "rsx" {
+		t.Fatalf("ann_rsx_div ownership %+v found=%v", comp, found)
 	}
 	p := NewProjector(reg)
 	frame := &core.TickFrame{}
-	frame.Set(core.SlotDivState, core.DivStateLL)
-	if _, ok := p.BuildTickAnnotation(frame, 42); ok {
-		t.Fatal("Phase F: tick annotation must not emit")
+	frame.Set(core.SlotJurikRSX, 55)
+	plots := p.BuildTickJSON(frame)
+	if _, has := plots["ann_rsx_div"]; has {
+		t.Fatal("annotation component must not pack Jurik RSX as a scalar plot")
 	}
-}
-
-func TestDivStateLabel_StillMapsEnums(t *testing.T) {
-	t.Parallel()
-	if DivStateLabel(core.DivStateL) != "L" || DivStateLabel(core.DivStateSS) != "SS" {
-		t.Fatalf("label map broken: L=%q SS=%q", DivStateLabel(core.DivStateL), DivStateLabel(core.DivStateSS))
+	if plots["line_rsx"] != 55 {
+		t.Fatalf("line_rsx plot %+v", plots)
+	}
+	hist := core.NewHistoryBus(4)
+	hist.PushFrame(frame)
+	hist.Advance()
+	cols := p.BuildHistoryColumns(hist, []int64{1})
+	histPlots, _ := cols["plots"].(map[string][]float64)
+	if _, has := histPlots["ann_rsx_div"]; has {
+		t.Fatal("history columns must not pack ann_rsx_div from Jurik RSX")
+	}
+	ev := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXZZDiv,
+		Direction:   indicators.FactDirBullish,
+		Pattern:     indicators.FactPatternHidden,
+		ConfirmedAt: 1_700_000_060_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	anns := p.AnnotationsFromFacts([]indicators.IndicatorFactEvent{ev}, []int64{1_700_000_000})
+	if len(anns) != 1 || anns[0].Pane != "rsx" || anns[0].Label != "H Bull" {
+		t.Fatalf("zz fact pane %+v", anns)
 	}
 }

@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-SIGNAL-2B — remove obsolete ZigZag divergence meaning (Aug 2026) ✅
+
+- Deleted `DivergenceNode` and SlotDivState / SlotDivScore consumers. No adapter. Facts stay `rsx_zz_div` only.
+- ScoreNode remains: MicroPatternNode → `SlotMicroDivScore` → `SlotTotalScore` (unused on wire; `LongScore` stays 0).
+- Slot iota not compacted (`SlotDivScore` / `SlotDivState` are holes). `ann_rsx_div.Slot` → `SlotJurikRSX` (pane ownership; not DivState).
+- Not fractal, menu, ScoreNodes, or Micro-chain deletion.
+
 ## RSX-SIGNAL-2A.1 — ZZ plumbing / live annotation skip (Aug 2026) ✅
 
 - **Frozen** with 2A at `39d6f78`. Idle LIVE a bit cooler. Do not reopen one-walk / collector / revision gate.
@@ -18,7 +25,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 ## RSX-SIGNAL-2A — ZigZag divergence facts (Aug 2026) ✅
 
 - **Frozen.** Commit `39d6f78` (2A + 2A.1 in one commit). `rsx_zz_div` Pattern regular|hidden. Four geometries; equal price/RSX is not a fact. Event on new confirmed swing only. Hidden paint: `H Bull` / `H Bear`. Regular: arrows only.
-- ZigZag remains RSX-adaptive (ATR sensitivity). `SlotDivScore` / `SlotDivState` quarantined until 2B.
+- ZigZag remains RSX-adaptive (ATR sensitivity). `SlotDivScore` / `SlotDivState` removed from the live path in 2B (iota holes kept).
 - Not fractal, not menu, not ScoreNodes.
 
 ## RSX-SIGNAL-1.1 — TV arrows + Pine TV pivots (Aug 2026) ✅

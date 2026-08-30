@@ -29,13 +29,10 @@ func newDAGRunner(historyCap int, rsx RSXSettings) *core.DAGRunner {
 		LeftBars:  2,
 		RightBars: 2,
 	}))
-	runner.AddNode(nodes.NewDivergenceNode(nodes.DivergenceNodeConfig{
-		TargetSlot: core.SlotJurikRSX,
-	}))
 	runner.AddNode(nodes.NewMicroPatternNode(core.SlotJurikRSX))
+	// SlotDivScore is unused (RSX-SIGNAL-2B). ScoreNode remains Micro-only until a later cleanup.
 	runner.AddNode(nodes.NewScoreNode(nodes.ScoreConfig{
 		Weights: map[core.Slot]float64{
-			core.SlotDivScore:      1.0,
 			core.SlotMicroDivScore: 0.5,
 		},
 	}))
@@ -128,7 +125,6 @@ func (a *Frame) validateDAGShadowLocked() {
 
 	slog.Debug("dag shadow total score",
 		"total", cur.Get(core.SlotTotalScore),
-		"macro", cur.Get(core.SlotDivScore),
 		"micro", cur.Get(core.SlotMicroDivScore),
 	)
 }
