@@ -26,7 +26,7 @@ func TestRunStreamingReplay_AlignedChartPoints(t *testing.T) {
 	for i := range klines {
 		klines[i] = synthPipelineKline(i, base, 50000+float64(i))
 	}
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close", DivMethod: "tv"}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close"}
 	cfg := ChartStreamingReplayConfig(settings, "1m")
 
 	result := RunStreamingReplay(nil, klines, cfg)

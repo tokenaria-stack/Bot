@@ -1,5 +1,5 @@
 /**
- * RSX-SIGNAL-1.1 — arrow-only TV div/pivot markers; Show Pivots filters paint.
+ * RSX-VISIBILITY-1 — arrow-only markers; FE visibility mask filters by source.
  * Run: node web/rsx_tv_div_marker_test.js
  */
 'use strict';
@@ -91,7 +91,7 @@ test('legacy labels stay unpublished', () => {
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'P' }), null);
 });
 
-test('show_pivots hides TV and fractal pivot sources only', () => {
+test('visibility mask hides only the matching source', () => {
   const anns = [
     { time: 1, pane: 'rsx', label: '', source: 'rsx_tv_div' },
     { time: 2, pane: 'rsx', label: '', source: 'rsx_tv_pivot' },
@@ -99,15 +99,35 @@ test('show_pivots hides TV and fractal pivot sources only', () => {
     { time: 4, pane: 'rsx', label: '', source: 'rsx_fractal_pivot' },
     { time: 5, pane: 'rsx', label: 'H Bull', source: 'rsx_zz_div' },
   ];
-  const paint = (showPivots) => anns.filter((ann) => {
-    const src = ann.source || '';
-    if (!showPivots && (src === 'rsx_tv_pivot' || src === 'rsx_fractal_pivot')) return false;
-    return Mappers.annotationToNativeMarker(ann) != null;
+  const paint = (settings) => anns.filter((ann) => {
+    const mask = Mappers.rsxVisibilityMask(settings);
+    return Mappers.rsxAnnotationSourceVisible(ann.source, mask)
+      && Mappers.annotationToNativeMarker(ann) != null;
   });
-  assert.strictEqual(paint(true).length, 5);
-  const hidden = paint(false);
-  assert.strictEqual(hidden.length, 3);
-  assert.deepStrictEqual(hidden.map((a) => a.source), ['rsx_tv_div', 'rsx_fractal_div', 'rsx_zz_div']);
+  const allOn = paint({});
+  assert.strictEqual(allOn.length, 5);
+  assert.strictEqual(paint({ show_tv_div: false }).map((a) => a.source).join(','),
+    'rsx_tv_pivot,rsx_fractal_div,rsx_fractal_pivot,rsx_zz_div');
+  assert.strictEqual(paint({ show_zz_div: false }).map((a) => a.source).join(','),
+    'rsx_tv_div,rsx_tv_pivot,rsx_fractal_div,rsx_fractal_pivot');
+  assert.strictEqual(paint({ show_fractal_pivot: false }).map((a) => a.source).join(','),
+    'rsx_tv_div,rsx_tv_pivot,rsx_fractal_div,rsx_zz_div');
+  assert.strictEqual(paint({ show_tv_pivot: false, show_fractal_pivot: true }).map((a) => a.source).join(','),
+    'rsx_tv_div,rsx_fractal_div,rsx_fractal_pivot,rsx_zz_div');
+  assert.strictEqual(paint({ show_tv_pivot: true, show_fractal_pivot: false }).map((a) => a.source).join(','),
+    'rsx_tv_div,rsx_tv_pivot,rsx_fractal_div,rsx_zz_div');
+  const allOff = paint({
+    show_tv_div: false,
+    show_tv_pivot: false,
+    show_zz_div: false,
+    show_fractal_div: false,
+    show_fractal_pivot: false,
+  });
+  assert.strictEqual(allOff.length, 0);
+  assert.strictEqual(anns.length, 5, 'facts in the store stay unchanged');
+  assert.strictEqual(paint({}).length, 5, 're-enable paints stored markers without new facts');
+  assert.strictEqual(Mappers.rsxVisibilityMask({ show_pivots: false }), 31, 'old show_pivots is ignored');
+  assert.strictEqual(Mappers.rsxAnnotationSourceVisible('future_src', 0), true);
 });
 
 test('normalize pane stays rsx', () => {

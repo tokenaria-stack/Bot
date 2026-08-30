@@ -35,13 +35,12 @@ func TestApplyRSXSettings_Clamp(t *testing.T) {
 		SignalLength: 12,
 		Source:       "hlc3",
 		PivotRadius:  3,
-		DivMethod:    "fractal",
 	}).Settings
 	if got.Length != 7 || got.DivLookback != 45 || got.SignalLength != 12 {
 		t.Fatalf("applied = %+v", got)
 	}
-	if got.Source != "hlc3" || got.PivotRadius != 3 || got.DivMethod != "fractal" {
-		t.Fatalf("source/pivot/method = %+v", got)
+	if got.Source != "hlc3" || got.PivotRadius != 3 {
+		t.Fatalf("source/pivot = %+v", got)
 	}
 	cur := GetRSXSettings()
 	if cur.Length != 7 || cur.DivLookback != 45 || cur.SignalLength != 12 {

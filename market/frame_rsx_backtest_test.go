@@ -14,7 +14,6 @@ func TestApplyBacktestRSXConfig_PinsSettingsAndReplays(t *testing.T) {
 		Length:       21,
 		SignalLength: 5,
 		Source:       "hlc3",
-		DivMethod:    "fractal",
 		PivotRadius:  3,
 		DivLookback:  60,
 	}
@@ -27,7 +26,7 @@ func TestApplyBacktestRSXConfig_PinsSettingsAndReplays(t *testing.T) {
 	if got.Length != 21 || got.SignalLength != 5 || got.Source != "hlc3" {
 		t.Fatalf("pinned settings mismatch: %+v", got)
 	}
-	if normalizeRSXDivMethod(got.DivMethod) != "fractal" || got.PivotRadius != 3 {
-		t.Fatalf("div settings mismatch: %+v", got)
+	if got.PivotRadius != 3 {
+		t.Fatalf("pivot settings mismatch: %+v", got)
 	}
 }

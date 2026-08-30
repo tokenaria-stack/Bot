@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-VISIBILITY-1 — independent RSX fact visibility (Aug 2026) ✅
+
+- Deleted `div_method` and `show_pivots`. Five FE flags (all default ON, no migration): `show_tv_div`, `show_tv_pivot`, `show_zz_div`, `show_fractal_div`, `show_fractal_pivot`.
+- TV facts ungated from UI selection. Paint filters by annotation `source` only. Compositor key: revision + `visibilityMask` + `line_rsx` series.
+- Visibility does not define factual existence. Compute sleeping / wire subscriptions / ScoreNodes / DAG demand are later chapters.
+
 ## RSX-SIGNAL-3 — fractal facts, not L/LL/S/SS (Aug 2026) ✅ frozen `c856fef`
 
 - Salvaged `scanRSXFractalHits` / `CheckClassicDivergence`. Published `rsx_fractal_div` (`class_a`/`class_b`/`class_c`) and `rsx_fractal_pivot`.

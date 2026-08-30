@@ -17,7 +17,7 @@
 
 **TradingView:** `study("Jurik RSX", shorttitle="RSX")`  
 **Лицензия:** MIT (Copyright 2019-present, Alex Orekhov / everget)  
-**Назначение в боте:** главный осциллятор 0–100, цвет линии, TV rolling divergence (режим `div_method: "tv"`).
+**Назначение в боте:** главный осциллятор 0–100, цвет линии, TV rolling divergence facts (`rsx_tv_div`).
 
 ### Ключевые входы Pine → Go
 

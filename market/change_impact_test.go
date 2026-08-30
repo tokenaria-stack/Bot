@@ -20,11 +20,10 @@ func TestRSXImpactOfChange_Classes(t *testing.T) {
 		{"length", RSXSettings{Length: 21}, ChangeImpactIndicatorReplay},
 		{"signal", RSXSettings{SignalLength: 14}, ChangeImpactIndicatorReplay},
 		{"source", RSXSettings{Source: "close"}, ChangeImpactIndicatorReplay},
-		{"div_method", RSXSettings{DivMethod: "fractal"}, ChangeImpactAnnotationOnly},
 		{"pivot", RSXSettings{PivotRadius: 4}, ChangeImpactAnnotationOnly},
 		{"lookback", RSXSettings{DivLookback: 120}, ChangeImpactAnnotationOnly},
 		{"min_osc", RSXSettings{MinOscDelta: 1.5}, ChangeImpactAnnotationOnly},
-		{"length_wins_over_div", RSXSettings{Length: 21, DivMethod: "fractal"}, ChangeImpactIndicatorReplay},
+		{"length_wins_over_pivot", RSXSettings{Length: 21, PivotRadius: 4}, ChangeImpactIndicatorReplay},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -40,7 +39,7 @@ func TestRSXImpactOfChange_Classes(t *testing.T) {
 	}
 }
 
-func TestUpdateRSXScanConfig_DivMethodPreservesTip(t *testing.T) {
+func TestUpdateRSXScanConfig_PivotRadiusPreservesTip(t *testing.T) {
 	ResetRSXSettings()
 	SetRSXSettingsPath(filepath.Join(t.TempDir(), "rsx.json"))
 	t.Cleanup(func() {
@@ -48,7 +47,7 @@ func TestUpdateRSXScanConfig_DivMethodPreservesTip(t *testing.T) {
 		SetRSXSettingsPath("")
 	})
 
-	ApplyRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv"})
+	ApplyRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", PivotRadius: 2})
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	warmupMarkerBars(frame, 80, 1_700_000_000_000, 60_000)
 	baseline := markerJurikRSX(frame)
@@ -57,21 +56,21 @@ func TestUpdateRSXScanConfig_DivMethodPreservesTip(t *testing.T) {
 	}
 
 	prev := GetRSXSettings()
-	nextFractal := NormalizeRSXSettings(mergeRSXSettings(prev, RSXSettings{DivMethod: "fractal"}))
-	_ = ApplyRSXSettings(nextFractal)
-	frame.UpdateRSXScanConfig(prev, nextFractal)
-	afterFractal := markerJurikRSX(frame)
-	if afterFractal != baseline {
-		t.Fatalf("DivMethod→fractal mutated tip: before=%v after=%v", baseline, afterFractal)
+	nextPivot := NormalizeRSXSettings(mergeRSXSettings(prev, RSXSettings{PivotRadius: 4}))
+	_ = ApplyRSXSettings(nextPivot)
+	frame.UpdateRSXScanConfig(prev, nextPivot)
+	afterPivot := markerJurikRSX(frame)
+	if afterPivot != baseline {
+		t.Fatalf("PivotRadius 2→4 mutated tip: before=%v after=%v", baseline, afterPivot)
 	}
 
 	prev2 := GetRSXSettings()
-	nextTV := NormalizeRSXSettings(mergeRSXSettings(prev2, RSXSettings{DivMethod: "tv"}))
-	_ = ApplyRSXSettings(nextTV)
-	frame.UpdateRSXScanConfig(prev2, nextTV)
-	afterTV := markerJurikRSX(frame)
-	if afterTV != baseline {
-		t.Fatalf("DivMethod→tv mutated tip: before=%v after=%v", baseline, afterTV)
+	nextLookback := NormalizeRSXSettings(mergeRSXSettings(prev2, RSXSettings{DivLookback: 120}))
+	_ = ApplyRSXSettings(nextLookback)
+	frame.UpdateRSXScanConfig(prev2, nextLookback)
+	afterLookback := markerJurikRSX(frame)
+	if afterLookback != baseline {
+		t.Fatalf("DivLookback mutated tip: before=%v after=%v", baseline, afterLookback)
 	}
 }
 

@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-VISIBILITY-1 — facts exist independently of paint (Aug 2026)
+
+**Context:** `div_method` (tv|fractal) and `show_pivots` encoded one-detector-at-a-time. TV fact production was gated on `div_method == tv`. Five factual families already existed.
+
+**Decision:** Delete the selector and global pivot switch. Five frontend visibility booleans filter paint by `source`. TV facts always publish. Compact `visibilityMask` in the annotation paint key. No preference migration. No backend hide flags.
+
+**Rejected:**
+- Keep ignored `div_method` / compatibility alias — **Reason:** leftover selector ownership.
+- Infer family from color/label/pattern — **Reason:** `source` is identity.
+- Compute sleeping / wire skip / ScoreNodes in this chapter — **Reason:** presentation only.
+
+**Consequences:** TRUTH → FACTS → FE visibility filter → paint. Future consumer demand may sleep unused compute; that is not implemented here.
+
+---
+
 ## RSX-SIGNAL-3 — fractal classic classes, not hidden (Aug 2026)
 
 **Context:** Fractal RSX used chart letters L/LL/S/SS/P. LL/SS mixed Class A and Class C. Product kept the fractal detector.
@@ -19,7 +34,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Gate facts on `div_method == fractal` — **Reason:** same law as `rsx_zz_div`.
 - Rewrite as ZigZag/TV/generic divergence — **Reason:** product kept this detector.
 
-**Consequences:** Frozen at `c856fef` (bounded confirm-bar `FractalFactsAt`). Next chapter is menu / `div_method` deletion, not ScoreNodes.
+**Consequences:** Frozen at `c856fef` (bounded confirm-bar `FractalFactsAt`). Menu / `div_method` deletion is RSX-VISIBILITY-1.
 
 ---
 

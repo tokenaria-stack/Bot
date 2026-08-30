@@ -1571,7 +1571,10 @@
       if (!factory || typeof factory.getSeries !== 'function') return;
       const series = factory.getSeries('line_rsx');
       if (!series || typeof series.setMarkers !== 'function') return;
-      const showPivots = opts?.showPivots !== false;
+      const mask = Number.isFinite(opts?.visibilityMask) ? opts.visibilityMask : 31;
+      const sourceVisible = (typeof window !== 'undefined' && window.Mappers && typeof window.Mappers.rsxAnnotationSourceVisible === 'function')
+        ? window.Mappers.rsxAnnotationSourceVisible
+        : (typeof rsxAnnotationSourceVisible === 'function' ? rsxAnnotationSourceVisible : () => true);
       const toMarker = (typeof window !== 'undefined' && window.Mappers && typeof window.Mappers.annotationToNativeMarker === 'function')
         ? window.Mappers.annotationToNativeMarker
         : (typeof annotationToNativeMarker === 'function' ? annotationToNativeMarker : null);
@@ -1584,7 +1587,7 @@
         const ann = anns[i];
         if (paneOf(ann?.pane || ann?.Pane) !== 'rsx') continue;
         const src = ann?.source || ann?.Source || '';
-		if (!showPivots && (src === 'rsx_tv_pivot' || src === 'rsx_fractal_pivot')) continue;
+        if (!sourceVisible(src, mask)) continue;
         const m = toMarker ? toMarker(ann) : null;
         if (!m) continue;
         const marker = {

@@ -72,8 +72,16 @@ function deltaIntent(time) {
   global.window = global.window || {};
   let series = { id: 'line_rsx' };
   global.window.DDRFactory = { getSeries: () => series };
-  global.rsxShowPivotsFrom = (_s, fb) => (typeof _s?.show_pivots === 'boolean' ? _s.show_pivots : fb);
-  global.RsxController = { getSettings: () => ({ show_pivots: true }) };
+  global.rsxVisibilityMask = (s) => {
+    let m = 0;
+    if (s?.show_tv_div !== false) m |= 1;
+    if (s?.show_tv_pivot !== false) m |= 2;
+    if (s?.show_zz_div !== false) m |= 4;
+    if (s?.show_fractal_div !== false) m |= 8;
+    if (s?.show_fractal_pivot !== false) m |= 16;
+    return m;
+  };
+  global.RsxController = { getSettings: () => ({}) };
 
   let layerCalls = 0;
   let sliceCalls = 0;
@@ -103,17 +111,17 @@ function deltaIntent(time) {
   assert.strictEqual(sliceCalls, slicesBefore, 'idle ticks must not slice annotations');
   assert.strictEqual(layerCalls, layersBefore, 'idle ticks must not setMarkers');
 
-  global.RsxController = { getSettings: () => ({ show_pivots: false }) };
+  global.RsxController = { getSettings: () => ({ show_tv_pivot: false }) };
   compositor.flush(deltaIntent(1_700_000_180));
-  assert.strictEqual(layerCalls, layersBefore + 1, 'show_pivots change repaints once');
+  assert.strictEqual(layerCalls, layersBefore + 1, 'visibilityMask change repaints once');
 
-  const afterPivot = layerCalls;
+  const afterMask = layerCalls;
   compositor.flush(deltaIntent(1_700_000_180));
-  assert.strictEqual(layerCalls, afterPivot, 'same pivots skip');
+  assert.strictEqual(layerCalls, afterMask, 'same visibilityMask skip');
 
   series = { id: 'line_rsx-recreated' };
   compositor.flush(deltaIntent(1_700_000_180));
-  assert.strictEqual(layerCalls, afterPivot + 1, 'series recreation hydrates markers');
+  assert.strictEqual(layerCalls, afterMask + 1, 'series recreation hydrates markers');
 }
 
 console.log('annotation_revision_test.js passed');

@@ -85,15 +85,17 @@ const RsxController = (() => {
     const defaults = getSettingsState(ctx);
     if (!wrap) return coerceRsxSettingsForAPI({ ...defaults }, defaults);
     const source = wrap.querySelector('.rsx-source-select')?.value || defaults.source;
-    const divMethod = wrap.querySelector('.rsx-div-method-select')?.value || defaults.div_method;
-    const showPivotsEl = wrap.querySelector('.rsx-show-pivots-chk');
+    const vis = {};
+    wrap.querySelectorAll('.rsx-vis-chk').forEach((el) => {
+      const key = el.getAttribute('data-vis-key');
+      if (key) vis[key] = el.checked;
+    });
     return coerceRsxSettingsForAPI({
       length: clampRsxLength(Number(wrap.querySelector('.rsx-length-input')?.value)),
       div_lookback: clampRsxDivLookback(Number(wrap.querySelector('.rsx-div-lookback-input')?.value)),
       signal_length: clampRsxSignalLength(Number(wrap.querySelector('.rsx-signal-length-input')?.value)),
       source: source === 'close' ? 'close' : 'hlc3',
       pivot_radius: clampRsxPivotRadius(Number(wrap.querySelector('.rsx-pivot-radius-input')?.value)),
-      div_method: divMethod === 'fractal' ? 'fractal' : 'tv',
       min_price_delta_ratio: readFloatDeltaInput(
         wrap.querySelector('.rsx-min-price-delta-input'),
         defaults.min_price_delta_ratio ?? 0,
@@ -102,7 +104,7 @@ const RsxController = (() => {
         wrap.querySelector('.rsx-min-osc-delta-input'),
         defaults.min_osc_delta ?? 0,
       ),
-      show_pivots: showPivotsEl ? showPivotsEl.checked : rsxShowPivotsFrom(defaults, true),
+      ...rsxVisibilityFlagsFrom(vis, defaults),
     }, defaults);
   }
 
@@ -115,8 +117,6 @@ const RsxController = (() => {
     const signalEl = wrap.querySelector('.rsx-signal-length-input');
     const sourceEl = wrap.querySelector('.rsx-source-select');
     const pivotEl = wrap.querySelector('.rsx-pivot-radius-input');
-    const methodEl = wrap.querySelector('.rsx-div-method-select');
-    const showPivotsEl = wrap.querySelector('.rsx-show-pivots-chk');
     const minPriceDeltaEl = wrap.querySelector('.rsx-min-price-delta-input');
     const minOscDeltaEl = wrap.querySelector('.rsx-min-osc-delta-input');
     if (lengthEl && Number.isFinite(s.length)) lengthEl.value = String(s.length);
@@ -124,30 +124,16 @@ const RsxController = (() => {
     if (signalEl && Number.isFinite(s.signal_length)) signalEl.value = String(s.signal_length);
     if (sourceEl && s.source) sourceEl.value = s.source;
     if (pivotEl && Number.isFinite(s.pivot_radius)) pivotEl.value = String(s.pivot_radius);
-    if (methodEl && s.div_method) methodEl.value = s.div_method;
     if (minPriceDeltaEl && Number.isFinite(s.min_price_delta_ratio)) {
       minPriceDeltaEl.value = String(s.min_price_delta_ratio);
     }
     if (minOscDeltaEl && Number.isFinite(s.min_osc_delta)) {
       minOscDeltaEl.value = String(s.min_osc_delta);
     }
-    if (showPivotsEl && typeof s.show_pivots === 'boolean') showPivotsEl.checked = s.show_pivots;
-    syncPivotRadiusFieldState(context);
-  }
-
-  function syncPivotRadiusFieldState(contextOrWrap) {
-    const wrap = typeof contextOrWrap === 'string'
-      ? getWrap(contextOrWrap)
-      : (contextOrWrap?.id === 'rsx-wrap' || contextOrWrap?.id === 'bt-rsx-wrap'
-        ? contextOrWrap
-        : contextOrWrap?.closest?.('.rsx-wrap'));
-    if (!wrap) return;
-    const method = wrap.querySelector('.rsx-div-method-select')?.value || 'tv';
-    const pivotEl = wrap.querySelector('.rsx-pivot-radius-input');
-    const row = pivotEl?.closest('.setting-row');
-    const isTV = method !== 'fractal';
-    if (pivotEl) pivotEl.disabled = isTV;
-    if (row) row.classList.toggle('setting-row--disabled', isTV);
+    wrap.querySelectorAll('.rsx-vis-chk').forEach((el) => {
+      const key = el.getAttribute('data-vis-key');
+      if (key && typeof s[key] === 'boolean') el.checked = s[key];
+    });
   }
 
   function syncFromMenu(context) {
@@ -232,7 +218,7 @@ const RsxController = (() => {
     applyToMenu('live', liveSettings);
     applyToMenu('backtest', backtestSettings);
 
-    const rsxFieldSelector = '.rsx-length-input, .rsx-div-lookback-input, .rsx-signal-length-input, .rsx-source-select, .rsx-pivot-radius-input, .rsx-div-method-select, .rsx-min-price-delta-input, .rsx-min-osc-delta-input, .rsx-show-pivots-chk';
+    const rsxFieldSelector = '.rsx-length-input, .rsx-div-lookback-input, .rsx-signal-length-input, .rsx-source-select, .rsx-pivot-radius-input, .rsx-min-price-delta-input, .rsx-min-osc-delta-input, .rsx-vis-chk';
     document.querySelectorAll('.rsx-wrap').forEach((wrap) => {
       const toggle = wrap.querySelector('.rsx-settings-toggle');
       const menu = getSettingsMenu(wrap);
@@ -240,7 +226,6 @@ const RsxController = (() => {
 
       const context = contextFromWrap(wrap);
       if (typeof initFloatingMenuDrag === 'function') initFloatingMenuDrag(menu);
-      syncPivotRadiusFieldState(context);
 
       toggle?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -253,10 +238,7 @@ const RsxController = (() => {
       });
 
       menu.querySelectorAll(rsxFieldSelector).forEach((el) => {
-        if (el.classList.contains('rsx-div-method-select')) {
-          el.addEventListener('change', () => syncPivotRadiusFieldState(context));
-        }
-        if (el.classList.contains('rsx-show-pivots-chk')) {
+        if (el.classList.contains('rsx-vis-chk')) {
           el.addEventListener('change', () => refreshPivotsOnChart(context));
           return;
         }

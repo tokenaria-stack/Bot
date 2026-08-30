@@ -19,7 +19,7 @@ func TestIsRSXPivotHigh(t *testing.T) {
 func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
-	ApplyRSXSettings(RSXSettings{DivMethod: "fractal", PivotRadius: 2})
+	ApplyRSXSettings(RSXSettings{PivotRadius: 2})
 
 	rsx := []float64{50, 52, 54, 58, 62, 64, 63, 70, 63, 61, 58, 54, 52, 50, 48}
 	prices := make([]float64, len(rsx))
@@ -49,7 +49,7 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
-	ApplyRSXSettings(RSXSettings{DivMethod: "fractal", PivotRadius: 2})
+	ApplyRSXSettings(RSXSettings{PivotRadius: 2})
 
 	rsx := []float64{55, 58, 62, 65, 63, 61, 59, 57}
 	prices := make([]float64, len(rsx))

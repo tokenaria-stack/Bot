@@ -633,7 +633,7 @@ func parseRSXLookback(r *http.Request) int {
 
 func hasRSXQueryOverrides(q url.Values) bool {
 	keys := []string{
-		"rsx_length", "rsx_signal_length", "rsx_source", "rsx_method", "rsx_pivot_radius",
+		"rsx_length", "rsx_signal_length", "rsx_source", "rsx_pivot_radius",
 		"min_price_delta_ratio", "min_osc_delta", "rsx_div_lookback",
 	}
 	for _, k := range keys {
@@ -669,9 +669,6 @@ func parseRSXSettingsFromRequest(r *http.Request) market.RSXSettings {
 	if v := q.Get("rsx_source"); v != "" {
 		patch.Source = v
 	}
-	if v := q.Get("rsx_method"); v != "" {
-		patch.DivMethod = v
-	}
 	if v := q.Get("rsx_pivot_radius"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			patch.PivotRadius = n
@@ -704,9 +701,6 @@ func mergeRSXSettingsFromPatch(base, patch market.RSXSettings) market.RSXSetting
 	}
 	if patch.Source != "" {
 		out.Source = patch.Source
-	}
-	if patch.DivMethod != "" {
-		out.DivMethod = patch.DivMethod
 	}
 	if patch.PivotRadius > 0 {
 		out.PivotRadius = patch.PivotRadius
@@ -1210,8 +1204,8 @@ func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Reque
 		wozduhPrefs = req.Settings.WozduhSettings
 	}
 	if hasRSX {
-		log.Printf("[Backtest] RSX settings: length=%d lookback=%d pivot_radius=%d method=%s source=%s",
-			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.DivMethod, rsxSettings.Source)
+		log.Printf("[Backtest] RSX settings: length=%d lookback=%d pivot_radius=%d source=%s",
+			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.Source)
 	}
 
 	simOnly := req.SimOnly

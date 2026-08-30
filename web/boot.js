@@ -70,7 +70,6 @@
       length: s.length,
       signal_length: s.signal_length,
       source: s.source,
-      div_method: s.div_method,
       pivot_radius: s.pivot_radius,
       div_lookback: s.div_lookback,
       min_price_delta_ratio: s.min_price_delta_ratio,
@@ -183,7 +182,6 @@
       length: 14,
       signal_length: 9,
       source: 'hlc3',
-      div_method: 'tv',
       pivot_radius: 2,
       div_lookback: 90,
       min_price_delta_ratio: 0,
@@ -210,9 +208,10 @@
       const result = await API.fetchRsxSettings();
       const serverSettings = result.settings || result;
       if (typeof RsxController === 'undefined') return;
-      const showPivots = RsxController.getSettings('live')?.show_pivots;
-      const applied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
-        { ...serverSettings, show_pivots: showPivots },
+      const vis = RsxController.getSettings('live');
+      const applied = RsxController.setSettings('live', overlayRsxVisibility(
+        normalizeRsxSettingsFromAPI(serverSettings, defaultRsxSettings()),
+        vis,
         defaultRsxSettings(),
       ));
       // Cache only — server is authoritative (ADR-012).
@@ -282,8 +281,9 @@
         const result = await pushRsxSettingsToServer(fromMenu);
         if (seq !== rsxSettingsSyncSeq || result == null) return;
         const serverSettings = result?.settings || result;
-        const applied = RsxController.setSettings('live', normalizeRsxSettingsFromAPI(
-          { ...serverSettings, show_pivots: fromMenu.show_pivots },
+        const applied = RsxController.setSettings('live', overlayRsxVisibility(
+          normalizeRsxSettingsFromAPI(serverSettings, fromMenu),
+          fromMenu,
           fromMenu,
         ));
         RsxController.persist('live', applied);

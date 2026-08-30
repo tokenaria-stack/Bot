@@ -47,10 +47,51 @@ function resolveTf(tf) {
   return raw;
 }
 
-function rsxShowPivotsFrom(settings, fallback = true) {
-  if (typeof settings?.show_pivots === 'boolean') return settings.show_pivots;
-  if (typeof settings?.showPivots === 'boolean') return settings.showPivots;
-  return fallback;
+function rsxVisOn(settings, key) {
+  if (typeof settings?.[key] === 'boolean') return settings[key];
+  return true;
+}
+
+function rsxVisibilityFlagsFrom(settings, defaults) {
+  const pick = (key) => {
+    if (typeof settings?.[key] === 'boolean') return settings[key];
+    if (typeof defaults?.[key] === 'boolean') return defaults[key];
+    return true;
+  };
+  return {
+    show_tv_div: pick('show_tv_div'),
+    show_tv_pivot: pick('show_tv_pivot'),
+    show_zz_div: pick('show_zz_div'),
+    show_fractal_div: pick('show_fractal_div'),
+    show_fractal_pivot: pick('show_fractal_pivot'),
+  };
+}
+
+function overlayRsxVisibility(engine, visSource, defaults) {
+  return { ...engine, ...rsxVisibilityFlagsFrom(visSource, defaults) };
+}
+
+/** bit0 TV div, bit1 TV pivot, bit2 ZZ div, bit3 fractal div, bit4 fractal pivot */
+function rsxVisibilityMask(settings) {
+  let mask = 0;
+  if (rsxVisOn(settings, 'show_tv_div')) mask |= 1;
+  if (rsxVisOn(settings, 'show_tv_pivot')) mask |= 2;
+  if (rsxVisOn(settings, 'show_zz_div')) mask |= 4;
+  if (rsxVisOn(settings, 'show_fractal_div')) mask |= 8;
+  if (rsxVisOn(settings, 'show_fractal_pivot')) mask |= 16;
+  return mask;
+}
+
+function rsxAnnotationSourceVisible(source, mask) {
+  const bits = Number.isFinite(mask) ? mask : 31;
+  switch (String(source || '')) {
+    case 'rsx_tv_div': return (bits & 1) !== 0;
+    case 'rsx_tv_pivot': return (bits & 2) !== 0;
+    case 'rsx_zz_div': return (bits & 4) !== 0;
+    case 'rsx_fractal_div': return (bits & 8) !== 0;
+    case 'rsx_fractal_pivot': return (bits & 16) !== 0;
+    default: return true;
+  }
 }
 
 function clampRsxLength(val) {
@@ -88,13 +129,11 @@ function coerceRsxSettingsForAPI(settings, defaults = defaultRsxSettings()) {
     source: settings?.source === 'close' ? 'close' : 'hlc3',
     pivot_radius: pivotRadius,
     pivotRadius,
-    div_method: settings?.div_method === 'fractal' ? 'fractal' : 'tv',
     min_price_delta_ratio: Number.isFinite(minPriceDelta) ? minPriceDelta : 0,
     min_osc_delta: Number.isFinite(minOscDelta) ? minOscDelta : 0,
     minPriceDeltaRatio: Number.isFinite(minPriceDelta) ? minPriceDelta : 0,
     minOscDelta: Number.isFinite(minOscDelta) ? minOscDelta : 0,
-    show_pivots: rsxShowPivotsFrom(settings, rsxShowPivotsFrom(defaults, true)),
-    showPivots: rsxShowPivotsFrom(settings, rsxShowPivotsFrom(defaults, true)),
+    ...rsxVisibilityFlagsFrom(settings, defaults),
   };
 }
 
@@ -104,17 +143,16 @@ function normalizeRsxSettingsFromAPI(raw, defaults = defaultRsxSettings()) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
   };
-  const divMethod = raw.div_method || raw.divMethod || defaults.div_method;
+  const vis = rsxVisibilityFlagsFrom(raw, defaults);
   return coerceRsxSettingsForAPI({
     length: num(raw.length ?? raw.rsxLength, defaults.length),
     div_lookback: num(raw.div_lookback ?? raw.divLookback, defaults.div_lookback),
     signal_length: num(raw.signal_length ?? raw.signalLineLength, defaults.signal_length),
     source: raw.source || raw.rsxSource || defaults.source,
     pivot_radius: num(raw.pivot_radius ?? raw.pivotRadius, defaults.pivot_radius),
-    div_method: divMethod,
     min_price_delta_ratio: num(raw.min_price_delta_ratio ?? raw.minPriceDeltaRatio, defaults.min_price_delta_ratio),
     min_osc_delta: num(raw.min_osc_delta ?? raw.minOscDelta, defaults.min_osc_delta),
-    show_pivots: rsxShowPivotsFrom(raw, rsxShowPivotsFrom(defaults, true)),
+    ...vis,
   }, defaults);
 }
 
@@ -506,6 +544,10 @@ if (typeof window !== 'undefined') {
     normalizeStrategyThresholds,
     normalizeRsxSettingsFromAPI,
     coerceRsxSettingsForAPI,
+    overlayRsxVisibility,
+    rsxVisibilityFlagsFrom,
+    rsxVisibilityMask,
+    rsxAnnotationSourceVisible,
     normalizeTf,
     resolveTf,
     normalizeTradeRow,

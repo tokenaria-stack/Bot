@@ -29,7 +29,6 @@ type RSXSettings struct {
 	SignalLength       int     `json:"signal_length"`
 	Source             string  `json:"source"`       // "close" or "hlc3" (default hlc3)
 	PivotRadius        int     `json:"pivot_radius"` // fractal divergence
-	DivMethod          string  `json:"div_method"`   // "tv" or "fractal"
 	MinPriceDeltaRatio float64 `json:"min_price_delta_ratio"`
 	MinOscDelta        float64 `json:"min_osc_delta"`
 }
@@ -77,7 +76,6 @@ func defaultRSXSettings() RSXSettings {
 		SignalLength: DefaultRSXSignalLength,
 		Source:       "hlc3",
 		PivotRadius:  DefaultRSXPivotRadius,
-		DivMethod:    "tv",
 	}
 }
 
@@ -97,9 +95,6 @@ func mergeRSXSettings(base, update RSXSettings) RSXSettings {
 	}
 	if update.PivotRadius > 0 {
 		out.PivotRadius = clampInt(update.PivotRadius, MinRSXPivotRadius, MaxRSXPivotRadius, DefaultRSXPivotRadius)
-	}
-	if update.DivMethod != "" {
-		out.DivMethod = normalizeRSXDivMethod(update.DivMethod)
 	}
 	if update.MinPriceDeltaRatio > 0 {
 		out.MinPriceDeltaRatio = update.MinPriceDeltaRatio
@@ -191,8 +186,7 @@ func RSXImpactOfChange(old, new RSXSettings) ChangeImpact {
 		normalizeRSXSource(a.Source) != normalizeRSXSource(b.Source) {
 		return ChangeImpactIndicatorReplay
 	}
-	if normalizeRSXDivMethod(a.DivMethod) != normalizeRSXDivMethod(b.DivMethod) ||
-		a.PivotRadius != b.PivotRadius ||
+	if a.PivotRadius != b.PivotRadius ||
 		a.DivLookback != b.DivLookback ||
 		a.MinPriceDeltaRatio != b.MinPriceDeltaRatio ||
 		a.MinOscDelta != b.MinOscDelta {
@@ -215,11 +209,6 @@ func RSXPivotRadius() int {
 	return r
 }
 
-// RSXUsesFractalDiv reports whether fractal (classic pivot) divergence mode is active.
-func RSXUsesFractalDiv() bool {
-	return normalizeRSXDivMethod(GetRSXSettings().DivMethod) == "fractal"
-}
-
 // RSXSourcePrice returns the scalar fed into Jurik RSX for the current bar.
 func RSXSourcePrice(high, low, close float64, source string) float64 {
 	if normalizeRSXSource(source) == "close" {
@@ -234,15 +223,6 @@ func normalizeRSXSource(source string) string {
 		return "close"
 	default:
 		return "hlc3"
-	}
-}
-
-func normalizeRSXDivMethod(method string) string {
-	switch strings.ToLower(strings.TrimSpace(method)) {
-	case "fractal":
-		return "fractal"
-	default:
-		return "tv"
 	}
 }
 

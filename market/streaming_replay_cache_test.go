@@ -26,7 +26,7 @@ func TestStreamingReplayAccumulator_WindowSlice(t *testing.T) {
 		return out
 	}
 
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close", DivMethod: "tv"}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close"}
 	cfg := ChartStreamingReplayConfig(settings, "1m")
 
 	full := makeKlines(150)
@@ -61,7 +61,7 @@ func TestStreamingReplayAccumulator_IncrementalExtend(t *testing.T) {
 		return out
 	}
 
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close", DivMethod: "tv"}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "close"}
 	cfg := ChartStreamingReplayConfig(settings, "1m")
 
 	first := makeKlines(120)

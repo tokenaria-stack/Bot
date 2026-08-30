@@ -95,7 +95,7 @@ func TestParseRSXSettingsFromRequest(t *testing.T) {
 	t.Parallel()
 
 	base := market.GetRSXSettings()
-	req, err := http.NewRequest(http.MethodGet, "/api/history/chunk?rsx_length=21&rsx_signal_length=5&rsx_source=hlc3&rsx_method=fractal&rsx_pivot_radius=4&min_price_delta_ratio=0.001&min_osc_delta=1.5&rsx_div_lookback=120", nil)
+	req, err := http.NewRequest(http.MethodGet, "/api/history/chunk?rsx_length=21&rsx_signal_length=5&rsx_source=hlc3&rsx_pivot_radius=4&min_price_delta_ratio=0.001&min_osc_delta=1.5&rsx_div_lookback=120", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +108,6 @@ func TestParseRSXSettingsFromRequest(t *testing.T) {
 	}
 	if got.Source != "hlc3" {
 		t.Fatalf("source = %q, want hlc3", got.Source)
-	}
-	if got.DivMethod != "fractal" {
-		t.Fatalf("div_method = %q, want fractal", got.DivMethod)
 	}
 	if got.PivotRadius != 4 {
 		t.Fatalf("pivot_radius = %d, want 4", got.PivotRadius)

@@ -48,7 +48,7 @@ func zzTestKlines(n int) []exchange.Kline {
 
 func TestZZDivFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 	klines := zzTestKlines(160)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30}
 	fromReplay := ReplayClosedBars(klines, settings).ZZFacts
 
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
@@ -86,7 +86,7 @@ func TestZZDivFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 
 func TestZZDivFacts_NoNewSwingNoNewFacts(t *testing.T) {
 	klines := zzTestKlines(120)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv"}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"}
 	cap := core.ValidateHistoryCap(len(klines))
 	runner := newDAGRunner(cap, settings)
 	var col ZZDivFactCollector
@@ -145,12 +145,11 @@ func TestZZDivFacts_RSXFromSwingBarNotConfirmBar(t *testing.T) {
 	}
 }
 
-func TestZZDivFacts_NotGatedByDivMethod(t *testing.T) {
+func TestZZDivFacts_PublishedIndependently(t *testing.T) {
 	klines := zzTestKlines(80)
-	tv := ReplayClosedBars(klines, RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv"}).ZZFacts
-	fr := ReplayClosedBars(klines, RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "fractal", PivotRadius: 2}).ZZFacts
-	if len(tv) == 0 || len(fr) == 0 {
-		t.Fatalf("ZZ facts must publish regardless of div_method (tv=%d fractal=%d)", len(tv), len(fr))
+	got := ReplayClosedBars(klines, RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", PivotRadius: 2}).ZZFacts
+	if len(got) == 0 {
+		t.Fatal("ZZ facts must publish independently of FE visibility")
 	}
 }
 

@@ -9,7 +9,7 @@ func TestRSXSettings_UnmarshalJSON_PivotRadiusAliases(t *testing.T) {
 	t.Parallel()
 
 	var fromSnake RSXSettings
-	if err := json.Unmarshal([]byte(`{"pivot_radius":4,"div_method":"fractal"}`), &fromSnake); err != nil {
+	if err := json.Unmarshal([]byte(`{"pivot_radius":4}`), &fromSnake); err != nil {
 		t.Fatalf("snake: %v", err)
 	}
 	if fromSnake.PivotRadius != 4 {
@@ -17,7 +17,7 @@ func TestRSXSettings_UnmarshalJSON_PivotRadiusAliases(t *testing.T) {
 	}
 
 	var fromCamel RSXSettings
-	if err := json.Unmarshal([]byte(`{"pivotRadius":3,"div_method":"fractal"}`), &fromCamel); err != nil {
+	if err := json.Unmarshal([]byte(`{"pivotRadius":3}`), &fromCamel); err != nil {
 		t.Fatalf("camel: %v", err)
 	}
 	if fromCamel.PivotRadius != 3 {
@@ -32,7 +32,6 @@ func TestResolveBacktestRSXSettings_PivotRadiusDefault(t *testing.T) {
 		RSXSettings: &RSXSettings{
 			Length:      14,
 			DivLookback: 90,
-			DivMethod:   "fractal",
 			Source:      "close",
 		},
 	})

@@ -42,7 +42,6 @@ func TestHandleIndicatorSettings(t *testing.T) {
 		DivLookback:  120,
 		SignalLength: 14,
 		Source:       "hlc3",
-		DivMethod:    "fractal",
 		PivotRadius:  2,
 	})
 	rec = httptest.NewRecorder()

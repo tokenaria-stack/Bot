@@ -200,7 +200,6 @@ const API = {
       rsx_length: String(rsxSettings.length),
       rsx_signal_length: String(rsxSettings.signal_length),
       rsx_source: rsxSettings.source,
-      rsx_method: rsxSettings.div_method,
       rsx_pivot_radius: String(rsxSettings.pivot_radius),
       rsx_div_lookback: String(rsxSettings.div_lookback),
       min_price_delta_ratio: String(rsxSettings.min_price_delta_ratio),

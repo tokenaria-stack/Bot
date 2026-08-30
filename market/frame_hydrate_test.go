@@ -56,15 +56,18 @@ func TestMarker_RSXSettingsPinnedIgnoresGlobalMutation(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 
-	ApplyRSXSettings(RSXSettings{DivLookback: 30, Source: "close", DivMethod: "tv"})
+	ApplyRSXSettings(RSXSettings{DivLookback: 30, Source: "close", PivotRadius: 2})
 	klines := syntheticRSXKlines(40)
 	m := NewFrame(klines, "1m", ChaosConfig{})
-	pinned := RSXSettings{DivLookback: 30, Source: "close", DivMethod: "tv"}
+	pinned := RSXSettings{DivLookback: 30, Source: "close", PivotRadius: 2}
 	m.SetRSXSettings(pinned)
 
-	ApplyRSXSettings(RSXSettings{DivLookback: 30, Source: "hlc3", DivMethod: "fractal", PivotRadius: 3})
+	ApplyRSXSettings(RSXSettings{DivLookback: 90, Source: "hlc3", PivotRadius: 3})
 	cfg := m.rsxScanConfigLocked()
-	if cfg.Mode != indicators.RSXScanTV {
-		t.Fatalf("pinned marker should keep TV mode, got %v", cfg.Mode)
+	if cfg.Lookback != 30 || cfg.PivotRadius != 2 {
+		t.Fatalf("pinned scan config mutated: lookback=%d pivot=%d", cfg.Lookback, cfg.PivotRadius)
+	}
+	if cfg.Mode != indicators.RSXScanFractal {
+		t.Fatalf("scan config mode = %v, want fractal", cfg.Mode)
 	}
 }

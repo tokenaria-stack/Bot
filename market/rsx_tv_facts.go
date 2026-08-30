@@ -26,9 +26,6 @@ func RSTVFactsFromClosedSeries(klines []exchange.Kline, rsx []float64, lookback 
 }
 
 func RSTVFactsFromDAGHistory(klines []exchange.Kline, hist *core.HistoryBus, settings RSXSettings) []indicators.IndicatorFactEvent {
-	if normalizeRSXDivMethod(settings.DivMethod) != "tv" {
-		return nil
-	}
 	rsx := historySlotSeries(hist, core.SlotJurikRSX)
 	n := len(rsx)
 	if n > len(klines) {
@@ -57,9 +54,6 @@ func historySlotSeries(hist *core.HistoryBus, slot core.Slot) []float64 {
 
 func (a *Frame) noteRSTVFactLocked(isClosed bool, barIndex int) {
 	if a == nil || !isClosed || barIndex < 0 || barIndex >= len(a.klines) {
-		return
-	}
-	if normalizeRSXDivMethod(a.effectiveRSXSettings().DivMethod) != "tv" {
 		return
 	}
 	bus := a.dag.Bus()
@@ -121,9 +115,6 @@ func (a *Frame) rebuildRSTVFactsLocked() {
 	a.rsxTVCloses = nil
 	a.rsxTVOsc = nil
 	a.rsxTVOpens = nil
-	if normalizeRSXDivMethod(a.effectiveRSXSettings().DivMethod) != "tv" {
-		return
-	}
 	hist := a.dagHistoryLocked()
 	if hist == nil {
 		return

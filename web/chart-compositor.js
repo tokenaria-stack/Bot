@@ -28,7 +28,7 @@ class ChartCompositor {
     /** @type {(() => void)|null} */
     this._invalidateQueuedDeltas = null;
     this._paintedAnnotationRevision = -1;
-    this._paintedShowPivots = null;
+    this._paintedVisibilityMask = null;
     this._paintedMarkerSeries = null;
   }
 
@@ -621,10 +621,11 @@ class ChartCompositor {
     window.DDRFactory.applyHydratedData();
   }
 
-  _showPivotsPref() {
-    return (typeof rsxShowPivotsFrom === 'function' && typeof RsxController !== 'undefined')
-      ? rsxShowPivotsFrom(RsxController.getSettings('live'), true)
-      : true;
+  _visibilityMask() {
+    if (typeof rsxVisibilityMask === 'function' && typeof RsxController !== 'undefined') {
+      return rsxVisibilityMask(RsxController.getSettings('live'));
+    }
+    return 31;
   }
 
   _markerSeries() {
@@ -639,7 +640,7 @@ class ChartCompositor {
   }
 
   _annotationPaintNeeded() {
-    const showPivots = this._showPivotsPref();
+    const mask = this._visibilityMask();
     const series = this._markerSeries();
     const rev = (typeof this._store?.annotationRevision === 'function')
       ? this._store.annotationRevision()
@@ -647,7 +648,7 @@ class ChartCompositor {
     return !(
       series === this._paintedMarkerSeries
       && rev === this._paintedAnnotationRevision
-      && showPivots === this._paintedShowPivots
+      && mask === this._paintedVisibilityMask
     );
   }
 
@@ -655,7 +656,7 @@ class ChartCompositor {
     this._paintedAnnotationRevision = (typeof this._store?.annotationRevision === 'function')
       ? this._store.annotationRevision()
       : -1;
-    this._paintedShowPivots = this._showPivotsPref();
+    this._paintedVisibilityMask = this._visibilityMask();
     this._paintedMarkerSeries = this._markerSeries();
   }
 
@@ -663,8 +664,8 @@ class ChartCompositor {
     if (typeof ChartAdapter === 'undefined' || typeof ChartAdapter.applyLiveAnnotationLayer !== 'function') {
       return;
     }
-    const showPivots = this._showPivotsPref();
-    ChartAdapter.applyLiveAnnotationLayer(storeData, { showPivots });
+    const visibilityMask = this._visibilityMask();
+    ChartAdapter.applyLiveAnnotationLayer(storeData, { visibilityMask });
     this._rememberAnnotationPaint();
   }
 

@@ -401,10 +401,13 @@ function defaultRsxSettings() {
     signal_length: DEFAULT_RSX_SIGNAL_LENGTH,
     source: 'hlc3',
     pivot_radius: 2,
-    div_method: 'tv',
     min_price_delta_ratio: 0,
     min_osc_delta: 0,
-    show_pivots: true,
+    show_tv_div: true,
+    show_tv_pivot: true,
+    show_zz_div: true,
+    show_fractal_div: true,
+    show_fractal_pivot: true,
   };
 }
 

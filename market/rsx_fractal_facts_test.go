@@ -28,7 +28,7 @@ func fractalWaveKlines(n int) []exchange.Kline {
 
 func TestRSTFractalFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 	klines := fractalWaveKlines(120)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30, PivotRadius: 2}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
 
 	hist := ReplayDAGKlines(klines, settings)
 	fromReplay := RSTFractalFactsFromDAGHistory(klines, hist, settings)
@@ -70,25 +70,20 @@ func TestRSTFractalFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 	}
 }
 
-func TestRSTFractalFacts_IndependentOfDivMethod(t *testing.T) {
+func TestRSTFractalFacts_CoexistWithTV(t *testing.T) {
 	klines := fractalWaveKlines(120)
-	tv := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30, PivotRadius: 2}
-	fr := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "fractal", DivLookback: 30, PivotRadius: 2}
-	a := RSTFractalFactsFromDAGHistory(klines, ReplayDAGKlines(klines, tv), tv)
-	b := RSTFractalFactsFromDAGHistory(klines, ReplayDAGKlines(klines, fr), fr)
-	if len(a) == 0 || len(a) != len(b) {
-		t.Fatalf("tv-method %d fractal-method %d", len(a), len(b))
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			t.Fatalf("i=%d %+v vs %+v", i, a[i], b[i])
-		}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
+	hist := ReplayDAGKlines(klines, settings)
+	tv := RSTVFactsFromDAGHistory(klines, hist, settings)
+	fr := RSTFractalFactsFromDAGHistory(klines, hist, settings)
+	if len(tv) == 0 || len(fr) == 0 {
+		t.Fatalf("both families must publish on the same series (tv=%d fractal=%d)", len(tv), len(fr))
 	}
 }
 
 func TestRSTFractalFacts_FormingBarDoesNotConfirm(t *testing.T) {
 	klines := fractalWaveKlines(120)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30, PivotRadius: 2}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
 	for i, k := range klines {
@@ -112,7 +107,7 @@ func TestRSTFractalFacts_FormingBarDoesNotConfirm(t *testing.T) {
 
 func TestRSTFractalFacts_FrozenTVAndZZ(t *testing.T) {
 	klines := fractalWaveKlines(120)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30, PivotRadius: 2}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
 	replay := ReplayClosedBars(klines, settings)
 	tv := RSTVFactsFromDAGHistory(klines, replay.Hist, settings)
 	for _, ev := range tv {
@@ -133,9 +128,9 @@ func TestRSTFractalFacts_FrozenTVAndZZ(t *testing.T) {
 	}
 }
 
-func TestRSTFractalFacts_ShowPivotsDoesNotChangeFactCount(t *testing.T) {
+func TestRSTFractalFacts_VisibilityDoesNotOwnFacts(t *testing.T) {
 	klines := fractalWaveKlines(120)
-	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivMethod: "tv", DivLookback: 30, PivotRadius: 2}
+	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
 	facts := RSTFractalFactsFromDAGHistory(klines, ReplayDAGKlines(klines, settings), settings)
 	pivots := 0
 	for _, ev := range facts {
