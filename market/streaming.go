@@ -65,6 +65,10 @@ func (a *Frame) resetStreamingEngines() {
 	// Falcon Jurik and RSX divergence scans share the same normalized source.
 	a.falcon.SetRSXSource(settings.Source)
 	a.Annotations = nil
+	a.rsxTVFacts = nil
+	a.rsxTVCloses = nil
+	a.rsxTVOsc = nil
+	a.rsxTVOpens = nil
 	a.clearDataBusLocked()
 	a.initDAGShadowLocked()
 	a.lastCommittedOpenTime = 0
@@ -139,6 +143,7 @@ func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isCl
 		}
 	}
 	a.runDAGShadowLocked(k, barIndex, isClosed)
+	a.noteRSTVFactLocked(isClosed, barIndex)
 }
 
 func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {

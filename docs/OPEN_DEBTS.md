@@ -28,7 +28,11 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE indicator paint skip is **enough for now** (HIDDEN-RENDER-SKIP-1 `40dca59` + WOZDUH-OWNER-1 `3722baf`). User accepted live `updateTick` ~2× cheaper with most Wozduh lines unchecked; laptop load down. Do **not** start wire skip, lazy `removeSeries`, or LOD from this.  
 5. **Later (parked):** proper **backend** indicator optimisation — DAG/compute + pack/wire only for subscribed plots. Not a FE workaround. Not this freeze.  
-6. Then: ScoreNodes / clean strategy + indicator rebuild  
+6. Then: ScoreNodes / clean strategy + indicator rebuild — **RSX-TRUTH-CLEAN-1 frozen** (`5f8a290`); do not reopen Go RSX color or old marker factory.
+
+**RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
+
+**RSX-SIGNAL-1 ✅ frozen.** Pine TV divergence facts (`rsx_tv_div`) + RSX-pane Bull/Bear markers. Do not start **RSX-SIGNAL-2** (`rsx_zz_div`) from this chapter. Menu `div_method` / fractal / ZigZag remain distinct families.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 
@@ -38,7 +42,7 @@ S6 / Working Set lifetime remains a later debt — **not** reopened by this free
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes** — move Score/Falcon decision graph into DAG nodes | 🔜 | Do **not** delete `market/falcon.go` until done |
+| **76** | **ScoreNodes** — move Score/Falcon decision graph into DAG nodes | 🔜 | Start from frozen RSX truth (`5f8a290`). Each factor: fact vs presentation debt? Do **not** delete `market/falcon.go` until done |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
 | **84** | **RSX settings SSOT (B0)** | ✅ | ADR-012: engine owns config, default hlc3, autosave `rsx_settings.json`, dumb menu POST pipe |
 | **85** | **ChangeImpact + Viewport (B1)** | ✅ | ADR-013/014: classify impact before Set*; soft indicator paint; debounce/Abort/generation |

@@ -35,6 +35,7 @@ func (a *Frame) trimMarkerRAMLocked(drop int) {
 	a.rsxPriceLines = trimTailLocked(a.rsxPriceLines, drop)
 
 	a.trimAnnotationsAfterDropLocked(drop)
+	a.trimRSTVFactsLocked()
 	a.invalidatestreamingSnapLocked()
 	a.alignAllDataBusToKlinesLocked()
 }

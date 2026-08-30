@@ -1562,6 +1562,44 @@
       setBottomTimeAxis(ownerHostId);
     },
 
+    /**
+     * RSX-SIGNAL-1: Bull/Bear markers from factual events on line_rsx.
+     * Color/shape come from the wire annotation (projector), not from decision.
+     */
+    applyLiveAnnotationLayer(storeData) {
+      const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
+      if (!factory || typeof factory.getSeries !== 'function') return;
+      const series = factory.getSeries('line_rsx');
+      if (!series || typeof series.setMarkers !== 'function') return;
+      const toMarker = (typeof window !== 'undefined' && window.Mappers && typeof window.Mappers.annotationToNativeMarker === 'function')
+        ? window.Mappers.annotationToNativeMarker
+        : (typeof annotationToNativeMarker === 'function' ? annotationToNativeMarker : null);
+      const paneOf = (typeof window !== 'undefined' && window.Mappers && typeof window.Mappers.normalizeAnnotationPane === 'function')
+        ? window.Mappers.normalizeAnnotationPane
+        : (p) => (p === 'price' || p === 'wozduh' ? p : 'rsx');
+      const anns = Array.isArray(storeData?.annotations) ? storeData.annotations : [];
+      const markers = [];
+      for (let i = 0; i < anns.length; i++) {
+        const ann = anns[i];
+        if (paneOf(ann?.pane || ann?.Pane) !== 'rsx') continue;
+        const m = toMarker ? toMarker(ann) : null;
+        if (!m) continue;
+        markers.push({
+          time: m.time,
+          position: m.position,
+          color: m.color,
+          shape: m.shape,
+          text: m.text,
+        });
+      }
+      markers.sort((a, b) => a.time - b.time);
+      try {
+        series.setMarkers(markers);
+      } catch {
+        /* series may be detached */
+      }
+    },
+
     /** ADR-025 — toolbar / Escape / tab switch. */
     toggleRuler,
     resetRuler,

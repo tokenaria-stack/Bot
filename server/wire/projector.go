@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"trading_bot/core"
+	"trading_bot/indicators"
 )
 
 // Projector maps TickFrame slot values to wire keys using the UI registry (no indicator names).
@@ -51,6 +52,35 @@ func (p *Projector) BuildTickAnnotation(frame *core.TickFrame, timeSec int64) (A
 		return Annotation{}, false
 	}
 	return AnnotationFromDivState(timeSec, frame.Get(comp.Slot), annotationPane(comp))
+}
+
+// AnnotationsFromFacts projects factual events whose AnchorAt (as chart seconds)
+// falls in times. ZigZag DivState is not used.
+func (p *Projector) AnnotationsFromFacts(events []indicators.IndicatorFactEvent, times []int64) []Annotation {
+	if p == nil || p.registry == nil || len(times) == 0 {
+		return []Annotation{}
+	}
+	comp, ok := p.firstAnnotationComponent()
+	if !ok {
+		return []Annotation{}
+	}
+	pane := annotationPane(comp)
+	allowed := make(map[int64]struct{}, len(times))
+	for _, t := range times {
+		allowed[t] = struct{}{}
+	}
+	out := make([]Annotation, 0)
+	for _, ev := range events {
+		ann, ok := AnnotationFromFact(ev, pane)
+		if !ok {
+			continue
+		}
+		if _, in := allowed[ann.Time]; !in {
+			continue
+		}
+		out = append(out, ann)
+	}
+	return out
 }
 
 // BuildHistoryAnnotations walks HistoryBus DivState and emits markers on rising edges

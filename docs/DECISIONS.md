@@ -7,6 +7,38 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-SIGNAL-1 — TV divergence is a fact, not a trade (Aug 2026)
+
+**Context:** Everget Pine alerts on `divbull` / `divbear` with one-bar confirm and `offset=-1`. Chart markers must not wait on ScoreFactor. Decision must not act at visual anchor time.
+
+**Decision:** One event shape `IndicatorFactEvent`. v1 source `rsx_tv_div` only. Times are closed-bar OpenTime ms. Projector owns color/shape. Reuse existing TV rolling math; do not publish ZigZag `DivState` or fractal hits on this path.
+
+**Rejected:**
+- BUY/SELL / L/LL/S/SS as the published fact — **Reason:** meaning belongs to a later ScoreNode.
+- Merging TV / fractal / ZigZag under one detector — **Reason:** different fact families.
+- Using RAM indexes as event identity — **Reason:** not stable across trim/replay.
+
+**Consequences:** Frozen this chapter. RSX-SIGNAL-2 may reuse the struct for `rsx_zz_div` without pretending it is TV.
+
+---
+
+## RSX-TRUTH-CLEAN-1 — RSX truth vs presentation vs meaning (Aug 2026)
+
+**Context:** Slope-vs-50 hex/`rsxColor` lived in Go and on replay/tick/HTF payloads. A future ScoreNode could treat that visual heuristic as a trading factor. Presentation already belongs on the FE (`rsxStrokeColor`, 30/50/70 scale).
+
+**Decision:** Backend RSX exposes numerical values and factual states only. Frontend owns paint. Future `decision` / ScoreNodes derive meaning explicitly from truth. Backtest later consumes the same truth + meaning — never a second RSX implementation.
+
+Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, divergence facts, thresholds.
+
+**Rejected:**
+- `RSXMomentumState` / Pine OB/OS color in Go / semantic aliases — **Reason:** replaces one presentation SSOT with another.
+- Keeping hollow chart-factory wrappers (`BuildRSXChart`, empty marker sockets) — **Reason:** archaeological code is still a fake SSOT.
+- Purging generic `Marker` / annotation `Color` used by real divergence events — **Reason:** those are facts, not the old L/LL/S/SS factory.
+
+**Consequences:** Frozen (`5f8a290`). For every candidate ScoreNode factor: is this a real fact from indicator truth, or old presentation/state debt? Do not reopen RSX truth to start ScoreNodes.
+
+---
+
 ## SPARSE-ADR010-TIP-1 — sparse HTTP tip is append-only (Aug 2026)
 
 **Context:** Native ADR-010 uses Cap + OVERWRITE. Sparse HTTP rebuild always Replays closed rows first, then overlaid Frame Cur via same-open OVERWRITE when `OpenTime` matched the last Replay bar. That rewrote finalized RSX/Jurik with live DAG Cur. Calendar `isFormingKline` is wrong for quiet 5s–45s.

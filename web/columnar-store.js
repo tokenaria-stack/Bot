@@ -1059,6 +1059,16 @@ class ColumnarStore {
     };
 
     const mergedAnn = this._ingestTickMarkers(tick, time);
+    if (Array.isArray(tick.annotations) && tick.annotations.length) {
+      const seen = new Set(this._annotations.map((a) => `${a.time}|${a.label || a.Label || ''}`));
+      for (const ann of tick.annotations) {
+        const key = `${ann.time ?? ann.Time}|${ann.label ?? ann.Label ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        this._annotations.push(ann);
+      }
+      this._rebuildAnnotationMapFromArray(this._annotations);
+    }
     const ms = ColumnarStore._toMs(time);
 
     const delta = {

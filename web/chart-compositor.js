@@ -291,6 +291,9 @@ class ChartCompositor {
       this._maybeProposeLiveEdgeGuard(applied, n);
     } finally {
       ChartAdapter.setLiveUpdating(false);
+      if (typeof this._store.getForLightweightCharts === 'function') {
+        this._applyAnnotations(this._store.getForLightweightCharts());
+      }
       if (this._onAfterFlush) this._onAfterFlush(intent);
     }
   }
@@ -321,8 +324,8 @@ class ChartCompositor {
     if (intent.phase === 'F2') return;
 
     ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
-    this._applyAnnotations(storeData);
     this._applyDdrPlots(snapshot);
+    this._applyAnnotations(storeData);
     const nav = this._getNavigatorResult();
     if (nav) {
       ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {

@@ -4,23 +4,73 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/indicators"
 	"trading_bot/ui_config"
 )
 
-func TestAnnotationFromDivState_PhaseFPurged(t *testing.T) {
+func TestAnnotationFromFact_BullBearOnAnchor(t *testing.T) {
 	t.Parallel()
-	if _, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx"); ok {
-		t.Fatal("Phase F: DivState must not emit chart markers")
+	bull := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXTVDiv,
+		Direction:   indicators.FactDirBullish,
+		ConfirmedAt: 1_700_000_060_000,
+		AnchorAt:    1_700_000_000_000,
+		AnchorValue: 28,
+		AnchorPrice: 100,
 	}
-	if _, ok := AnnotationFromDivState(1700000000, core.DivStateS, "rsx"); ok {
-		t.Fatal("Phase F: DivState must not emit chart markers")
+	ann, ok := AnnotationFromFact(bull, "rsx")
+	if !ok {
+		t.Fatal("bull fact must project")
 	}
-	if _, ok := AnnotationFromDivState(1, core.DivStateNone, "rsx"); ok {
-		t.Fatal("None must not emit")
+	if ann.Time != 1_700_000_000 || ann.Pane != "rsx" || ann.Label != "Bull" {
+		t.Fatalf("bull ann=%+v", ann)
+	}
+	if ann.Position != "belowBar" || ann.Shape != "arrowUp" || ann.Color != "#26a69a" {
+		t.Fatalf("bull style=%+v", ann)
+	}
+
+	bear := bull
+	bear.Direction = indicators.FactDirBearish
+	ann, ok = AnnotationFromFact(bear, "rsx")
+	if !ok || ann.Label != "Bear" || ann.Position != "aboveBar" || ann.Shape != "arrowDown" || ann.Color != "#ef5350" {
+		t.Fatalf("bear ann=%+v ok=%v", ann, ok)
 	}
 }
 
-func TestBuildHistoryAnnotations_PhaseFEmpty(t *testing.T) {
+func TestAnnotationFromFact_RejectsLegacyAndZigZag(t *testing.T) {
+	t.Parallel()
+	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_zz_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
+		t.Fatal("zz source must not use TV projector")
+	}
+	if _, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx"); ok {
+		t.Fatal("ZigZag DivState must not emit chart markers")
+	}
+}
+
+func TestAnnotationsFromFacts_FiltersToTimes(t *testing.T) {
+	t.Parallel()
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewProjector(reg)
+	ev := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXTVDiv,
+		Direction:   indicators.FactDirBullish,
+		ConfirmedAt: 1_700_000_060_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	anns := p.AnnotationsFromFacts([]indicators.IndicatorFactEvent{ev}, []int64{1_700_000_000})
+	if len(anns) != 1 || anns[0].Label != "Bull" {
+		t.Fatalf("got %+v", anns)
+	}
+	empty := p.AnnotationsFromFacts([]indicators.IndicatorFactEvent{ev}, []int64{99})
+	if len(empty) != 0 {
+		t.Fatalf("out of window: %+v", empty)
+	}
+}
+
+func TestBuildHistoryAnnotations_DivStateUnpublished(t *testing.T) {
 	t.Parallel()
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {

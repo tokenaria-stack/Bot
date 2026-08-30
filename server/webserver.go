@@ -376,7 +376,7 @@ func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle,
 	if dagFrame != nil && d.projector != nil {
 		plots = d.projector.BuildTickJSON(dagFrame)
 	}
-	marker, anns := d.risingEdgeDivAnnotations(timeframe, dagFrame, chart.Time, isClosed)
+	marker, anns := d.closedRSTVAnnotations(timeframe, candle.OpenTime, isClosed)
 	hdr := dagHeaderFromFrame(dagFrame)
 	payload := tickPayload{
 		Timeframe:   timeframe,
@@ -411,33 +411,41 @@ func (d *DashboardServer) BroadcastPriceBar(timeframe string, candle domain.Cand
 	d.RouteChartTick(timeframe, candle, false, nil)
 }
 
-// risingEdgeDivAnnotations emits a wire marker only when closed-bar DivState changes.
+// closedRSTVAnnotations emits RSX TV divergence markers when this closed bar confirmed a fact.
+func (d *DashboardServer) closedRSTVAnnotations(timeframe string, openTimeMs int64, isClosed bool) (string, []wire.Annotation) {
+	if !isClosed || d == nil || d.projector == nil || openTimeMs <= 0 {
+		return "", nil
+	}
+	frame := d.frameForTimeframe(timeframe)
+	if frame == nil {
+		return "", nil
+	}
+	events := frame.RSTVFactsConfirmedAt(openTimeMs)
+	if len(events) == 0 {
+		return "", nil
+	}
+	out := make([]wire.Annotation, 0, len(events))
+	for _, ev := range events {
+		ann, ok := wire.AnnotationFromFact(ev, "rsx")
+		if ok {
+			out = append(out, ann)
+		}
+	}
+	return "", out
+}
+
+// risingEdgeDivAnnotations is retained for tests; ZigZag DivState is not published as RSX TV facts.
 func (d *DashboardServer) risingEdgeDivAnnotations(
 	timeframe string,
 	frame *core.TickFrame,
 	timeSec int64,
 	isClosed bool,
 ) (string, []wire.Annotation) {
-	if !isClosed || d == nil || d.projector == nil || frame == nil {
-		return "", nil
-	}
-	state := frame.Get(core.SlotDivState)
-	if !jsonSafeDivState(state) {
-		state = core.DivStateNone
-	}
-	d.lastDivMu.Lock()
-	prev := d.lastDivState[timeframe]
-	d.lastDivState[timeframe] = state
-	d.lastDivMu.Unlock()
-
-	if state == core.DivStateNone || state == prev {
-		return "", nil
-	}
-	ann, ok := d.projector.BuildTickAnnotation(frame, timeSec)
-	if !ok {
-		return "", nil
-	}
-	return ann.Label, []wire.Annotation{ann}
+	_ = timeframe
+	_ = frame
+	_ = timeSec
+	_ = isClosed
+	return "", nil
 }
 
 func jsonSafeDivState(v float64) bool {

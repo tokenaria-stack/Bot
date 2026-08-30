@@ -298,9 +298,11 @@ function annotationToNativeMarker(ann) {
   const rawTime = ann?.time ?? ann?.Time;
   const time = chartTime(rawTime);
   if (time == null || !Number.isFinite(time)) return null;
-  const label = String(ann?.label ?? ann?.Label ?? ann?.text ?? '').toUpperCase();
+  const label = String(ann?.label ?? ann?.Label ?? ann?.text ?? '').trim();
+  const upper = label.toUpperCase();
   // Phase F: drop legacy RSX trading labels (navigator HH/LL use a separate path).
-  if (['S', 'SS', 'L', 'LL', 'P'].includes(label)) return null;
+  if (['S', 'SS', 'L', 'LL', 'P'].includes(upper)) return null;
+  const text = upper === 'BULL' ? 'Bull' : (upper === 'BEAR' ? 'Bear' : label);
   return {
     time: Number(time),
     position: ann?.position || 'belowBar',
@@ -308,7 +310,7 @@ function annotationToNativeMarker(ann) {
       ? ChartTheme.resolve(ann?.color, ChartTheme.bull)
       : (ann?.color || '#26a69a'),
     shape: ann?.shape || 'circle',
-    text: label,
+    text,
     _rawTime: rawTime,
   };
 }

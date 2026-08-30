@@ -651,7 +651,6 @@
       setLegendVisibility: noop,
       getChartType: () => 'candles',
       applyRsxData: noop,
-      applyLiveAnnotationLayer: noop,
       setNavigatorOverlay: noop,
       hideLegacyOscillatorSeries: noop,
       enableDDROscCutover: noop,

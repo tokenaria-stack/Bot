@@ -167,7 +167,7 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	hist := market.ReplayDAGKlines(klines, rsxSettings)
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)
-	annotations := d.projector.BuildHistoryAnnotations(hist, times)
+	annotations := d.packRSTVHistoryAnnotations(klines, hist, rsxSettings, times)
 	if annotations == nil {
 		annotations = []wire.Annotation{}
 	}
@@ -221,6 +221,23 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 		logProjectionContinuity(resp.ProjCont, timeframe)
 	}
 	return resp, true
+}
+
+func (d *DashboardServer) packRSTVHistoryAnnotations(
+	klines []exchange.Kline,
+	hist *core.HistoryBus,
+	rsxSettings market.RSXSettings,
+	times []int64,
+) []wire.Annotation {
+	if d == nil || d.projector == nil {
+		return []wire.Annotation{}
+	}
+	events := market.RSTVFactsFromDAGHistory(klines, hist, rsxSettings)
+	anns := d.projector.AnnotationsFromFacts(events, times)
+	if anns == nil {
+		return []wire.Annotation{}
+	}
+	return anns
 }
 
 func tipRSXFromPlots(plots map[string][]float64) float64 {

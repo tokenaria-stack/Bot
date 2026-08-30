@@ -8,6 +8,22 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-SIGNAL-1 — Pine TV divergence facts on the chart (Aug 2026) ✅
+
+- **Frozen.** `feat: publish RSX TV divergence facts`. Same TV detector as history (`rsxTVHitAtDisplayBar`); facts use closed-bar OpenTime ms (`AnchorAt` visual, `ConfirmedAt` knowledge). Projector paints Bull/Bear on `ann_rsx_div`. No ScoreFactor / BUY/SELL.
+- Also fixed `UpdateKlineTick` new-bar `lastCommittedOpenTime` when the arriving bar is closed — missing pin re-Saved the previous bar and desynced DAG hist vs klines (live facts ≠ ReplayDAG).
+- Next chapter (not started): **RSX-SIGNAL-2** = `rsx_zz_div` on the same event struct.
+
+## RSX-TRUTH-CLEAN-1 — backend RSX is numerical/factual only (Aug 2026) ✅
+
+- **Frozen.** Commit `5f8a290`. Do not reopen Go slope-vs-50 color, backend `rsxColor` wire, or old L/LL/S/SS chart-factory sockets.
+- Deleted: `RSXColor` / `JurikRSXColor` / `BuildRSXChart`, replay/backtest/tick color copies, write-only `HTFState.RSXColor`, dead tail-poll / empty marker helpers, `ChartTheme.rsxMarkerStyle`.
+- Kept: Jurik + signal math, Snapshot/Restore, DAG/projector scalars, Cap/closed-bar, divergence facts, HTF numeric RSX, FE `rsxStrokeColor` + 30/50/70 scale.
+- Trusted inputs for future ScoreNodes: RSX value, RSX signal, HTF RSX numbers, divergence facts, thresholds. Not colors, old labels, or presentation strings.
+- `TestGoldenAudit` Binance Forbidden is orthogonal; do not reopen this chapter for it.
+
+---
+
 ## SPARSE-ADR010-TIP-1 — sparse HTTP forming tip append-only (Aug 2026) ✅
 
 - **Frozen.** User smoke green: 5s/15s RSX closed points stable; only the forming row moves. Commit `a452cb5`.

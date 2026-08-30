@@ -361,6 +361,19 @@ Key files: `exchange/ws.go` (OnDisconnect/OnReconnect), `market/runtime.go` + `k
 
 After Phase F, live ScoreEngine / matrix / thresholds / trade FSM are **gone**.
 
+**RSX ownership (RSX-TRUTH-CLEAN-1, frozen `5f8a290` + RSX-SIGNAL-1):**
+
+```
+BACKEND RSX     → values + factual states only
+FRONTEND RSX    → presentation only (rsxStrokeColor, scale chrome)
+FUTURE DECISION → derives meaning explicitly from backend truth
+```
+
+**RSX TV divergence facts (RSX-SIGNAL-1):** Pine rolling detector (`scanRSXTVHits` / `rsxTVHitAtDisplayBar`) emits `IndicatorFactEvent` (`source=rsx_tv_div`, `bullish`/`bearish`). `AnchorAt` / `ConfirmedAt` are closed-bar `OpenTime` Unix ms. Marker y/time uses `AnchorAt`; knowledge time is `ConfirmedAt` (one closed bar later). Projector `AnnotationFromFact` → `ann_rsx_div` on the RSX pane (Bull/Bear). ZigZag `SlotDivState` and fractal menu remain unpublished on this path.
+
+ScoreNodes may trust: RSX value, RSX signal, HTF RSX numbers, divergence facts, thresholds.  
+Not: backend colors, old L/LL/S/SS sockets, presentation strings, legacy chart helpers.
+
 Remaining contracts:
 
 | Component | Path | Role |

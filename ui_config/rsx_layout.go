@@ -29,7 +29,7 @@ func RSXComponents() []core.UIComponent {
 			RenderOpts: json.RawMessage(`{"color":"#8B9BB4","lineWidth":1,"title":"RSX Signal","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}}`),
 		},
 		{
-			// Shot 9I: Projector packs SlotDivState → LWC markers; DAG never knows colors/shapes.
+			// RSX-SIGNAL-1: projector packs rsx_tv_div facts → Bull/Bear markers.
 			ID:         "ann_rsx_div",
 			Pane:       "pane_osc",
 			HostID:     "rsx",

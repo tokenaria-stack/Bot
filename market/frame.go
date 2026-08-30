@@ -80,6 +80,10 @@ type Frame struct {
 	WozduhRed      []float64
 	WozduhGreen    []float64
 	Annotations    []ChartAnnotation
+	rsxTVFacts     []indicators.IndicatorFactEvent
+	rsxTVCloses    []float64
+	rsxTVOsc       []float64
+	rsxTVOpens     []int64
 	streamingSnap  streamingSnapshot
 	mtfStates      map[string]*HTFState
 	closeLines     []float64
@@ -271,6 +275,9 @@ func (a *Frame) UpdateKlineTick(k exchange.Kline, isClosed bool) {
 		}
 		a.klines = append(a.klines, k)
 		a.evalTick(k, len(a.klines)-1, isClosed)
+		if isClosed {
+			a.lastCommittedOpenTime = k.OpenTime
+		}
 		a.alignAllDataBusToKlinesLocked()
 		a.trimKlinesToCapLocked()
 		a.clampDataBusToKlinesLocked()
