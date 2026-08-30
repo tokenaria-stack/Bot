@@ -288,54 +288,23 @@ const MAX_RSX_DIV_LOOKBACK = 200;
 const MIN_RSX_SIGNAL_LENGTH = 2;
 const MAX_RSX_SIGNAL_LENGTH = 50;
 
-const RSX_DEFAULT_COLOR = (typeof ChartTheme !== 'undefined') ? ChartTheme.rsxDefault : '#e1d2b5';
-
 /** Lazy-built after LightweightCharts CDN loads (see ensureChartLibraryStyles). */
 let CHART_STYLES = null;
 let INDICATOR_CONFIG = null;
 let SHARED_CROSSHAIR = null;
-let WOZDUX_LINE_DEFS = null;
-let WOZDUX_LINE_KEYS = [];
 function ensureChartLibraryStyles() {
   if (CHART_STYLES) return true;
   if (typeof LightweightCharts === 'undefined') return false;
 
   const LC = LightweightCharts;
-  const oscMidline50Level = {
-    price: 50,
-    color: 'rgba(204, 85, 0, 0.55)',
-    lineStyle: LC.LineStyle.Dashed,
-    lineWidth: 1,
-    axisLabelVisible: true,
-  };
 
   CHART_STYLES = {
-  seriesDefaults: {
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerRadius: 1,
-    crosshairMarkerBorderWidth: 1,
-    crosshairMarkerBorderColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.crosshairMarkerBorder : '#90ee90',
-  },
   candle: {
     upColor: TV.green,
     downColor: TV.red,
     borderVisible: false,
     wickUpColor: TV.green,
     wickDownColor: TV.red,
-  },
-  bar: {
-    upColor: TV.green,
-    downColor: TV.red,
-    visible: false,
-  },
-  priceLine: {
-    color: TV.blue,
-    lineWidth: 2,
-    visible: false,
-    priceLineVisible: false,
-    lastValueVisible: true,
-    autoscaleInfoProvider: () => null,
   },
   volume: {
     priceFormat: { type: 'volume' },
@@ -347,129 +316,18 @@ function ensureChartLibraryStyles() {
     upColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeUp : 'rgba(8,153,129,0.55)',
     downColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeDown : 'rgba(242,54,69,0.55)',
   },
-  rsx: {
-    color: RSX_DEFAULT_COLOR,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  rsxSignal: {
-    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.rsxSignalLine : '#ff9800',
-    lineWidth: 1,
-    lineStyle: LC.LineStyle.Dashed,
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhUp: {
-    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhFast : 'blue',
-    lineWidth: 2,
-    lineStyle: LC.LineStyle.Solid,
-    title: 'wt11 (Blue)',
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhDown: {
-    color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhSlow : 'aqua',
-    lineWidth: 2,
-    lineStyle: LC.LineStyle.Solid,
-    title: 'wt22 (Aqua)',
-    priceLineVisible: false,
-    lastValueVisible: false,
-  },
-  wozduhLevels: [
-    { price: 70, color: 'rgba(255, 255, 255, 0.4)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { ...oscMidline50Level },
-    { price: 30, color: 'rgba(255, 255, 255, 0.4)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 92, color: 'rgba(240, 220, 140, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 8, color: 'rgba(240, 220, 140, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-  ],
-  rsxLevels: [
-    { price: 80, color: 'rgba(255, 190, 120, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-    { price: 70, color: 'rgba(255, 255, 255, 0.2)', lineStyle: LC.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true },
-    { ...oscMidline50Level },
-    { price: 30, color: 'rgba(255, 255, 255, 0.2)', lineStyle: LC.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true },
-    { price: 20, color: 'rgba(255, 190, 120, 0.75)', lineStyle: LC.LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true },
-  ],
-  wozdux: {
-    rsiPrice: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.bear : 'red', lineWidth: 2, title: 'RSI(C)', priceLineVisible: false, lastValueVisible: false },
-    rsiHl2: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.short : 'purple', lineWidth: 2, title: 'RSI(HL2)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolFast: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhFast : 'blue', lineWidth: 2, title: 'wt11 (Blue)', priceLineVisible: false, lastValueVisible: false },
-    rsiVolSlow: { color: (typeof ChartTheme !== 'undefined') ? ChartTheme.wozduhSlow : 'aqua', lineWidth: 2, title: 'wt22 (Aqua)', priceLineVisible: false, lastValueVisible: false },
-  },
 };
 
-  /**
-   * Single source of truth for indicator layers on Live and Backtest charts.
-   * initProfessionalChart builds every series, area fill, and level line from here.
-   */
+  /** Price pane only. Oscillator paint lives in ui_config + primitives + rsxStrokeColor. */
   INDICATOR_CONFIG = {
   price: {
     candle: CHART_STYLES.candle,
-    bar: CHART_STYLES.bar,
-    line: CHART_STYLES.priceLine,
     volume: CHART_STYLES.volume,
     volumeBar: CHART_STYLES.volumeBar,
     volumeScale: { scaleMargins: { top: 0.82, bottom: 0 } },
     priceScale: { scaleMargins: { top: 0.05, bottom: 0.22 } },
   },
-  rsx: {
-    lines: {
-      rsx_main: {
-        dataKey: 'rsx',
-        style: CHART_STYLES.rsx,
-      },
-      rsx_signal: {
-        dataKey: 'rsx_signal',
-        style: CHART_STYLES.rsxSignal,
-      },
-    },
-    levels: CHART_STYLES.rsxLevels,
-    areas: [
-      {
-        id: 'rsx_neutral_zone',
-        top: 60,
-        bottom: 40,
-        topColor: 'rgba(225, 210, 181, 0.08)',
-        bottomColor: 'rgba(225, 210, 181, 0.04)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-    ],
-  },
-  wozduh: {
-    lines: {
-      wozduh_wt1: { dataKey: 'rsiVolFast', style: CHART_STYLES.wozdux.rsiVolFast },
-      wozduh_wt2: { dataKey: 'rsiVolSlow', style: CHART_STYLES.wozdux.rsiVolSlow },
-      rsiPrice: { dataKey: 'rsiPrice', style: CHART_STYLES.wozdux.rsiPrice },
-      rsiHl2: { dataKey: 'rsiHl2', style: CHART_STYLES.wozdux.rsiHl2 },
-    },
-    markerSeriesKey: 'rsiVolSlow',
-    levels: CHART_STYLES.wozduhLevels,
-    areas: [
-      {
-        id: 'wozduh_ob_zone',
-        top: 100,
-        bottom: 70,
-        topColor: 'rgba(255, 255, 0, 0.04)',
-        bottomColor: 'rgba(255, 255, 0, 0.02)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-      {
-        id: 'wozduh_os_zone',
-        top: 30,
-        bottom: 0,
-        topColor: 'rgba(255, 255, 0, 0.02)',
-        bottomColor: 'rgba(255, 255, 0, 0.04)',
-        lineColor: 'transparent',
-        lineWidth: 0,
-      },
-    ],
-  },
 };
-
-  WOZDUX_LINE_DEFS = CHART_STYLES.wozdux;
-  WOZDUX_LINE_KEYS = Object.keys(WOZDUX_LINE_DEFS);
 
   SHARED_CROSSHAIR = {
     mode: LC.CrosshairMode.Normal,

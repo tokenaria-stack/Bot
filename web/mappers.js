@@ -288,42 +288,6 @@ function toVolumeBars(candles) {
   }));
 }
 
-function mapRSXSignalData(osc) {
-  return (osc || []).map((d) => {
-    const time = chartTime(d?.time);
-    if (time == null) return { time: 0 };
-    const raw = d.rsx_signal ?? d.rsxSignal;
-    const value = parseFloat(raw);
-    if (isWarmupOscValue(value)) return { time: Number(time) };
-    return { time: Number(time), value };
-  });
-}
-
-function mapRSXData(osc) {
-  return (osc || []).map((d) => {
-    const time = chartTime(d?.time);
-    if (time == null) return { time: 0 };
-    const value = parseFloat(d.rsx);
-    if (isWarmupOscValue(value)) {
-      return { time: Number(time) };
-    }
-    return {
-      time: Number(time),
-      value,
-      color: d.color || RSX_DEFAULT_COLOR,
-      marker: d.marker || '',
-    };
-  });
-}
-
-function rsxMarkerStyle(marker) {
-  // Phase F: RSX L/LL/S/SS trading labels purged — no special styling.
-  if (typeof ChartTheme !== 'undefined' && ChartTheme.rsxMarkerStyle) {
-    return ChartTheme.rsxMarkerStyle(marker);
-  }
-  return { position: 'belowBar', color: '#2962ff', shape: 'circle', size: 1 };
-}
-
 function normalizeAnnotationPane(pane) {
   const key = String(pane || 'rsx').trim().toLowerCase();
   if (key === 'price' || key === 'wozduh') return key;
@@ -528,11 +492,8 @@ if (typeof window !== 'undefined') {
     toLine,
     toLineClose,
     toVolumeBars,
-    mapRSXData,
-    mapRSXSignalData,
     annotationToNativeMarker,
     normalizeAnnotationPane,
-    rsxMarkerStyle,
     mapNavigatorLinesForChart,
     mapNavigatorBackgroundZones,
     navigatorBarColorMap,

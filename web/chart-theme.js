@@ -27,7 +27,6 @@ const ChartTheme = {
   rsxPivot: '#1565c0',
   regularDiv: '#2962ff',
   hiddenDiv: '#7b1fa2',
-  rsxDefault: '#e1d2b5',
   rsxJurikDot: '#c8a882',
 
   // ── Volume spikes ───────────────────────────────────────────────────────────
@@ -63,7 +62,6 @@ const ChartTheme = {
   // ── Wozduh legacy line defaults (DDR manifest overrides at runtime) ─────────
   wozduhFast: 'blue',
   wozduhSlow: 'aqua',
-  rsxSignalLine: '#ff9800',
 
   // ── MTF period accents (navigator overlays) ─────────────────────────────────
   mtfPeriodColors: {
