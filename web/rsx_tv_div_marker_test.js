@@ -1,5 +1,5 @@
 /**
- * RSX-SIGNAL-1 — Bull/Bear annotations map to RSX-pane LWC markers.
+ * RSX-SIGNAL-1.1 — arrow-only TV div/pivot markers; Show Pivots filters paint.
  * Run: node web/rsx_tv_div_marker_test.js
  */
 'use strict';
@@ -27,38 +27,40 @@ function test(name, fn) {
   console.log('OK', name);
 }
 
-test('bull maps to up marker, not L/LL', () => {
+test('empty caption stays arrow-only', () => {
   const m = Mappers.annotationToNativeMarker({
     time: 1700000000,
     pane: 'rsx',
-    label: 'Bull',
-    color: '#26a69a',
+    label: '',
+    color: '#00e676',
     position: 'belowBar',
     shape: 'arrowUp',
+    source: 'rsx_tv_div',
   });
-  assert.strictEqual(m.text, 'Bull');
+  assert.strictEqual(m.text, '');
   assert.strictEqual(m.shape, 'arrowUp');
-  assert.strictEqual(m.position, 'belowBar');
-  assert.strictEqual(m.color, '#26a69a');
+  assert.strictEqual(m.color, '#00e676');
 });
 
-test('bear maps to down marker, not S/SS', () => {
+test('pivot annotation keeps blue color, no Pivot text', () => {
   const m = Mappers.annotationToNativeMarker({
     time: 1700000000,
     pane: 'rsx',
-    label: 'Bear',
-    color: '#ef5350',
+    label: '',
+    color: '#2979ff',
     position: 'aboveBar',
     shape: 'arrowDown',
+    source: 'rsx_tv_pivot',
   });
-  assert.strictEqual(m.text, 'Bear');
+  assert.strictEqual(m.text, '');
   assert.strictEqual(m.shape, 'arrowDown');
-  assert.strictEqual(m.position, 'aboveBar');
+  assert.strictEqual(m.source, 'rsx_tv_pivot');
 });
 
 test('legacy L/LL/S/SS still dropped', () => {
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'L' }), null);
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'SS' }), null);
+  assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'P' }), null);
 });
 
 test('normalize pane stays rsx', () => {

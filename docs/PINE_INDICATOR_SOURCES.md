@@ -187,8 +187,8 @@ plotshape(piv ? na : shrt ? (pivotl ? min_rsi - 3 : na) : na, location=location.
 ### Заметки для сверки с Go
 
 - **Ядро RSX:** `f18 = 3/(length+2)`, двойное сглаживание `f28/f30 → vC → … → v14/v20`, warmup-счётчик `f88/f90`, итог `(v14/v20+1)*50` — см. `indicators/jurik.go`.
-- **Дивергенции TV:** rolling `max`/`min` по **close** (не high/low), окно `xbars`, задержка 1 бар (`offset=-1` на метках). Публикация: факт `rsx_tv_div` с метками **Bull** / **Bear** (не L/S). Внутренний детектор по-прежнему помечает hit как `L`/`S` до маппинга в direction.
-- **Пивоты Pine:** условие `max_rsi == max_rsi[2]` (2 бара справа ниже) — близко к нашему fractal radius=2, но логика иная (на истории max_rsi, не локальный экстремум RSX).
+- **Дивергенции TV:** rolling `max`/`min` по **close**, окно `xbars`, задержка 1 бар (`offset=-1`). Факт `rsx_tv_div`; на графике только стрелки (без Bull/Bear).
+- **Пивоты Pine TV:** `pivoth`/`pivotl` = `max_rsi == max_rsi[2]` и `max_rsi[2] != max_rsi[3]` (то же для min), `offset=-2`. Факт `rsx_tv_pivot` high/low. Не fractal radius-P.
 - **Цвет в Pine:** OB/OS 70/30. В боте: rising+fallback 50 / falling+below 50 (`rsx_chart.go`) — осознанное отличие для дашборда.
 
 ---

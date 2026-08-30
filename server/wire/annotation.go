@@ -17,7 +17,14 @@ type Annotation struct {
 	Color    string `json:"color"`
 	Position string `json:"position"` // "aboveBar", "belowBar", "inBar"
 	Shape    string `json:"shape"`    // "arrowUp", "arrowDown", "circle"
+	Source   string `json:"source,omitempty"`
 }
+
+const (
+	rsxDivBullColor = "#00e676"
+	rsxDivBearColor = "#ff1744"
+	rsxPivotColor   = "#2979ff"
+)
 
 // DivStateLabel maps SlotDivState enum values to RSX marker labels.
 func DivStateLabel(state float64) string {
@@ -51,11 +58,11 @@ func AnnotationStyleFromLabel(label string) (color, position, shape string) {
 // AnnotationFromFact projects a factual event into a pane marker.
 // Time is AnchorAt (visual). Knowledge time stays on the event (ConfirmedAt).
 func AnnotationFromFact(ev indicators.IndicatorFactEvent, pane string) (Annotation, bool) {
-	if ev.Source != indicators.FactSourceRSXTVDiv || ev.AnchorAt <= 0 {
+	if ev.AnchorAt <= 0 {
 		return Annotation{}, false
 	}
-	label, color, position, shape := factPresentation(ev.Direction)
-	if label == "" {
+	color, position, shape, ok := factPresentation(ev.Source, ev.Direction)
+	if !ok {
 		return Annotation{}, false
 	}
 	if pane == "" {
@@ -64,22 +71,32 @@ func AnnotationFromFact(ev indicators.IndicatorFactEvent, pane string) (Annotati
 	return Annotation{
 		Time:     exchange.ChartTimeSec(ev.AnchorAt),
 		Pane:     pane,
-		Label:    label,
+		Label:    "",
 		Color:    color,
 		Position: position,
 		Shape:    shape,
+		Source:   ev.Source,
 	}, true
 }
 
-func factPresentation(direction string) (label, color, position, shape string) {
-	switch direction {
-	case indicators.FactDirBullish:
-		return "Bull", "#26a69a", "belowBar", "arrowUp"
-	case indicators.FactDirBearish:
-		return "Bear", "#ef5350", "aboveBar", "arrowDown"
-	default:
-		return "", "", "", ""
+func factPresentation(source, direction string) (color, position, shape string, ok bool) {
+	switch source {
+	case indicators.FactSourceRSXTVDiv:
+		switch direction {
+		case indicators.FactDirBullish:
+			return rsxDivBullColor, "belowBar", "arrowUp", true
+		case indicators.FactDirBearish:
+			return rsxDivBearColor, "aboveBar", "arrowDown", true
+		}
+	case indicators.FactSourceRSXTVPivot:
+		switch direction {
+		case indicators.FactDirPivotHigh:
+			return rsxPivotColor, "aboveBar", "arrowDown", true
+		case indicators.FactDirPivotLow:
+			return rsxPivotColor, "belowBar", "arrowUp", true
+		}
 	}
+	return "", "", "", false
 }
 
 // AnnotationFromDivState does not publish ZigZag DivState as RSX TV facts.

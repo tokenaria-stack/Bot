@@ -369,7 +369,7 @@ FRONTEND RSX    → presentation only (rsxStrokeColor, scale chrome)
 FUTURE DECISION → derives meaning explicitly from backend truth
 ```
 
-**RSX TV divergence facts (RSX-SIGNAL-1):** Pine rolling detector (`scanRSXTVHits` / `rsxTVHitAtDisplayBar`) emits `IndicatorFactEvent` (`source=rsx_tv_div`, `bullish`/`bearish`). `AnchorAt` / `ConfirmedAt` are closed-bar `OpenTime` Unix ms. Marker y/time uses `AnchorAt`; knowledge time is `ConfirmedAt` (one closed bar later). Projector `AnnotationFromFact` → `ann_rsx_div` on the RSX pane (Bull/Bear). ZigZag `SlotDivState` and fractal menu remain unpublished on this path.
+**RSX TV facts (RSX-SIGNAL-1 / 1.1):** Pine rolling detector emits `rsx_tv_div` (`bullish`/`bearish`) and `rsx_tv_pivot` (`high`/`low`). Times are closed-bar OpenTime ms. Divergence: `ConfirmedAt` = confirm bar, `AnchorAt` = prior bar. Pivot: `ConfirmedAt` = confirm bar, `AnchorAt` = two bars back. Projector paints arrow-only markers. `show_pivots` hides pivot arrows in the FE painter only. ZigZag `SlotDivState` and fractal remain unpublished.
 
 ScoreNodes may trust: RSX value, RSX signal, HTF RSX numbers, divergence facts, thresholds.  
 Not: backend colors, old L/LL/S/SS sockets, presentation strings, legacy chart helpers.

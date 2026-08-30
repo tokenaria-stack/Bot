@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-SIGNAL-1.1 — TV arrows + Pine TV pivots (Aug 2026) ✅
+
+- Divergence facts unchanged (`rsx_tv_div`). Projector: no Bull/Bear captions; brighter red/green arrows.
+- New fact family `rsx_tv_pivot` (`high`/`low`): Pine `pivoth`/`pivotl` on rolling max_rsi/min_rsi, 2-bar confirm, `AnchorAt` two bars back. Blue arrows, no text.
+- Show Pivots is presentation-only (FE filter). Detector always runs on TV closed bars.
+- Not fractal `P`, not ZigZag, not Class A/C.
+
 ## RSX-SIGNAL-1 — Pine TV divergence facts on the chart (Aug 2026) ✅
 
 - **Frozen.** `feat: publish RSX TV divergence facts`. Same TV detector as history (`rsxTVHitAtDisplayBar`); facts use closed-bar OpenTime ms (`AnchorAt` visual, `ConfirmedAt` knowledge). Projector paints Bull/Bear on `ann_rsx_div`. No ScoreFactor / BUY/SELL.

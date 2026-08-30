@@ -1566,11 +1566,12 @@
      * RSX-SIGNAL-1: Bull/Bear markers from factual events on line_rsx.
      * Color/shape come from the wire annotation (projector), not from decision.
      */
-    applyLiveAnnotationLayer(storeData) {
+    applyLiveAnnotationLayer(storeData, opts) {
       const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
       if (!factory || typeof factory.getSeries !== 'function') return;
       const series = factory.getSeries('line_rsx');
       if (!series || typeof series.setMarkers !== 'function') return;
+      const showPivots = opts?.showPivots !== false;
       const toMarker = (typeof window !== 'undefined' && window.Mappers && typeof window.Mappers.annotationToNativeMarker === 'function')
         ? window.Mappers.annotationToNativeMarker
         : (typeof annotationToNativeMarker === 'function' ? annotationToNativeMarker : null);
@@ -1582,15 +1583,18 @@
       for (let i = 0; i < anns.length; i++) {
         const ann = anns[i];
         if (paneOf(ann?.pane || ann?.Pane) !== 'rsx') continue;
+        const src = ann?.source || ann?.Source || '';
+        if (!showPivots && src === 'rsx_tv_pivot') continue;
         const m = toMarker ? toMarker(ann) : null;
         if (!m) continue;
-        markers.push({
+        const marker = {
           time: m.time,
           position: m.position,
           color: m.color,
           shape: m.shape,
-          text: m.text,
-        });
+        };
+        if (m.text) marker.text = m.text;
+        markers.push(marker);
       }
       markers.sort((a, b) => a.time - b.time);
       try {

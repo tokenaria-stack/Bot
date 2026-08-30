@@ -12,8 +12,11 @@ type IndicatorFactEvent struct {
 }
 
 const (
-	FactSourceRSXTVDiv = "rsx_tv_div"
+	FactSourceRSXTVDiv   = "rsx_tv_div"
+	FactSourceRSXTVPivot = "rsx_tv_pivot"
 
-	FactDirBullish = "bullish"
-	FactDirBearish = "bearish"
+	FactDirBullish   = "bullish"
+	FactDirBearish   = "bearish"
+	FactDirPivotHigh = "high"
+	FactDirPivotLow  = "low"
 )

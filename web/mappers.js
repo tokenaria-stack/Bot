@@ -308,9 +308,10 @@ function annotationToNativeMarker(ann) {
     position: ann?.position || 'belowBar',
     color: (typeof ChartTheme !== 'undefined')
       ? ChartTheme.resolve(ann?.color, ChartTheme.bull)
-      : (ann?.color || '#26a69a'),
+      : (ann?.color || '#00e676'),
     shape: ann?.shape || 'circle',
     text,
+    source: ann?.source || ann?.Source || '',
     _rawTime: rawTime,
   };
 }

@@ -22,18 +22,41 @@ func TestAnnotationFromFact_BullBearOnAnchor(t *testing.T) {
 	if !ok {
 		t.Fatal("bull fact must project")
 	}
-	if ann.Time != 1_700_000_000 || ann.Pane != "rsx" || ann.Label != "Bull" {
+	if ann.Time != 1_700_000_000 || ann.Pane != "rsx" || ann.Label != "" {
 		t.Fatalf("bull ann=%+v", ann)
 	}
-	if ann.Position != "belowBar" || ann.Shape != "arrowUp" || ann.Color != "#26a69a" {
+	if ann.Position != "belowBar" || ann.Shape != "arrowUp" || ann.Color != rsxDivBullColor {
 		t.Fatalf("bull style=%+v", ann)
+	}
+	if ann.Source != indicators.FactSourceRSXTVDiv {
+		t.Fatalf("source %q", ann.Source)
 	}
 
 	bear := bull
 	bear.Direction = indicators.FactDirBearish
 	ann, ok = AnnotationFromFact(bear, "rsx")
-	if !ok || ann.Label != "Bear" || ann.Position != "aboveBar" || ann.Shape != "arrowDown" || ann.Color != "#ef5350" {
+	if !ok || ann.Label != "" || ann.Position != "aboveBar" || ann.Shape != "arrowDown" || ann.Color != rsxDivBearColor {
 		t.Fatalf("bear ann=%+v ok=%v", ann, ok)
+	}
+}
+
+func TestAnnotationFromFact_TVPivotArrows(t *testing.T) {
+	t.Parallel()
+	high := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXTVPivot,
+		Direction:   indicators.FactDirPivotHigh,
+		ConfirmedAt: 1_700_000_120_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	ann, ok := AnnotationFromFact(high, "rsx")
+	if !ok || ann.Label != "" || ann.Shape != "arrowDown" || ann.Position != "aboveBar" || ann.Color != rsxPivotColor {
+		t.Fatalf("pivot high=%+v ok=%v", ann, ok)
+	}
+	low := high
+	low.Direction = indicators.FactDirPivotLow
+	ann, ok = AnnotationFromFact(low, "rsx")
+	if !ok || ann.Label != "" || ann.Shape != "arrowUp" || ann.Position != "belowBar" || ann.Color != rsxPivotColor {
+		t.Fatalf("pivot low=%+v ok=%v", ann, ok)
 	}
 }
 
@@ -61,7 +84,7 @@ func TestAnnotationsFromFacts_FiltersToTimes(t *testing.T) {
 		AnchorAt:    1_700_000_000_000,
 	}
 	anns := p.AnnotationsFromFacts([]indicators.IndicatorFactEvent{ev}, []int64{1_700_000_000})
-	if len(anns) != 1 || anns[0].Label != "Bull" {
+	if len(anns) != 1 || anns[0].Label != "" || anns[0].Shape != "arrowUp" {
 		t.Fatalf("got %+v", anns)
 	}
 	empty := p.AnnotationsFromFacts([]indicators.IndicatorFactEvent{ev}, []int64{99})

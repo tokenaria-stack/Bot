@@ -20,11 +20,11 @@ const ChartTheme = {
   sell: '#f23645',
 
   // ── RSX / divergence markers ───────────────────────────────────────────────
-  rsxShort: '#b71c1c',
-  rsxStrongShort: '#b71c1c',
-  rsxLong: '#004d40',
-  rsxStrongLong: '#004d40',
-  rsxPivot: '#1565c0',
+  rsxShort: '#ff1744',
+  rsxStrongShort: '#ff1744',
+  rsxLong: '#00e676',
+  rsxStrongLong: '#00e676',
+  rsxPivot: '#2979ff',
   regularDiv: '#2962ff',
   hiddenDiv: '#7b1fa2',
   rsxJurikDot: '#c8a882',

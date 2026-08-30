@@ -46,14 +46,27 @@ func TestRSTVFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 	if len(fromReplay) == 0 {
 		t.Fatal("expected TV facts on this series")
 	}
+	sawDiv, sawPivot := false, false
 	for _, ev := range fromReplay {
-		if ev.Source != indicators.FactSourceRSXTVDiv {
+		switch ev.Source {
+		case indicators.FactSourceRSXTVDiv:
+			sawDiv = true
+			if ev.ConfirmedAt-ev.AnchorAt != 60_000 {
+				t.Fatalf("div delay ms=%d", ev.ConfirmedAt-ev.AnchorAt)
+			}
+		case indicators.FactSourceRSXTVPivot:
+			sawPivot = true
+			if ev.ConfirmedAt-ev.AnchorAt != 120_000 {
+				t.Fatalf("pivot delay ms=%d", ev.ConfirmedAt-ev.AnchorAt)
+			}
+		default:
 			t.Fatalf("source %q", ev.Source)
 		}
-		if ev.ConfirmedAt-ev.AnchorAt != 60_000 {
-			t.Fatalf("bar delay ms=%d", ev.ConfirmedAt-ev.AnchorAt)
-		}
 	}
+	if !sawDiv {
+		t.Fatal("expected TV divergence facts")
+	}
+	_ = sawPivot
 }
 
 func TestUpdateKlineTick_ClosedWalkHistCountMatchesKlines(t *testing.T) {

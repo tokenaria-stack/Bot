@@ -6,7 +6,7 @@ import (
 	"trading_bot/indicators"
 )
 
-// RSTVFactsFromClosedSeries emits Pine TV divergence facts from aligned closed bars.
+// RSTVFactsFromClosedSeries emits Pine TV divergence and TV pivot facts from aligned closed bars.
 // rsx[i] must be SlotJurikRSX for klines[i]. Lookback follows RSX settings.
 func RSTVFactsFromClosedSeries(klines []exchange.Kline, rsx []float64, lookback int) []indicators.IndicatorFactEvent {
 	n := len(klines)
@@ -19,7 +19,10 @@ func RSTVFactsFromClosedSeries(klines []exchange.Kline, rsx []float64, lookback 
 		closes[i] = k.Close
 		opens[i] = k.OpenTime
 	}
-	return indicators.TVDivergenceFacts(closes, rsx, opens, lookback)
+	return indicators.MergeTVFacts(
+		indicators.TVDivergenceFacts(closes, rsx, opens, lookback),
+		indicators.TVPivotFacts(closes, rsx, opens, lookback),
+	)
 }
 
 func RSTVFactsFromDAGHistory(klines []exchange.Kline, hist *core.HistoryBus, settings RSXSettings) []indicators.IndicatorFactEvent {
@@ -84,15 +87,15 @@ func (a *Frame) noteRSTVFactLocked(isClosed bool, barIndex int) {
 		return
 	}
 	lookback := a.effectiveRSXSettings().DivLookback
-	ev, ok := indicators.TVDivergenceFactAt(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, barIndex, lookback)
-	if !ok {
-		return
+	events := indicators.TVFactsAt(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, barIndex, lookback)
+	confirmed := a.rsxTVOpens[barIndex]
+	kept := a.rsxTVFacts[:0]
+	for _, ev := range a.rsxTVFacts {
+		if ev.ConfirmedAt != confirmed {
+			kept = append(kept, ev)
+		}
 	}
-	if len(a.rsxTVFacts) > 0 && a.rsxTVFacts[len(a.rsxTVFacts)-1].ConfirmedAt == ev.ConfirmedAt {
-		a.rsxTVFacts[len(a.rsxTVFacts)-1] = ev
-		return
-	}
-	a.rsxTVFacts = append(a.rsxTVFacts, ev)
+	a.rsxTVFacts = append(kept, events...)
 }
 
 func (a *Frame) resyncRSTVSeriesLocked(hist *core.HistoryBus, n int) {
@@ -133,7 +136,11 @@ func (a *Frame) rebuildRSTVFactsLocked() {
 		return
 	}
 	a.resyncRSTVSeriesLocked(hist, n)
-	a.rsxTVFacts = indicators.TVDivergenceFacts(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, a.effectiveRSXSettings().DivLookback)
+	lookback := a.effectiveRSXSettings().DivLookback
+	a.rsxTVFacts = indicators.MergeTVFacts(
+		indicators.TVDivergenceFacts(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, lookback),
+		indicators.TVPivotFacts(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, lookback),
+	)
 }
 
 func (a *Frame) trimRSTVFactsLocked() {

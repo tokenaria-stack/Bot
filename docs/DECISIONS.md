@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-SIGNAL-1.1 — TV presentation + Pine TV pivots (Aug 2026)
+
+**Context:** SIGNAL-1 published TV divergence with Bull/Bear captions and no Pine pivots. Users wanted arrows-only plus the real TV pivot plots, not fractal P.
+
+**Decision:** Keep `rsx_tv_div` facts. Projector uses empty labels and saturated green/red. Add `rsx_tv_pivot` with Direction `high`/`low`, ConfirmedAt at the knowable bar, AnchorAt = OpenTime two bars back. Show Pivots filters paint only.
+
+**Rejected:**
+- Class A/C as “strong” TV divergence — **Reason:** not in Everget TV law.
+- Fractal `P` as TV pivots — **Reason:** different family.
+- Putting color or “Pivot” text on the event — **Reason:** presentation.
+
+**Consequences:** Complete the TV visual chapter before ZigZag (`rsx_zz_div`).
+
+---
+
 ## RSX-SIGNAL-1 — TV divergence is a fact, not a trade (Aug 2026)
 
 **Context:** Everget Pine alerts on `divbull` / `divbear` with one-bar confirm and `offset=-1`. Chart markers must not wait on ScoreFactor. Decision must not act at visual anchor time.
