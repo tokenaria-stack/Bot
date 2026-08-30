@@ -8,16 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## RSX-SIGNAL-2A.1 — ZZ plumbing / live annotation skip (Aug 2026)
+## RSX-SIGNAL-2A.1 — ZZ plumbing / live annotation skip (Aug 2026) ✅
 
+- **Frozen** with 2A at `39d6f78`. Idle LIVE a bit cooler. Do not reopen one-walk / collector / revision gate.
 - One closed-bar DAG walk (`ReplayClosedBars`) produces Hist + `rsx_zz_div`. No second ZigZag/Jurik pass.
 - `ZZDivFactCollector` samples RSX at confirm via `Hist.Get` lookback (not session `ValueAtBar`), then stores `{AnchorAt, IsHigh, Price, RSX}`.
 - FE: ColumnarStore `annotationRevision`; compositor skips slice/`setMarkers` when revision + `show_pivots` + `line_rsx` series identity are unchanged.
 
-## RSX-SIGNAL-2A — ZigZag divergence facts (Aug 2026)
+## RSX-SIGNAL-2A — ZigZag divergence facts (Aug 2026) ✅
 
-- `rsx_zz_div` with Pattern regular|hidden. Four geometries; equal price/RSX is not a fact. Event on new confirmed swing only. RSX sampled at swing bar (`ValueAtBar`). Hidden paint: `H Bull` / `H Bear`. Regular: arrows only.
-- ZigZag remains RSX-adaptive (ATR sensitivity). `SlotDivScore` / `SlotDivState` quarantined.
+- **Frozen.** Commit `39d6f78` (2A + 2A.1 in one commit). `rsx_zz_div` Pattern regular|hidden. Four geometries; equal price/RSX is not a fact. Event on new confirmed swing only. Hidden paint: `H Bull` / `H Bear`. Regular: arrows only.
+- ZigZag remains RSX-adaptive (ATR sensitivity). `SlotDivScore` / `SlotDivState` quarantined until 2B.
 - Not fractal, not menu, not ScoreNodes.
 
 ## RSX-SIGNAL-1.1 — TV arrows + Pine TV pivots (Aug 2026) ✅

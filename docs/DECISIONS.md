@@ -17,7 +17,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Hashing times+labels every tick — **Reason:** O(n) work on idle LIVE.
 - Sampling RSX inside ZigZagNode or retrofitting DivergenceNode — **Reason:** mixes 2A.1 with 2B.
 
-**Consequences:** Freeze 2A after smoke. Do not start 2B from this chapter.
+**Consequences:** Frozen (`39d6f78`) with 2A. Next chapter is 2B (DivState/DivScore audit), not fractal.
 
 ---
 
@@ -32,7 +32,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Reading `SlotDivScore` to classify — **Reason:** meaning, unproven weights.
 - Changing ZigZag RSX sensitivity in this chapter — **Reason:** geometry ownership.
 
-**Consequences:** 2B may delete unused DivState/score coupling after a consumer audit. Menu later.
+**Consequences:** Frozen (`39d6f78`). 2B may delete unused DivState/score coupling after a consumer audit. Menu later.
 
 ---
 
