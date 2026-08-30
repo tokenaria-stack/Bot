@@ -8,11 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## RSX-SIGNAL-3 — fractal facts, not L/LL/S/SS (Aug 2026)
+## RSX-SIGNAL-3 — fractal facts, not L/LL/S/SS (Aug 2026) ✅ frozen `c856fef`
 
 - Salvaged `scanRSXFractalHits` / `CheckClassicDivergence`. Published `rsx_fractal_div` (`class_a`/`class_b`/`class_c`) and `rsx_fractal_pivot`.
 - Class C was documented but never assigned; classifier now returns it (new price extreme + oscillator double top/bottom). Hits carry Class at detection time (old LL/SS collapsed A vs C).
-- Not gated on `div_method`. Menu unchanged.
+- `FractalFactsAt` is confirm-bar only (O(lookback)); not a prefix rescan. Not gated on `div_method`. Menu unchanged.
 
 ## FALCON-SCORE-CLEAN-1 — delete write-only Falcon divergence scoring (Aug 2026) ✅
 

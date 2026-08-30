@@ -46,7 +46,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator kept. Frame ZigZag kept (fib/geometry).
 
-**RSX-SIGNAL-3 ✅** — fractal detector publishes `rsx_fractal_div` (class_a/b/c) and `rsx_fractal_pivot`. Next when asked: independent visibility / kill `div_method`. Not ScoreNodes.
+**RSX-SIGNAL-3 ✅ frozen** (`c856fef`). Fractal facts (`rsx_fractal_div` class_a/b/c, `rsx_fractal_pivot`) + bounded `FractalFactsAt`. Do **not** reopen detector math or lookback search. Next when asked: independent visibility / kill `div_method`. Not ScoreNodes.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

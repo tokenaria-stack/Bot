@@ -19,7 +19,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Gate facts on `div_method == fractal` — **Reason:** same law as `rsx_zz_div`.
 - Rewrite as ZigZag/TV/generic divergence — **Reason:** product kept this detector.
 
-**Consequences:** Next chapter is menu / `div_method` deletion, not ScoreNodes.
+**Consequences:** Frozen at `c856fef` (bounded confirm-bar `FractalFactsAt`). Next chapter is menu / `div_method` deletion, not ScoreNodes.
 
 ---
 
