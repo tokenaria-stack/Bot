@@ -57,7 +57,21 @@ test('pivot annotation keeps blue color, no Pivot text', () => {
   assert.strictEqual(m.source, 'rsx_tv_pivot');
 });
 
-test('legacy L/LL/S/SS still dropped', () => {
+test('hidden zz keeps H Bull text', () => {
+  const m = Mappers.annotationToNativeMarker({
+    time: 1700000000,
+    pane: 'rsx',
+    label: 'H Bull',
+    color: '#00e676',
+    position: 'belowBar',
+    shape: 'arrowUp',
+    source: 'rsx_zz_div',
+  });
+  assert.strictEqual(m.text, 'H Bull');
+  assert.strictEqual(m.source, 'rsx_zz_div');
+});
+
+test('legacy labels stay unpublished', () => {
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'L' }), null);
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'SS' }), null);
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'P' }), null);

@@ -7,6 +7,35 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-SIGNAL-2A.1 — collector + revision gate, not fingerprint (Aug 2026)
+
+**Context:** 2A semantics were green. History ran a second DAG for ZZ facts. Live `_flushDelta` sliced annotations and called `setMarkers` every tick. Session `BarIndex` + `ValueAtBar` failed after `dagHistoryCap` wrap.
+
+**Decision:** Tiny closed-bar `ZZDivFactCollector` (not DivergenceNode). Fuse ZZ collection into `ReplayClosedBars`. Annotation paint key is store revision + `show_pivots` + series identity. Do not fingerprint the marker list.
+
+**Rejected:**
+- Hashing times+labels every tick — **Reason:** O(n) work on idle LIVE.
+- Sampling RSX inside ZigZagNode or retrofitting DivergenceNode — **Reason:** mixes 2A.1 with 2B.
+
+**Consequences:** Freeze 2A after smoke. Do not start 2B from this chapter.
+
+---
+
+## RSX-SIGNAL-2A — ZigZag facts, not SlotDivState (Aug 2026)
+
+**Context:** TV facts are frozen. ZigZag `DivergenceNode` compared last two same-type swings vs RSX at the swing bar, but published a level (`SlotDivState`) plus score weights. `LL` was hidden bullish; `SS` was unused.
+
+**Decision:** New `IndicatorFactEvent` family `rsx_zz_div` + `Pattern`. Emit once per new confirmed swing. Hidden bearish is a new truthful geometry, not `SS`. Do not put OpenTime on generic `SwingEvent`; resolve kline OpenTime at emit.
+
+**Rejected:**
+- Mapping LL/SS to Grade=strong — **Reason:** hidden ≠ strong; SS was dead.
+- Reading `SlotDivScore` to classify — **Reason:** meaning, unproven weights.
+- Changing ZigZag RSX sensitivity in this chapter — **Reason:** geometry ownership.
+
+**Consequences:** 2B may delete unused DivState/score coupling after a consumer audit. Menu later.
+
+---
+
 ## RSX-SIGNAL-1.1 — TV presentation + Pine TV pivots (Aug 2026)
 
 **Context:** SIGNAL-1 published TV divergence with Bull/Bear captions and no Pine pivots. Users wanted arrows-only plus the real TV pivot plots, not fractal P.

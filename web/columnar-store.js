@@ -35,6 +35,8 @@ class ColumnarStore {
     this._annotations = [];
     /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, volCross, rsxLabel, ... } */
     this._annotationMap = new Map();
+    /** Authoritative annotation data generation. Not a paint fingerprint. */
+    this._annotationRevision = 0;
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
     /** @type {number} TF bar duration (sec); 0 = gap detection disabled. */
@@ -95,12 +97,22 @@ class ColumnarStore {
     return typeof DDRFactory !== 'undefined' ? DDRFactory.HISTORY_ABSENT : Number.NaN;
   }
 
+  annotationRevision() {
+    return this._annotationRevision;
+  }
+
+  _bumpAnnotationRevision() {
+    this._annotationRevision += 1;
+  }
+
   clear() {
+    const hadAnns = this._annotations.length > 0;
     this._times = [];
     this._candles = { open: [], high: [], low: [], close: [], volume: [] };
     this._plots = {};
     this._annotations = [];
     this._annotationMap.clear();
+    if (hadAnns) this._bumpAnnotationRevision();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
     this.windowMode = 'live';
@@ -272,8 +284,10 @@ class ColumnarStore {
         haveAnn.add(t);
       }
     }
+    const prevLen = this._annotations.length;
     this._annotations = keepAnn;
     this._rebuildAnnotationMapFromArray(this._annotations);
+    if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
     this._meta = { ...this._meta, added: this._times.length };
   }
 
@@ -334,6 +348,7 @@ class ColumnarStore {
     }
     this._annotations = Array.isArray(data.annotations) ? data.annotations.slice() : [];
     this._rebuildAnnotationMapFromArray(this._annotations);
+    this._bumpAnnotationRevision();
     const proj = data.projCont && typeof data.projCont === 'object' ? data.projCont : null;
     this._meta = {
       hasMore: data.hasMore === true,
@@ -406,6 +421,7 @@ class ColumnarStore {
     if (!Array.isArray(annotations)) return;
     this._annotations = annotations.slice();
     this._rebuildAnnotationMapFromArray(this._annotations);
+    this._bumpAnnotationRevision();
   }
 
   _rebuildAnnotationMapFromArray(annotations) {
@@ -612,16 +628,19 @@ class ColumnarStore {
     this._plots = nextPlots;
 
     if (this._times.length === 0) {
+      if (this._annotations.length) this._bumpAnnotationRevision();
       this._annotations = [];
       this._annotationMap.clear();
     } else {
       const t0 = Number(this._times[0]);
       const t1 = Number(this._times[this._times.length - 1]);
+      const prevLen = this._annotations.length;
       this._annotations = this._annotations.filter((ann) => {
         const t = Number(ann?.time ?? ann?.Time);
         return Number.isFinite(t) && t >= t0 && t <= t1;
       });
       this._rebuildAnnotationMapFromArray(this._annotations);
+      if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
     }
 
     if (meta.droppedNewest === true) {
@@ -814,6 +833,7 @@ class ColumnarStore {
   _gatherIndices(keepIdx, meta = {}) {
     const n = this._times.length;
     if (!Array.isArray(keepIdx) || keepIdx.length === 0) {
+      if (this._annotations.length) this._bumpAnnotationRevision();
       this._times = [];
       this._candles = { open: [], high: [], low: [], close: [], volume: [] };
       this._plots = {};
@@ -851,11 +871,13 @@ class ColumnarStore {
 
     const t0 = Number(this._times[0]);
     const t1 = Number(this._times[this._times.length - 1]);
+    const prevLen = this._annotations.length;
     this._annotations = this._annotations.filter((ann) => {
       const t = Number(ann?.time ?? ann?.Time);
       return Number.isFinite(t) && t >= t0 && t <= t1;
     });
     this._rebuildAnnotationMapFromArray(this._annotations);
+    if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
     if (meta.droppedNewest === true) {
       this.windowMode = 'history';
     }
@@ -1061,13 +1083,18 @@ class ColumnarStore {
     const mergedAnn = this._ingestTickMarkers(tick, time);
     if (Array.isArray(tick.annotations) && tick.annotations.length) {
       const seen = new Set(this._annotations.map((a) => `${a.time}|${a.label || a.Label || ''}`));
+      let added = 0;
       for (const ann of tick.annotations) {
         const key = `${ann.time ?? ann.Time}|${ann.label ?? ann.Label ?? ''}`;
         if (seen.has(key)) continue;
         seen.add(key);
         this._annotations.push(ann);
+        added += 1;
       }
-      this._rebuildAnnotationMapFromArray(this._annotations);
+      if (added) {
+        this._rebuildAnnotationMapFromArray(this._annotations);
+        this._bumpAnnotationRevision();
+      }
     }
     const ms = ColumnarStore._toMs(time);
 
@@ -1179,8 +1206,12 @@ class ColumnarStore {
       volume: prepended.volume.concat(this._candles.volume),
     };
     this._plots = mergedPlots;
+    const prevAnnLen = this._annotations.length;
     this._annotations = newAnns.concat(keptAnn);
     this._rebuildAnnotationMapFromArray(this._annotations);
+    if (newAnns.length > 0 || this._annotations.length !== prevAnnLen) {
+      this._bumpAnnotationRevision();
+    }
     this._meta = {
       ...this._meta,
       hasMore: data.hasMore === true,
@@ -1310,8 +1341,12 @@ class ColumnarStore {
       volume: this._candles.volume.concat(appended.volume),
     };
     this._plots = mergedPlots;
+    const prevAnnLen = this._annotations.length;
     this._annotations = keptAnn.concat(newAnns);
     this._rebuildAnnotationMapFromArray(this._annotations);
+    if (newAnns.length > 0 || this._annotations.length !== prevAnnLen) {
+      this._bumpAnnotationRevision();
+    }
     this._meta = {
       ...this._meta,
       added: this._times.length,

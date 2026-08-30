@@ -5,6 +5,7 @@ package indicators
 type IndicatorFactEvent struct {
 	Source      string
 	Direction   string
+	Pattern     string
 	ConfirmedAt int64
 	AnchorAt    int64
 	AnchorValue float64
@@ -14,9 +15,13 @@ type IndicatorFactEvent struct {
 const (
 	FactSourceRSXTVDiv   = "rsx_tv_div"
 	FactSourceRSXTVPivot = "rsx_tv_pivot"
+	FactSourceRSXZZDiv   = "rsx_zz_div"
 
 	FactDirBullish   = "bullish"
 	FactDirBearish   = "bearish"
 	FactDirPivotHigh = "high"
 	FactDirPivotLow  = "low"
+
+	FactPatternRegular = "regular"
+	FactPatternHidden  = "hidden"
 )

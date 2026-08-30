@@ -3,17 +3,23 @@ package market
 import (
 	"log/slog"
 	"math"
+	"sync/atomic"
 
 	"trading_bot/core"
 	"trading_bot/core/nodes"
 	"trading_bot/exchange"
+	"trading_bot/indicators"
 )
 
 const dagShadowEpsilon = 1e-4
 
 const dagHistoryCap = 1024
 
+// testDAGRunnerBorn counts newDAGRunner allocations (SIGNAL-2A.1 single-walk proof).
+var testDAGRunnerBorn atomic.Int64
+
 func newDAGRunner(historyCap int, rsx RSXSettings) *core.DAGRunner {
+	testDAGRunnerBorn.Add(1)
 	normalized := NormalizeRSXSettings(rsx)
 	bus := core.NewBus(historyCap)
 	runner := core.NewDAGRunner(bus)
@@ -36,21 +42,43 @@ func newDAGRunner(historyCap int, rsx RSXSettings) *core.DAGRunner {
 	return runner
 }
 
-// ReplayDAGKlines runs the DAG over closed klines and returns the populated history ring.
-func ReplayDAGKlines(klines []exchange.Kline, rsx RSXSettings) *core.HistoryBus {
+// ClosedDAGReplay is one closed-bar DAG walk: scalar hist plus ZZ facts from that walk.
+type ClosedDAGReplay struct {
+	Hist    *core.HistoryBus
+	ZZFacts []indicators.IndicatorFactEvent
+}
+
+// ReplayClosedBars is the single sequential closed-bar DAG walk (scalars + rsx_zz_div).
+func ReplayClosedBars(klines []exchange.Kline, rsx RSXSettings) ClosedDAGReplay {
 	if len(klines) == 0 {
-		return nil
+		return ClosedDAGReplay{}
 	}
-	cap := core.ValidateHistoryCap(len(klines))
-	runner := newDAGRunner(cap, rsx)
+	return replayClosedBarsCap(klines, rsx, core.ValidateHistoryCap(len(klines)))
+}
+
+func replayClosedBarsCap(klines []exchange.Kline, rsx RSXSettings, histCap int) ClosedDAGReplay {
+	if len(klines) == 0 {
+		return ClosedDAGReplay{}
+	}
+	runner := newDAGRunner(histCap, rsx)
+	var col ZZDivFactCollector
+	out := make([]indicators.IndicatorFactEvent, 0)
 	for i, k := range klines {
 		runner.TickUpdate(k.Open, k.High, k.Low, k.Close, k.Volume, i, true)
+		if ev, ok := col.ObserveClosed(runner.Bus(), klines, i); ok {
+			out = append(out, ev)
+		}
 	}
 	bus := runner.Bus()
 	if bus == nil {
-		return nil
+		return ClosedDAGReplay{ZZFacts: out}
 	}
-	return bus.Hist
+	return ClosedDAGReplay{Hist: bus.Hist, ZZFacts: out}
+}
+
+// ReplayDAGKlines runs the DAG over closed klines and returns the populated history ring.
+func ReplayDAGKlines(klines []exchange.Kline, rsx RSXSettings) *core.HistoryBus {
+	return ReplayClosedBars(klines, rsx).Hist
 }
 
 func (a *Frame) initDAGShadowLocked() {

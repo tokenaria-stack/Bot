@@ -189,6 +189,7 @@ plotshape(piv ? na : shrt ? (pivotl ? min_rsi - 3 : na) : na, location=location.
 - **Ядро RSX:** `f18 = 3/(length+2)`, двойное сглаживание `f28/f30 → vC → … → v14/v20`, warmup-счётчик `f88/f90`, итог `(v14/v20+1)*50` — см. `indicators/jurik.go`.
 - **Дивергенции TV:** rolling `max`/`min` по **close**, окно `xbars`, задержка 1 бар (`offset=-1`). Факт `rsx_tv_div`; на графике только стрелки (без Bull/Bear).
 - **Пивоты Pine TV:** `pivoth`/`pivotl` = `max_rsi == max_rsi[2]` и `max_rsi[2] != max_rsi[3]` (то же для min), `offset=-2`. Факт `rsx_tv_pivot` high/low. Не fractal radius-P.
+- **ZigZag (не TV):** Go ZigZag is RSX-adaptive for ATR sensitivity only. `rsx_zz_div` samples RSX at the swing bar, not at the confirmation bar. Timing is not `+2*tf`.
 - **Цвет в Pine:** OB/OS 70/30. В боте: rising+fallback 50 / falling+below 50 (`rsx_chart.go`) — осознанное отличие для дашборда.
 
 ---

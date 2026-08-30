@@ -8,6 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-SIGNAL-2A.1 — ZZ plumbing / live annotation skip (Aug 2026)
+
+- One closed-bar DAG walk (`ReplayClosedBars`) produces Hist + `rsx_zz_div`. No second ZigZag/Jurik pass.
+- `ZZDivFactCollector` samples RSX at confirm via `Hist.Get` lookback (not session `ValueAtBar`), then stores `{AnchorAt, IsHigh, Price, RSX}`.
+- FE: ColumnarStore `annotationRevision`; compositor skips slice/`setMarkers` when revision + `show_pivots` + `line_rsx` series identity are unchanged.
+
+## RSX-SIGNAL-2A — ZigZag divergence facts (Aug 2026)
+
+- `rsx_zz_div` with Pattern regular|hidden. Four geometries; equal price/RSX is not a fact. Event on new confirmed swing only. RSX sampled at swing bar (`ValueAtBar`). Hidden paint: `H Bull` / `H Bear`. Regular: arrows only.
+- ZigZag remains RSX-adaptive (ATR sensitivity). `SlotDivScore` / `SlotDivState` quarantined.
+- Not fractal, not menu, not ScoreNodes.
+
 ## RSX-SIGNAL-1.1 — TV arrows + Pine TV pivots (Aug 2026) ✅
 
 - **Frozen.** Smoke green. Commit `b4ac2ae`. Divergence facts unchanged (`rsx_tv_div`). Projector: no Bull/Bear captions; brighter red/green arrows.
@@ -19,7 +31,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 - **Frozen.** `feat: publish RSX TV divergence facts`. Same TV detector as history (`rsxTVHitAtDisplayBar`); facts use closed-bar OpenTime ms (`AnchorAt` visual, `ConfirmedAt` knowledge). Projector paints Bull/Bear on `ann_rsx_div`. No ScoreFactor / BUY/SELL.
 - Also fixed `UpdateKlineTick` new-bar `lastCommittedOpenTime` when the arriving bar is closed — missing pin re-Saved the previous bar and desynced DAG hist vs klines (live facts ≠ ReplayDAG).
-- Next chapter (not started): **RSX-SIGNAL-2** = `rsx_zz_div` on the same event struct.
+- Next chapter was **RSX-SIGNAL-2A** (`rsx_zz_div`).
 
 ## RSX-TRUTH-CLEAN-1 — backend RSX is numerical/factual only (Aug 2026) ✅
 

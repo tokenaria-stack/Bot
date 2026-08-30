@@ -36,6 +36,7 @@ func (a *Frame) trimMarkerRAMLocked(drop int) {
 
 	a.trimAnnotationsAfterDropLocked(drop)
 	a.trimRSTVFactsLocked()
+	a.trimRSTZZFactsLocked()
 	a.invalidatestreamingSnapLocked()
 	a.alignAllDataBusToKlinesLocked()
 }

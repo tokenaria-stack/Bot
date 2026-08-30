@@ -69,6 +69,8 @@ func (a *Frame) resetStreamingEngines() {
 	a.rsxTVCloses = nil
 	a.rsxTVOsc = nil
 	a.rsxTVOpens = nil
+	a.rsxZZFacts = nil
+	a.zzCollector = ZZDivFactCollector{}
 	a.clearDataBusLocked()
 	a.initDAGShadowLocked()
 	a.lastCommittedOpenTime = 0
@@ -144,6 +146,7 @@ func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isCl
 	}
 	a.runDAGShadowLocked(k, barIndex, isClosed)
 	a.noteRSTVFactLocked(isClosed, barIndex)
+	a.noteRSTZZFactLocked(isClosed, barIndex)
 }
 
 func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {

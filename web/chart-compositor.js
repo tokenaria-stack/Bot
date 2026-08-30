@@ -27,6 +27,9 @@ class ChartCompositor {
     this._prependCameraSettledCbs = [];
     /** @type {(() => void)|null} */
     this._invalidateQueuedDeltas = null;
+    this._paintedAnnotationRevision = -1;
+    this._paintedShowPivots = null;
+    this._paintedMarkerSeries = null;
   }
 
   /**
@@ -244,8 +247,10 @@ class ChartCompositor {
     ChartAdapter.setLiveUpdating(true);
     try {
       this._applyDdrPlots(snapshot);
-      const storeData = ChartCompositor.snapshotToStoreData(snapshot);
-      this._applyAnnotations(storeData);
+      if (this._annotationPaintNeeded()) {
+        const storeData = ChartCompositor.snapshotToStoreData(snapshot);
+        this._applyAnnotations(storeData);
+      }
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
@@ -291,7 +296,7 @@ class ChartCompositor {
       this._maybeProposeLiveEdgeGuard(applied, n);
     } finally {
       ChartAdapter.setLiveUpdating(false);
-      if (typeof this._store.getForLightweightCharts === 'function') {
+      if (this._annotationPaintNeeded() && typeof this._store.getForLightweightCharts === 'function') {
         this._applyAnnotations(this._store.getForLightweightCharts());
       }
       if (this._onAfterFlush) this._onAfterFlush(intent);
@@ -616,14 +621,51 @@ class ChartCompositor {
     window.DDRFactory.applyHydratedData();
   }
 
+  _showPivotsPref() {
+    return (typeof rsxShowPivotsFrom === 'function' && typeof RsxController !== 'undefined')
+      ? rsxShowPivotsFrom(RsxController.getSettings('live'), true)
+      : true;
+  }
+
+  _markerSeries() {
+    if (typeof window === 'undefined' || typeof window.DDRFactory?.getSeries !== 'function') {
+      return null;
+    }
+    return window.DDRFactory.getSeries('line_rsx') || null;
+  }
+
+  invalidateAnnotationPaintTarget() {
+    this._paintedMarkerSeries = null;
+  }
+
+  _annotationPaintNeeded() {
+    const showPivots = this._showPivotsPref();
+    const series = this._markerSeries();
+    const rev = (typeof this._store?.annotationRevision === 'function')
+      ? this._store.annotationRevision()
+      : -1;
+    return !(
+      series === this._paintedMarkerSeries
+      && rev === this._paintedAnnotationRevision
+      && showPivots === this._paintedShowPivots
+    );
+  }
+
+  _rememberAnnotationPaint() {
+    this._paintedAnnotationRevision = (typeof this._store?.annotationRevision === 'function')
+      ? this._store.annotationRevision()
+      : -1;
+    this._paintedShowPivots = this._showPivotsPref();
+    this._paintedMarkerSeries = this._markerSeries();
+  }
+
   _applyAnnotations(storeData) {
     if (typeof ChartAdapter === 'undefined' || typeof ChartAdapter.applyLiveAnnotationLayer !== 'function') {
       return;
     }
-    const showPivots = (typeof rsxShowPivotsFrom === 'function' && typeof RsxController !== 'undefined')
-      ? rsxShowPivotsFrom(RsxController.getSettings('live'), true)
-      : true;
+    const showPivots = this._showPivotsPref();
     ChartAdapter.applyLiveAnnotationLayer(storeData, { showPivots });
+    this._rememberAnnotationPaint();
   }
 
   static snapshotToStoreData(snapshot, annotationMap) {

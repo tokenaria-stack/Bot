@@ -84,6 +84,8 @@ type Frame struct {
 	rsxTVCloses    []float64
 	rsxTVOsc       []float64
 	rsxTVOpens     []int64
+	rsxZZFacts     []indicators.IndicatorFactEvent
+	zzCollector    ZZDivFactCollector
 	streamingSnap  streamingSnapshot
 	mtfStates      map[string]*HTFState
 	closeLines     []float64

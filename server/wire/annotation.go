@@ -61,7 +61,7 @@ func AnnotationFromFact(ev indicators.IndicatorFactEvent, pane string) (Annotati
 	if ev.AnchorAt <= 0 {
 		return Annotation{}, false
 	}
-	color, position, shape, ok := factPresentation(ev.Source, ev.Direction)
+	color, position, shape, label, ok := factPresentation(ev)
 	if !ok {
 		return Annotation{}, false
 	}
@@ -71,7 +71,7 @@ func AnnotationFromFact(ev indicators.IndicatorFactEvent, pane string) (Annotati
 	return Annotation{
 		Time:     exchange.ChartTimeSec(ev.AnchorAt),
 		Pane:     pane,
-		Label:    "",
+		Label:    label,
 		Color:    color,
 		Position: position,
 		Shape:    shape,
@@ -79,24 +79,39 @@ func AnnotationFromFact(ev indicators.IndicatorFactEvent, pane string) (Annotati
 	}, true
 }
 
-func factPresentation(source, direction string) (color, position, shape string, ok bool) {
-	switch source {
+func factPresentation(ev indicators.IndicatorFactEvent) (color, position, shape, label string, ok bool) {
+	switch ev.Source {
 	case indicators.FactSourceRSXTVDiv:
-		switch direction {
+		switch ev.Direction {
 		case indicators.FactDirBullish:
-			return rsxDivBullColor, "belowBar", "arrowUp", true
+			return rsxDivBullColor, "belowBar", "arrowUp", "", true
 		case indicators.FactDirBearish:
-			return rsxDivBearColor, "aboveBar", "arrowDown", true
+			return rsxDivBearColor, "aboveBar", "arrowDown", "", true
 		}
 	case indicators.FactSourceRSXTVPivot:
-		switch direction {
+		switch ev.Direction {
 		case indicators.FactDirPivotHigh:
-			return rsxPivotColor, "aboveBar", "arrowDown", true
+			return rsxPivotColor, "aboveBar", "arrowDown", "", true
 		case indicators.FactDirPivotLow:
-			return rsxPivotColor, "belowBar", "arrowUp", true
+			return rsxPivotColor, "belowBar", "arrowUp", "", true
+		}
+	case indicators.FactSourceRSXZZDiv:
+		switch ev.Direction {
+		case indicators.FactDirBullish:
+			label = ""
+			if ev.Pattern == indicators.FactPatternHidden {
+				label = "H Bull"
+			}
+			return rsxDivBullColor, "belowBar", "arrowUp", label, true
+		case indicators.FactDirBearish:
+			label = ""
+			if ev.Pattern == indicators.FactPatternHidden {
+				label = "H Bear"
+			}
+			return rsxDivBearColor, "aboveBar", "arrowDown", label, true
 		}
 	}
-	return "", "", "", false
+	return "", "", "", "", false
 }
 
 // AnnotationFromDivState does not publish ZigZag DivState as RSX TV facts.

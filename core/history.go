@@ -77,6 +77,14 @@ func (h *HistoryBus) Get(slot Slot, lookback int) float64 {
 	return h.data[base+idx]
 }
 
+// ValueAtBar returns the committed slot at DAG barIndex (0 = oldest in the current ring fill).
+func (h *HistoryBus) ValueAtBar(slot Slot, barIndex int) float64 {
+	if h == nil || barIndex < 0 || barIndex >= h.count {
+		return math.NaN()
+	}
+	return h.Get(slot, h.count-barIndex)
+}
+
 // Advance moves head forward after all slots are pushed on bar close.
 func (h *HistoryBus) Advance() {
 	if h == nil || h.cap == 0 {

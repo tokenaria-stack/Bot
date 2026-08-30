@@ -10,6 +10,7 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/exchange"
+	"trading_bot/indicators"
 	"trading_bot/market"
 	"trading_bot/server/wire"
 )
@@ -163,11 +164,12 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 		return columnarHistoryResponse{}, false
 	}
 
-	// Closed-only stream: ReplayDAGKlines must never see the forming tip.
-	hist := market.ReplayDAGKlines(klines, rsxSettings)
+	// Closed-only stream: one DAG walk for scalars + ZZ facts (never a second ZigZag/Jurik pass).
+	replay := market.ReplayClosedBars(klines, rsxSettings)
+	hist := replay.Hist
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)
-	annotations := d.packRSTVHistoryAnnotations(klines, hist, rsxSettings, times)
+	annotations := d.packRSTVHistoryAnnotations(klines, hist, rsxSettings, times, replay.ZZFacts)
 	if annotations == nil {
 		annotations = []wire.Annotation{}
 	}
@@ -228,11 +230,13 @@ func (d *DashboardServer) packRSTVHistoryAnnotations(
 	hist *core.HistoryBus,
 	rsxSettings market.RSXSettings,
 	times []int64,
+	zzFacts []indicators.IndicatorFactEvent,
 ) []wire.Annotation {
 	if d == nil || d.projector == nil {
 		return []wire.Annotation{}
 	}
 	events := market.RSTVFactsFromDAGHistory(klines, hist, rsxSettings)
+	events = append(events, zzFacts...)
 	anns := d.projector.AnnotationsFromFacts(events, times)
 	if anns == nil {
 		return []wire.Annotation{}

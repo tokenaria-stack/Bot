@@ -34,7 +34,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-SIGNAL-1 ✅ frozen** (`1c353e0`). Pine TV divergence facts (`rsx_tv_div`).
 
-**RSX-SIGNAL-1.1 ✅ frozen** (`b4ac2ae`). TV arrows only, brighter colors, Pine TV pivots (`rsx_tv_pivot`), FE `show_pivots` paint-only. Do not start **RSX-SIGNAL-2** (`rsx_zz_div`). Menu `div_method` / fractal / ZigZag remain distinct. No Class A/C “strong” grade.
+**RSX-SIGNAL-1.1 ✅ frozen** (`b4ac2ae`). TV family closed.
+
+**RSX-SIGNAL-2A** ZigZag facts (`rsx_zz_div`). **2A.1 plumbing** (one DAG walk, wrap-safe collector, annotation revision gate). Not frozen until smoke. Do **not** start 2B.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

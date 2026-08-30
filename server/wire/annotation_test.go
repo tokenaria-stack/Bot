@@ -60,13 +60,47 @@ func TestAnnotationFromFact_TVPivotArrows(t *testing.T) {
 	}
 }
 
-func TestAnnotationFromFact_RejectsLegacyAndZigZag(t *testing.T) {
+func TestAnnotationFromFact_ZigZagHiddenLabel(t *testing.T) {
 	t.Parallel()
-	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_zz_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
-		t.Fatal("zz source must not use TV projector")
+	ev := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXZZDiv,
+		Direction:   indicators.FactDirBullish,
+		Pattern:     indicators.FactPatternHidden,
+		ConfirmedAt: 1_700_000_120_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	ann, ok := AnnotationFromFact(ev, "rsx")
+	if !ok || ann.Label != "H Bull" || ann.Shape != "arrowUp" || ann.Source != indicators.FactSourceRSXZZDiv {
+		t.Fatalf("hidden bull=%+v ok=%v", ann, ok)
+	}
+	ev.Pattern = indicators.FactPatternRegular
+	ann, ok = AnnotationFromFact(ev, "rsx")
+	if !ok || ann.Label != "" || ann.Color != rsxDivBullColor {
+		t.Fatalf("regular zz=%+v ok=%v", ann, ok)
+	}
+	ev.Direction = indicators.FactDirBearish
+	ev.Pattern = indicators.FactPatternHidden
+	ann, ok = AnnotationFromFact(ev, "rsx")
+	if !ok || ann.Label != "H Bear" || ann.Shape != "arrowDown" {
+		t.Fatalf("hidden bear=%+v ok=%v", ann, ok)
+	}
+}
+
+func TestAnnotationFromFact_RejectsDivStateAndUnknown(t *testing.T) {
+	t.Parallel()
+	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_fractal_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
+		t.Fatal("fractal source must not project in SIGNAL-2A")
 	}
 	if _, ok := AnnotationFromDivState(1700000000, core.DivStateL, "rsx"); ok {
 		t.Fatal("ZigZag DivState must not emit chart markers")
+	}
+	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{
+		Source:    indicators.FactSourceRSXZZDiv,
+		Direction: indicators.FactDirBullish,
+		Pattern:   indicators.FactPatternRegular,
+		AnchorAt:  1,
+	}, "rsx"); !ok {
+		t.Fatal("rsx_zz_div must project in SIGNAL-2A")
 	}
 }
 

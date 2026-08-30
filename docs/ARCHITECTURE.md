@@ -369,7 +369,9 @@ FRONTEND RSX    → presentation only (rsxStrokeColor, scale chrome)
 FUTURE DECISION → derives meaning explicitly from backend truth
 ```
 
-**RSX TV facts (RSX-SIGNAL-1 / 1.1):** Pine rolling detector emits `rsx_tv_div` (`bullish`/`bearish`) and `rsx_tv_pivot` (`high`/`low`). Times are closed-bar OpenTime ms. Divergence: `ConfirmedAt` = confirm bar, `AnchorAt` = prior bar. Pivot: `ConfirmedAt` = confirm bar, `AnchorAt` = two bars back. Projector paints arrow-only markers. `show_pivots` hides pivot arrows in the FE painter only. ZigZag `SlotDivState` and fractal remain unpublished.
+**RSX TV facts (RSX-SIGNAL-1 / 1.1):** Pine rolling detector emits `rsx_tv_div` (`bullish`/`bearish`) and `rsx_tv_pivot` (`high`/`low`). Times are closed-bar OpenTime ms. Divergence: `ConfirmedAt` = confirm bar, `AnchorAt` = prior bar. Pivot: `ConfirmedAt` = confirm bar, `AnchorAt` = two bars back. Projector paints arrow-only markers. `show_pivots` hides pivot arrows in the FE painter only. Fractal remains unpublished.
+
+**RSX ZigZag facts (RSX-SIGNAL-2A / 2A.1):** `rsx_zz_div` with `Direction` bullish/bearish and `Pattern` regular/hidden. Swings come from the existing **RSX-adaptive** ZigZag (current-bar RSX only scales ATR sensitivity — not the divergence sample). On each newly confirmed swing, a closed-bar collector samples RSX once via hist lookback from the confirm bar, then keeps `{AnchorAt, IsHigh, Price, RSX}`. Identity is `(AnchorAt, IsHigh)`. `SlotDivScore` / `SlotDivState` are not the fact SSOT. History uses **one** DAG walk (`ReplayClosedBars`) for scalars + ZZ facts. Regular → arrow only; hidden → `H Bull` / `H Bear`. Live annotation paint is revision-gated (no idle `setMarkers`).
 
 ScoreNodes may trust: RSX value, RSX signal, HTF RSX numbers, divergence facts, thresholds.  
 Not: backend colors, old L/LL/S/SS sockets, presentation strings, legacy chart helpers.

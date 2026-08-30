@@ -421,6 +421,7 @@ func (d *DashboardServer) closedRSTVAnnotations(timeframe string, openTimeMs int
 		return "", nil
 	}
 	events := frame.RSTVFactsConfirmedAt(openTimeMs)
+	events = append(events, frame.RSTZZFactsConfirmedAt(openTimeMs)...)
 	if len(events) == 0 {
 		return "", nil
 	}
