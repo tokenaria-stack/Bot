@@ -75,22 +75,17 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 	}
 }
 
-func TestEnrichFromDAG_SlotTotalScoreDoesNotLeakIntoLongScore(t *testing.T) {
+func TestEnrichFromDAG_LiveLongScoreStaysZero(t *testing.T) {
 	prev := market.GetEngineMode()
 	t.Cleanup(func() { market.SetEngineMode(prev) })
 	market.SetEngineMode(market.EngineModeLive)
 
 	marker := newTestDAGMarker(80)
-	frame := marker.DAGTickFrame()
-	if frame == nil {
-		t.Fatal("expected DAG frame")
-	}
-	frame.Set(core.SlotTotalScore, 99)
 	state := &MarketState{}
 	d := &DashboardServer{}
 	d.enrichFromDAG(state, marker)
 	if state.LongScore != 0 {
-		t.Fatalf("LongScore leaked SlotTotalScore: %d", state.LongScore)
+		t.Fatalf("LongScore=%d want 0", state.LongScore)
 	}
 	if state.ShortScore != 0 {
 		t.Fatal("ShortScore must stay 0")

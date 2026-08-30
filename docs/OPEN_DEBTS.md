@@ -40,7 +40,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-SIGNAL-2B ✅** — obsolete ZigZag DivState/DivScore path deleted.
 
-**LEGACY-SCORE-CLEAN-1 ✅** — DAG MicroPatternNode / ScoreNode deleted. Slot iota holes remain (`SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore`). Next dedicated chapter when asked: slot compaction. Not Falcon/divEngine, fractal, menu, or ScoreNodes.
+**LEGACY-SCORE-CLEAN-1 ✅** — DAG MicroPatternNode / ScoreNode deleted.
+
+**SLOT-CLEAN-1 ✅** — compacted dead slots (`SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore`). Next when asked: Falcon/divEngine audit, or fractal facts. Not menu, ScoreNodes, or reserved slot aliases.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

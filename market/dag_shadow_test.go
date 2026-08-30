@@ -67,20 +67,3 @@ func TestDAGRunner_NoLegacyScoreChain(t *testing.T) {
 		t.Fatal("rsx/wozduh/zigzag must remain")
 	}
 }
-
-func TestReplayClosedBars_LegacyScoreSlotsStayZero(t *testing.T) {
-	t.Parallel()
-	klines := makeSyntheticKlines(80)
-	replay := ReplayClosedBars(klines, NormalizeRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"}))
-	if replay.Hist == nil || replay.Hist.Count() == 0 {
-		t.Fatal("expected DAG hist")
-	}
-	n := replay.Hist.Count()
-	for lookback := 1; lookback <= n; lookback++ {
-		for _, slot := range []core.Slot{core.SlotDivState, core.SlotDivScore, core.SlotMicroDivScore, core.SlotTotalScore} {
-			if v := replay.Hist.Get(slot, lookback); v != 0 {
-				t.Fatalf("slot %d lookback %d = %v (must stay unused)", slot, lookback, v)
-			}
-		}
-	}
-}

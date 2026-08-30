@@ -222,7 +222,7 @@ type tickPayload struct {
 	IsClosed         bool                            `json:"isClosed,omitempty"`
 	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
 	Plots            map[string]float64              `json:"plots,omitempty"`
-	// Markers come from IndicatorFactEvent projection, not SlotDivState.
+	// Markers come from IndicatorFactEvent projection.
 	Marker      string            `json:"marker,omitempty"`
 	Annotations []wire.Annotation `json:"annotations,omitempty"`
 }

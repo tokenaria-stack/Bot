@@ -16,12 +16,6 @@ const (
 	SlotWozduhFast
 	SlotWozduhSlow
 
-	// Unused holes (do not compact iota here): DivScore/DivState (2B) + MicroDivScore/TotalScore (LEGACY-SCORE-CLEAN-1).
-	SlotDivScore
-	SlotDivState
-	SlotMicroDivScore
-	SlotTotalScore
-
 	// Chaos atoms (Layer 2) — DDR debt: slots reserved; DAG node wiring TBD.
 	SlotAO
 	SlotAD

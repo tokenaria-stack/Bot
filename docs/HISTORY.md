@@ -8,10 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SLOT-CLEAN-1 — compact dead DAG slots (Aug 2026) ✅
+
+- Removed `SlotDivScore`, `SlotDivState`, `SlotMicroDivScore`, `SlotTotalScore`. Later slots renumber via iota. No aliases.
+- `SlotCount` is live layout only. HistoryBus width follows `SlotCount`. `LongScore` stays 0 with no fake slot to poison.
+
 ## LEGACY-SCORE-CLEAN-1 — remove dead DAG score chain (Aug 2026) ✅
 
 - Deleted `MicroPatternNode` and `ScoreNode` from `newDAGRunner`. No parked helpers, no `rsx_micro` facts.
-- `SlotMicroDivScore` / `SlotTotalScore` have no DAG writers. `LongScore` stays 0. Slot iota not compacted.
+- `SlotMicroDivScore` / `SlotTotalScore` had no DAG writers. Compacted in SLOT-CLEAN-1.
 - Falcon / `SmartDivergenceEngine` / `AnalyzeMicro*` left untouched (separate Live write-only path).
 
 ## RSX-SIGNAL-2B — remove obsolete ZigZag divergence meaning (Aug 2026) ✅

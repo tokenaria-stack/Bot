@@ -7,6 +7,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SLOT-CLEAN-1 — compact four dead DAG slots (Aug 2026)
+
+**Context:** After LEGACY-SCORE-CLEAN-1, `SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore` were unused iota holes. HistoryBus still allocated four empty stripes.
+
+**Decision:** Delete the four constants. Let later slots renumber. `Slot` is not on the wire (`json:"-"`). No aliases.
+
+**Rejected:**
+- Reserved `_` holes — **Reason:** fake architecture.
+- Poison-slot LongScore test after the constant is gone — **Reason:** deleted concept.
+
+**Consequences:** `SlotCount` drops by 4. Next is not ScoreNodes; Falcon/divEngine and fractal stay later.
+
+---
+
 ## LEGACY-SCORE-CLEAN-1 — delete DAG Micro/ScoreNode, do not park math (Aug 2026)
 
 **Context:** After 2B, the only remaining DAG score chain was MicroPatternNode (Jurik saucer/V-spike → 15/20/35) → ScoreNode ×0.5 → unused `SlotTotalScore`. No operational consumer. A separate Live Falcon/`divEngine` micro path still exists.
@@ -17,7 +31,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Keep detectSaucer/V-spike as unregistered DAG helpers — **Reason:** no consumer.
 - Deleting Falcon `AnalyzeMicro*` in the same patch — **Reason:** different oscillators, mixed with AnalyzeMacro.
 
-**Consequences:** Next dedicated chapter is slot compaction of four dead holes. Falcon/divEngine is a later audit.
+**Consequences:** Next dedicated chapter was slot compaction (SLOT-CLEAN-1). Falcon/divEngine is a later audit.
 
 ---
 

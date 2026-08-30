@@ -18,7 +18,7 @@ type ZZDivSwingSample struct {
 }
 
 // ZZDivFactCollector emits rsx_zz_div on newly confirmed same-type swing pairs.
-// Closed bars only. Independent of SlotDivState / SlotDivScore.
+// Closed bars only. Independent of DAG score slots.
 type ZZDivFactCollector struct {
 	lastHigh          ZZDivSwingSample
 	lastLow           ZZDivSwingSample
