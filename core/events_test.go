@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestEventRingSaveRestore(t *testing.T) {
 	r := NewEventRing()
@@ -33,5 +36,13 @@ func TestHistValueAtBar(t *testing.T) {
 	v := HistValueAtBar(bus, SlotJurikRSX, 6, 3)
 	if v != 103 {
 		t.Fatalf("hist at bar 3 from bar 6: got %v want 103", v)
+	}
+}
+
+func TestHistValueAtBarGuard(t *testing.T) {
+	bus := NewBus(8)
+	v := HistValueAtBar(bus, SlotJurikRSX, 100, 0)
+	if !math.IsNaN(v) {
+		t.Fatalf("expected NaN for out-of-range lookback, got %v", v)
 	}
 }

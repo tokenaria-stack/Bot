@@ -7,6 +7,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## LEGACY-SCORE-CLEAN-1 — delete DAG Micro/ScoreNode, do not park math (Aug 2026)
+
+**Context:** After 2B, the only remaining DAG score chain was MicroPatternNode (Jurik saucer/V-spike → 15/20/35) → ScoreNode ×0.5 → unused `SlotTotalScore`. No operational consumer. A separate Live Falcon/`divEngine` micro path still exists.
+
+**Decision:** Delete the DAG nodes and tests that locked scores. Leave slot iota holes. Do not publish `rsx_micro` facts. Do not park unused detector helpers on the DAG.
+
+**Rejected:**
+- Keep detectSaucer/V-spike as unregistered DAG helpers — **Reason:** no consumer.
+- Deleting Falcon `AnalyzeMicro*` in the same patch — **Reason:** different oscillators, mixed with AnalyzeMacro.
+
+**Consequences:** Next dedicated chapter is slot compaction of four dead holes. Falcon/divEngine is a later audit.
+
+---
+
 ## RSX-SIGNAL-2B — delete DivergenceNode, do not compact slots (Aug 2026)
 
 **Context:** After 2A/2A.1, ZigZag meaning lived twice: truthful `rsx_zz_div` facts and a dead `DivergenceNode` → `SlotDivState`/`SlotDivScore` → unused `SlotTotalScore` path. Old L/S/LL/SS was unpublished. Production already forced `LongScore = 0`.
@@ -19,7 +33,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Compacting slot iota in this chapter — **Reason:** renumbers later slots.
 - Wiring `SlotTotalScore` into `LongScore` to keep an old test green — **Reason:** production does not do that.
 
-**Consequences:** Micro → ScoreNode → unused TotalScore remains a later small cleanup. Not ScoreNodes, fractal, or menu.
+**Consequences:** Frozen (`3f20255`). Micro → ScoreNode → unused TotalScore was deleted in LEGACY-SCORE-CLEAN-1.
 
 ---
 

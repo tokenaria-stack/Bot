@@ -8,12 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## LEGACY-SCORE-CLEAN-1 — remove dead DAG score chain (Aug 2026) ✅
+
+- Deleted `MicroPatternNode` and `ScoreNode` from `newDAGRunner`. No parked helpers, no `rsx_micro` facts.
+- `SlotMicroDivScore` / `SlotTotalScore` have no DAG writers. `LongScore` stays 0. Slot iota not compacted.
+- Falcon / `SmartDivergenceEngine` / `AnalyzeMicro*` left untouched (separate Live write-only path).
+
 ## RSX-SIGNAL-2B — remove obsolete ZigZag divergence meaning (Aug 2026) ✅
 
 - Deleted `DivergenceNode` and SlotDivState / SlotDivScore consumers. No adapter. Facts stay `rsx_zz_div` only.
-- ScoreNode remains: MicroPatternNode → `SlotMicroDivScore` → `SlotTotalScore` (unused on wire; `LongScore` stays 0).
+- ScoreNode / MicroPatternNode removed later in LEGACY-SCORE-CLEAN-1.
 - Slot iota not compacted (`SlotDivScore` / `SlotDivState` are holes). `ann_rsx_div.Slot` → `SlotJurikRSX` (pane ownership; not DivState).
-- Not fractal, menu, ScoreNodes, or Micro-chain deletion.
+- Not fractal, menu, or ScoreNodes.
 
 ## RSX-SIGNAL-2A.1 — ZZ plumbing / live annotation skip (Aug 2026) ✅
 

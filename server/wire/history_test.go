@@ -80,7 +80,6 @@ func TestBuildHistoryColumnsFiltered_OnlyRequestedSlots(t *testing.T) {
 	for i := 1; i <= 2; i++ {
 		frame := &core.TickFrame{}
 		frame.Set(core.SlotJurikRSX, float64(40+i))
-		frame.Set(core.SlotTotalScore, float64(10*i))
 		h.PushFrame(frame)
 		h.Advance()
 	}

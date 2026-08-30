@@ -54,18 +54,21 @@ func TestDAGShadowParityWithFalcon(t *testing.T) {
 	}
 }
 
-func TestDAGRunner_NoDivergenceNode(t *testing.T) {
+func TestDAGRunner_NoLegacyScoreChain(t *testing.T) {
 	t.Parallel()
 	r := newDAGRunner(64, NormalizeRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"}))
 	if r.NodeByName("divergence") != nil {
 		t.Fatal("DivergenceNode must not be registered")
 	}
-	if r.NodeByName("score") == nil || r.NodeByName("zigzag") == nil || r.NodeByName("micro_pattern") == nil {
-		t.Fatal("score/zigzag/micro_pattern must remain")
+	if r.NodeByName("micro_pattern") != nil || r.NodeByName("score") != nil {
+		t.Fatal("MicroPatternNode / ScoreNode must not be registered")
+	}
+	if r.NodeByName("rsx") == nil || r.NodeByName("wozduh") == nil || r.NodeByName("zigzag") == nil {
+		t.Fatal("rsx/wozduh/zigzag must remain")
 	}
 }
 
-func TestReplayClosedBars_DivSlotsStayZero(t *testing.T) {
+func TestReplayClosedBars_LegacyScoreSlotsStayZero(t *testing.T) {
 	t.Parallel()
 	klines := makeSyntheticKlines(80)
 	replay := ReplayClosedBars(klines, NormalizeRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"}))
@@ -74,11 +77,10 @@ func TestReplayClosedBars_DivSlotsStayZero(t *testing.T) {
 	}
 	n := replay.Hist.Count()
 	for lookback := 1; lookback <= n; lookback++ {
-		if v := replay.Hist.Get(core.SlotDivState, lookback); v != 0 {
-			t.Fatalf("SlotDivState lookback %d = %v (must stay unused)", lookback, v)
-		}
-		if v := replay.Hist.Get(core.SlotDivScore, lookback); v != 0 {
-			t.Fatalf("SlotDivScore lookback %d = %v (must stay unused)", lookback, v)
+		for _, slot := range []core.Slot{core.SlotDivState, core.SlotDivScore, core.SlotMicroDivScore, core.SlotTotalScore} {
+			if v := replay.Hist.Get(slot, lookback); v != 0 {
+				t.Fatalf("slot %d lookback %d = %v (must stay unused)", slot, lookback, v)
+			}
 		}
 	}
 }

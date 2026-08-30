@@ -38,7 +38,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-SIGNAL-2A ✅ frozen** + **RSX-SIGNAL-2A.1 ✅ frozen** (`39d6f78`). ZigZag facts + one-walk/wrap collector + annotation revision gate. Do **not** reopen 2A plumbing.
 
-**RSX-SIGNAL-2B ✅** — obsolete ZigZag DivState/DivScore path deleted. Slot iota holes remain. Next small cleanup when asked: MicroPatternNode → ScoreNode → unused `SlotTotalScore`. Not fractal, menu, ScoreNodes, or slot compaction.
+**RSX-SIGNAL-2B ✅** — obsolete ZigZag DivState/DivScore path deleted.
+
+**LEGACY-SCORE-CLEAN-1 ✅** — DAG MicroPatternNode / ScoreNode deleted. Slot iota holes remain (`SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore`). Next dedicated chapter when asked: slot compaction. Not Falcon/divEngine, fractal, menu, or ScoreNodes.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 
