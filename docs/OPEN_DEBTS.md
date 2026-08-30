@@ -32,7 +32,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
-**RSX-SIGNAL-1 ✅ frozen.** Pine TV divergence facts (`rsx_tv_div`). **RSX-SIGNAL-1.1:** arrow-only paint + Pine TV pivots (`rsx_tv_pivot`). Do not start **RSX-SIGNAL-2** (`rsx_zz_div`). Menu `div_method` / fractal / ZigZag remain distinct. No Class A/C “strong” grade.
+**RSX-SIGNAL-1 ✅ frozen** (`1c353e0`). Pine TV divergence facts (`rsx_tv_div`).
+
+**RSX-SIGNAL-1.1 ✅ frozen** (`b4ac2ae`). TV arrows only, brighter colors, Pine TV pivots (`rsx_tv_pivot`), FE `show_pivots` paint-only. Do not start **RSX-SIGNAL-2** (`rsx_zz_div`). Menu `div_method` / fractal / ZigZag remain distinct. No Class A/C “strong” grade.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

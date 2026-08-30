@@ -36,6 +36,6 @@ On request / only when the task needs them:
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** |
 | NEXT | **HIST-3** microscope matrix → **DATA-1B** gaps → later **backend indicator opt** (not FE) → **#76 ScoreNodes** |
-| RSX | **RSX-TRUTH-CLEAN-1** (`5f8a290`) + **RSX-SIGNAL-1** (`1c353e0`) + **1.1** TV pivots/arrows |
+| RSX | **RSX-TRUTH-CLEAN-1** (`5f8a290`) + **RSX-SIGNAL-1** (`1c353e0`) + **RSX-SIGNAL-1.1 frozen** (`b4ac2ae`) — TV family closed |
 
 Update the owning SSOT file — do not duplicate content here.

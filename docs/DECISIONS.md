@@ -18,7 +18,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Fractal `P` as TV pivots — **Reason:** different family.
 - Putting color or “Pivot” text on the event — **Reason:** presentation.
 
-**Consequences:** Complete the TV visual chapter before ZigZag (`rsx_zz_div`).
+**Consequences:** Frozen (`b4ac2ae`). TV family closed. Do not start ZigZag (`rsx_zz_div`) from this chapter.
 
 ---
 
