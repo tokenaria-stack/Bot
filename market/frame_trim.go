@@ -35,7 +35,6 @@ func (a *Frame) trimMarkerRAMLocked(drop int) {
 	a.rsxPriceLines = trimTailLocked(a.rsxPriceLines, drop)
 
 	a.trimAnnotationsAfterDropLocked(drop)
-	a.realignBarIndexCachesLocked(drop)
 	a.invalidatestreamingSnapLocked()
 	a.alignAllDataBusToKlinesLocked()
 }
@@ -62,19 +61,6 @@ func (a *Frame) trimAnnotationsAfterDropLocked(drop int) {
 		}
 	}
 	a.Annotations = out
-}
-
-func (a *Frame) realignBarIndexCachesLocked(drop int) {
-	if drop <= 0 {
-		return
-	}
-	if a.cachedRSXMarkerBar >= 0 {
-		a.cachedRSXMarkerBar -= drop
-		if a.cachedRSXMarkerBar < 0 {
-			a.cachedRSXMarkerBar = -1
-			a.cachedRSXMarkerLabel = ""
-		}
-	}
 }
 
 func (a *Frame) invalidatestreamingSnapLocked() {

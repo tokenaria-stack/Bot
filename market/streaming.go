@@ -88,8 +88,9 @@ func (a *Frame) replayStreamingLocked() {
 }
 
 // replayLifecycleLocked reproduces live tick semantics:
-//   closed prefix → evaluate(isClosed=true) → commit last closed
-//   optional forming tip → evaluate(isClosed=false) → never commit
+//
+//	closed prefix → evaluate(isClosed=true) → commit last closed
+//	optional forming tip → evaluate(isClosed=false) → never commit
 func (a *Frame) replayLifecycleLocked(klines []exchange.Kline, nowMs int64) {
 	closed, forming := splitLiveTail(klines, nowMs)
 	for i, k := range closed {
@@ -232,8 +233,6 @@ func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool
 
 	// Divergence math still runs; RSX L/LL/S/SS chart labels purged in Phase F.
 	a.divSignal, _ = a.divEngine.AnalyzeWithRSX(a, barIndex)
-	a.cachedRSXMarkerBar = barIndex
-	a.cachedRSXMarkerLabel = ""
 
 	if isClosed && !a.bulkReplayMode {
 		a.saveStreamingState()

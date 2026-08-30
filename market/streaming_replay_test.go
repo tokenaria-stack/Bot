@@ -73,19 +73,32 @@ func TestRunStreamingReplay_SignalLengthAffectsOutput(t *testing.T) {
 	}
 }
 
+func TestRunStreamingReplay_NoRSXPresentationColor(t *testing.T) {
+	t.Parallel()
+
+	klines := make([]exchange.Kline, 80)
+	base := int64(1_700_000_000_000)
+	for i := range klines {
+		klines[i] = synthPipelineKline(i, base, 50000+float64(i))
+	}
+	result := RunStreamingReplay(nil, klines, ChartStreamingReplayConfig(RSXSettings{Length: 14, SignalLength: 9, Source: "close"}, "1m"))
+	populated := 0
+	for i, pt := range result.ChartPoints {
+		if pt.RSX != 0 {
+			populated++
+		}
+		if pt.Jurik != pt.RSX {
+			t.Fatalf("point %d jurik/rsx mismatch", i)
+		}
+	}
+	if populated == 0 {
+		t.Fatal("expected RSX numerical values on replay chart points")
+	}
+}
+
 func TestIndicatorWarmupBars_MatchesBacktestMinBars(t *testing.T) {
 	t.Parallel()
 	if BacktestMinBars() != IndicatorWarmupBars {
 		t.Fatalf("BacktestMinBars=%d IndicatorWarmupBars=%d", BacktestMinBars(), IndicatorWarmupBars)
-	}
-}
-
-func TestApplyChartAnnotation_PhaseFNoOp(t *testing.T) {
-	t.Parallel()
-	acc := &StreamingReplayAccumulator{}
-	pt := &BacktestChartPoint{}
-	acc.applyChartAnnotation(pt, 0, 1700000000)
-	if pt.Marker != "" {
-		t.Fatalf("Phase F: marker must stay empty, got %q", pt.Marker)
 	}
 }

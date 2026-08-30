@@ -188,7 +188,6 @@ type ChartOscillator struct {
 	PriceChanMid    float64 `json:"priceChanMid"`
 	PriceChanUp     float64 `json:"priceChanUp"`
 	PriceChanDn     float64 `json:"priceChanDn"`
-	Color           string  `json:"color,omitempty"`
 	Marker          string  `json:"marker,omitempty"`
 	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
 	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
@@ -214,8 +213,6 @@ type tickPayload struct {
 	Jurik            float64                         `json:"jurik,omitempty"`
 	RSX              float64                         `json:"rsx,omitempty"`
 	RSXSignal        float64                         `json:"rsx_signal,omitempty"`
-	RSXColor         string                          `json:"rsxColor,omitempty"`
-	RSXMarker        string                          `json:"rsxMarker,omitempty"`
 	LongScore        int                             `json:"longScore,omitempty"`
 	ShortScore       int                             `json:"shortScore,omitempty"`
 	RawAction        string                          `json:"rawAction,omitempty"`
@@ -991,7 +988,6 @@ type ChartPoint struct {
 	PriceChanMid    float64                         `json:"priceChanMid,omitempty"`
 	PriceChanUp     float64                         `json:"priceChanUp,omitempty"`
 	PriceChanDn     float64                         `json:"priceChanDn,omitempty"`
-	Color           string                          `json:"color,omitempty"`
 	Marker          string                          `json:"marker,omitempty"`
 	VolumeSpikeUp   bool                            `json:"volumeSpikeUp,omitempty"`
 	VolumeSpikeDown bool                            `json:"volumeSpikeDown,omitempty"`
@@ -1015,7 +1011,6 @@ type SimPoint struct {
 	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
 	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
 	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
-	Color           string  `json:"color,omitempty"`
 	Marker          string  `json:"marker,omitempty"`
 	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
 	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
@@ -1356,7 +1351,6 @@ func backtestResultFromStrategy(run *market.BacktestRunResult) BacktestResult {
 			PriceChanMid:    p.PriceChanMid,
 			PriceChanUp:     p.PriceChanUp,
 			PriceChanDn:     p.PriceChanDn,
-			Color:           p.Color,
 			Marker:          p.Marker,
 			VolumeSpikeUp:   p.VolumeSpikeUp,
 			VolumeSpikeDown: p.VolumeSpikeDown,
@@ -1382,7 +1376,6 @@ func backtestResultFromStrategy(run *market.BacktestRunResult) BacktestResult {
 			RsiVolFast:      p.RsiVolFast,
 			RsiVolSlow:      p.RsiVolSlow,
 			VolCrossMarker:  p.VolCrossMarker,
-			Color:           p.Color,
 			Marker:          p.Marker,
 			VolumeSpikeUp:   p.VolumeSpikeUp,
 			VolumeSpikeDown: p.VolumeSpikeDown,
@@ -1701,7 +1694,6 @@ func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator)
 			PriceChanMid:    o.PriceChanMid,
 			PriceChanUp:     o.PriceChanUp,
 			PriceChanDn:     o.PriceChanDn,
-			Color:           o.Color,
 			Marker:          o.Marker,
 			VolumeSpikeUp:   o.VolumeSpikeUp,
 			VolumeSpikeDown: o.VolumeSpikeDown,

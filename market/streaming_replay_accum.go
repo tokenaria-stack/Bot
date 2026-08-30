@@ -15,8 +15,6 @@ type StreamingReplayAccumulator struct {
 	annotations   []ChartAnnotation
 	prevBlue      float64
 	prevBlueReady bool
-	prevRSX       float64
-	prevRSXReady  bool
 	processed     int
 	firstOpenMs   int64
 	lastOpenMs    int64
@@ -144,7 +142,6 @@ func (a *StreamingReplayAccumulator) Reset(klines []exchange.Kline, cfg Streamin
 	a.firstOpenMs = 0
 	a.lastOpenMs = 0
 	a.prevBlueReady = false
-	a.prevRSXReady = false
 	a.resetMarker()
 	if len(klines) > 0 {
 		a.firstOpenMs = klines[0].OpenTime
@@ -223,31 +220,14 @@ func (a *StreamingReplayAccumulator) processRange(klines []exchange.Kline, from,
 		pt.Jurik = falcon.JurikRSX
 		pt.RSXSignal = falcon.JurikRSXSignal
 		populateBacktestPointFromFalcon(&pt, falcon, a.prevBlue, a.prevBlueReady)
-		if a.prevRSXReady {
-			pt.Color = RSXColor(pt.RSX, a.prevRSX)
-		}
-		a.prevRSX = pt.RSX
-		a.prevRSXReady = true
 		a.prevBlue = falcon.BlueLine
 		a.prevBlueReady = true
-
-		if len(a.chartData) >= IndicatorWarmupBars-1 {
-			a.applyChartAnnotation(&pt, a.marker.BarCount()-1, barTimeSec)
-		}
 
 		a.chartData = append(a.chartData, pt)
 		a.processed++
 		a.lastOpenMs = kline.OpenTime
 	}
 	return nil
-}
-
-// applyChartAnnotation is a Phase F no-op: RSX L/LL/S/SS labels are not published.
-func (a *StreamingReplayAccumulator) applyChartAnnotation(pt *BacktestChartPoint, barIndex int, barTimeSec int64) {
-	_ = a
-	_ = pt
-	_ = barIndex
-	_ = barTimeSec
 }
 
 func validReplayOHLC(open, high, low, closePrice float64) bool {

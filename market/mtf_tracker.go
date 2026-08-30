@@ -18,7 +18,6 @@ type HTFState struct {
 	LastUpdateSec int64
 	CandleCount   int
 	RSXValue      float64
-	RSXColor      string  // "green" / "red" / "neutral"
 	WozduhUp      float64 // HTF wt11 (RsiVolFast)
 	WozduhDown    float64 // HTF wt22 (RsiVolSlow)
 }
@@ -127,7 +126,7 @@ func (t *WalkForwardMTFTracker) Update(currentTickSec int64, chartKlines []excha
 		}
 
 		layer := BuildHTFNavigatorLayer(t.navigatorUI, candles, tf, chartKlines)
-		rsx, rsxColor, wozUp, wozDown := evaluateHTFOscillators(candles)
+		rsx, wozUp, wozDown := evaluateHTFOscillators(candles)
 		t.states[tf] = &HTFState{
 			Interval:      tf,
 			TrendLines:    append([]NavigatorLineDTO(nil), layer.Lines...),
@@ -135,7 +134,6 @@ func (t *WalkForwardMTFTracker) Update(currentTickSec int64, chartKlines []excha
 			LastUpdateSec: currentTickSec,
 			CandleCount:   len(candles),
 			RSXValue:      rsx,
-			RSXColor:      rsxColor,
 			WozduhUp:      wozUp,
 			WozduhDown:    wozDown,
 		}
@@ -178,33 +176,14 @@ func (t *WalkForwardMTFTracker) States() map[string]*HTFState {
 }
 
 // evaluateHTFOscillators runs an isolated FalconEngine over strictly-closed HTF candles.
-func evaluateHTFOscillators(candles []exchange.Kline) (rsx float64, rsxColor string, wozUp, wozDown float64) {
+func evaluateHTFOscillators(candles []exchange.Kline) (rsx, wozUp, wozDown float64) {
 	if len(candles) == 0 {
-		return 0, "neutral", 0, 0
+		return 0, 0, 0
 	}
 	falcon := NewFalconEngine()
-	var prevRSX float64
 	var last FalconSignals
-	for i, c := range candles {
+	for _, c := range candles {
 		last = falcon.Evaluate(c.High, c.Low, c.Close, c.Volume)
-		if i == len(candles)-1 {
-			rsx = last.JurikRSX
-			rsxColor = rsxColorLabel(RSXColor(last.JurikRSX, prevRSX))
-			wozUp = last.RsiVolFast
-			wozDown = last.RsiVolSlow
-		}
-		prevRSX = last.JurikRSX
 	}
-	return rsx, rsxColor, wozUp, wozDown
-}
-
-func rsxColorLabel(color string) string {
-	switch color {
-	case RSXColorGreen:
-		return "green"
-	case RSXColorRed:
-		return "red"
-	default:
-		return "neutral"
-	}
+	return last.JurikRSX, last.RsiVolFast, last.RsiVolSlow
 }

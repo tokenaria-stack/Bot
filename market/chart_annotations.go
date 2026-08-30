@@ -5,8 +5,8 @@ import "strings"
 // ChartAnnotation is one native Lightweight Charts marker bound to a dashboard pane.
 type ChartAnnotation struct {
 	Time     int64  `json:"time"`
-	Pane     string `json:"pane"`  // "price", "rsx", "wozduh"
-	Label    string `json:"label"` // navigator/geometry labels; RSX L/LL/S/SS purged in Phase F
+	Pane     string `json:"pane"` // "price", "rsx", "wozduh"
+	Label    string `json:"label"`
 	Color    string `json:"color"`
 	Position string `json:"position"` // "aboveBar", "belowBar", "inBar"
 	Shape    string `json:"shape"`    // "arrowUp", "arrowDown", "circle"
@@ -21,14 +21,7 @@ func normalizeAnnotationPane(pane string) string {
 	}
 }
 
-// ChartMarkerAt is a Phase F socket: RSX trading labels are not published.
-func (a *Frame) ChartMarkerAt(barIndex int) string {
-	_ = barIndex
-	return ""
-}
-
 // ExportAllAnnotations collects chart markers from indicator subsystems for [fromBar..toBar].
-// RSX L/LL/S/SS delivery was purged in Phase F; Wozduh stub remains.
 func (a *Frame) ExportAllAnnotations(fromBar, toBar int) []ChartAnnotation {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

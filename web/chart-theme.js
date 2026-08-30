@@ -192,20 +192,6 @@ const ChartTheme = {
       try { fn(ChartTheme); } catch (err) { console.warn('[ChartTheme] listener error:', err); }
     });
   },
-
-  rsxMarkerStyle(marker) {
-    // Phase F: RSX L/LL/S/SS trading labels purged from chart surface.
-    const m = String(marker || '').toUpperCase();
-    if (['S', 'SS', 'L', 'LL', 'P'].includes(m)) {
-      return null;
-    }
-    return {
-      position: 'belowBar',
-      color: ChartTheme.regularDiv,
-      shape: 'circle',
-      size: 1,
-    };
-  },
 };
 
 if (typeof window !== 'undefined') {

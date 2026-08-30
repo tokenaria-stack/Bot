@@ -4,28 +4,6 @@ import (
 	"testing"
 )
 
-func TestChartMarkerAt_PhaseFEmpty(t *testing.T) {
-	t.Parallel()
-
-	ResetRSXSettings()
-	t.Cleanup(ResetRSXSettings)
-	ApplyRSXSettings(RSXSettings{DivMethod: "fractal", PivotRadius: 2})
-
-	rsx := []float64{50, 52, 54, 58, 62, 64, 63, 70, 63, 61, 58, 54, 52, 50, 48}
-	klines := makeSyntheticKlines(len(rsx))
-	m := NewFrame(klines, "1m", ChaosConfig{})
-	m.mu.Lock()
-	m.JurikLines = append([]float64(nil), rsx...)
-	m.mu.Unlock()
-
-	if got := m.ChartMarkerAt(7); got != "" {
-		t.Fatalf("Phase F: ChartMarkerAt must be empty, got %q", got)
-	}
-	if got := m.ChartMarkerAt(14); got != "" {
-		t.Fatalf("Phase F: ChartMarkerAt must be empty, got %q", got)
-	}
-}
-
 func TestExportAllAnnotations_NoRSXTradingLabels(t *testing.T) {
 	t.Parallel()
 

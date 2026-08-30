@@ -115,7 +115,6 @@ type BacktestChartPoint struct {
 	PriceChanMid    float64
 	PriceChanUp     float64
 	PriceChanDn     float64
-	Color           string
 	Marker          string
 	VolumeSpikeUp   bool
 	VolumeSpikeDown bool
@@ -138,7 +137,6 @@ type BacktestSimPoint struct {
 	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
 	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
 	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
-	Color           string  `json:"color,omitempty"`
 	Marker          string  `json:"marker,omitempty"`
 	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
 	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
@@ -295,7 +293,6 @@ func backtestChartPointToSim(pt BacktestChartPoint) BacktestSimPoint {
 		RsiVolFast:      pt.RsiVolFast,
 		RsiVolSlow:      pt.RsiVolSlow,
 		VolCrossMarker:  pt.VolCrossMarker,
-		Color:           pt.Color,
 		Marker:          pt.Marker,
 		VolumeSpikeUp:   pt.VolumeSpikeUp,
 		VolumeSpikeDown: pt.VolumeSpikeDown,

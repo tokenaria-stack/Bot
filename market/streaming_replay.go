@@ -87,8 +87,6 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 
 	var prevBlue float64
 	var prevBlueReady bool
-	var prevRSX float64
-	var prevRSXReady bool
 
 	histKlines := make([]exchange.Kline, 0, len(klines))
 	var histRSX, histWozduh []float64
@@ -136,9 +134,6 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 				RsiVolSlow:     falcon.RsiVolSlow,
 				VolCrossMarker: falcon.VolCrossMarker,
 			}
-			if prevRSXReady {
-				simPt.Color = RSXColor(simPt.RSX, prevRSX)
-			}
 			if prevBlueReady {
 				simPt.VolumeSpikeUp = DetectWozduxVolumeSpikeUp(prevBlue, falcon.BlueLine, falcon.RedLine)
 				simPt.VolumeSpikeDown = DetectWozduxVolumeSpikeDown(prevBlue, falcon.BlueLine, falcon.RedLine)
@@ -154,14 +149,9 @@ func runStreamingReplayFull(ctx context.Context, klines []exchange.Kline, cfg St
 				Volume: kline.Volume,
 			}
 			populateBacktestPointFromMarker(&pt, marker, prevBlue, prevBlueReady)
-			if prevRSXReady {
-				pt.Color = RSXColor(pt.RSX, prevRSX)
-			}
 			chartData = append(chartData, pt)
 		}
 
-		prevRSX = falcon.JurikRSX
-		prevRSXReady = true
 		prevBlue = falcon.BlueLine
 		prevBlueReady = true
 	}

@@ -76,18 +76,16 @@ type Frame struct {
 	prevZigHas            bool
 	rsxSettings           *RSXSettings
 	// DataBus — единый реестр синхронизированных серий (владелец — только Frame).
-	JurikLines           []float64
-	WozduhRed            []float64
-	WozduhGreen          []float64
-	Annotations          []ChartAnnotation
-	streamingSnap        streamingSnapshot
-	mtfStates            map[string]*HTFState
-	cachedRSXMarkerBar   int
-	cachedRSXMarkerLabel string
-	closeLines           []float64
-	rsxPriceLines        []float64
-	bulkReplayMode       bool
-	dag                  *core.DAGRunner
+	JurikLines     []float64
+	WozduhRed      []float64
+	WozduhGreen    []float64
+	Annotations    []ChartAnnotation
+	streamingSnap  streamingSnapshot
+	mtfStates      map[string]*HTFState
+	closeLines     []float64
+	rsxPriceLines  []float64
+	bulkReplayMode bool
+	dag            *core.DAGRunner
 	// lastCommittedOpenTime is the OpenTime of the most recently Save-committed bar
 	// (streaming engines + DAG). Guards UpdateKlineTick's cross-bar handoff against
 	// double-committing a bar already closed via isClosed==true (Jeweler Protocol: no double IIR pass).
@@ -185,13 +183,6 @@ func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 	case ChangeImpactProjectionOnly:
 		// No engine mutation.
 	}
-}
-
-// JurikRSXColor returns the TradingView-style RSX line color for the latest bar.
-func (a *Frame) JurikRSXColor() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return RSXColor(a.jurikValue, a.jurikPrevBar)
 }
 
 // LoadHistoricalKlines merges real exchange bars with the live RAM buffer (overlay wins on
@@ -306,8 +297,6 @@ func (a *Frame) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isCl
 		return
 	}
 	a.recordDataBusBarLocked(barIndex, a.falconSignals)
-	a.cachedRSXMarkerBar = barIndex
-	a.cachedRSXMarkerLabel = ""
 }
 
 // SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).
@@ -450,23 +439,6 @@ func (a *Frame) Timeframe() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.timeframe
-}
-
-// FrameTailPollSnapshot holds tail-poll indicator values under one lock acquisition.
-type FrameTailPollSnapshot struct {
-	Falcon    FalconSignals
-	RSXColor  string
-	RSXMarker string // Phase F socket: always empty (L/LL/S/SS purged)
-}
-
-// TailPollSnapshot copies the latest tail-poll fields for HTTP poll=1 responses.
-func (a *Frame) TailPollSnapshot() FrameTailPollSnapshot {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return FrameTailPollSnapshot{
-		Falcon:   a.falconSignals,
-		RSXColor: RSXColor(a.jurikValue, a.jurikPrevBar),
-	}
 }
 
 // FalconSnapshot returns a copy of the latest Falcon dashboard values.
