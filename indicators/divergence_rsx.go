@@ -284,6 +284,30 @@ func rsxFractalConfirmBar(pivotBar int, isPivot bool, cfg RSXScanConfig) int {
 	return pivotBar + cfg.PivotRadius
 }
 
+// previousRSXFractalPivot returns the nearest earlier same-type fractal pivot
+// within lookback, or -1. Used by FractalFactsAt so live work stays O(lookback).
+func previousRSXFractalPivot(rsx []float64, pivot, radius, lookback int, high bool) int {
+	if pivot <= radius {
+		return -1
+	}
+	lo := radius
+	if lookback > 0 && pivot-lookback > lo {
+		lo = pivot - lookback
+	}
+	for k := pivot - 1; k >= lo; k-- {
+		if high {
+			if isRSXPivotHigh(rsx, k, radius) {
+				return k
+			}
+			continue
+		}
+		if isRSXPivotLow(rsx, k, radius) {
+			return k
+		}
+	}
+	return -1
+}
+
 func fractalHitStrength(hit RSXMarkerHit) int {
 	if hit.IsPivot {
 		return 0

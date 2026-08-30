@@ -240,3 +240,23 @@ func TestFractalDetectorParity_ScanHitsMatchFacts(t *testing.T) {
 		}
 	}
 }
+
+func TestFractalFactsAt_MatchesPrefixScanAtConfirmBar(t *testing.T) {
+	t.Parallel()
+	cfg := fractalTestCfg()
+	prices, rsx, opens := twoOscPeaks(100, 110, 80, 70, false)
+	bus := &stubDataBus{jurik: rsx, prices: prices, closes: prices}
+	allHits := indicators.ScanRSXMarkers(bus, cfg)
+	for bar := range prices {
+		got := indicators.FractalFactsAt(prices, rsx, opens, cfg, bar)
+		var want int
+		for _, h := range allHits {
+			if h.DisplayBar == bar {
+				want++
+			}
+		}
+		if len(got) != want {
+			t.Fatalf("bar %d: At %d scan %d got=%+v", bar, len(got), want, got)
+		}
+	}
+}
