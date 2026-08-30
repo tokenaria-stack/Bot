@@ -27,9 +27,8 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 		prices[i] = 100 + rsx[i]
 	}
 	cfg := RSXScanConfigFromSettings(GetRSXSettings())
-	engine := indicators.NewSmartDivergenceEngine(cfg)
 	bus := newBatchDataBus(rsx, prices, nil)
-	hits := engine.ScanRSX(bus)
+	hits := indicators.ScanRSXMarkers(bus, cfg)
 	var pAtPivot int
 	for _, h := range hits {
 		if h.Label == "P" && h.PivotBar == 7 {
@@ -55,10 +54,10 @@ func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
 		prices[i] = 100 + rsx[i]
 	}
 	cfg := RSXScanConfigFromSettings(GetRSXSettings())
-	engine := indicators.NewSmartDivergenceEngine(cfg)
 	bus := newBatchDataBus(rsx, prices, nil)
-	if len(engine.ScanRSX(bus)) != 0 {
-		t.Fatalf("expected no P without macro pivot, got %+v", engine.ScanRSX(bus))
+	hits := indicators.ScanRSXMarkers(bus, cfg)
+	if len(hits) != 0 {
+		t.Fatalf("expected no P without macro pivot, got %+v", hits)
 	}
 }
 

@@ -29,8 +29,7 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 		PivotRadius: 2,
 	}
 	bus := &stubDataBus{jurik: rsx, prices: prices}
-	engine := indicators.NewSmartDivergenceEngine(cfg)
-	hits := engine.ScanRSX(bus)
+	hits := indicators.ScanRSXMarkers(bus, cfg)
 	var pAtPivot int
 	for _, h := range hits {
 		if h.Label == "P" && h.PivotBar == 7 {
@@ -39,35 +38,6 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	}
 	if pAtPivot != 1 {
 		t.Fatalf("expected exactly one P at pivot 7, got %d hits: %+v", pAtPivot, hits)
-	}
-}
-
-func TestRSXDivAnnotation_PivotStyles(t *testing.T) {
-	t.Parallel()
-	high := indicators.RSXDivAnnotationFromHit(indicators.RSXMarkerHit{
-		DisplayBar: 3,
-		Label:      "P",
-		PeakType:   indicators.PeakHigh,
-	})
-	if high.Position != "aboveBar" || high.Shape != "arrowDown" || high.Color != "#2962FF" {
-		t.Fatalf("unexpected high pivot style: %+v", high)
-	}
-
-	low := indicators.RSXDivAnnotationFromHit(indicators.RSXMarkerHit{
-		DisplayBar: 4,
-		Label:      "P",
-		PeakType:   indicators.PeakLow,
-	})
-	if low.Position != "belowBar" || low.Shape != "arrowUp" || low.Color != "#2962FF" {
-		t.Fatalf("unexpected low pivot style: %+v", low)
-	}
-}
-
-func TestRSXDivAnnotation_Styles(t *testing.T) {
-	t.Parallel()
-	ann := indicators.RSXDivAnnotation(5, "LL")
-	if ann.Color == "" || ann.Position != "belowBar" || ann.Shape != "arrowUp" {
-		t.Fatalf("unexpected style: %+v", ann)
 	}
 }
 

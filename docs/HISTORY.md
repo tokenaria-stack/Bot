@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-SCORE-CLEAN-1 — delete write-only Falcon divergence scoring (Aug 2026) ✅
+
+- Deleted `SmartDivergenceEngine`, `AnalyzeWithRSX`, `DivSignal`, `Frame.divSignal`, Frame `orangeRsi`.
+- Kept `FalconEngine.Evaluate`, HTF Falcon numbers, DAG ZigZag, Frame ZigZag (fib/geometry), TV/ZZ facts and fractal scanners.
+- Surgical edits in `indicators/divergence_rsx.go`; did not delete that file.
+
 ## SLOT-CLEAN-1 — compact dead DAG slots (Aug 2026) ✅
 
 - Removed `SlotDivScore`, `SlotDivState`, `SlotMicroDivScore`, `SlotTotalScore`. Later slots renumber via iota. No aliases.
@@ -17,7 +23,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 - Deleted `MicroPatternNode` and `ScoreNode` from `newDAGRunner`. No parked helpers, no `rsx_micro` facts.
 - `SlotMicroDivScore` / `SlotTotalScore` had no DAG writers. Compacted in SLOT-CLEAN-1.
-- Falcon / `SmartDivergenceEngine` / `AnalyzeMicro*` left untouched (separate Live write-only path).
+- Falcon / `SmartDivergenceEngine` scoring later deleted in FALCON-SCORE-CLEAN-1.
 
 ## RSX-SIGNAL-2B — remove obsolete ZigZag divergence meaning (Aug 2026) ✅
 

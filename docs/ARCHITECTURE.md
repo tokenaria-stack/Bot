@@ -382,7 +382,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Decision sockets |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Keep until #76 |
+| Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF/backtest). Scoring island removed. |
 | Sizing | `execution/` | Quantity math socket |
 | Qdrant | `vector_db/` | Pattern memory socket (#8) |
 

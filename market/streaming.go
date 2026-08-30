@@ -1,8 +1,6 @@
 package market
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"trading_bot/data"
@@ -26,11 +24,9 @@ func (a *Frame) resetStreamingEngines() {
 	settings := a.effectiveRSXSettings()
 	a.falcon = NewFalconEngine()
 	a.volEngine = NewVolatilityEngine()
-	a.divEngine = indicators.NewSmartDivergenceEngine(rsxScanConfigFromSettings(settings))
 	a.zigzag = indicators.NewZigZag(indicators.DefaultATRPeriod)
 	a.zigzag.SetSensitivity(defaultZigZagSensitivity)
 	a.geometry = newGeometryTracker()
-	a.orangeRsi = indicators.NewRSI(14)
 	a.ad = indicators.NewAD()
 	a.stoch = indicators.NewStochastic(14, 3, 3)
 	a.ao = indicators.NewAO(a.config.AOFastPeriod, a.config.AOSlowPeriod)
@@ -62,7 +58,7 @@ func (a *Frame) resetStreamingEngines() {
 	a.prevZigHas = false
 	a.falcon.SetRSXLength(settings.Length)
 	a.falcon.SetRSXSignalLength(settings.SignalLength)
-	// Falcon Jurik and RSX divergence scans share the same normalized source.
+	// Falcon Jurik uses the same normalized source as DAG RSX.
 	a.falcon.SetRSXSource(settings.Source)
 	a.Annotations = nil
 	a.rsxTVFacts = nil
@@ -179,8 +175,6 @@ func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool
 	a.volatilityState = a.volEngine.Evaluate(k.High, k.Low, k.Close, k.Volume, curJurik)
 
 	hl2 := (k.High + k.Low) / 2
-	orange := a.orangeRsi.Update(k.Close)
-	a.divEngine.UpdateMicroTick(orange, a.falconSignals.RedLine)
 
 	adVal := a.ad.UpdateCandle(k.High, k.Low, k.Close)
 	a.accumulationRising, a.distributionFalling = detectADFlow(adVal, a.adHistory)
@@ -197,7 +191,7 @@ func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool
 	a.prevAO = curAO
 	a.prevAOReady = true
 	a.latestAO = curAO
-	stochVal := a.stoch.UpdateCandle(k.High, k.Low, k.Close)
+	a.stoch.UpdateCandle(k.High, k.Low, k.Close)
 
 	zzUpd := a.zigzag.UpdateCandle(k.High, k.Low, k.Close, a.falconSignals.JurikRSX)
 	a.zigZagState = ZigZagState{
@@ -206,19 +200,6 @@ func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool
 	}
 
 	if a.isNewZigZagNode(zzUpd) {
-		a.divEngine.UpdateSnapshot(indicators.Snapshot{
-			Index:      barIndex,
-			IsHigh:     zzUpd.Node.IsHigh,
-			Price:      zzUpd.Node.Price,
-			Jurik:      a.falconSignals.JurikRSX,
-			OrangeRSI:  orange,
-			RedRSI:     a.falconSignals.RedLine,
-			BlueVolume: a.falconSignals.BlueLine,
-			BurgundyAD: adVal,
-			AO:         a.latestAO,
-			MACD:       a.falconSignals.BlackLine,
-			Stoch:      stochVal,
-		})
 		a.geometry.onSwingNode(barIndex, zzUpd.Node)
 		if a.prevZigHas {
 			a.fibWaveStart = a.prevZigNode.Price
@@ -238,9 +219,6 @@ func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool
 	a.geometryBounceDown = a.geometryState.BounceDown
 	a.geometryTriangle = a.geometryState.TriangleKind != ""
 	a.recordDataBusBarLocked(barIndex, a.falconSignals)
-
-	// Divergence math still runs; RSX L/LL/S/SS chart labels purged in Phase F.
-	a.divSignal, _ = a.divEngine.AnalyzeWithRSX(a, barIndex)
 
 	if isClosed && !a.bulkReplayMode {
 		a.saveStreamingState()
@@ -320,29 +298,4 @@ func detectADFlow(curAD float64, history []float64) (rising, falling bool) {
 	}
 
 	return rising, falling
-}
-
-func combineDivSignals(macro indicators.DivSignal, microScore int) indicators.DivSignal {
-	score := macro.Score + microScore
-	if score > 100 {
-		score = 100
-	}
-	if score < -100 {
-		score = -100
-	}
-
-	desc := macro.Description
-	if microScore != 0 {
-		microPart := fmt.Sprintf("Micro (%+d)", microScore)
-		if desc != "" {
-			desc = strings.Join([]string{desc, microPart}, "; ")
-		} else {
-			desc = microPart
-		}
-	}
-
-	return indicators.DivSignal{
-		Score:       score,
-		Description: desc,
-	}
 }

@@ -119,12 +119,6 @@ func markerRSXBarCount(m *Frame) int {
 	return len(m.JurikLines)
 }
 
-func markerDivScore(m *Frame) int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.divSignal.Score
-}
-
 func assertIntraBarStable(t *testing.T, name string, want, got float64) {
 	t.Helper()
 	const eps = 1e-9
@@ -259,8 +253,5 @@ func TestMarker_UpdateKlineTick_IntraBarDoesNotGrowRSXOrPoisonDiv(t *testing.T) 
 
 	if got, want := markerRSXBarCount(intra), markerRSXBarCount(single); got != want {
 		t.Fatalf("intra-bar RSX bar count = %d, want %d", got, want)
-	}
-	if got, want := markerDivScore(intra), markerDivScore(single); got != want {
-		t.Fatalf("intra-bar div score = %d, want %d", got, want)
 	}
 }

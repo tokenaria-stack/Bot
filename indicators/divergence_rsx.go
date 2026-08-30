@@ -1,10 +1,5 @@
 package indicators
 
-import (
-	"fmt"
-	"strings"
-)
-
 const (
 	DefaultRSXMacroPivotRadius   = 7
 	DefaultRSXPeakIndexTolerance = 2
@@ -37,15 +32,6 @@ type RSXMarkerHit struct {
 	DisplayBar int
 	Label      string
 	PeakType   PeakType // PeakHigh / PeakLow for pivot "P" marker styling
-}
-
-// DivAnnotation is a pane-ready divergence marker (time filled by strategy layer).
-type DivAnnotation struct {
-	BarIndex int
-	Label    string
-	Color    string
-	Position string
-	Shape    string
 }
 
 var rsxTradingMarkerStrengthMap = map[string]int{
@@ -123,100 +109,6 @@ func RSXLabelAtDisplayBar(bus DataBus, displayBar int, cfg RSXScanConfig) string
 	return RSXHitAtDisplayBar(bus, displayBar, cfg).Label
 }
 
-// RSXDivAnnotation builds a styled annotation for one RSX marker label.
-func RSXDivAnnotation(displayBar int, label string) DivAnnotation {
-	return RSXDivAnnotationFromHit(RSXMarkerHit{DisplayBar: displayBar, Label: label})
-}
-
-// RSXDivAnnotationFromHit builds a pane-ready annotation using pivot peak type for "P" markers.
-func RSXDivAnnotationFromHit(hit RSXMarkerHit) DivAnnotation {
-	displayBar := hit.DisplayBar
-	label := hit.Label
-	var color, position, shape string
-	if label == "P" {
-		color, position, shape = rsxPivotAnnotationStyle(hit.PeakType == PeakHigh)
-	} else {
-		color, position, shape = rsxAnnotationStyle(label)
-	}
-	return DivAnnotation{
-		BarIndex: displayBar,
-		Label:    label,
-		Color:    color,
-		Position: position,
-		Shape:    shape,
-	}
-}
-
-func rsxPivotAnnotationStyle(isHigh bool) (color, position, shape string) {
-	if isHigh {
-		return "#2962FF", "aboveBar", "arrowDown"
-	}
-	return "#2962FF", "belowBar", "arrowUp"
-}
-
-// AnalyzeWithRSX combines ZigZag macro/micro scoring with RSX marker detection at displayBar.
-func (e *SmartDivergenceEngine) AnalyzeWithRSX(
-	bus DataBus,
-	displayBar int,
-) (combined DivSignal, annotation *DivAnnotation) {
-	macro := e.AnalyzeMacro()
-	microScore := e.AnalyzeMicroCombined()
-	combined = combineRSXDivSignals(macro, microScore)
-
-	hit := RSXHitAtDisplayBar(bus, displayBar, e.rsxConfig)
-	if hit.Label == "" {
-		return combined, nil
-	}
-	ann := RSXDivAnnotationFromHit(hit)
-	return combined, &ann
-}
-
-// ScanRSX runs a full-series RSX divergence scan using the engine configuration.
-func (e *SmartDivergenceEngine) ScanRSX(bus DataBus) []RSXMarkerHit {
-	if e == nil {
-		return nil
-	}
-	return ScanRSXMarkers(bus, e.rsxConfig)
-}
-
-// RSXLabelAtDisplayBar returns the marker label visible on displayBar.
-func (e *SmartDivergenceEngine) RSXLabelAtDisplayBar(bus DataBus, displayBar int) string {
-	if e == nil {
-		return ""
-	}
-	return RSXLabelAtDisplayBar(bus, displayBar, e.rsxConfig)
-}
-
-func joinDivDescriptions(parts ...string) string {
-	var out []string
-	for _, p := range parts {
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return strings.Join(out, "; ")
-}
-
-func combineRSXDivSignals(macro DivSignal, microScore int) DivSignal {
-	score := macro.Score + microScore
-	if score > 100 {
-		score = 100
-	}
-	if score < -100 {
-		score = -100
-	}
-	desc := macro.Description
-	if microScore != 0 {
-		microPart := fmt.Sprintf("Micro (%+d)", microScore)
-		if desc != "" {
-			desc = strings.Join([]string{desc, microPart}, "; ")
-		} else {
-			desc = microPart
-		}
-	}
-	return DivSignal{Score: score, Description: desc}
-}
-
 func rsxTradingMarkerStrength(label string) int {
 	if st, ok := rsxTradingMarkerStrengthMap[label]; ok {
 		return st
@@ -225,17 +117,6 @@ func rsxTradingMarkerStrength(label string) int {
 		return 0
 	}
 	return -1
-}
-
-func rsxAnnotationStyle(label string) (color, position, shape string) {
-	switch label {
-	case "S", "SS":
-		return "#ef5350", "aboveBar", "arrowDown"
-	case "L", "LL":
-		return "#26a69a", "belowBar", "arrowUp"
-	default:
-		return "#2962ff", "belowBar", "circle"
-	}
 }
 
 func rsxDisplayBar(pivotBar int, label string, cfg RSXScanConfig) int {

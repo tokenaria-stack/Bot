@@ -36,7 +36,7 @@ func rsxScanConfigFromSettings(s RSXSettings) indicators.RSXScanConfig {
 }
 
 func (a *Frame) rsxScanConfigLocked() indicators.RSXScanConfig {
-	return a.divEngine.RSXConfig()
+	return RSXScanConfigFromSettings(a.effectiveRSXSettings())
 }
 
 func (a *Frame) rebuildRSXAnnotationsLocked() {

@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-SCORE-CLEAN-1 — delete write-only divEngine scoring (Aug 2026)
+
+**Context:** Live ran `AnalyzeWithRSX` into `Frame.divSignal` with the annotation discarded. ChartOnly never ran it. No decision/UI/fact consumer.
+
+**Decision:** Delete `SmartDivergenceEngine` and `divSignal`. Keep `FalconEngine` numbers. Keep Frame ZigZag for fib/geometry. Delete Frame `orangeRsi` (scoring-only). Surgical delete in `divergence_rsx.go`.
+
+**Rejected:**
+- Delete `falcon.go` — **Reason:** HTF/backtest/Live numbers.
+- Delete Frame ZigZag — **Reason:** still feeds geometry/fib.
+- Park saucer/V-spike helpers — **Reason:** no consumer.
+
+**Consequences:** Next kill-check is remaining Live strategy furniture (fib/geometry/DataBus), not ScoreNodes.
+
+---
+
 ## SLOT-CLEAN-1 — compact four dead DAG slots (Aug 2026)
 
 **Context:** After LEGACY-SCORE-CLEAN-1, `SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore` were unused iota holes. HistoryBus still allocated four empty stripes.
@@ -17,7 +32,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Reserved `_` holes — **Reason:** fake architecture.
 - Poison-slot LongScore test after the constant is gone — **Reason:** deleted concept.
 
-**Consequences:** `SlotCount` drops by 4. Next is not ScoreNodes; Falcon/divEngine and fractal stay later.
+**Consequences:** `SlotCount` drops by 4. Falcon scoring was deleted in FALCON-SCORE-CLEAN-1. Fractal facts later.
 
 ---
 

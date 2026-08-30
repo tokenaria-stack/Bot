@@ -42,7 +42,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **LEGACY-SCORE-CLEAN-1 ✅** — DAG MicroPatternNode / ScoreNode deleted.
 
-**SLOT-CLEAN-1 ✅** — compacted dead slots (`SlotDivScore` / `SlotDivState` / `SlotMicroDivScore` / `SlotTotalScore`). Next when asked: Falcon/divEngine audit, or fractal facts. Not menu, ScoreNodes, or reserved slot aliases.
+**SLOT-CLEAN-1 ✅** — compacted dead slots.
+
+**FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator kept. Frame ZigZag kept (fib/geometry). Next when asked: unpublished fractal facts, or further Live strategy furniture. Not menu, ScoreNodes.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

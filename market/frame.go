@@ -34,10 +34,8 @@ type Frame struct {
 	falcon                *FalconEngine
 	falconSignals         FalconSignals
 	volEngine             *VolatilityEngine
-	divEngine             *indicators.SmartDivergenceEngine
 	zigzag                *indicators.ZigZag
 	geometry              *geometryTracker
-	orangeRsi             *indicators.RSI
 	ad                    *indicators.AD
 	stoch                 *indicators.Stochastic
 	ao                    *indicators.AO
@@ -69,7 +67,6 @@ type Frame struct {
 	aoCrossZeroUp         bool
 	aoCrossZeroDown       bool
 	volatilityState       VolatilityState
-	divSignal             indicators.DivSignal
 	zigZagState           ZigZagState
 	geometryState         GeometryState
 	prevZigNode           indicators.ZigZagNode
@@ -143,9 +140,6 @@ func (a *Frame) ApplyBacktestRSXConfig(settings RSXSettings) {
 	a.falcon.SetRSXLength(normalized.Length)
 	a.falcon.SetRSXSignalLength(normalized.SignalLength)
 	a.falcon.SetRSXSource(normalized.Source)
-	if a.divEngine != nil {
-		a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
-	}
 	a.replayStreamingLocked()
 }
 
@@ -167,9 +161,6 @@ func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 		a.falcon.SetRSXLength(normalized.Length)
 		a.falcon.SetRSXSignalLength(normalized.SignalLength)
 		a.falcon.SetRSXSource(normalized.Source)
-		if a.divEngine != nil {
-			a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
-		}
 		if a.dag != nil {
 			_ = a.dag.OnConfigChange("rsx", nodes.RSXNodeConfig{
 				Length:       normalized.Length,
@@ -179,9 +170,6 @@ func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 		}
 		a.replayStreamingLocked()
 	case ChangeImpactAnnotationOnly:
-		if a.divEngine != nil {
-			a.divEngine.UpdateRSXConfig(rsxScanConfigFromSettings(normalized))
-		}
 		a.rebuildRSXAnnotationsLocked()
 	case ChangeImpactGraphReplay:
 		// Reserved — B1 does not implement graph membership rebuild.

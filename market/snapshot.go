@@ -1,9 +1,5 @@
 package market
 
-import (
-	"trading_bot/indicators"
-)
-
 // streamingSnapshot holds Frame-level streaming state between closed bars.
 type streamingSnapshot struct {
 	adHistory             []float64
@@ -26,7 +22,6 @@ type streamingSnapshot struct {
 	aoCrossZeroUp         bool
 	aoCrossZeroDown       bool
 	volatilityState       VolatilityState
-	divSignal             indicators.DivSignal
 	annotations           []ChartAnnotation
 	jurikLines            []float64
 	wozduhRed             []float64
@@ -39,9 +34,6 @@ func (a *Frame) restoreStreamingState() {
 	if a.volEngine != nil {
 		a.volEngine.RestoreState()
 	}
-	if a.orangeRsi != nil {
-		a.orangeRsi.RestoreState()
-	}
 	if a.ad != nil {
 		a.ad.RestoreState()
 	}
@@ -50,9 +42,6 @@ func (a *Frame) restoreStreamingState() {
 	}
 	if a.ao != nil {
 		a.ao.RestoreState()
-	}
-	if a.divEngine != nil {
-		a.divEngine.RestoreState()
 	}
 
 	s := a.streamingSnap
@@ -76,7 +65,6 @@ func (a *Frame) restoreStreamingState() {
 	a.aoCrossZeroUp = s.aoCrossZeroUp
 	a.aoCrossZeroDown = s.aoCrossZeroDown
 	a.volatilityState = s.volatilityState
-	a.divSignal = s.divSignal
 	a.Annotations = append([]ChartAnnotation(nil), s.annotations...)
 	a.restoreDataBusFromSnapLocked(s, live)
 }
@@ -87,9 +75,6 @@ func (a *Frame) saveStreamingState() {
 	if a.volEngine != nil {
 		a.volEngine.SaveState()
 	}
-	if a.orangeRsi != nil {
-		a.orangeRsi.SaveState()
-	}
 	if a.ad != nil {
 		a.ad.SaveState()
 	}
@@ -98,9 +83,6 @@ func (a *Frame) saveStreamingState() {
 	}
 	if a.ao != nil {
 		a.ao.SaveState()
-	}
-	if a.divEngine != nil {
-		a.divEngine.SaveState()
 	}
 
 	a.streamingSnap = streamingSnapshot{
@@ -124,7 +106,6 @@ func (a *Frame) saveStreamingState() {
 		aoCrossZeroUp:         a.aoCrossZeroUp,
 		aoCrossZeroDown:       a.aoCrossZeroDown,
 		volatilityState:       a.volatilityState,
-		divSignal:             a.divSignal,
 		annotations:           append([]ChartAnnotation(nil), a.Annotations...),
 		jurikLines:            append([]float64(nil), a.JurikLines...),
 		wozduhRed:             append([]float64(nil), a.WozduhRed...),
