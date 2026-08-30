@@ -31,15 +31,18 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	hits := indicators.ScanRSXMarkers(bus, cfg)
 	var pAtPivot int
 	for _, h := range hits {
-		if h.Label == "P" && h.PivotBar == 7 {
+		if h.IsPivot && h.PivotBar == 7 && h.PeakType == indicators.PeakHigh {
 			pAtPivot++
 		}
 	}
 	if pAtPivot != 1 {
-		t.Fatalf("expected exactly one P at pivot 7, got %d hits: %+v", pAtPivot, hits)
+		t.Fatalf("expected exactly one pivot high at 7, got %d hits: %+v", pAtPivot, hits)
 	}
 	if len(hits) != 1 {
 		t.Fatalf("expected exactly one marker, got %d: %+v", len(hits), hits)
+	}
+	if hits[0].Label != "" {
+		t.Fatalf("fractal hit must not leak label %q", hits[0].Label)
 	}
 }
 
@@ -58,12 +61,5 @@ func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
 	hits := indicators.ScanRSXMarkers(bus, cfg)
 	if len(hits) != 0 {
 		t.Fatalf("expected no P without macro pivot, got %+v", hits)
-	}
-}
-
-func TestBearishRSXMarker(t *testing.T) {
-	m := indicators.BearishRSXMarkerLabel(indicators.DivergenceResult{Class: indicators.ClassA})
-	if m != "SS" {
-		t.Fatalf("ClassA bearish = SS, got %s", m)
 	}
 }

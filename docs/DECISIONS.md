@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RSX-SIGNAL-3 — fractal classic classes, not hidden (Aug 2026)
+
+**Context:** Fractal RSX used chart letters L/LL/S/SS/P. LL/SS mixed Class A and Class C. Product kept the fractal detector.
+
+**Decision:** Publish `rsx_fractal_div` with `Pattern` `class_a`/`class_b`/`class_c` and `rsx_fractal_pivot` high/low. Carry `CheckClassicDivergence` class on the hit. Facts ignore `div_method`. Paint Class B as arrow-only; A/C keep class captions.
+
+**Rejected:**
+- Map LL/SS to `hidden` — **Reason:** this family is classic A/B/C, not ZigZag hidden.
+- Reconstruct class from letters later — **Reason:** letters already collapsed A vs C.
+- Gate facts on `div_method == fractal` — **Reason:** same law as `rsx_zz_div`.
+- Rewrite as ZigZag/TV/generic divergence — **Reason:** product kept this detector.
+
+**Consequences:** Next chapter is menu / `div_method` deletion, not ScoreNodes.
+
+---
+
 ## FALCON-SCORE-CLEAN-1 — delete write-only divEngine scoring (Aug 2026)
 
 **Context:** Live ran `AnalyzeWithRSX` into `Frame.divSignal` with the annotation discarded. ChartOnly never ran it. No decision/UI/fact consumer.

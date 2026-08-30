@@ -86,10 +86,56 @@ func TestAnnotationFromFact_ZigZagHiddenLabel(t *testing.T) {
 	}
 }
 
+func TestAnnotationFromFact_FractalClassCaptions(t *testing.T) {
+	t.Parallel()
+	base := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXFractalDiv,
+		Direction:   indicators.FactDirBullish,
+		Pattern:     indicators.FactPatternClassB,
+		ConfirmedAt: 1_700_000_120_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	ann, ok := AnnotationFromFact(base, "rsx")
+	if !ok || ann.Label != "" || ann.Shape != "arrowUp" || ann.Color != rsxDivBullColor || ann.Pane != "rsx" {
+		t.Fatalf("class B bull=%+v ok=%v", ann, ok)
+	}
+	base.Pattern = indicators.FactPatternClassA
+	ann, ok = AnnotationFromFact(base, "rsx")
+	if !ok || ann.Label != "A Bull" {
+		t.Fatalf("class A bull=%+v ok=%v", ann, ok)
+	}
+	base.Pattern = indicators.FactPatternClassC
+	ann, ok = AnnotationFromFact(base, "rsx")
+	if !ok || ann.Label != "C Bull" {
+		t.Fatalf("class C bull=%+v ok=%v", ann, ok)
+	}
+	base.Direction = indicators.FactDirBearish
+	base.Pattern = indicators.FactPatternClassA
+	ann, ok = AnnotationFromFact(base, "rsx")
+	if !ok || ann.Label != "A Bear" || ann.Shape != "arrowDown" {
+		t.Fatalf("class A bear=%+v ok=%v", ann, ok)
+	}
+	base.Pattern = indicators.FactPatternClassC
+	ann, ok = AnnotationFromFact(base, "rsx")
+	if !ok || ann.Label != "C Bear" {
+		t.Fatalf("class C bear=%+v ok=%v", ann, ok)
+	}
+	piv := indicators.IndicatorFactEvent{
+		Source:      indicators.FactSourceRSXFractalPivot,
+		Direction:   indicators.FactDirPivotHigh,
+		ConfirmedAt: 1_700_000_120_000,
+		AnchorAt:    1_700_000_000_000,
+	}
+	ann, ok = AnnotationFromFact(piv, "rsx")
+	if !ok || ann.Label != "" || ann.Color != rsxPivotColor || ann.Shape != "arrowDown" {
+		t.Fatalf("fractal pivot high=%+v ok=%v", ann, ok)
+	}
+}
+
 func TestAnnotationFromFact_RejectsUnknown(t *testing.T) {
 	t.Parallel()
-	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_fractal_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
-		t.Fatal("fractal source must not project")
+	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{Source: "rsx_mystery_div", Direction: indicators.FactDirBullish, AnchorAt: 1}, "rsx"); ok {
+		t.Fatal("unknown source must not project")
 	}
 	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{
 		Source:    indicators.FactSourceRSXZZDiv,
@@ -98,6 +144,14 @@ func TestAnnotationFromFact_RejectsUnknown(t *testing.T) {
 		AnchorAt:  1,
 	}, "rsx"); !ok {
 		t.Fatal("rsx_zz_div must project")
+	}
+	if _, ok := AnnotationFromFact(indicators.IndicatorFactEvent{
+		Source:    indicators.FactSourceRSXFractalDiv,
+		Direction: indicators.FactDirBullish,
+		Pattern:   indicators.FactPatternClassB,
+		AnchorAt:  1,
+	}, "rsx"); !ok {
+		t.Fatal("rsx_fractal_div must project")
 	}
 }
 

@@ -48,6 +48,78 @@ func TestCheckClassicDivergence_bullishClassA(t *testing.T) {
 	}
 }
 
+func TestCheckClassicDivergence_bearishClassB(t *testing.T) {
+	t.Parallel()
+	result := indicators.CheckClassicDivergence(
+		[]indicators.Peak{
+			{Index: 10, Value: 100, Type: indicators.PeakHigh},
+			{Index: 30, Value: 100, Type: indicators.PeakHigh},
+		},
+		[]indicators.Peak{
+			{Index: 10, Value: 5, Type: indicators.PeakHigh},
+			{Index: 30, Value: 3, Type: indicators.PeakHigh},
+		},
+		2, 0, 0,
+	)
+	if result.Direction != indicators.Bearish || result.Class != indicators.ClassB {
+		t.Fatalf("got %+v, want bearish Class B", result)
+	}
+}
+
+func TestCheckClassicDivergence_bullishClassB(t *testing.T) {
+	t.Parallel()
+	result := indicators.CheckClassicDivergence(
+		[]indicators.Peak{
+			{Index: 10, Value: 90, Type: indicators.PeakLow},
+			{Index: 30, Value: 90, Type: indicators.PeakLow},
+		},
+		[]indicators.Peak{
+			{Index: 10, Value: -5, Type: indicators.PeakLow},
+			{Index: 30, Value: -2, Type: indicators.PeakLow},
+		},
+		2, 0, 0,
+	)
+	if result.Direction != indicators.Bullish || result.Class != indicators.ClassB {
+		t.Fatalf("got %+v, want bullish Class B", result)
+	}
+}
+
+func TestCheckClassicDivergence_bearishClassC(t *testing.T) {
+	t.Parallel()
+	result := indicators.CheckClassicDivergence(
+		[]indicators.Peak{
+			{Index: 10, Value: 100, Type: indicators.PeakHigh},
+			{Index: 30, Value: 110, Type: indicators.PeakHigh},
+		},
+		[]indicators.Peak{
+			{Index: 10, Value: 5, Type: indicators.PeakHigh},
+			{Index: 30, Value: 5.002, Type: indicators.PeakHigh},
+		},
+		2, 0, 0,
+	)
+	if result.Direction != indicators.Bearish || result.Class != indicators.ClassC {
+		t.Fatalf("got %+v, want bearish Class C", result)
+	}
+}
+
+func TestCheckClassicDivergence_bullishClassC(t *testing.T) {
+	t.Parallel()
+	result := indicators.CheckClassicDivergence(
+		[]indicators.Peak{
+			{Index: 10, Value: 90, Type: indicators.PeakLow},
+			{Index: 30, Value: 80, Type: indicators.PeakLow},
+		},
+		[]indicators.Peak{
+			{Index: 10, Value: -5, Type: indicators.PeakLow},
+			{Index: 30, Value: -5.002, Type: indicators.PeakLow},
+		},
+		2, 0, 0,
+	)
+	if result.Direction != indicators.Bullish || result.Class != indicators.ClassC {
+		t.Fatalf("got %+v, want bullish Class C", result)
+	}
+}
+
 func TestCheckClassicDivergence_noMatch(t *testing.T) {
 	t.Parallel()
 

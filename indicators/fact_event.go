@@ -13,9 +13,11 @@ type IndicatorFactEvent struct {
 }
 
 const (
-	FactSourceRSXTVDiv   = "rsx_tv_div"
-	FactSourceRSXTVPivot = "rsx_tv_pivot"
-	FactSourceRSXZZDiv   = "rsx_zz_div"
+	FactSourceRSXTVDiv        = "rsx_tv_div"
+	FactSourceRSXTVPivot      = "rsx_tv_pivot"
+	FactSourceRSXZZDiv        = "rsx_zz_div"
+	FactSourceRSXFractalDiv   = "rsx_fractal_div"
+	FactSourceRSXFractalPivot = "rsx_fractal_pivot"
 
 	FactDirBullish   = "bullish"
 	FactDirBearish   = "bearish"
@@ -24,4 +26,7 @@ const (
 
 	FactPatternRegular = "regular"
 	FactPatternHidden  = "hidden"
+	FactPatternClassA  = "class_a"
+	FactPatternClassB  = "class_b"
+	FactPatternClassC  = "class_c"
 )

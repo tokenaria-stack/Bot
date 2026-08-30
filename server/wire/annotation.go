@@ -78,6 +78,37 @@ func factPresentation(ev indicators.IndicatorFactEvent) (color, position, shape,
 			}
 			return rsxDivBearColor, "aboveBar", "arrowDown", label, true
 		}
+	case indicators.FactSourceRSXFractalDiv:
+		switch ev.Direction {
+		case indicators.FactDirBullish:
+			return rsxDivBullColor, "belowBar", "arrowUp", fractalClassCaption(ev.Pattern, true), true
+		case indicators.FactDirBearish:
+			return rsxDivBearColor, "aboveBar", "arrowDown", fractalClassCaption(ev.Pattern, false), true
+		}
+	case indicators.FactSourceRSXFractalPivot:
+		switch ev.Direction {
+		case indicators.FactDirPivotHigh:
+			return rsxPivotColor, "aboveBar", "arrowDown", "", true
+		case indicators.FactDirPivotLow:
+			return rsxPivotColor, "belowBar", "arrowUp", "", true
+		}
 	}
 	return "", "", "", "", false
+}
+
+func fractalClassCaption(pattern string, bullish bool) string {
+	switch pattern {
+	case indicators.FactPatternClassA:
+		if bullish {
+			return "A Bull"
+		}
+		return "A Bear"
+	case indicators.FactPatternClassC:
+		if bullish {
+			return "C Bull"
+		}
+		return "C Bear"
+	default:
+		return ""
+	}
 }

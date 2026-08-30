@@ -44,7 +44,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **SLOT-CLEAN-1 ✅** — compacted dead slots.
 
-**FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator kept. Frame ZigZag kept (fib/geometry). Next when asked: unpublished fractal facts, or further Live strategy furniture. Not menu, ScoreNodes.
+**FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator kept. Frame ZigZag kept (fib/geometry).
+
+**RSX-SIGNAL-3 ✅** — fractal detector publishes `rsx_fractal_div` (class_a/b/c) and `rsx_fractal_pivot`. Next when asked: independent visibility / kill `div_method`. Not ScoreNodes.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

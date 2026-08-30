@@ -26,12 +26,16 @@ type RSXScanConfig struct {
 	MinOscDelta        float64
 }
 
-// RSXMarkerHit is one RSX divergence marker before chart placement.
+// RSXMarkerHit is one RSX detector hit before fact/chart placement.
+// Label is TV-family only (L/S). Fractal hits use Class / DivDir / IsPivot.
 type RSXMarkerHit struct {
 	PivotBar   int
 	DisplayBar int
 	Label      string
-	PeakType   PeakType // PeakHigh / PeakLow for pivot "P" marker styling
+	PeakType   PeakType
+	Class      DivClass
+	DivDir     DivDirection
+	IsPivot    bool
 }
 
 var rsxTradingMarkerStrengthMap = map[string]int{
@@ -137,14 +141,6 @@ func IsRSXPivotLow(rsx []float64, i, radius int) bool {
 	return isRSXPivotLow(rsx, i, radius)
 }
 
-func BearishRSXMarkerLabel(div DivergenceResult) string {
-	return bearishRSXMarkerLabel(div)
-}
-
-func BullishRSXMarkerLabel(div DivergenceResult) string {
-	return bullishRSXMarkerLabel(div)
-}
-
 func isRSXPivotHigh(rsx []float64, i, radius int) bool {
 	if radius <= 0 {
 		radius = DefaultRSXPivotRadius
@@ -216,44 +212,16 @@ func scanRSXFractalHits(prices, rsx []float64, cfg RSXScanConfig) []RSXMarkerHit
 	for i := radius; i+radius < len(rsx); i++ {
 		switch {
 		case isRSXPivotHigh(rsx, i, radius):
-			marker := ""
-			if lastPivotHigh >= 0 && i-lastPivotHigh <= cfg.Lookback {
-				div := checkRSXPivotDivergence(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
-				if div.Direction == Bearish {
-					marker = bearishRSXMarkerLabel(div)
-				}
-			}
-			if marker == "" && isRSXMacroPivotHigh(rsx, i, cfg.MacroPivotRadius) {
-				marker = "P"
-			}
-			if marker != "" {
-				hits = append(hits, RSXMarkerHit{
-					PivotBar:   i,
-					DisplayBar: rsxDisplayBar(i, marker, cfg),
-					Label:      marker,
-					PeakType:   PeakHigh,
-				})
+			hit := fractalHitAtPivot(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
+			if hit.PivotBar >= 0 {
+				hits = append(hits, hit)
 			}
 			lastPivotHigh = i
 
 		case isRSXPivotLow(rsx, i, radius):
-			marker := ""
-			if lastPivotLow >= 0 && i-lastPivotLow <= cfg.Lookback {
-				div := checkRSXPivotDivergence(prices, rsx, lastPivotLow, i, PeakLow, cfg)
-				if div.Direction == Bullish {
-					marker = bullishRSXMarkerLabel(div)
-				}
-			}
-			if marker == "" && isRSXMacroPivotLow(rsx, i, cfg.MacroPivotRadius) {
-				marker = "P"
-			}
-			if marker != "" {
-				hits = append(hits, RSXMarkerHit{
-					PivotBar:   i,
-					DisplayBar: rsxDisplayBar(i, marker, cfg),
-					Label:      marker,
-					PeakType:   PeakLow,
-				})
+			hit := fractalHitAtPivot(prices, rsx, lastPivotLow, i, PeakLow, cfg)
+			if hit.PivotBar >= 0 {
+				hits = append(hits, hit)
 			}
 			lastPivotLow = i
 		}
@@ -276,18 +244,58 @@ func checkRSXPivotDivergence(prices, rsx []float64, idx1, idx2 int, peakType Pea
 	)
 }
 
-func bearishRSXMarkerLabel(div DivergenceResult) string {
-	if div.Class == ClassA || div.Class == ClassC {
-		return "SS"
+func fractalHitAtPivot(prices, rsx []float64, lastPivot, i int, peakType PeakType, cfg RSXScanConfig) RSXMarkerHit {
+	empty := RSXMarkerHit{PivotBar: -1}
+	wantDir := Bearish
+	if peakType == PeakLow {
+		wantDir = Bullish
 	}
-	return "S"
+	if lastPivot >= 0 && i-lastPivot <= cfg.Lookback {
+		div := checkRSXPivotDivergence(prices, rsx, lastPivot, i, peakType, cfg)
+		if div.Direction == wantDir && div.Class != None {
+			return RSXMarkerHit{
+				PivotBar:   i,
+				DisplayBar: rsxFractalConfirmBar(i, false, cfg),
+				PeakType:   peakType,
+				Class:      div.Class,
+				DivDir:     div.Direction,
+			}
+		}
+	}
+	macro := isRSXMacroPivotHigh(rsx, i, cfg.MacroPivotRadius)
+	if peakType == PeakLow {
+		macro = isRSXMacroPivotLow(rsx, i, cfg.MacroPivotRadius)
+	}
+	if !macro {
+		return empty
+	}
+	return RSXMarkerHit{
+		PivotBar:   i,
+		DisplayBar: rsxFractalConfirmBar(i, true, cfg),
+		PeakType:   peakType,
+		IsPivot:    true,
+	}
 }
 
-func bullishRSXMarkerLabel(div DivergenceResult) string {
-	if div.Class == ClassA || div.Class == ClassC {
-		return "LL"
+func rsxFractalConfirmBar(pivotBar int, isPivot bool, cfg RSXScanConfig) int {
+	if isPivot {
+		return pivotBar + cfg.MacroPivotRadius
 	}
-	return "L"
+	return pivotBar + cfg.PivotRadius
+}
+
+func fractalHitStrength(hit RSXMarkerHit) int {
+	if hit.IsPivot {
+		return 0
+	}
+	switch hit.Class {
+	case ClassA, ClassC:
+		return 2
+	case ClassB:
+		return 1
+	default:
+		return -1
+	}
 }
 
 // rsxTVHitAtDisplayBar evaluates TV divergence markers for one display bar (O(lookback)).
@@ -429,57 +437,23 @@ func rsxFractalHitAtDisplayBar(prices, rsx []float64, displayBar int, cfg RSXSca
 	for i := start; i <= end; i++ {
 		switch {
 		case isRSXPivotHigh(rsx, i, radius):
-			marker := ""
-			if lastPivotHigh >= 0 && i-lastPivotHigh <= cfg.Lookback {
-				div := checkRSXPivotDivergence(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
-				if div.Direction == Bearish {
-					marker = bearishRSXMarkerLabel(div)
-				}
-			}
-			if marker == "" && isRSXMacroPivotHigh(rsx, i, cfg.MacroPivotRadius) {
-				marker = "P"
-			}
-			if marker != "" {
-				hit := RSXMarkerHit{
-					PivotBar:   i,
-					DisplayBar: rsxDisplayBar(i, marker, cfg),
-					Label:      marker,
-					PeakType:   PeakHigh,
-				}
-				if hit.DisplayBar == displayBar {
-					st := rsxTradingMarkerStrength(hit.Label)
-					if st > bestStrength {
-						best = hit
-						bestStrength = st
-					}
+			hit := fractalHitAtPivot(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
+			if hit.PivotBar >= 0 && hit.DisplayBar == displayBar {
+				st := fractalHitStrength(hit)
+				if st > bestStrength {
+					best = hit
+					bestStrength = st
 				}
 			}
 			lastPivotHigh = i
 
 		case isRSXPivotLow(rsx, i, radius):
-			marker := ""
-			if lastPivotLow >= 0 && i-lastPivotLow <= cfg.Lookback {
-				div := checkRSXPivotDivergence(prices, rsx, lastPivotLow, i, PeakLow, cfg)
-				if div.Direction == Bullish {
-					marker = bullishRSXMarkerLabel(div)
-				}
-			}
-			if marker == "" && isRSXMacroPivotLow(rsx, i, cfg.MacroPivotRadius) {
-				marker = "P"
-			}
-			if marker != "" {
-				hit := RSXMarkerHit{
-					PivotBar:   i,
-					DisplayBar: rsxDisplayBar(i, marker, cfg),
-					Label:      marker,
-					PeakType:   PeakLow,
-				}
-				if hit.DisplayBar == displayBar {
-					st := rsxTradingMarkerStrength(hit.Label)
-					if st > bestStrength {
-						best = hit
-						bestStrength = st
-					}
+			hit := fractalHitAtPivot(prices, rsx, lastPivotLow, i, PeakLow, cfg)
+			if hit.PivotBar >= 0 && hit.DisplayBar == displayBar {
+				st := fractalHitStrength(hit)
+				if st > bestStrength {
+					best = hit
+					bestStrength = st
 				}
 			}
 			lastPivotLow = i

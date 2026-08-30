@@ -237,6 +237,7 @@ func (d *DashboardServer) packRSTVHistoryAnnotations(
 	}
 	events := market.RSTVFactsFromDAGHistory(klines, hist, rsxSettings)
 	events = append(events, zzFacts...)
+	events = append(events, market.RSTFractalFactsFromDAGHistory(klines, hist, rsxSettings)...)
 	anns := d.projector.AnnotationsFromFacts(events, times)
 	if anns == nil {
 		return []wire.Annotation{}

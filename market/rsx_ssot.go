@@ -42,4 +42,5 @@ func (a *Frame) rsxScanConfigLocked() indicators.RSXScanConfig {
 func (a *Frame) rebuildRSXAnnotationsLocked() {
 	a.Annotations = a.Annotations[:0]
 	a.rebuildRSTVFactsLocked()
+	a.rebuildRSTFractalFactsLocked()
 }

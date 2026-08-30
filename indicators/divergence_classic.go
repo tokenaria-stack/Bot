@@ -78,6 +78,11 @@ func CheckClassicDivergence(pricePeaks, oscPeaks []Peak, indexTolerance int, min
 			result.Direction = Bearish
 			result.Class = ClassA
 			return result
+		case priceP2.Value > priceP1.Value && pricesApproximatelyEqual(oscP2.Value, oscP1.Value) &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, 0):
+			result.Direction = Bearish
+			result.Class = ClassC
+			return result
 		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value < oscP1.Value &&
 			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bearish
@@ -90,6 +95,11 @@ func CheckClassicDivergence(pricePeaks, oscPeaks []Peak, indexTolerance int, min
 			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):
 			result.Direction = Bullish
 			result.Class = ClassA
+			return result
+		case priceP2.Value < priceP1.Value && pricesApproximatelyEqual(oscP2.Value, oscP1.Value) &&
+			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, 0):
+			result.Direction = Bullish
+			result.Class = ClassC
 			return result
 		case pricesApproximatelyEqual(priceP2.Value, priceP1.Value) && oscP2.Value > oscP1.Value &&
 			classicDivergenceMeetsDeltas(priceP1, priceP2, oscP1, oscP2, minPriceDeltaRatio, minOscDelta):

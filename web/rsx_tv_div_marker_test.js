@@ -57,6 +57,20 @@ test('pivot annotation keeps blue color, no Pivot text', () => {
   assert.strictEqual(m.source, 'rsx_tv_pivot');
 });
 
+test('fractal class captions stay on the marker', () => {
+  const m = Mappers.annotationToNativeMarker({
+    time: 1700000000,
+    pane: 'rsx',
+    label: 'A Bull',
+    color: '#00e676',
+    position: 'belowBar',
+    shape: 'arrowUp',
+    source: 'rsx_fractal_div',
+  });
+  assert.strictEqual(m.text, 'A Bull');
+  assert.strictEqual(m.source, 'rsx_fractal_div');
+});
+
 test('hidden zz keeps H Bull text', () => {
   const m = Mappers.annotationToNativeMarker({
     time: 1700000000,
@@ -75,6 +89,25 @@ test('legacy labels stay unpublished', () => {
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'L' }), null);
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'SS' }), null);
   assert.strictEqual(Mappers.annotationToNativeMarker({ time: 1, label: 'P' }), null);
+});
+
+test('show_pivots hides TV and fractal pivot sources only', () => {
+  const anns = [
+    { time: 1, pane: 'rsx', label: '', source: 'rsx_tv_div' },
+    { time: 2, pane: 'rsx', label: '', source: 'rsx_tv_pivot' },
+    { time: 3, pane: 'rsx', label: 'A Bull', source: 'rsx_fractal_div' },
+    { time: 4, pane: 'rsx', label: '', source: 'rsx_fractal_pivot' },
+    { time: 5, pane: 'rsx', label: 'H Bull', source: 'rsx_zz_div' },
+  ];
+  const paint = (showPivots) => anns.filter((ann) => {
+    const src = ann.source || '';
+    if (!showPivots && (src === 'rsx_tv_pivot' || src === 'rsx_fractal_pivot')) return false;
+    return Mappers.annotationToNativeMarker(ann) != null;
+  });
+  assert.strictEqual(paint(true).length, 5);
+  const hidden = paint(false);
+  assert.strictEqual(hidden.length, 3);
+  assert.deepStrictEqual(hidden.map((a) => a.source), ['rsx_tv_div', 'rsx_fractal_div', 'rsx_zz_div']);
 });
 
 test('normalize pane stays rsx', () => {

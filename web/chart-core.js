@@ -1584,7 +1584,7 @@
         const ann = anns[i];
         if (paneOf(ann?.pane || ann?.Pane) !== 'rsx') continue;
         const src = ann?.source || ann?.Source || '';
-        if (!showPivots && src === 'rsx_tv_pivot') continue;
+		if (!showPivots && (src === 'rsx_tv_pivot' || src === 'rsx_fractal_pivot')) continue;
         const m = toMarker ? toMarker(ann) : null;
         if (!m) continue;
         const marker = {

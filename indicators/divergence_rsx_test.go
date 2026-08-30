@@ -32,12 +32,15 @@ func TestScanRSXFractalHits_SingleP(t *testing.T) {
 	hits := indicators.ScanRSXMarkers(bus, cfg)
 	var pAtPivot int
 	for _, h := range hits {
-		if h.Label == "P" && h.PivotBar == 7 {
+		if h.IsPivot && h.PivotBar == 7 && h.PeakType == indicators.PeakHigh {
 			pAtPivot++
+		}
+		if h.Label == "P" || h.Label == "L" || h.Label == "LL" || h.Label == "S" || h.Label == "SS" {
+			t.Fatalf("fractal hit leaked label %q", h.Label)
 		}
 	}
 	if pAtPivot != 1 {
-		t.Fatalf("expected exactly one P at pivot 7, got %d hits: %+v", pAtPivot, hits)
+		t.Fatalf("expected exactly one pivot high at 7, got %d hits: %+v", pAtPivot, hits)
 	}
 }
 
