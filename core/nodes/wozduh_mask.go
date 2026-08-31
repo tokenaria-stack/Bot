@@ -72,3 +72,40 @@ func WozduhMaskForPlots(ids []string) WozduhMask {
 func WozduhDefaultVisibleMask() WozduhMask {
 	return WozduhMaskForPlots([]string{"woz_rsi_hl2", "woz_slow", "woz_fast", "woz_rsi_price"})
 }
+
+// WozduhWakeReplayMask is the temp-node mask for a 0→1 transition: waking bits plus
+// the prerequisites those bits need during a closed-bar replay. Live install still
+// copies only wake bits, not already-active shared bases.
+func WozduhWakeReplayMask(wake WozduhMask) WozduhMask {
+	m := wake
+	if wake&(WozduhBitGreenEMA|WozduhBitRsiOfRsi|WozduhBitPriceChannel) != 0 {
+		m |= WozduhBitOrangeBase
+	}
+	if wake&(WozduhBitWt11|WozduhBitWt22|WozduhBitVolChannel|WozduhBitVolCrossPair) != 0 {
+		m |= WozduhBitVolBase
+	}
+	if wake&WozduhBitVolChannel != 0 {
+		m |= WozduhBitWt22
+	}
+	if wake&WozduhBitVolCrossPair != 0 {
+		m |= WozduhBitWt11 | WozduhBitWt22
+	}
+	return m
+}
+
+// WozduhMaskFromClientSubscriptions ORs plot-ID lists from WS clients on one Frame.
+// A nil or empty list is the WIRE-1 unfiltered contract (compute-all).
+// No clients → 0.
+func WozduhMaskFromClientSubscriptions(slotLists [][]string) WozduhMask {
+	if len(slotLists) == 0 {
+		return 0
+	}
+	var u WozduhMask
+	for _, ids := range slotLists {
+		if len(ids) == 0 {
+			return WozduhMaskAll
+		}
+		u |= WozduhMaskForPlots(ids)
+	}
+	return u
+}

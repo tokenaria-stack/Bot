@@ -33,6 +33,7 @@ type WozduhNode struct {
 	mask WozduhMask
 
 	streamUpdates int
+	wakeInstalls  int
 
 	redRsi    *indicators.RSI // RSI(HL2)
 	orangeRsi *indicators.RSI // RSI(close)
@@ -72,7 +73,7 @@ func NewWozduhNode() *WozduhNode {
 }
 
 // NewWozduhNodeMasked creates a Wozduh pipeline that runs only the given compute bits.
-// Mask is fixed for the node's lifetime. Zero means no streams run.
+// Zero means no streams run. ApplyMask may change the mask later (live Frame demand).
 func NewWozduhNodeMasked(mask WozduhMask) *WozduhNode {
 	return &WozduhNode{
 		mask:       mask,
@@ -210,12 +211,18 @@ func (n *WozduhNode) StreamUpdates() int {
 	return n.streamUpdates
 }
 
-// Mask returns the fixed compute mask this node was created with.
 func (n *WozduhNode) Mask() WozduhMask {
 	if n == nil {
 		return 0
 	}
 	return n.mask
+}
+
+func (n *WozduhNode) Slot(slot core.Slot) float64 {
+	if n == nil || n.bus == nil || n.bus.Cur == nil {
+		return math.NaN()
+	}
+	return n.bus.Cur.Get(slot)
 }
 
 func (n *WozduhNode) failClosedInactive(cur *core.TickFrame) {
@@ -260,6 +267,96 @@ func (n *WozduhNode) failClosedInactive(cur *core.TickFrame) {
 	if n.mask&WozduhBitADRSI == 0 {
 		cur.Set(core.SlotWozduhRsiAd, nan)
 	}
+}
+
+// ApplyMask installs a new compute mask and NaNs newly inactive output slots immediately.
+func (n *WozduhNode) ApplyMask(mask WozduhMask) {
+	if n == nil {
+		return
+	}
+	n.mask = mask
+	if n.bus != nil && n.bus.Cur != nil {
+		n.failClosedInactive(n.bus.Cur)
+	}
+}
+
+// InstallWokenFields copies only newly activated stateful fields from a temp replay node.
+func (n *WozduhNode) InstallWokenFields(src *WozduhNode, wake WozduhMask) {
+	if n == nil || src == nil || wake == 0 {
+		return
+	}
+	if wake&WozduhBitOrangeBase != 0 {
+		n.orangeRsi = src.orangeRsi
+	}
+	if wake&WozduhBitGreenEMA != 0 {
+		n.greenEma = src.greenEma
+	}
+	if wake&WozduhBitRsiOfRsi != 0 {
+		n.rsiOfRsi = src.rsiOfRsi
+	}
+	if wake&WozduhBitPriceChannel != 0 {
+		n.priceSMA = src.priceSMA
+		n.priceStdev = src.priceStdev
+	}
+	if wake&WozduhBitVolBase != 0 {
+		n.volVwap = src.volVwap
+		n.volRsi = src.volRsi
+	}
+	if wake&WozduhBitWt11 != 0 {
+		n.wt11Ema = src.wt11Ema
+	}
+	if wake&WozduhBitWt22 != 0 {
+		n.wt22Ema = src.wt22Ema
+	}
+	if wake&WozduhBitVolChannel != 0 {
+		n.wt22SMA = src.wt22SMA
+		n.wt22Stdev = src.wt22Stdev
+	}
+	if wake&WozduhBitVolCrossPair != 0 {
+		n.prevWt11 = src.prevWt11
+		n.prevWt22 = src.prevWt22
+		n.prevWtReady = src.prevWtReady
+	}
+	if wake&WozduhBitRedRSI != 0 {
+		n.redRsi = src.redRsi
+	}
+	if wake&WozduhBitBlackMACD != 0 {
+		n.blackRsi = src.blackRsi
+		n.blackMacd = src.blackMacd
+	}
+	if wake&WozduhBitNavyRSI != 0 {
+		n.navyVwp = src.navyVwp
+		n.navyRsi = src.navyRsi
+	}
+	if wake&WozduhBitADRSI != 0 {
+		n.ad = src.ad
+		n.adRsi = src.adRsi
+	}
+	n.wakeInstalls++
+}
+
+// WakeInstalls is the number of InstallWokenFields calls (tests).
+func (n *WozduhNode) WakeInstalls() int {
+	if n == nil {
+		return 0
+	}
+	return n.wakeInstalls
+}
+
+// OrangeRsiPtr exposes the orange RSI object for shared-base identity tests.
+func (n *WozduhNode) OrangeRsiPtr() *indicators.RSI {
+	if n == nil {
+		return nil
+	}
+	return n.orangeRsi
+}
+
+// Wt11EmaPtr exposes wt11 for shared-base identity tests.
+func (n *WozduhNode) Wt11EmaPtr() *indicators.EMA {
+	if n == nil {
+		return nil
+	}
+	return n.wt11Ema
 }
 
 func detectVolCrossCode(prevWt11, prevWt22, wt11, wt22 float64, ready bool) float64 {

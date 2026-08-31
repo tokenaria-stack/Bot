@@ -57,6 +57,31 @@ func TestWozduhDefaultVisibleMask(t *testing.T) {
 	}
 }
 
+func TestWozduhMaskFromClientSubscriptions(t *testing.T) {
+	t.Parallel()
+	if nodes.WozduhMaskFromClientSubscriptions(nil) != 0 {
+		t.Fatal("no clients must be 0")
+	}
+	if nodes.WozduhMaskFromClientSubscriptions([][]string{nil}) != nodes.WozduhMaskAll {
+		t.Fatal("nil slots must be all")
+	}
+	if nodes.WozduhMaskFromClientSubscriptions([][]string{{}}) != nodes.WozduhMaskAll {
+		t.Fatal("empty slots must be all")
+	}
+	a := nodes.WozduhMaskForPlots([]string{"woz_fast"})
+	b := nodes.WozduhMaskForPlots([]string{"woz_price_chan_up"})
+	got := nodes.WozduhMaskFromClientSubscriptions([][]string{
+		{"woz_fast"},
+		{"woz_price_chan_up"},
+	})
+	if got != a|b {
+		t.Fatalf("union %#b want %#b", got, a|b)
+	}
+	if nodes.WozduhMaskFromClientSubscriptions([][]string{{"nope", "line_rsx"}}) != 0 {
+		t.Fatal("unknown/non-wozduh must contribute 0")
+	}
+}
+
 func TestWozduhMask_ZeroNotAll(t *testing.T) {
 	t.Parallel()
 	if nodes.WozduhMask(0) == nodes.WozduhMaskAll {

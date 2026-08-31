@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 )
 
@@ -28,6 +29,7 @@ func TestDAGShadowParityWithFalcon(t *testing.T) {
 	}
 
 	m := NewFrame(klines, "1m", ChaosConfig{})
+	m.SetWozduhDemand(nodes.WozduhMaskAll)
 	if m.dag == nil {
 		t.Fatal("expected shadow DAG runner")
 	}

@@ -8,17 +8,24 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026) ✅
+
+- Per-Frame mask = WS client union OR proven internal demand. ChartOnly internal = 0. Live internal = VolBase|Wt11|Wt22 (`validateDAGShadowLocked` woz_fast/slow). VolCross is not mandatory.
+- Nil/empty live `plotIDs` = `WozduhMaskAll`. Sleep NaNs outputs immediately. Wake uses a temp `WozduhNode` over retained closed bars (`dagHistoryCap`), installs only newly activated fields, then SaveState.
+- `clientsMu` is released before the Frame lock. Disconnect / TF change recomputes that Frame’s union.
+- Measured streams/update: ALL=18, default-visible=6, Live unused=4, ChartOnly unused seconds TFs=0.
+- Next when asked: **#76 ScoreNodes**. Not DAG-DEMAND / MICRO-DEMAND.
+
 ## WOZDUH-ACTIVE-1A — masked stateless Wozduh history replay (Aug 2026) ✅ frozen `2cd4ca4`
 
 - `/api/history` derives a fixed Wozduh compute mask from requested plot IDs. Same klines/warmup; unused streams do not Update.
-- `ReplayClosedBars` remains compute-all. Live Frame untouched. Next when asked: **WOZDUH-ACTIVE-1B**.
+- `ReplayClosedBars` remains compute-all.
 
 ## WOZDUH-WIRE-1 — subscribe only requested Wozduh plots (Aug 2026) ✅ frozen `0c2ecce`
 
 - Visibility checkboxes → subscribed scalar plot IDs (channels expand to up/mid/dn). No second Subscribe UI.
 - History `slots` + per-WS-client live tick filter. DAG still computes all atoms.
 - Enable: subscribe → fetch current window → `updatePlots` → one `setData` → reveal. `woz_slow` stays subscribed while hidden (WOZDUH-OWNER-1).
-- Next when asked: **WOZDUH-ACTIVE-1B** (live demand). Not ScoreNodes.
 
 ## RSX-VISIBILITY-1 — independent RSX fact visibility (Aug 2026) ✅ frozen `749912f`
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 )
 
@@ -133,6 +134,7 @@ func TestTimelineHeal_TipMatchesReplayAfterLoadHistorical(t *testing.T) {
 
 	rsxCfg := NormalizeRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
 	frame := NewFrame(gappy, "1m", testChaos())
+	frame.SetWozduhDemand(nodes.WozduhMaskAll)
 	frame.LoadHistoricalKlines(full)
 
 	dag := frame.DAGTickFrame()

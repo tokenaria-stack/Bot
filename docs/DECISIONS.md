@@ -7,6 +7,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## WOZDUH-ACTIVE-1B — per-Frame live Wozduh demand (Aug 2026)
+
+**Context:** 1A masked history replay. Persistent Frames still ran `WozduhMaskAll` on every tick, including unused seconds TFs.
+
+**Decision:** Per-Frame required mask = WS `plotIDs` union (nil/empty = all) OR proven internal mask. Sleep/wake under Frame lock after releasing `clientsMu`. Wake via temp node + explicit field install. No DAG-DEMAND framework.
+
+**Rejected:**
+- Global Wozduh mask — **Reason:** demand is per Frame/TF.
+- Make `/api/state` or VolCross demand — **Reason:** not proven production consumers of persistent live Wozduh.
+- Async wake / forming catch-up — **Reason:** correctness over latency; existing Restore+current-tick law is enough.
+- Generic atom/reflection installer — **Reason:** Wozduh fields are concrete.
+
+**Consequences:** ChartOnly unused Frames can be mask 0 (0 stream Updates). Live unused Frames keep 4 streams/update (VolBase×2 + Wt11 + Wt22). Always-on IIR older than `dagHistoryCap` is compared with `dagShadowEpsilon`, not bit-exact. Do not reopen. Next when asked: ScoreNodes.
+
 ## WOZDUH-ACTIVE-1A — masked history replay, compute-all default (Aug 2026)
 
 **Context:** WIRE-1 already filtered packing. `/api/history` still replayed every Wozduh stream over the chunk.
@@ -18,7 +32,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Live demand/union in this chapter — **Reason:** WOZDUH-ACTIVE-1B.
 - Atom interfaces — **Reason:** bit-guard existing Update().
 
-**Consequences:** Frozen at `2cd4ca4`. Zero mask means no Wozduh work, not all. Empty history `slots` stay compute-all. Do not reopen replay masking. Next when asked: WOZDUH-ACTIVE-1B.
+**Consequences:** Frozen at `2cd4ca4`. Zero mask means no Wozduh work, not all. Empty history `slots` stay compute-all. Do not reopen replay masking.
 
 ---
 
@@ -34,7 +48,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Compute sleeping in this chapter — **Reason:** WOZDUH-ACTIVE-1.
 - Filter `/api/state` Plots in the same cut — **Reason:** live path is WS `slots`; HTTP snapshot stays unfiltered (legacy).
 
-**Consequences:** Frozen at `0c2ecce`. VISIBLE → SUBSCRIBED → REQUIRED. REQUIRED still means all current Wozduh atoms on the live Frame. Do not reopen wire/pack. Next when asked: WOZDUH-ACTIVE-1B.
+**Consequences:** Frozen at `0c2ecce`. VISIBLE → SUBSCRIBED → REQUIRED. REQUIRED still means all current Wozduh atoms on the live Frame. Do not reopen wire/pack.
 
 ---
 

@@ -26,8 +26,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
-4. FE paint skip + wire pack + history mask: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`). Next when asked: **WOZDUH-ACTIVE-1B**. Do not start lazy `removeSeries` or LOD from this.  
-5. **Later:** **WOZDUH-ACTIVE-1B** (live Frame demand / sleep / wake). Then ScoreNodes. Not DAG-DEMAND from this freeze.  
+4. FE paint skip + wire pack + history mask: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen**. Next when asked: **#76 ScoreNodes**. Do not start lazy `removeSeries`, LOD, DAG-DEMAND, or MICRO-DEMAND from this.  
+5. **Later:** ScoreNodes. Not DAG-DEMAND / MICRO-DEMAND from this freeze.  
 6. Then: ScoreNodes / clean strategy + indicator rebuild — **RSX-TRUTH-CLEAN-1 frozen** (`5f8a290`); do not reopen Go RSX color or old marker factory.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
@@ -50,7 +50,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of paint. Visibility not in RSX fingerprint. Do **not** reopen.
 
-**WOZDUH-ACTIVE-1A ✅ frozen** (`2cd4ca4`). `/api/history` replay uses a fixed Wozduh compute mask. Live Frame still compute-all. Do **not** reopen. Next when asked: **WOZDUH-ACTIVE-1B**. Not ScoreNodes / DAG-DEMAND.
+**WOZDUH-ACTIVE-1B ✅ frozen**. Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|Wt11|Wt22). ChartOnly unused Frames are mask 0. Do **not** reopen. Next when asked: **#76 ScoreNodes**. Not DAG-DEMAND / MICRO-DEMAND.
+
+**WOZDUH-ACTIVE-1A ✅ frozen** (`2cd4ca4`). `/api/history` replay uses a fixed Wozduh compute mask. Do **not** reopen.
 
 **WOZDUH-WIRE-1 ✅ frozen** (`0c2ecce`). Pack/send only subscribed Wozduh scalar plot IDs. Enable hydrates current window before reveal. Do **not** reopen.
 

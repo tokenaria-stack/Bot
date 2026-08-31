@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 )
 
@@ -48,6 +49,7 @@ func frameTip3(frame *Frame) (rsx, sig, woz float64) {
 
 func newFrameWithRSX(klines []exchange.Kline, rsx RSXSettings) *Frame {
 	f := NewFrame(klines, "1m", testChaos())
+	f.SetWozduhDemand(nodes.WozduhMaskAll)
 	f.SetRSXSettings(rsx)
 	f.ReapplyRSXSettings()
 	return f

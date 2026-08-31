@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/data"
 	"trading_bot/decision"
 	"trading_bot/domain"
@@ -624,12 +625,9 @@ func (d *DashboardServer) routeTick(timeframe string, msg wsEnvelope) {
 	if len(dead) == 0 {
 		return
 	}
-	d.clientsMu.Lock()
 	for _, client := range dead {
-		delete(d.clients, client)
-		delete(d.clientTF, client)
+		d.dropWSClient(client)
 	}
-	d.clientsMu.Unlock()
 }
 
 // writeToClients sends raw WS payload to all clients, or only those matching accept (when non-nil).
@@ -659,12 +657,9 @@ func (d *DashboardServer) writeToClients(payload []byte, accept func(*WSClient) 
 		return
 	}
 
-	d.clientsMu.Lock()
 	for _, client := range dead {
-		delete(d.clients, client)
-		delete(d.clientTF, client)
+		d.dropWSClient(client)
 	}
-	d.clientsMu.Unlock()
 }
 
 func parseRSXLookback(r *http.Request) int {
@@ -2042,11 +2037,53 @@ func (d *DashboardServer) setClientSubscribe(client *WSClient, tf string, plotID
 		return
 	}
 	d.clientsMu.Lock()
+	oldTF := strings.TrimSpace(d.clientTF[client])
 	d.clientTF[client] = spec.ID
 	if plotIDs != nil {
 		client.plotIDs = append([]string(nil), plotIDs...)
 	}
 	d.clientsMu.Unlock()
+	if oldTF != "" && oldTF != spec.ID {
+		d.recomputeWozduhDemand(oldTF)
+	}
+	d.recomputeWozduhDemand(spec.ID)
+}
+
+func (d *DashboardServer) snapshotWozduhUnion(tfID string) nodes.WozduhMask {
+	d.clientsMu.Lock()
+	lists := make([][]string, 0)
+	for client := range d.clients {
+		if strings.TrimSpace(d.clientTF[client]) != tfID {
+			continue
+		}
+		lists = append(lists, append([]string(nil), client.plotIDs...))
+	}
+	d.clientsMu.Unlock()
+	return nodes.WozduhMaskFromClientSubscriptions(lists)
+}
+
+func (d *DashboardServer) recomputeWozduhDemand(tfID string) {
+	tfID = strings.TrimSpace(tfID)
+	if d == nil || tfID == "" {
+		return
+	}
+	union := d.snapshotWozduhUnion(tfID)
+	frame := d.frames[tfID]
+	if frame == nil {
+		return
+	}
+	frame.SetWozduhDemand(union)
+}
+
+func (d *DashboardServer) dropWSClient(client *WSClient) {
+	d.clientsMu.Lock()
+	tf := strings.TrimSpace(d.clientTF[client])
+	delete(d.clients, client)
+	delete(d.clientTF, client)
+	d.clientsMu.Unlock()
+	if tf != "" {
+		d.recomputeWozduhDemand(tf)
+	}
 }
 
 func chartCandlesToKlines(candles []ChartCandle) []exchange.Kline {
@@ -2280,12 +2317,10 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	d.clients[client] = true
 	d.clientTF[client] = d.tradingTimeframe
 	d.clientsMu.Unlock()
+	d.recomputeWozduhDemand(d.tradingTimeframe)
 
 	defer func() {
-		d.clientsMu.Lock()
-		delete(d.clients, client)
-		delete(d.clientTF, client)
-		d.clientsMu.Unlock()
+		d.dropWSClient(client)
 		_ = client.Close()
 	}()
 
