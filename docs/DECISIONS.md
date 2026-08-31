@@ -18,7 +18,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Infer family from color/label/pattern — **Reason:** `source` is identity.
 - Compute sleeping / wire skip / ScoreNodes in this chapter — **Reason:** presentation only.
 
-**Consequences:** TRUTH → FACTS → FE visibility filter → paint. Future consumer demand may sleep unused compute; that is not implemented here.
+**Consequences:** Frozen at `749912f`. TRUTH → FACTS → FE visibility filter → paint. Next when asked: WOZDUH-WIRE-1 (wire pack), then WOZDUH-ACTIVE-1 (compute). Do not reopen this chapter.
 
 ---
 

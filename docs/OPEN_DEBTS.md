@@ -48,9 +48,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-SIGNAL-3 ✅ frozen** (`c856fef`). Fractal facts (`rsx_fractal_div` class_a/b/c, `rsx_fractal_pivot`) + bounded `FractalFactsAt`. Do **not** reopen detector math or lookback search.
 
-**RSX-VISIBILITY-1 ✅** — five FE visibility flags; `div_method` / `show_pivots` deleted. Facts stay independent of paint. Not compute sleeping, not wire skip, not ScoreNodes.
+**RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of paint. Visibility not in RSX fingerprint. Do **not** reopen.
 
-**NEXT architecture intent (not this freeze):** unused RSX/Wozduh computation may later sleep based on consumer demand (WOZDUH-WIRE-1 → WOZDUH-ACTIVE-1 → DAG-DEMAND). Do not treat “always compute forever” as a permanent rule.
+**NEXT when asked:** **WOZDUH-WIRE-1** (pack/send only subscribed Wozduh columns; enable must hydrate history immediately). Then **WOZDUH-ACTIVE-1**. Not ScoreNodes / DAG-DEMAND from this freeze. Do not treat “always compute forever” as a permanent rule.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 
