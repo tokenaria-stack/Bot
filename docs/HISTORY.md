@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## WOZDUH-ACTIVE-1A — masked stateless Wozduh history replay (Aug 2026)
+## WOZDUH-ACTIVE-1A — masked stateless Wozduh history replay (Aug 2026) ✅ frozen `2cd4ca4`
 
 - `/api/history` derives a fixed Wozduh compute mask from requested plot IDs. Same klines/warmup; unused streams do not Update.
 - `ReplayClosedBars` remains compute-all. Live Frame untouched. Next when asked: **WOZDUH-ACTIVE-1B**.

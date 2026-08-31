@@ -18,7 +18,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Live demand/union in this chapter — **Reason:** WOZDUH-ACTIVE-1B.
 - Atom interfaces — **Reason:** bit-guard existing Update().
 
-**Consequences:** Zero mask means no Wozduh work, not all. Next when asked: 1B.
+**Consequences:** Frozen at `2cd4ca4`. Zero mask means no Wozduh work, not all. Empty history `slots` stay compute-all. Do not reopen replay masking. Next when asked: WOZDUH-ACTIVE-1B.
 
 ---
 
@@ -34,7 +34,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Compute sleeping in this chapter — **Reason:** WOZDUH-ACTIVE-1.
 - Filter `/api/state` Plots in the same cut — **Reason:** live path is WS `slots`; HTTP snapshot stays unfiltered (legacy).
 
-**Consequences:** Frozen at `0c2ecce`. VISIBLE → SUBSCRIBED → REQUIRED. REQUIRED still means all current Wozduh atoms. Do not reopen wire/pack. Next when asked: WOZDUH-ACTIVE-1A (stateless replay mask), then 1B (persistent Frame demand).
+**Consequences:** Frozen at `0c2ecce`. VISIBLE → SUBSCRIBED → REQUIRED. REQUIRED still means all current Wozduh atoms on the live Frame. Do not reopen wire/pack. Next when asked: WOZDUH-ACTIVE-1B.
 
 ---
 
