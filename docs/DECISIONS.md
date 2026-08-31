@@ -18,7 +18,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Merge forming-child idle into DAG-DEMAND — **Reason:** sparse reducer/tip is frozen; aggregation is cheap vs Jurik.
 - Stop 5s–45s OHLCV reducers — **Reason:** cheap, makes TF switch ready without reconstructing bars from 1s.
 
-**Consequences:** Implemented. ChartOnly unused Frames: 0 RSX/TV/Fractal/DAG-ZZ Updates. ScoreNodes may later OR into the same mask. MICRO-IDLE-1 is not automatic.
+**Consequences:** Implemented. ChartOnly unused Frames: 0 RSX/TV/Fractal/DAG-ZZ Updates. ScoreNodes later OR into the same mask. MICRO-IDLE-1 closed after measure.
 
 ## DAG-DEMAND-1 implementation (Aug 2026)
 
@@ -31,7 +31,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Second temporary Jurik for TV/Fractal/ZZ while Core is live — **Reason:** IIR near a discrete threshold can change pivot/ZZ class.
 - Re-Update last closed bar after Install — **Reason:** double IIR vs warmup-from-birth.
 
-**Consequences:** Frozen with this commit. Do not start MICRO-IDLE-1 or ScoreNodes in the same change.
+**Consequences:** Frozen at `0837c77`. ScoreNodes OR into the same mask. MICRO-IDLE-1 measured and closed as unnecessary.
+
+## MICRO-IDLE-1 closed without implementation (Aug 2026)
+
+**Context:** After DAG-DEMAND-1, unused micro TFs are 1s → child OHLCV reducers → nothing analytical.
+
+**Decision:** Do not implement forming-child idle. Measured residual ≈ 6µs per 1s parent for five unused children.
+
+**Rejected:**
+- Implement MICRO-IDLE because the debt existed — **Reason:** remaining cost is cheap OHLCV + skipped DAG Updates, not Jurik.
+
+**Consequences:** Reducers / sparse tip stay frozen. NEXT is ScoreNodes.
+
+## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026)
 
 **Context:** 1A masked history replay. Persistent Frames still ran `WozduhMaskAll` on every tick, including unused seconds TFs.
 

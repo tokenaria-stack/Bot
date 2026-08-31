@@ -8,13 +8,21 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## DAG-DEMAND-1 — per-TF RSX analytical demand (Aug 2026) ✅
+## MICRO-IDLE-1 — residual 5s–45s cost (Aug 2026) ✅ closed, not implemented
+
+- Read-only measure (`TestMicroIdle_ResidualCostVsOldAnalytics`): idle ChartOnly, no micro charts.
+- 1200 1s parents: reducer-only ≈ 5µs/parent; reducers + unused Frame ticks ≈ **6µs/parent**; 6000 forming / 505 closed child ticks; unused Frames stay analytical-0.
+- Same path with `RSXWorkAll` is only ~2.4× because remaining cost is OHLCV + empty DAG skip, not Jurik.
+- Production rate is one 1s parent per wall-clock second → ~6µs CPU/s. **Not worth a reducer lifecycle.**
+- Next: **#76 ScoreNodes**.
+
+## DAG-DEMAND-1 — per-TF RSX analytical demand (Aug 2026) ✅ frozen `0837c77`
 
 - Per-Frame mask `NeedRSXCore|NeedRSTV|NeedRSFractal|NeedRSZZ` = WS plots ∪ facts ∪ Live Core (`validateDAGShadowLocked` Jurik). ChartOnly unused 1s–45s: all bits 0; OHLCV stays on.
 - WS `facts *[]string`: omitted/null = all families; `[]` = none. Visibility checkboxes send consumption intent only (no Jurik POST).
 - Wake: closed bars only; one Jurik rebuild per transaction; family wake uses live retained RSX if Core stayed on. Sleep NaNs Core slots; facts are not deleted.
 - Two ZigZags remain separate. Wozduh mask untouched. HTTP history independent.
-- Next: **#76 ScoreNodes**. Do not start MICRO-IDLE-1 until a measure says forming-child fanout is still expensive.
+- Next: **#76 ScoreNodes**. MICRO-IDLE-1 closed (measured residual negligible).
 
 ## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026) ✅ frozen `1b724ef`
 
