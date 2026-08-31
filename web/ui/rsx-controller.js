@@ -174,6 +174,9 @@ const RsxController = (() => {
     const settings = readSettingsFromMenu(context);
     const applied = setSettings(context, settings);
     persist(context, applied);
+    if (context === 'live' && typeof wsSubscribeTf === 'function') {
+      wsSubscribeTf(window.currentTf);
+    }
     if (context === 'live' && typeof liveRenderScheduler !== 'undefined' && liveRenderScheduler) {
       liveRenderScheduler.markDirty({ mode: 'full' });
       return;

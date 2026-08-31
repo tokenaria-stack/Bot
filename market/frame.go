@@ -93,7 +93,14 @@ type Frame struct {
 	rsxPriceLines    []float64
 	bulkReplayMode   bool
 	dag              *core.DAGRunner
-	wozduhDemand     nodes.WozduhMask // last required mask (client union | internal)
+	wozduhDemand     nodes.WozduhMask
+	rsxDemand        nodes.RSXWorkMask
+	rsxApplied       nodes.RSXWorkMask
+	tvEvals          int
+	fractalEvals     int
+	zzEvals          int
+	rsxFactRevision  int
+	rsxCoreRebuilds  int
 	// lastCommittedOpenTime is the OpenTime of the most recently Save-committed bar
 	// (streaming engines + DAG). Guards UpdateKlineTick's cross-bar handoff against
 	// double-committing a bar already closed via isClosed==true (Jeweler Protocol: no double IIR pass).

@@ -7,7 +7,31 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
-## WOZDUH-ACTIVE-1B — per-Frame live Wozduh demand (Aug 2026)
+## DAG-DEMAND-1 before ScoreNodes (Aug 2026)
+
+**Context:** Wozduh demand is frozen. Unused 5s–45s Frames still run RSX, DAG ZigZag, and fact collectors. ScoreNodes would bury that CPU debt.
+
+**Decision:** NEXT is DAG-DEMAND-1 (per-TF analytical sleep). Keep 1s + child **closed OHLCV**. Split MICRO-IDLE-1 (forming fanout) and require a measurement. ScoreNodes after. Same demand law as Wozduh; no IndicatorManager; no fake ScoreNode consumers.
+
+**Rejected:**
+- ScoreNodes first — **Reason:** leftover CPU is forgotten once strategy work starts.
+- Merge forming-child idle into DAG-DEMAND — **Reason:** sparse reducer/tip is frozen; aggregation is cheap vs Jurik.
+- Stop 5s–45s OHLCV reducers — **Reason:** cheap, makes TF switch ready without reconstructing bars from 1s.
+
+**Consequences:** Implemented. ChartOnly unused Frames: 0 RSX/TV/Fractal/DAG-ZZ Updates. ScoreNodes may later OR into the same mask. MICRO-IDLE-1 is not automatic.
+
+## DAG-DEMAND-1 implementation (Aug 2026)
+
+**Context:** GPT locked the chapter plus one extra law: one coherent RSX history per wake, and `facts` tri-state (omitted vs `[]`).
+
+**Decision:** Compact `RSXWorkMask` on the Frame. WS `Facts *[]string`. Snapshot clients under `clientsMu`, then Frame lock (same as Wozduh). Closed-only rebuild; paint last rebuilt Cur when the tip is already closed (do not re-Update that bar).
+
+**Rejected:**
+- `len(facts)==0` means all — **Reason:** cannot distinguish omitted from explicit none.
+- Second temporary Jurik for TV/Fractal/ZZ while Core is live — **Reason:** IIR near a discrete threshold can change pivot/ZZ class.
+- Re-Update last closed bar after Install — **Reason:** double IIR vs warmup-from-birth.
+
+**Consequences:** Frozen with this commit. Do not start MICRO-IDLE-1 or ScoreNodes in the same change.
 
 **Context:** 1A masked history replay. Persistent Frames still ran `WozduhMaskAll` on every tick, including unused seconds TFs.
 

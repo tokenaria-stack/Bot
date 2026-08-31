@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/data"
 	"trading_bot/exchange"
 )
@@ -106,6 +107,7 @@ func TestReplayLifecycle_IndicatorReplayPreservesFormingCur(t *testing.T) {
 	forming := synthFormingTip(closed[len(closed)-1], step, nowMs)
 
 	frame := NewFrame(append(append([]exchange.Kline{}, closed...), forming), "1m", ChaosConfig{})
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	// Ensure live semantics even if NewFrame path changes: forming as open.
 	frame.UpdateKlineTick(forming, false)
 
@@ -125,6 +127,7 @@ func TestReplayLifecycle_IndicatorReplayPreservesFormingCur(t *testing.T) {
 	}
 
 	ref := NewFrame(append([]exchange.Kline{}, closed...), "1m", ChaosConfig{})
+	ref.SetRSXDemand(nodes.RSXWorkAll)
 	ref.UpdateKlineTick(forming, false)
 	want := ref.DAGTickFrame().Get(core.SlotJurikRSX)
 	if math.Abs(postCur-want) > 1e-9 {
@@ -144,6 +147,7 @@ func TestReplayLifecycle_FirstWSFormingTickIdempotent(t *testing.T) {
 	forming := synthFormingTip(closed[len(closed)-1], step, nowMs)
 
 	frame := NewFrame(append(append([]exchange.Kline{}, closed...), forming), "1m", ChaosConfig{})
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	frame.UpdateKlineTick(forming, false)
 
 	prev := GetRSXSettings()
@@ -173,6 +177,7 @@ func TestReplayLifecycle_ClosedOnlyUnchanged(t *testing.T) {
 	closed := synthClosedPrefix(40, step, nowMs)
 
 	frame := NewFrame(append([]exchange.Kline{}, closed...), "1m", ChaosConfig{})
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	before := frame.DAGTickFrame().Get(core.SlotJurikRSX)
 	beforeCommit := frame.lastCommittedOpenTime
 
@@ -182,6 +187,7 @@ func TestReplayLifecycle_ClosedOnlyUnchanged(t *testing.T) {
 	frame.UpdateRSXScanConfig(prev, next)
 
 	ref := NewFrame(append([]exchange.Kline{}, closed...), "1m", ChaosConfig{})
+	ref.SetRSXDemand(nodes.RSXWorkAll)
 	want := ref.DAGTickFrame().Get(core.SlotJurikRSX)
 	got := frame.DAGTickFrame().Get(core.SlotJurikRSX)
 	if math.Abs(got-want) > 1e-9 {

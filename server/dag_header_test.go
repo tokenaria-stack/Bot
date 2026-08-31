@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/decision"
 	"trading_bot/exchange"
 	"trading_bot/market"
@@ -93,6 +94,12 @@ func TestEnrichFromDAG_LiveLongScoreStaysZero(t *testing.T) {
 }
 
 func newTestDAGMarker(n int) *market.Frame {
+	f := newTestDAGFrame(n)
+	f.SetRSXDemand(nodes.NeedRSXCore)
+	return f
+}
+
+func newTestDAGFrame(n int) *market.Frame {
 	klines := make([]exchange.Kline, n)
 	base := int64(1_700_000_000_000)
 	for i := range klines {

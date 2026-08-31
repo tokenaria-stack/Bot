@@ -26,9 +26,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
-4. FE paint skip + wire pack + history/live mask: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). Next when asked: **#76 ScoreNodes** (greenfield; do not salvage old Falcon/MicroPattern scores). Do not start lazy `removeSeries`, LOD, DAG-DEMAND, or MICRO-DEMAND from this.  
-5. **Later:** ScoreNodes. Not DAG-DEMAND / MICRO-DEMAND from this freeze.  
-6. Then: ScoreNodes / clean strategy + indicator rebuild — **RSX-TRUTH-CLEAN-1 frozen** (`5f8a290`); do not reopen Go RSX color or old marker factory.
+4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
+5. **DAG-DEMAND-1 ✅** (per-TF RSX/TV/Fractal/DAG-ZZ sleep). **Do not reopen.** Next: **#76 ScoreNodes**. **MICRO-IDLE-1** only if a later measure shows unused 5s–45s forming-child fanout is still expensive (OHLCV arithmetic is expected cheap).
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -50,7 +49,13 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of paint. Visibility not in RSX fingerprint. Do **not** reopen.
 
-**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|Wt11|Wt22). ChartOnly unused Frames are mask 0. Do **not** reopen Wozduh compute. Next when asked: **#76 ScoreNodes**. Not DAG-DEMAND / MICRO-DEMAND.
+**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|Wt11|Wt22). ChartOnly unused Frames are mask 0. Do **not** reopen Wozduh compute.
+
+**DAG-DEMAND-1 ✅** — per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
+
+**Parked (keep intentionally — not DAG-DEMAND):** Wozduh SaveState while asleep; wake under Frame lock; 1024 IIR epsilon; legacy `finiteOrZero`; unfiltered WS = Wozduh all.
+
+**Product later (do not mix in):** #69 S6/69D, DATA-1B, #81 P1/P2, #82 FE calendar snap, fib/drawings, #29 backtest projection.
 
 **WOZDUH-ACTIVE-1A ✅ frozen** (`2cd4ca4`). `/api/history` replay uses a fixed Wozduh compute mask. Do **not** reopen.
 
@@ -64,7 +69,8 @@ S6 / Working Set lifetime remains a later debt — **not** reopened by this free
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes** — move Score/Falcon decision graph into DAG nodes | 🔜 | Start from frozen RSX truth (`5f8a290`). Each factor: fact vs presentation debt? Do **not** delete `market/falcon.go` until done |
+| **76** | **ScoreNodes** — greenfield decision graph from truth + facts | 🔜 **NEXT** | Do **not** salvage old Falcon/MicroPattern scores. Do **not** delete `market/falcon.go` until then |
+| **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. Measure before MICRO-IDLE-1. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
 | **84** | **RSX settings SSOT (B0)** | ✅ | ADR-012: engine owns config, default hlc3, autosave `rsx_settings.json`, dumb menu POST pipe |
 | **85** | **ChangeImpact + Viewport (B1)** | ✅ | ADR-013/014: classify impact before Set*; soft indicator paint; debounce/Abort/generation |
@@ -168,7 +174,7 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | **35** (charts) | Phase 8B annotations UI on prepend | 🔜 | `applyUniversalAnnotations` |
 | **29** | Backtest history bypasses Projection | 🟡 | Asymmetry vs live Atomic |
 | **82** | `prependMonolith` times not normalized via `chartTime` | 🟢 | Latent; server sends seconds |
-| **92** | **Backend indicator opt** (DAG/wire skip unused plots) | ⏸ later | FE skip accepted. Store/wire still full. Do not start from rAF symptoms. |
+| **92** | **DAG-DEMAND-1** (was “backend skip unused plots”) | ✅ | Implemented with #93. |
 
 ---
 

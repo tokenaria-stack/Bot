@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"trading_bot/core/nodes"
 	"trading_bot/data"
 	"trading_bot/exchange"
 	"trading_bot/market"
@@ -33,6 +34,7 @@ func TestCompareTipSSOT_Match(t *testing.T) {
 	frameK := hist[len(hist)-20:]
 	rsx := market.NormalizeRSXSettings(market.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
 	frame := market.NewFrame(frameK, "1m", market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 
@@ -115,6 +117,7 @@ func TestTipSSOT_RealDataPlane_GetWindowVsFrame(t *testing.T) {
 	rsx := market.NormalizeRSXSettings(market.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
 	market.ApplyRSXSettings(rsx)
 	frame := market.NewFrame(bootK, interval, market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 
@@ -135,6 +138,7 @@ func TestTipSSOT_RealDataPlane_GetWindowVsFrame(t *testing.T) {
 			t.Fatalf("re-boot Load: %v", err)
 		}
 		frame = market.NewFrame(candlesToKlines(bootCandles), interval, market.ChaosConfig{})
+		frame.SetRSXDemand(nodes.NeedRSXCore)
 		frame.SetRSXSettings(rsx)
 		frame.ReapplyRSXSettings()
 		frames[interval] = frame

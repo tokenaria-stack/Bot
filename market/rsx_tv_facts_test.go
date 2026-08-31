@@ -3,6 +3,7 @@ package market
 import (
 	"testing"
 
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 )
@@ -30,6 +31,7 @@ func TestRSTVFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for _, k := range klines {
 		frame.UpdateKlineTick(k, true)
 	}
@@ -86,6 +88,7 @@ func TestUpdateKlineTick_ClosedWalkHistCountMatchesKlines(t *testing.T) {
 	}
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30})
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for _, k := range klines {
 		frame.UpdateKlineTick(k, true)
 	}
@@ -130,6 +133,7 @@ func TestRSTVFacts_AlwaysPublished(t *testing.T) {
 	}
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for _, k := range klines {
 		frame.UpdateKlineTick(k, true)
 	}
@@ -161,6 +165,7 @@ func TestRSTVFacts_FormingBarDoesNotConfirm(t *testing.T) {
 	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30}
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for i, k := range klines {
 		frame.UpdateKlineTick(k, i < len(klines)-1)
 	}

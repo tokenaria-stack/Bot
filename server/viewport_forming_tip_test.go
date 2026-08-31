@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/market"
 	"trading_bot/server/wire"
@@ -56,6 +57,7 @@ func TestProjectViewportFormingTip_OverwriteSameOpen(t *testing.T) {
 	frameKlines := append([]exchange.Kline{}, closed[:len(closed)-1]...)
 	frameKlines = append(frameKlines, tip)
 	frame := market.NewFrame(frameKlines, "1m", market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 
@@ -145,6 +147,7 @@ func TestProjectViewportFormingTip_SeedsLiveEdge(t *testing.T) {
 	}
 
 	frame := market.NewFrame(append(append([]exchange.Kline{}, closed...), forming), "1m", market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 
@@ -220,6 +223,7 @@ func TestProjectViewportFormingTip_SkipsDeepHistory(t *testing.T) {
 		Open: 10, High: 11, Low: 9, Close: 10.5, Volume: 2,
 	}
 	frame := market.NewFrame(append(append([]exchange.Kline{}, closed...), forming), "1m", market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 

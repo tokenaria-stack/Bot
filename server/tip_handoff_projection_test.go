@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/data"
 	"trading_bot/exchange"
 	"trading_bot/market"
@@ -60,6 +61,7 @@ func TestTipHandoff_ProjectionSeam(t *testing.T) {
 	rsx := market.NormalizeRSXSettings(market.RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
 	market.ApplyRSXSettings(rsx)
 	frame := market.NewFrame(candlesToKlines(bootCandles), interval, market.ChaosConfig{})
+	frame.SetRSXDemand(nodes.NeedRSXCore)
 	frame.SetRSXSettings(rsx)
 	frame.ReapplyRSXSettings()
 

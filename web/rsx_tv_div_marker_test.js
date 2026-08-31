@@ -128,6 +128,26 @@ test('visibility mask hides only the matching source', () => {
   assert.strictEqual(paint({}).length, 5, 're-enable paints stored markers without new facts');
   assert.strictEqual(Mappers.rsxVisibilityMask({ show_pivots: false }), 31, 'old show_pivots is ignored');
   assert.strictEqual(Mappers.rsxAnnotationSourceVisible('future_src', 0), true);
+  assert.strictEqual(
+    Mappers.rsxVisibleFactSources({
+      show_tv_div: true,
+      show_tv_pivot: false,
+      show_zz_div: false,
+      show_fractal_div: true,
+      show_fractal_pivot: false,
+    }).join(','),
+    'rsx_tv_div,rsx_fractal_div',
+  );
+  assert.strictEqual(
+    Mappers.rsxVisibleFactSources({
+      show_tv_div: false,
+      show_tv_pivot: false,
+      show_zz_div: false,
+      show_fractal_div: false,
+      show_fractal_pivot: false,
+    }).join(','),
+    '',
+  );
 });
 
 test('normalize pane stays rsx', () => {

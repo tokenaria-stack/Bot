@@ -77,6 +77,25 @@ func (h *HistoryBus) Get(slot Slot, lookback int) float64 {
 	return h.data[base+idx]
 }
 
+// PatchNewest writes oldest-first values onto the newest committed bars for slot
+// without advancing the ring (RSX wake hist fill; does not touch other slots).
+func (h *HistoryBus) PatchNewest(slot Slot, oldestFirst []float64) {
+	if h == nil || slot >= SlotCount || len(oldestFirst) == 0 || h.count < 1 {
+		return
+	}
+	n := len(oldestFirst)
+	if n > h.count {
+		oldestFirst = oldestFirst[len(oldestFirst)-h.count:]
+		n = h.count
+	}
+	base := int(slot) * h.cap
+	for i := 0; i < n; i++ {
+		lookback := n - i
+		idx := (h.head - lookback) & (h.cap - 1)
+		h.data[base+idx] = oldestFirst[i]
+	}
+}
+
 // ValueAtBar returns the committed slot at DAG barIndex (0 = oldest in the current ring fill).
 func (h *HistoryBus) ValueAtBar(slot Slot, barIndex int) float64 {
 	if h == nil || barIndex < 0 || barIndex >= h.count {

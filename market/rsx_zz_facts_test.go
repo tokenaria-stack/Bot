@@ -54,6 +54,7 @@ func TestZZDivFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for _, k := range klines {
 		frame.UpdateKlineTick(k, true)
 	}
@@ -195,6 +196,7 @@ func TestZZDivFacts_OverCapParity(t *testing.T) {
 
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	long := zzOscillatingKlines(dagHistoryCap + 80)
 	for _, k := range long {
 		frame.UpdateKlineTick(k, true)

@@ -72,6 +72,16 @@ function overlayRsxVisibility(engine, visSource, defaults) {
 }
 
 /** bit0 TV div, bit1 TV pivot, bit2 ZZ div, bit3 fractal div, bit4 fractal pivot */
+function rsxVisibleFactSources(settings) {
+  const ids = [];
+  if (rsxVisOn(settings, 'show_tv_div')) ids.push('rsx_tv_div');
+  if (rsxVisOn(settings, 'show_tv_pivot')) ids.push('rsx_tv_pivot');
+  if (rsxVisOn(settings, 'show_zz_div')) ids.push('rsx_zz_div');
+  if (rsxVisOn(settings, 'show_fractal_div')) ids.push('rsx_fractal_div');
+  if (rsxVisOn(settings, 'show_fractal_pivot')) ids.push('rsx_fractal_pivot');
+  return ids;
+}
+
 function rsxVisibilityMask(settings) {
   let mask = 0;
   if (rsxVisOn(settings, 'show_tv_div')) mask |= 1;
@@ -546,6 +556,7 @@ if (typeof window !== 'undefined') {
     coerceRsxSettingsForAPI,
     overlayRsxVisibility,
     rsxVisibilityFlagsFrom,
+    rsxVisibleFactSources,
     rsxVisibilityMask,
     rsxAnnotationSourceVisible,
     normalizeTf,

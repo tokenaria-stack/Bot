@@ -24,6 +24,8 @@ type ZigZagNode struct {
 	prevZigHas     bool
 	snapPrevZig    indicators.ZigZagNode
 	snapPrevZigHas bool
+	active         bool
+	streamUpdates  int
 }
 
 // NewZigZagNode creates a ZigZag node with explicit fractal and sensitivity config.
@@ -42,6 +44,7 @@ func NewZigZagNode(cfg ZigZagConfig) *ZigZagNode {
 			Sensitivity: sens,
 		},
 		zigzag: zz,
+		active: true,
 	}
 }
 
@@ -65,7 +68,7 @@ func (n *ZigZagNode) normalizeConfig() {
 }
 
 func (n *ZigZagNode) Update() {
-	if n.bus == nil || n.bus.Cur == nil || n.zigzag == nil {
+	if n.bus == nil || n.bus.Cur == nil || n.zigzag == nil || !n.active {
 		return
 	}
 	high := n.bus.Cur.Get(core.SlotPriceHigh)
@@ -73,6 +76,7 @@ func (n *ZigZagNode) Update() {
 	close := n.bus.Cur.Get(core.SlotPriceClose)
 	rsi := n.bus.Cur.Get(core.SlotJurikRSX)
 	n.last = n.zigzag.UpdateCandle(high, low, close, rsi)
+	n.streamUpdates++
 
 	if n.isNewZigZagNode(n.last) && n.bus.Events != nil {
 		actualBarIndex := n.bus.Cur.BarIndex - n.cfg.RightBars
@@ -115,6 +119,43 @@ func (n *ZigZagNode) RestoreState() {
 	}
 	n.prevZig = n.snapPrevZig
 	n.prevZigHas = n.snapPrevZigHas
+}
+
+func (n *ZigZagNode) ApplyActive(on bool) {
+	if n == nil {
+		return
+	}
+	n.active = on
+}
+
+func (n *ZigZagNode) Active() bool {
+	return n != nil && n.active
+}
+
+func (n *ZigZagNode) StreamUpdates() int {
+	if n == nil {
+		return 0
+	}
+	return n.streamUpdates
+}
+
+func (n *ZigZagNode) ZigZagPtr() *indicators.ZigZag {
+	if n == nil {
+		return nil
+	}
+	return n.zigzag
+}
+
+func (n *ZigZagNode) InstallWoken(src *ZigZagNode) {
+	if n == nil || src == nil {
+		return
+	}
+	n.zigzag = src.zigzag
+	n.last = src.last
+	n.prevZig = src.prevZig
+	n.prevZigHas = src.prevZigHas
+	n.snapPrevZig = src.snapPrevZig
+	n.snapPrevZigHas = src.snapPrevZigHas
 }
 
 func (n *ZigZagNode) OnConfigChange(cfg any) error {

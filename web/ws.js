@@ -7,6 +7,7 @@ const WS = {
   _reconnectTimer: null,
   _subscribedTf: null,
   _slots: null,
+  _facts: null,
 
   isOpen() {
     return WS._socket?.readyState === WebSocket.OPEN;
@@ -34,23 +35,27 @@ const WS = {
     }
   },
 
-  subscribe(tf, resolvedTf, slots) {
+  subscribe(tf, resolvedTf, slots, facts) {
     // Case-sensitive: "1m" (minute) ≠ "1M" (month).
     const subTf = String(resolvedTf ?? tf ?? '');
     if (!subTf) return;
     WS._subscribedTf = subTf;
     if (Array.isArray(slots)) WS._slots = slots.slice();
+    if (Array.isArray(facts)) WS._facts = facts.slice();
     WS._sendSubscribe(subTf);
   },
 
   _sendSubscribe(tf) {
     const send = () => {
       if (WS._socket && WS._socket.readyState === WebSocket.OPEN) {
-        WS._socket.send(JSON.stringify({
+        const payload = {
           type: 'subscribe',
           tf,
           ...(Array.isArray(WS._slots) ? { slots: WS._slots } : {}),
-        }));
+        };
+        // Array (including []) is explicit demand. Omit only when never set (legacy ALL).
+        if (Array.isArray(WS._facts)) payload.facts = WS._facts;
+        WS._socket.send(JSON.stringify(payload));
       }
     };
     send();

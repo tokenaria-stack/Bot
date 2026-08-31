@@ -3,6 +3,7 @@ package market
 import (
 	"testing"
 
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 )
@@ -35,6 +36,7 @@ func TestRSTFractalFacts_ReplayMatchesLiveClosedWalk(t *testing.T) {
 
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for _, k := range klines {
 		frame.UpdateKlineTick(k, true)
 	}
@@ -86,6 +88,7 @@ func TestRSTFractalFacts_FormingBarDoesNotConfirm(t *testing.T) {
 	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30, PivotRadius: 2}
 	frame := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	frame.ApplyBacktestRSXConfig(settings)
+	frame.SetRSXDemand(nodes.RSXWorkAll)
 	for i, k := range klines {
 		if i == len(klines)-1 {
 			frame.UpdateKlineTick(k, false)

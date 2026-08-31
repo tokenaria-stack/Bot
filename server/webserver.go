@@ -50,7 +50,8 @@ var errWarmingUp = errors.New("warming_up")
 type WSClient struct {
 	Conn    *websocket.Conn
 	mu      sync.Mutex
-	plotIDs []string // nil = unfiltered live plots; snapshot under clientsMu
+	plotIDs []string  // nil = unfiltered live plots; snapshot under clientsMu
+	facts   *[]string // nil = omitted facts (all families); &[]string{} = none
 }
 
 func (c *WSClient) WriteMessage(messageType int, data []byte) error {
@@ -2028,10 +2029,10 @@ func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
 
 // setClientTimeframe records the resolved timeframe a WS client is subscribed to.
 func (d *DashboardServer) setClientTimeframe(client *WSClient, tf string) {
-	d.setClientSubscribe(client, tf, nil)
+	d.setClientSubscribe(client, tf, nil, nil)
 }
 
-func (d *DashboardServer) setClientSubscribe(client *WSClient, tf string, plotIDs []string) {
+func (d *DashboardServer) setClientSubscribe(client *WSClient, tf string, plotIDs []string, facts *[]string) {
 	spec, err := ResolveTimeframe(tf)
 	if err != nil {
 		return
@@ -2042,37 +2043,59 @@ func (d *DashboardServer) setClientSubscribe(client *WSClient, tf string, plotID
 	if plotIDs != nil {
 		client.plotIDs = append([]string(nil), plotIDs...)
 	}
+	if facts != nil {
+		cp := append([]string(nil), (*facts)...)
+		client.facts = &cp
+	}
 	d.clientsMu.Unlock()
 	if oldTF != "" && oldTF != spec.ID {
-		d.recomputeWozduhDemand(oldTF)
+		d.recomputeAnalyticalDemand(oldTF)
 	}
-	d.recomputeWozduhDemand(spec.ID)
+	d.recomputeAnalyticalDemand(spec.ID)
 }
 
-func (d *DashboardServer) snapshotWozduhUnion(tfID string) nodes.WozduhMask {
+func (d *DashboardServer) snapshotClientDemand(tfID string) (nodes.WozduhMask, nodes.RSXWorkMask) {
 	d.clientsMu.Lock()
 	lists := make([][]string, 0)
+	rsx := make([]nodes.RSXClientDemand, 0)
 	for client := range d.clients {
 		if strings.TrimSpace(d.clientTF[client]) != tfID {
 			continue
 		}
-		lists = append(lists, append([]string(nil), client.plotIDs...))
+		plots := append([]string(nil), client.plotIDs...)
+		lists = append(lists, plots)
+		var facts *[]string
+		if client.facts != nil {
+			cp := append([]string(nil), (*client.facts)...)
+			facts = &cp
+		}
+		rsx = append(rsx, nodes.RSXClientDemand{Plots: plots, Facts: facts})
 	}
 	d.clientsMu.Unlock()
-	return nodes.WozduhMaskFromClientSubscriptions(lists)
+	return nodes.WozduhMaskFromClientSubscriptions(lists), nodes.RSXWorkFromClientSubscriptions(rsx)
 }
 
-func (d *DashboardServer) recomputeWozduhDemand(tfID string) {
+func (d *DashboardServer) snapshotWozduhUnion(tfID string) nodes.WozduhMask {
+	woz, _ := d.snapshotClientDemand(tfID)
+	return woz
+}
+
+func (d *DashboardServer) recomputeAnalyticalDemand(tfID string) {
 	tfID = strings.TrimSpace(tfID)
 	if d == nil || tfID == "" {
 		return
 	}
-	union := d.snapshotWozduhUnion(tfID)
+	woz, rsx := d.snapshotClientDemand(tfID)
 	frame := d.frames[tfID]
 	if frame == nil {
 		return
 	}
-	frame.SetWozduhDemand(union)
+	frame.SetWozduhDemand(woz)
+	frame.SetRSXDemand(rsx)
+}
+
+func (d *DashboardServer) recomputeWozduhDemand(tfID string) {
+	d.recomputeAnalyticalDemand(tfID)
 }
 
 func (d *DashboardServer) dropWSClient(client *WSClient) {
@@ -2082,7 +2105,7 @@ func (d *DashboardServer) dropWSClient(client *WSClient) {
 	delete(d.clientTF, client)
 	d.clientsMu.Unlock()
 	if tf != "" {
-		d.recomputeWozduhDemand(tf)
+		d.recomputeAnalyticalDemand(tf)
 	}
 }
 
@@ -2317,7 +2340,7 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	d.clients[client] = true
 	d.clientTF[client] = d.tradingTimeframe
 	d.clientsMu.Unlock()
-	d.recomputeWozduhDemand(d.tradingTimeframe)
+	d.recomputeAnalyticalDemand(d.tradingTimeframe)
 
 	defer func() {
 		d.dropWSClient(client)
@@ -2338,15 +2361,16 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		var msg struct {
-			Type  string   `json:"type"`
-			TF    string   `json:"tf"`
-			Slots []string `json:"slots"`
+			Type  string    `json:"type"`
+			TF    string    `json:"tf"`
+			Slots []string  `json:"slots"`
+			Facts *[]string `json:"facts"`
 		}
 		if err := json.Unmarshal(message, &msg); err != nil {
 			continue
 		}
 		if msg.Type == "subscribe" && msg.TF != "" {
-			d.setClientSubscribe(client, msg.TF, msg.Slots)
+			d.setClientSubscribe(client, msg.TF, msg.Slots, msg.Facts)
 		}
 	}
 }

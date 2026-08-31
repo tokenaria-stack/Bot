@@ -1,6 +1,7 @@
 package market
 
 import (
+	"trading_bot/core/nodes"
 	"trading_bot/indicators"
 )
 
@@ -8,6 +9,10 @@ func (a *Frame) noteRSTZZFactLocked(isClosed bool, barIndex int) {
 	if a == nil || !isClosed || a.dag == nil {
 		return
 	}
+	if a.rsxApplied&nodes.NeedRSZZ == 0 {
+		return
+	}
+	a.zzEvals++
 	ev, ok := a.zzCollector.ObserveClosed(a.dag.Bus(), a.klines, barIndex)
 	if !ok {
 		return

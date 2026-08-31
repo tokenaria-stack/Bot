@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DAG-DEMAND-1 — per-TF RSX analytical demand (Aug 2026) ✅
+
+- Per-Frame mask `NeedRSXCore|NeedRSTV|NeedRSFractal|NeedRSZZ` = WS plots ∪ facts ∪ Live Core (`validateDAGShadowLocked` Jurik). ChartOnly unused 1s–45s: all bits 0; OHLCV stays on.
+- WS `facts *[]string`: omitted/null = all families; `[]` = none. Visibility checkboxes send consumption intent only (no Jurik POST).
+- Wake: closed bars only; one Jurik rebuild per transaction; family wake uses live retained RSX if Core stayed on. Sleep NaNs Core slots; facts are not deleted.
+- Two ZigZags remain separate. Wozduh mask untouched. HTTP history independent.
+- Next: **#76 ScoreNodes**. Do not start MICRO-IDLE-1 until a measure says forming-child fanout is still expensive.
+
 ## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026) ✅ frozen `1b724ef`
 
 - Per-Frame mask = WS client union OR proven internal demand. ChartOnly internal = 0. Live internal = VolBase|Wt11|Wt22 (`validateDAGShadowLocked` woz_fast/slow). VolCross is not mandatory.

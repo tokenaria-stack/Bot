@@ -2,6 +2,7 @@ package market
 
 import (
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 )
@@ -56,6 +57,10 @@ func (a *Frame) noteRSTVFactLocked(isClosed bool, barIndex int) {
 	if a == nil || !isClosed || barIndex < 0 || barIndex >= len(a.klines) {
 		return
 	}
+	if a.rsxApplied&nodes.NeedRSTV == 0 {
+		return
+	}
+	a.tvEvals++
 	bus := a.dag.Bus()
 	if bus == nil || bus.Cur == nil {
 		return

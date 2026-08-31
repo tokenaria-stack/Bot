@@ -50,6 +50,7 @@ func frameTip3(frame *Frame) (rsx, sig, woz float64) {
 func newFrameWithRSX(klines []exchange.Kline, rsx RSXSettings) *Frame {
 	f := NewFrame(klines, "1m", testChaos())
 	f.SetWozduhDemand(nodes.WozduhMaskAll)
+	f.SetRSXDemand(nodes.NeedRSXCore)
 	f.SetRSXSettings(rsx)
 	f.ReapplyRSXSettings()
 	return f

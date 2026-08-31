@@ -82,7 +82,7 @@ func TestWozduhDemand_WSUnionDisconnectAndTFChange(t *testing.T) {
 		t.Fatalf("after A disconnect %#b want %#b", m1, wantB)
 	}
 
-	d.setClientSubscribe(b, "15s", []string{"woz_rsi_price"})
+	d.setClientSubscribe(b, "15s", []string{"woz_rsi_price"}, nil)
 	m1, _, _ = f1m.WozduhLiveStats()
 	if m1 != 0 {
 		t.Fatalf("old TF must drop B demand, got %#b", m1)

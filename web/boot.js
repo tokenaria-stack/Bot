@@ -793,7 +793,18 @@
   function wsSubscribeTf(tf) {
     if (typeof WS === 'undefined') return;
     const slots = resolveLiveSlotIds();
-    WS.subscribe(tf, tf, slots);
+    const facts = resolveLiveFactIds();
+    WS.subscribe(tf, tf, slots, facts);
+  }
+
+  function resolveLiveFactIds() {
+    const settings = typeof RsxController !== 'undefined' && typeof RsxController.getSettings === 'function'
+      ? RsxController.getSettings('live')
+      : null;
+    if (typeof rsxVisibleFactSources === 'function') {
+      return rsxVisibleFactSources(settings);
+    }
+    return ['rsx_tv_div', 'rsx_tv_pivot', 'rsx_zz_div', 'rsx_fractal_div', 'rsx_fractal_pivot'];
   }
 
   function clearChartData(options = {}) {
