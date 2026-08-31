@@ -16,10 +16,11 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 **Rejected:**
 - Global Wozduh mask — **Reason:** demand is per Frame/TF.
 - Make `/api/state` or VolCross demand — **Reason:** not proven production consumers of persistent live Wozduh.
+- Rewrite `chart_cache` `finiteOrZero` (NaN→0) as part of 1B — **Reason:** that helper is on `ReplayDAGKlines` / `ReplayClosedBars` (compute-all), not the sleeping live Frame. Live `/api/state` Plots already omit NaN. Live FE hydrates Wozduh from columnar + WS. Legacy JSON oscillators are observational / backtest-adjacent, not current chart truth.
 - Async wake / forming catch-up — **Reason:** correctness over latency; existing Restore+current-tick law is enough.
 - Generic atom/reflection installer — **Reason:** Wozduh fields are concrete.
 
-**Consequences:** ChartOnly unused Frames can be mask 0 (0 stream Updates). Live unused Frames keep 4 streams/update (VolBase×2 + Wt11 + Wt22). Always-on IIR older than `dagHistoryCap` is compared with `dagShadowEpsilon`, not bit-exact. Do not reopen. Next when asked: ScoreNodes.
+**Consequences:** Frozen at `1b724ef`. ChartOnly unused Frames can be mask 0 (0 stream Updates). Live unused Frames keep 4 streams/update (VolBase×2 + Wt11 + Wt22). Always-on IIR older than `dagHistoryCap` is compared with `dagShadowEpsilon`, not bit-exact. Stop Wozduh chapters here. Next when asked: ScoreNodes.
 
 ## WOZDUH-ACTIVE-1A — masked history replay, compute-all default (Aug 2026)
 

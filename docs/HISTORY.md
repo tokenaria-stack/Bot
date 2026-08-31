@@ -8,7 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026) ✅
+## WOZDUH-ACTIVE-1B — persistent live Wozduh demand (Aug 2026) ✅ frozen `1b724ef`
+
+- Per-Frame mask = WS client union OR proven internal demand. ChartOnly internal = 0. Live internal = VolBase|Wt11|Wt22 (`validateDAGShadowLocked` woz_fast/slow). VolCross is not mandatory.
+- Nil/empty live `plotIDs` = `WozduhMaskAll`. Sleep NaNs outputs immediately. Wake uses a temp `WozduhNode` over retained closed bars (`dagHistoryCap`), installs only newly activated fields, then SaveState.
+- `clientsMu` is released before the Frame lock. Disconnect / TF change recomputes that Frame’s union.
+- Measured streams/update: ALL=18, default-visible=6, Live unused=4, ChartOnly unused seconds TFs=0.
+- `chart_cache` `finiteOrZero` is not live-mask packing: it maps warmup NaN→0 on `ReplayClosedBars` (compute-all) for legacy JSON history only. Live chart truth is columnar + WS; `/api/state` Plots omit non-finite. Left unchanged (not a demand source).
+- Next when asked: **#76 ScoreNodes**. Not DAG-DEMAND / MICRO-DEMAND / further Wozduh polish.
 
 - Per-Frame mask = WS client union OR proven internal demand. ChartOnly internal = 0. Live internal = VolBase|Wt11|Wt22 (`validateDAGShadowLocked` woz_fast/slow). VolCross is not mandatory.
 - Nil/empty live `plotIDs` = `WozduhMaskAll`. Sleep NaNs outputs immediately. Wake uses a temp `WozduhNode` over retained closed bars (`dagHistoryCap`), installs only newly activated fields, then SaveState.

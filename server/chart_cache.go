@@ -81,6 +81,8 @@ func dagAnnotationsFromHistory(d *DashboardServer, hist *core.HistoryBus, times 
 }
 
 // dagOscillatorsFromHistory fills legacy ChartOscillator rows from DAG slots (no Falcon).
+// finiteOrZero maps warmup NaN to 0 on ReplayClosedBars (compute-all). This is not the
+// live Frame Wozduh mask and is not current chart truth (columnar + WS omit non-finite).
 func dagOscillatorsFromHistory(hist *core.HistoryBus, times []int64) []ChartOscillator {
 	n := len(times)
 	out := make([]ChartOscillator, n)

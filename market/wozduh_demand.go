@@ -11,8 +11,10 @@ func wozduhInternalMask() nodes.WozduhMask {
 	if !EngineAllowsStrategies() {
 		return 0
 	}
-	// validateDAGShadowLocked reads woz_fast / woz_slow. /api/state packing,
-	// Navigator ReplayClosedBars, and chart_cache hist rows are not demand.
+	// validateDAGShadowLocked reads woz_fast / woz_slow. Live /api/state Plots omit
+	// NaN via Projector (WIRE-1). Navigator uses ReplayClosedBars (compute-all), not
+	// the persistent Frame mask. chart_cache finiteOrZero is warmup-NaN on that
+	// independent replay — not asleep live slots, and not a demand source.
 	return nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22
 }
 
