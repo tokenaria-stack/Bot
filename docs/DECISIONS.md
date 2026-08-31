@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## WOZDUH-ACTIVE-1A — masked history replay, compute-all default (Aug 2026)
+
+**Context:** WIRE-1 already filtered packing. `/api/history` still replayed every Wozduh stream over the chunk.
+
+**Decision:** Static plot→compute bitmask. `ReplayClosedBars` stays all bits. History opts into `ReplayClosedBarsMasked`. Empty `slots` still compute-all. Inactive output slots are NaN. Live Frame unchanged.
+
+**Rejected:**
+- Change default replay callers — **Reason:** Navigator, golden, shadow, ZZ tests stay compute-all.
+- Live demand/union in this chapter — **Reason:** WOZDUH-ACTIVE-1B.
+- Atom interfaces — **Reason:** bit-guard existing Update().
+
+**Consequences:** Zero mask means no Wozduh work, not all. Next when asked: 1B.
+
+---
+
 ## WOZDUH-WIRE-1 — pack only subscribed Wozduh scalars (Aug 2026)
 
 **Context:** Paint already skipped hidden Wozduh series. Projector still packed every Wozduh scalar on history and live ticks.

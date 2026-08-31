@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 	"trading_bot/market"
@@ -165,7 +166,11 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	}
 
 	// Closed-only stream: one DAG walk for scalars + ZZ facts (never a second ZigZag/Jurik pass).
-	replay := market.ReplayClosedBars(klines, rsxSettings)
+	wozMask := nodes.WozduhMaskAll
+	if len(slotIDs) > 0 {
+		wozMask = nodes.WozduhMaskForPlots(slotIDs)
+	}
+	replay := market.ReplayClosedBarsMasked(klines, rsxSettings, wozMask)
 	hist := replay.Hist
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)

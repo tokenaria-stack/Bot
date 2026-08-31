@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"trading_bot/core"
+	"trading_bot/core/nodes"
 	"trading_bot/exchange"
 	"trading_bot/indicators"
 )
@@ -171,7 +172,7 @@ func TestZZDivFacts_OverCapParity(t *testing.T) {
 	klines := zzOscillatingKlines(n)
 	settings := RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"}
 	ref := ReplayClosedBars(klines, settings).ZZFacts
-	wrapped := replayClosedBarsCap(klines, settings, wrapCap).ZZFacts
+	wrapped := replayClosedBarsCap(klines, settings, wrapCap, nodes.WozduhMaskAll).ZZFacts
 	if len(ref) == 0 {
 		t.Fatal("reference walk produced no ZZ facts")
 	}

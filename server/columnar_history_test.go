@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +114,50 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	}
 	if _, ok := resp.Plots["woz_fast"]; !ok {
 		t.Fatal("expected woz_fast plot")
+	}
+}
+
+func TestBuildColumnarHistoryPayload_RSXOnlyNoWozduhColumns(t *testing.T) {
+	t.Parallel()
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := &DashboardServer{projector: wire.NewProjector(reg)}
+	klines := make([]exchange.Kline, market.IndicatorWarmupBars+40)
+	base := int64(1_700_000_000_000)
+	for i := range klines {
+		price := 50000.0 + float64(i)
+		ot := base + int64(i)*60_000
+		klines[i] = exchange.Kline{
+			OpenTime:  ot,
+			CloseTime: ot + 59_999,
+			Open:      price,
+			High:      price + 10,
+			Low:       price - 10,
+			Close:     price + 5,
+			Volume:    100,
+		}
+	}
+	resp, ok := d.buildColumnarHistoryPayload(
+		context.Background(),
+		klines,
+		40,
+		market.IndicatorWarmupBars,
+		market.GetRSXSettings(),
+		[]string{"line_rsx", "line_rsx_signal"},
+		false, false, "1m", "1m",
+	)
+	if !ok {
+		t.Fatal("expected payload ok")
+	}
+	if _, ok := resp.Plots["line_rsx"]; !ok {
+		t.Fatal("expected line_rsx")
+	}
+	for id := range resp.Plots {
+		if strings.HasPrefix(id, "woz_") {
+			t.Fatalf("unexpected wozduh plot %s in RSX-only history", id)
+		}
 	}
 }
 

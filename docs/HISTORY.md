@@ -8,12 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-ACTIVE-1A — masked stateless Wozduh history replay (Aug 2026)
+
+- `/api/history` derives a fixed Wozduh compute mask from requested plot IDs. Same klines/warmup; unused streams do not Update.
+- `ReplayClosedBars` remains compute-all. Live Frame untouched. Next when asked: **WOZDUH-ACTIVE-1B**.
+
 ## WOZDUH-WIRE-1 — subscribe only requested Wozduh plots (Aug 2026) ✅ frozen `0c2ecce`
 
 - Visibility checkboxes → subscribed scalar plot IDs (channels expand to up/mid/dn). No second Subscribe UI.
 - History `slots` + per-WS-client live tick filter. DAG still computes all atoms.
 - Enable: subscribe → fetch current window → `updatePlots` → one `setData` → reveal. `woz_slow` stays subscribed while hidden (WOZDUH-OWNER-1).
-- Next when asked: **WOZDUH-ACTIVE-1A** (masked history replay). Then 1B (live demand). Not ScoreNodes.
+- Next when asked: **WOZDUH-ACTIVE-1B** (live demand). Not ScoreNodes.
 
 ## RSX-VISIBILITY-1 — independent RSX fact visibility (Aug 2026) ✅ frozen `749912f`
 
