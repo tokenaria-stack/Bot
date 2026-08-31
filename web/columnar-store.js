@@ -417,6 +417,20 @@ class ColumnarStore {
     }
   }
 
+  /**
+   * Drop unsubscribed Wozduh columns. Non-woz_ plots (RSX) stay.
+   * Empty keep set is a no-op (do not wipe on empty boot).
+   */
+  dropPlotsNotIn(keepIds) {
+    if (!Array.isArray(keepIds) || keepIds.length === 0) return;
+    const keep = new Set(keepIds);
+    for (const id of Object.keys(this._plots)) {
+      if (keep.has(id)) continue;
+      if (!String(id).startsWith('woz_')) continue;
+      delete this._plots[id];
+    }
+  }
+
   mergeAnnotations(annotations) {
     if (!Array.isArray(annotations)) return;
     this._annotations = annotations.slice();

@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## WOZDUH-WIRE-1 — pack only subscribed Wozduh scalars (Aug 2026)
+
+**Context:** Paint already skipped hidden Wozduh series. Projector still packed every Wozduh scalar on history and live ticks.
+
+**Decision:** Derive subscription from existing visibility + mandatory `woz_slow`. Filter at the wire boundary per WS client `slots`. Enable hydrates the current store window before reveal. Do not change Wozduh math.
+
+**Rejected:**
+- Second Subscribe UI — **Reason:** visibility is the chart subscription.
+- Global Frame/DAG subscription — **Reason:** one client must not change another client's wire or numerical truth.
+- Compute sleeping in this chapter — **Reason:** WOZDUH-ACTIVE-1.
+- Filter `/api/state` Plots in the same cut — **Reason:** live path is WS `slots`; HTTP snapshot stays unfiltered (legacy).
+
+**Consequences:** VISIBLE → SUBSCRIBED → REQUIRED. REQUIRED still means all current Wozduh atoms.
+
+---
+
 ## RSX-VISIBILITY-1 — facts exist independently of paint (Aug 2026)
 
 **Context:** `div_method` (tv|fractal) and `show_pivots` encoded one-detector-at-a-time. TV fact production was gated on `div_method == tv`. Five factual families already existed.
@@ -18,7 +34,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 - Infer family from color/label/pattern — **Reason:** `source` is identity.
 - Compute sleeping / wire skip / ScoreNodes in this chapter — **Reason:** presentation only.
 
-**Consequences:** Frozen at `749912f`. TRUTH → FACTS → FE visibility filter → paint. Next when asked: WOZDUH-WIRE-1 (wire pack), then WOZDUH-ACTIVE-1 (compute). Do not reopen this chapter.
+**Consequences:** Frozen at `749912f`. TRUTH → FACTS → FE visibility filter → paint. Next when asked: WOZDUH-ACTIVE-1 (compute). Do not reopen this chapter.
 
 ---
 

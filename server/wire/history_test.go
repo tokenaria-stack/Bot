@@ -103,6 +103,31 @@ func TestBuildHistoryColumnsFiltered_OnlyRequestedSlots(t *testing.T) {
 	}
 }
 
+func TestBuildHistoryColumnsFiltered_WozduhSourcesNotCompose(t *testing.T) {
+	reg, err := ui_config.BuildUIRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewProjector(reg)
+	h := core.NewHistoryBus(4)
+	frame := &core.TickFrame{}
+	frame.Set(core.SlotWozduhVolChanUp, 80)
+	frame.Set(core.SlotWozduhVolChanMid, 50)
+	frame.Set(core.SlotWozduhVolChanDn, 20)
+	h.PushFrame(frame)
+	h.Advance()
+
+	plots, _ := p.BuildHistoryColumnsFiltered(h, []int64{100}, []string{
+		"woz_vol_chan_up", "woz_vol_chan_mid", "woz_vol_chan_dn",
+	})
+	if _, ok := plots["woz_vol_chan"]; ok {
+		t.Fatal("compose id must not be a history column")
+	}
+	if len(plots) != 3 {
+		t.Fatalf("plots=%d want 3", len(plots))
+	}
+}
+
 func TestBuildHistoryColumnsFiltered_EmptySlotIDsAllScalars(t *testing.T) {
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {

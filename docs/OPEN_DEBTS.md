@@ -26,8 +26,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
-4. FE indicator paint skip is **enough for now** (HIDDEN-RENDER-SKIP-1 `40dca59` + WOZDUH-OWNER-1 `3722baf`). User accepted live `updateTick` ~2× cheaper with most Wozduh lines unchecked; laptop load down. Do **not** start wire skip, lazy `removeSeries`, or LOD from this.  
-5. **Later (parked):** proper **backend** indicator optimisation — DAG/compute + pack/wire only for subscribed plots. Not a FE workaround. Not this freeze.  
+4. FE paint skip + wire pack: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1**. Next compute cut is **WOZDUH-ACTIVE-1** when asked. Do not start lazy `removeSeries` or LOD from this.  
+5. **Later (parked):** DAG/compute sleeping for unsubscribed Wozduh atoms. Not ScoreNodes from this freeze.  
 6. Then: ScoreNodes / clean strategy + indicator rebuild — **RSX-TRUTH-CLEAN-1 frozen** (`5f8a290`); do not reopen Go RSX color or old marker factory.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
@@ -50,7 +50,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of paint. Visibility not in RSX fingerprint. Do **not** reopen.
 
-**NEXT when asked:** **WOZDUH-WIRE-1** (pack/send only subscribed Wozduh columns; enable must hydrate history immediately). Then **WOZDUH-ACTIVE-1**. Not ScoreNodes / DAG-DEMAND from this freeze. Do not treat “always compute forever” as a permanent rule.
+**WOZDUH-WIRE-1 ✅** — pack/send only subscribed Wozduh scalar plot IDs. Enable hydrates current window before reveal. Then **WOZDUH-ACTIVE-1**. Not ScoreNodes / DAG-DEMAND from this freeze.
 
 S6 / Working Set lifetime remains a later debt — **not** reopened by this freeze.
 

@@ -47,8 +47,9 @@ var errWarmingUp = errors.New("warming_up")
 // WSClient wraps a WebSocket connection with a per-connection write mutex.
 // gorilla/websocket permits only one concurrent writer per connection.
 type WSClient struct {
-	Conn *websocket.Conn
-	mu   sync.Mutex
+	Conn    *websocket.Conn
+	mu      sync.Mutex
+	plotIDs []string // nil = unfiltered live plots; snapshot under clientsMu
 }
 
 func (c *WSClient) WriteMessage(messageType int, data []byte) error {
@@ -570,19 +571,65 @@ func (d *DashboardServer) BroadcastTimelinePublishable() {
 // routeTick delivers a chart tick only to clients whose subscribed TF matches (Transport purity).
 // Case-sensitive: Binance "1m" (minute) ≠ "1M" (month) — never fold case.
 func (d *DashboardServer) routeTick(timeframe string, msg wsEnvelope) {
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		log.Printf("[Dashboard] routeTick marshal: %v", err)
-		return
-	}
 	want := strings.TrimSpace(timeframe)
 	if want == "" {
 		return
 	}
-	d.writeToClients(payload, func(client *WSClient) bool {
+	tick, isTick := msg.Data.(tickPayload)
+	if !isTick {
+		payload, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("[Dashboard] routeTick marshal: %v", err)
+			return
+		}
+		d.writeToClients(payload, func(client *WSClient) bool {
+			tf := strings.TrimSpace(d.clientTF[client])
+			return tf == want
+		})
+		return
+	}
+	fullPlots := tick.Plots
+	d.clientsMu.Lock()
+	type dest struct {
+		client  *WSClient
+		plotIDs []string
+	}
+	snapshot := make([]dest, 0, len(d.clients))
+	for client := range d.clients {
 		tf := strings.TrimSpace(d.clientTF[client])
-		return tf == want
-	})
+		if tf != want {
+			continue
+		}
+		snapshot = append(snapshot, dest{
+			client:  client,
+			plotIDs: append([]string(nil), client.plotIDs...),
+		})
+	}
+	d.clientsMu.Unlock()
+
+	var dead []*WSClient
+	for _, item := range snapshot {
+		tick.Plots = wire.FilterPlotMap(fullPlots, item.plotIDs)
+		payload, err := json.Marshal(wsEnvelope{Type: msg.Type, Data: tick})
+		if err != nil {
+			log.Printf("[Dashboard] routeTick marshal: %v", err)
+			continue
+		}
+		if err := item.client.WriteMessage(websocket.TextMessage, payload); err != nil {
+			_ = item.client.Close()
+			dead = append(dead, item.client)
+		}
+	}
+	tick.Plots = fullPlots
+	if len(dead) == 0 {
+		return
+	}
+	d.clientsMu.Lock()
+	for _, client := range dead {
+		delete(d.clients, client)
+		delete(d.clientTF, client)
+	}
+	d.clientsMu.Unlock()
 }
 
 // writeToClients sends raw WS payload to all clients, or only those matching accept (when non-nil).
@@ -1986,12 +2033,19 @@ func (d *DashboardServer) ramKlines(tfID string, maxBars int) []exchange.Kline {
 
 // setClientTimeframe records the resolved timeframe a WS client is subscribed to.
 func (d *DashboardServer) setClientTimeframe(client *WSClient, tf string) {
+	d.setClientSubscribe(client, tf, nil)
+}
+
+func (d *DashboardServer) setClientSubscribe(client *WSClient, tf string, plotIDs []string) {
 	spec, err := ResolveTimeframe(tf)
 	if err != nil {
 		return
 	}
 	d.clientsMu.Lock()
 	d.clientTF[client] = spec.ID
+	if plotIDs != nil {
+		client.plotIDs = append([]string(nil), plotIDs...)
+	}
 	d.clientsMu.Unlock()
 }
 
@@ -2249,14 +2303,15 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		var msg struct {
-			Type string `json:"type"`
-			TF   string `json:"tf"`
+			Type  string   `json:"type"`
+			TF    string   `json:"tf"`
+			Slots []string `json:"slots"`
 		}
 		if err := json.Unmarshal(message, &msg); err != nil {
 			continue
 		}
 		if msg.Type == "subscribe" && msg.TF != "" {
-			d.setClientTimeframe(client, msg.TF)
+			d.setClientSubscribe(client, msg.TF, msg.Slots)
 		}
 	}
 }

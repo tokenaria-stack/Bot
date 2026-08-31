@@ -6,6 +6,7 @@ const WS = {
   _callbacks: null,
   _reconnectTimer: null,
   _subscribedTf: null,
+  _slots: null,
 
   isOpen() {
     return WS._socket?.readyState === WebSocket.OPEN;
@@ -33,18 +34,23 @@ const WS = {
     }
   },
 
-  subscribe(tf, resolvedTf) {
+  subscribe(tf, resolvedTf, slots) {
     // Case-sensitive: "1m" (minute) ≠ "1M" (month).
     const subTf = String(resolvedTf ?? tf ?? '');
     if (!subTf) return;
     WS._subscribedTf = subTf;
+    if (Array.isArray(slots)) WS._slots = slots.slice();
     WS._sendSubscribe(subTf);
   },
 
   _sendSubscribe(tf) {
     const send = () => {
       if (WS._socket && WS._socket.readyState === WebSocket.OPEN) {
-        WS._socket.send(JSON.stringify({ type: 'subscribe', tf }));
+        WS._socket.send(JSON.stringify({
+          type: 'subscribe',
+          tf,
+          ...(Array.isArray(WS._slots) ? { slots: WS._slots } : {}),
+        }));
       }
     };
     send();

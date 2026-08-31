@@ -42,6 +42,16 @@ class DDRFactory {
     this.getColumnarSnapshot = typeof options.getColumnarSnapshot === 'function'
       ? options.getColumnarSnapshot
       : DDRFactory.defaultColumnarSnapshot;
+    this._enableGen = new Map();
+    this.fetchPlotColumns = typeof options.fetchPlotColumns === 'function'
+      ? options.fetchPlotColumns
+      : null;
+    this.onSubscriptionChange = typeof options.onSubscriptionChange === 'function'
+      ? options.onSubscriptionChange
+      : null;
+    this.onMergePlots = typeof options.onMergePlots === 'function'
+      ? options.onMergePlots
+      : null;
   }
 
   static defaultNormalizeTime(raw) {
@@ -250,23 +260,25 @@ class DDRFactory {
 
   /** Plot column ids to request from /api/history (channel sources, not render ids). */
   requestedPlotIds() {
-    const ids = [];
-    const seen = new Set();
-    const push = (id) => {
-      if (!id || seen.has(id)) return;
-      seen.add(id);
-      ids.push(id);
-    };
-    for (const [id, entry] of this.seriesMap) {
-      if (entry?.kind === 'channel' && entry.plots) {
-        push(entry.plots.upper);
-        push(entry.plots.mid);
-        push(entry.plots.lower);
-        continue;
-      }
-      push(id);
+    return [...this._neededPlotIds()];
+  }
+
+  _scalarIdsForRender(id) {
+    const entry = this.seriesMap.get(id);
+    if (!entry) return [];
+    if (entry.kind === 'channel' && entry.plots) {
+      return [entry.plots.upper, entry.plots.mid, entry.plots.lower].filter(Boolean);
     }
-    return ids;
+    return id ? [id] : [];
+  }
+
+  _notifySubscription() {
+    if (typeof this.onSubscriptionChange !== 'function') return;
+    try {
+      this.onSubscriptionChange(this.requestedPlotIds());
+    } catch {
+      /* boot/tests */
+    }
   }
 
   /**
@@ -357,14 +369,47 @@ class DDRFactory {
     const want = visible !== false;
     this._feedVisible.set(id, want);
     if (want) {
+      const gen = (this._enableGen.get(id) || 0) + 1;
+      this._enableGen.set(id, gen);
+      this._notifySubscription();
       if (!DDRFactory._CROSSHAIR_ANCHORS.has(id)) {
+        series.applyOptions({ visible: false });
+        return this._enableRenderComponent(id, gen);
+      } else {
         this._hydrateRenderComponent(id);
+        series.applyOptions({ visible: true });
       }
-      series.applyOptions({ visible: true });
     } else {
       series.applyOptions({ visible: false });
+      this._notifySubscription();
     }
     return true;
+  }
+
+  async _enableRenderComponent(id, gen) {
+    const ids = this._scalarIdsForRender(id);
+    if (typeof this.fetchPlotColumns === 'function') {
+      try {
+        const fetched = await this.fetchPlotColumns(ids);
+        if (gen !== this._enableGen.get(id) || this._feedVisible.get(id) === false) return;
+        if (!fetched?.plots) return;
+        if (typeof this.onMergePlots === 'function') {
+          this.onMergePlots(fetched.plots);
+        }
+      } catch {
+        return;
+      }
+    }
+    if (gen !== this._enableGen.get(id) || this._feedVisible.get(id) === false) return;
+    this._hydrateRenderComponent(id);
+    const series = DDRFactory._seriesFromEntry(this.seriesMap.get(id));
+    if (series) {
+      try {
+        series.applyOptions({ visible: true });
+      } catch {
+        /* detached */
+      }
+    }
   }
 
   _neededPlotIds() {

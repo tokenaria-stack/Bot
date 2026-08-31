@@ -791,7 +791,9 @@
   }
 
   function wsSubscribeTf(tf) {
-    if (typeof WS !== 'undefined') WS.subscribe(tf, tf);
+    if (typeof WS === 'undefined') return;
+    const slots = resolveLiveSlotIds();
+    WS.subscribe(tf, tf, slots);
   }
 
   function clearChartData(options = {}) {
@@ -851,8 +853,6 @@
       const fromFactory = window.DDRFactory.requestedPlotIds();
       if (fromFactory.length) return fromFactory;
     }
-    const fromMap = window.DDRFactory ? [...window.DDRFactory.seriesMap.keys()] : [];
-    if (fromMap.length) return fromMap;
     return collectManifestScalarSlotIds(window.DDRFactory?.manifest);
   }
 
@@ -860,9 +860,41 @@
     if (typeof DDRFactory === 'undefined') return;
     window.DDRFactory = new DDRFactory({
       normalizeTime: (raw) => (typeof chartTime === 'function' ? chartTime(raw) : DDRFactory.defaultNormalizeTime(raw)),
+      fetchPlotColumns: fetchSubscribedPlotColumns,
+      onMergePlots: (plots) => {
+        if (liveColumnarStore && typeof liveColumnarStore.updatePlots === 'function') {
+          liveColumnarStore.updatePlots(plots);
+        }
+      },
+      onSubscriptionChange: (ids) => {
+        if (liveColumnarStore && typeof liveColumnarStore.dropPlotsNotIn === 'function') {
+          liveColumnarStore.dropPlotsNotIn(ids);
+        }
+        wsSubscribeTf(window.currentTf);
+      },
     });
     window.DDRFactory.fetchManifest().catch((err) => {
       console.warn('[Renaissance] manifest fetch failed:', err);
+    });
+  }
+
+  async function fetchSubscribedPlotColumns(ids) {
+    if (!Array.isArray(ids) || !ids.length || typeof API === 'undefined') return null;
+    const store = liveColumnarStore;
+    const endTimeSec = store?.lastTimeSec?.() ?? Math.floor(Date.now() / 1000);
+    const limit = Math.max(store?.barCount?.() || 0, 1);
+    const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
+    const historyIsland = liveColumnarStore?.windowMode === 'history';
+    return API.fetchColumnarHistory({
+      tf: window.currentTf,
+      endTimeSec,
+      limit,
+      slots: ids,
+      rsxSettings: resolveLiveRsxSettings(),
+      symbol,
+      ...(typeof isSparseSecondChart === 'function' && isSparseSecondChart(window.currentTf)
+        ? { includeForming: !historyIsland }
+        : { includeForming: true }),
     });
   }
 

@@ -20,15 +20,18 @@ func NewProjector(r *core.UIRegistry) *Projector {
 // BuildTickJSON projects scalar slot values into a map keyed by component ID.
 // Non-finite values (NaN, ±Inf) are omitted so encoding/json never panics on plots.
 func (p *Projector) BuildTickJSON(frame *core.TickFrame) map[string]float64 {
+	return p.BuildTickJSONFiltered(frame, nil)
+}
+
+// BuildTickJSONFiltered projects only the requested component IDs.
+// When slotIDs is empty, all scalar manifest components are serialized (legacy / tests).
+func (p *Projector) BuildTickJSONFiltered(frame *core.TickFrame, slotIDs []string) map[string]float64 {
 	if p == nil || p.registry == nil || frame == nil {
 		return nil
 	}
-	components := p.registry.Components()
+	components := p.filterScalarComponents(slotIDs)
 	out := make(map[string]float64, len(components))
 	for _, c := range components {
-		if c.DataMode != "scalar" {
-			continue
-		}
 		val := frame.Get(c.Slot)
 		if !jsonSafeFloat(val) {
 			continue
@@ -37,6 +40,20 @@ func (p *Projector) BuildTickJSON(frame *core.TickFrame) map[string]float64 {
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+// FilterPlotMap keeps only requested plot IDs. Empty slotIDs leaves plots unchanged.
+func FilterPlotMap(plots map[string]float64, slotIDs []string) map[string]float64 {
+	if plots == nil || len(slotIDs) == 0 {
+		return plots
+	}
+	out := make(map[string]float64, len(slotIDs))
+	for _, id := range slotIDs {
+		if v, ok := plots[id]; ok {
+			out[id] = v
+		}
 	}
 	return out
 }
