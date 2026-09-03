@@ -394,6 +394,99 @@ Future strategies live under `decision/`. They consume market state without impo
 
 ---
 
+## Forecast Engine (FORECAST-SPEC-1 — contracts only, frozen)
+
+**Package:** `forecast/`. **Status:** contracts/identity/laws only. No FeatureTape, no model, no runtime evaluation, no wiring into `market`/`decision` yet. Imports nothing from `exchange`/`market`/`decision`/`execution`.
+
+Not a scoring engine. Evidence → probability engine:
+
+```text
+MARKET TRUTH → ANALYTICAL TRUTH + FACTS → FeaturePlan → feature vector
+    → EvidenceModel (later) → calibrated probability + RankPercentile
+    → ForecastFrame → Decision (later)
+```
+
+**Governing law:** maximum capability in identities/contracts, minimum machinery until a real consumer exists. `minimal implementation != limited architecture`.
+
+### Object ownership
+
+| Object | Owns | Does NOT own |
+|---|---|---|
+| `MarketKey` | venue + instrument + contract + timeframe | — |
+| `AnalysisRecipe` | indicator periods/sources/lookbacks, init/warmup law (via `LogicVersion`) | paint, weights, feature selection, TargetSpec, Decision thresholds |
+| `FeatureRecipe` | which deterministic measurements are extracted (reusable across `AnalysisRecipe`s) | weights, arbitrary scoring |
+| `FeaturePlan` | compiled bind of one `AnalysisRecipe` + one `FeatureRecipe` + logic versions | node graph / registry / plugin traversal |
+| `TargetSpec` | frozen first-passage event (UP_FIRST/DOWN_FIRST/TIMEOUT), dual-hit policy | trade exits (`ExecutionSpec`, later) |
+| `ForecastArtifactPinned` | which Market/Analysis/Features/Plan/Target identities a future artifact must pin | weights/scaler/calibration (added in FORECAST-RUNTIME-1) |
+| `ForecastFrame` | minimal output shape + fail-closed validators | model arithmetic |
+| `PaintPreset` | presentation only (concept, not yet a type) | anything numerical |
+
+### MarketFrame vs AnalysisRuntime (capability law, not yet implemented)
+
+```text
+MarketFrame     = one market/bar truth
+AnalysisRuntime = one AnalysisRecipe identity's analytical truth
+```
+
+Same `AnalysisRecipe` identity → same numerical process, should share one `AnalysisRuntime`. Different `AnalysisRecipe` identities (e.g. RSX14 vs RSX21) may run simultaneously over the same `MarketFrame` — that is deliberate isolation, **not** forbidden dual truth. Forbidden dual truth is two calculators claiming the **same** `AnalysisRecipe` identity while producing different numbers. `AnalysisRuntimeKey{Market, Analysis}` is defined as an identity type only — **no runtime map/registry/refcounting exists**; today's one-DAG-per-Frame implementation remains the v1 adapter, and "one `AnalysisRecipe` per `MarketFrame`" is **not** a permanent contract.
+
+### Identity
+
+Every published identity has: `HumanKey` (readable, never identity) + full SHA-256 `Digest` (compared in full; `Short()` is 16-hex display-only) + explicit `LogicVersion`(s). Digest hashes the **resolved** (post-default) config payload, never a friendly `Name`, never raw source. A correctness-changing implementation fix requires an explicit `LogicVersion` bump — hashing config alone cannot detect that.
+
+### Ready vs absent
+
+`NotReady` (insufficient warmup, incomplete ingress reconcile, bind failure, invalid state) → no `ForecastFrame`, no model evaluation, `dst` undefined. This is distinct from a feature being legitimately **absent** while the system **is** Ready (e.g. no TV divergence right now: `present=0`, age ignored, never a magic `-1`).
+
+### Nonfinite numeric law
+
+Existing NaN-as-"output unavailable" sentinels (sleeping RSX/Wozduh slots) remain valid and are **not** reopened here. NaN/±Inf must never enter persistent analytical state, a `FeaturePlan` feature vector, scaler/model input, or `ForecastFrame` probability/rank fields — see `ValidateFeatureVector` / `ValidateForecastFrame`.
+
+### Candidate / TargetSpec / dual-hit
+
+v1 candidate universe: every eligible closed bar (no strategy pre-filter). One `TargetFamilyATRFirstPassage` in v1: barriers frozen at candidate close `t` from information known at `t`. Dual-hit (`DualHitPolicy`): resolve only with strictly finer history from the **same** `MarketKey` family (`SameFamily` — never spot resolving futures or vice versa), otherwise `TARGET_AMBIGUOUS` and **exclude from fitting** — never guessed, never a fourth model class.
+
+### HTF closed availability / At vs actionable
+
+An HTF value may be consumed only if that HTF bar was closed and authoritative by the candidate's close seam (never `HTF.OpenTime <= candidate.OpenTime`). `ForecastFrame.At` is closed-bar identity (Unix ms, UTC) — it does **not** mean the forecast was actionable at that bar's open; fill timing is a later Decision/Execution law.
+
+### RequiredHistory
+
+`FeatureRecipe.RequiredHistory()` bounds age-bearing features (`age = min(actualAge, MaxAgeBars)`, default 256). A `FeaturePlan` must not remember more history than live can reconstruct while claiming the same identity; mismatch → refuse/NotReady.
+
+### Fail closed
+
+`PublishForecastFrame` is the single gate: `NotReady` or an invalid/nonfinite probability set (`ValidateForecastFrame`: finite, in `[0,1]`, sums to ~1) → **no** `ForecastFrame`. Never zero-fill, never reuse a stale vector/frame, never fall back to a default recipe. Same law applies to `MarketKey` mismatch, schema/logic mismatch, and artifact digest failure once those paths exist.
+
+### OOF vs final refit (research law, not yet implemented)
+
+Walk-forward fold models exist only to produce honest out-of-fold predictions for calibration/RankPercentile. Production weights come from one **final** development-window refit; calibration/rank tables stay OOF-derived. Never deploy "the best-looking fold model."
+
+### Configuration lifecycle (vocabulary only)
+
+`Draft → Save As → Publish → Activate → Promote`. No global "current settings"; no `LiveSettings`/`BacktestSettings` copies. Long-running surfaces use bindings; finite jobs pin an immutable `RunManifest`. No UI/config DB/persistence in this chapter.
+
+### Invalidation table
+
+| Changed | FeatureTape | Labels | Model | Calibration/Rank | DecisionRun |
+|---|---|---|---|---|---|
+| PaintPreset | NO | NO | NO | NO | NO |
+| AnalysisRecipe | YES | YES | YES | YES | YES |
+| FeatureRecipe | YES | YES | YES | YES | YES |
+| TargetSpec | NO | YES | YES | YES | YES |
+| ValidationPlan | NO | NO | YES | YES | YES |
+| ModelSpec | NO | NO | YES | YES | YES |
+| DecisionSpec | NO | NO | NO | NO | YES |
+| ExecutionSpec | NO | NO | NO | NO | YES |
+
+### v1 scope / deferred machinery
+
+v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built in this chapter: FeatureTape, LabelSet, Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability. REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
+
+**Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, Falcon, old scores, strategies, execution, backtest, Decision.
+
+---
+
 ## MTF (two modes — do not mix)
 
 **Scoring MTF** (when strategies return): walk-forward boundary tracker, zero look-ahead (`GetCandlesStrictlyBefore`), updates only on HTF close boundaries.

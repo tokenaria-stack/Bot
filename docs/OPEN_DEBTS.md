@@ -53,6 +53,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
+**FORECAST-SPEC-1 ✅ frozen.** `forecast/` package: contracts/identity/laws only for the evidence→probability engine (not a scoring engine). `MarketKey`, `Identity`/`Digest`/`LogicVersion`, `AnalysisRecipe`, `FeatureRecipe`, `FeaturePlan` (bind fails closed on missing capability), `TargetSpec` (ATR first-passage, dual-hit exclude-by-default), `ForecastFrame` + `PublishForecastFrame`/`ValidateForecastFrame`/`ValidateFeatureVector` fail-closed gates, `ForecastArtifactPinned`. No FeatureTape/model/runtime wiring; imports nothing from `exchange`/`market`/`decision`. See `docs/ARCHITECTURE.md` "Forecast Engine (FORECAST-SPEC-1)". Do **not** reopen; do **not** start FEATURE-TAPE-1 until asked.
+
 **MICRO-IDLE-1 ✅ closed (not worth implementing).** Idle ChartOnly, no micro charts: five child reducers + unused Frame ticks ≈ **6µs per 1s parent** (~6µs CPU per wall-clock second). Forming ticks dominate count (6000 forming / 505 closed per 1200 parents); that is OHLCV + empty DAG skip, not Jurik. Sleeping that path is not worth a second lifecycle. Reducers and sparse tip stay frozen.
 
 **Parked (keep intentionally — not DAG-DEMAND):** Wozduh SaveState while asleep; wake under Frame lock; 1024 IIR epsilon; legacy `finiteOrZero`; unfiltered WS = Wozduh all.
@@ -71,7 +73,7 @@ S6 / Working Set lifetime remains a later debt — **not** reopened by this free
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes** — greenfield decision graph from truth + facts | 🔜 **NEXT** | Do **not** salvage old Falcon/MicroPattern scores. Do **not** delete `market/falcon.go` until then |
+| **76** | **ScoreNodes → Forecast engine** — evidence→probability, not a scoring graph | 🟡 **SPEC ✅** | Do **not** salvage old Falcon/MicroPattern scores. Do **not** delete `market/falcon.go` until then. **FORECAST-SPEC-1 ✅ frozen** (contracts in `forecast/`). Roadmap: FORECAST-SPEC-1 ✅ → FEATURE-TAPE-1 → LABEL-SET-1 → FORECAST-MODEL-1 → FORECAST-CONFIDENCE-1 → FORECAST-RUNTIME-1 → DECISION-RESEARCH-1 → FINAL-VALIDATION-1 → (challenger / Reliability / Qdrant / automation later). **NEXT: FEATURE-TAPE-1**, only when asked. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
