@@ -137,8 +137,8 @@ func TestBindFeaturePlan_CompatibleSucceeds(t *testing.T) {
 	if plan.VectorLen() != 4 {
 		t.Fatalf("expected VectorLen 4, got %d", plan.VectorLen())
 	}
-	if plan.RequiredHistory != defaultMaxAgeBars {
-		t.Fatalf("expected RequiredHistory %d, got %d", defaultMaxAgeBars, plan.RequiredHistory)
+	if plan.FeatureHistoryBars != defaultMaxAgeBars {
+		t.Fatalf("expected FeatureHistoryBars %d, got %d", defaultMaxAgeBars, plan.FeatureHistoryBars)
 	}
 }
 

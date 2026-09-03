@@ -35,7 +35,7 @@ type ForecastFrame struct {
 }
 
 // ValidateFeatureVector rejects any nonfinite value in a filled feature
-// vector. A future FeaturePlanFiller implementation MUST call this (or an
+// vector. A future FeaturePlan.Fill implementation MUST call this (or an
 // equivalent check) before the vector is considered usable — NaN/±Inf must
 // never reach a scaler/model (FORECAST-SPEC-1 §9).
 func ValidateFeatureVector(v []float64) error {

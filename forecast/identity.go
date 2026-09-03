@@ -28,9 +28,6 @@ func (d Digest) String() string { return hex.EncodeToString(d[:]) }
 // only — never compare identities with Short().
 func (d Digest) Short() string { return hex.EncodeToString(d[:8]) }
 
-// IsZero reports whether this is the unset digest.
-func (d Digest) IsZero() bool { return d == Digest{} }
-
 // Identity is a published object's machine identity: a human-readable key
 // (for logs/filenames only), the full digest of its resolved payload, and
 // the explicit logic version(s) it was resolved under. A friendly Name is

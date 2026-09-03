@@ -12,33 +12,32 @@ const (
 	IsReady  Ready = true
 )
 
-// FillSource is the trusted analytical truth a FeaturePlan projects from.
-// FORECAST-SPEC-1 defines this as an opaque contract; a real AnalysisRuntime
-// source is wired in FEATURE-TAPE-1. No market/exchange import happens here.
-type FillSource interface{}
-
-// FeaturePlanFiller is the future hot-path contract: FEATURE-TAPE-1 will
-// implement it on a compiled *FeaturePlan bound to a live AnalysisRuntime.
-// Documented here so the shape cannot drift once real data exists.
+// FeaturePlan is a compiled, flat binding of one AnalysisRecipe and one
+// FeatureRecipe — not a node graph, registry, plugin system, or event bus
+// (FORECAST-SPEC-1 §6).
+//
+// FEATURE-TAPE-1 will add the real hot-path method directly on this type
+// once a live AnalysisRuntime source exists:
+//
+//	func (p *FeaturePlan) Fill(src <AnalysisRuntime>, dst []float64) (Ready, error)
 //
 // Fill MUST NOT allocate, MUST write exactly VectorLen() values into a
 // caller-owned dst reused across bars, and MUST leave dst undefined (never
 // silently reused as the current bar's vector — Stale Buffer Law,
-// FORECAST-SPEC-1 §8) whenever it returns NotReady.
-type FeaturePlanFiller interface {
-	VectorLen() int
-	Fill(src FillSource, dst []float64) (Ready, error)
-}
-
-// FeaturePlan is a compiled, flat binding of one AnalysisRecipe and one
-// FeatureRecipe — not a node graph, registry, plugin system, or event bus
-// (FORECAST-SPEC-1 §6).
+// FORECAST-SPEC-1 §8) whenever it returns NotReady. No separate filler
+// interface/abstraction is introduced ahead of that real consumer.
 type FeaturePlan struct {
-	Analysis        Identity
-	Features        Identity
-	Logic           LogicVersion // versions the AnalysisRecipe+FeatureRecipe combination law itself
-	Schema          []FeatureID  // fixed vector layout, in FeatureRecipe order
-	RequiredHistory int          // bars of lookback this plan needs to be reconstructable live
+	Analysis Identity
+	Features Identity
+	Logic    LogicVersion // versions the AnalysisRecipe+FeatureRecipe combination law itself
+	Schema   []FeatureID  // fixed vector layout, in FeatureRecipe order
+
+	// FeatureHistoryBars is the FEATURE-SIDE history contribution only (see
+	// FeatureRecipe.FeatureHistoryBars). It is NOT the complete "reconstructable
+	// live" requirement — AnalysisRecipe/Jurik/detector reconstruction is not
+	// folded in here yet. The complete closure is reserved under the name
+	// RequiredHistoryBars, implemented in FEATURE-TAPE-1.
+	FeatureHistoryBars int
 }
 
 // VectorLen is the fixed feature-vector length this plan projects into. It
@@ -90,10 +89,10 @@ func BindFeaturePlan(analysis AnalysisRecipe, features FeatureRecipe, planLogic 
 		return FeaturePlan{}, err
 	}
 	return FeaturePlan{
-		Analysis:        aID,
-		Features:        fID,
-		Logic:           planLogic,
-		Schema:          append([]FeatureID(nil), features.Features...),
-		RequiredHistory: features.RequiredHistory(),
+		Analysis:           aID,
+		Features:           fID,
+		Logic:              planLogic,
+		Schema:             append([]FeatureID(nil), features.Features...),
+		FeatureHistoryBars: features.FeatureHistoryBars(),
 	}, nil
 }

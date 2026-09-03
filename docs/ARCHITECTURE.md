@@ -450,9 +450,9 @@ v1 candidate universe: every eligible closed bar (no strategy pre-filter). One `
 
 An HTF value may be consumed only if that HTF bar was closed and authoritative by the candidate's close seam (never `HTF.OpenTime <= candidate.OpenTime`). `ForecastFrame.At` is closed-bar identity (Unix ms, UTC) — it does **not** mean the forecast was actionable at that bar's open; fill timing is a later Decision/Execution law.
 
-### RequiredHistory
+### FeatureHistoryBars (feature-side only, not the complete closure)
 
-`FeatureRecipe.RequiredHistory()` bounds age-bearing features (`age = min(actualAge, MaxAgeBars)`, default 256). A `FeaturePlan` must not remember more history than live can reconstruct while claiming the same identity; mismatch → refuse/NotReady.
+`FeatureRecipe.FeatureHistoryBars()` bounds age-bearing features (`age = min(actualAge, MaxAgeBars)`, default 256) and is carried onto `FeaturePlan.FeatureHistoryBars`. This is the **feature-side history contribution only** — it does not yet fold in `AnalysisRecipe`/Jurik/detector reconstruction requirements (no such field exists on `AnalysisRecipe` in this chapter). The complete closure is reserved under the name `RequiredHistoryBars` (`= max(AnalysisRuntime reconstruction requirement, FeatureHistoryBars, ...)`), implemented in FEATURE-TAPE-1 once a real AnalysisRuntime binding exists. A `FeaturePlan` must not remember more history than live can reconstruct while claiming the same identity; mismatch → refuse/NotReady.
 
 ### Fail closed
 

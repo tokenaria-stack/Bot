@@ -28,7 +28,7 @@ var featureCapability = map[FeatureID]AnalysisCapability{
 }
 
 // ageFeatures lists features whose temporal meaning is "bars since a fact
-// was confirmed" and therefore need a bounded RequiredHistory contract
+// was confirmed" and therefore need a bounded FeatureHistoryBars contract
 // (FORECAST-SPEC-1 §10/§11): age = min(actualAge, MaxAgeBars[feature]).
 var ageFeatures = map[FeatureID]bool{
 	FeatureTVBullAge: true,
@@ -109,11 +109,18 @@ func (r FeatureRecipe) Identity() (Identity, error) {
 	return NewIdentity(r.HumanKey(), featureIdentityPayload{Features: r.Features, MaxAgeBars: r.MaxAgeBars, Logic: r.Logic}, r.Logic)
 }
 
-// RequiredHistory is the maximum bounded age across this recipe's age
-// features. A FeaturePlan built from this recipe must not remember more
-// history than live can reconstruct while claiming the same identity
+// FeatureHistoryBars is the maximum bounded age across this recipe's age
+// features — the FEATURE-SIDE history contribution only. It does NOT
+// include AnalysisRecipe/Jurik/detector reconstruction requirements (that
+// contribution does not exist as a type in this chapter). The later
+// complete closure is reserved under the name RequiredHistoryBars:
+//
+//	RequiredHistoryBars = max(AnalysisRuntime reconstruction requirement,
+//	                          FeatureHistoryBars, ...)
+//
+// implemented in FEATURE-TAPE-1 once a real AnalysisRuntime binding exists
 // (FORECAST-SPEC-1 §11).
-func (r FeatureRecipe) RequiredHistory() int {
+func (r FeatureRecipe) FeatureHistoryBars() int {
 	max := 0
 	for _, n := range r.MaxAgeBars {
 		if n > max {
