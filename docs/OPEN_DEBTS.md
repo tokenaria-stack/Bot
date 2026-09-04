@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **Do not reopen.** **MICRO-IDLE-1 ✅ closed**. **FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). Next when asked: **FEATURE-TAPE-1**.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅**. Next when asked: **FEATURE-TAPE-1B**.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -53,7 +53,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
-**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). `forecast/` package: contracts/identity/laws only. Kill-check follow-up renamed `FeatureHistoryBars` (feature-side only; `RequiredHistoryBars` reserved for FEATURE-TAPE-1), deleted unused `Digest.IsZero` / `FeaturePlanFiller` / `FillSource`. Do **not** reopen. Do **not** start FEATURE-TAPE-1 until asked.
+**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅** — `market.FeatureEvaluator` + persistent `rsxForecastDemand`. No files. Do **not** start FEATURE-TAPE-1B until asked.
 
 **MICRO-IDLE-1 ✅ closed (not worth implementing).** Idle ChartOnly, no micro charts: five child reducers + unused Frame ticks ≈ **6µs per 1s parent** (~6µs CPU per wall-clock second). Forming ticks dominate count (6000 forming / 505 closed per 1200 parents); that is OHLCV + empty DAG skip, not Jurik. Sleeping that path is not worth a second lifecycle. Reducers and sparse tip stay frozen.
 
@@ -73,7 +73,7 @@ S6 / Working Set lifetime remains a later debt — **not** reopened by this free
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** — evidence→probability, not a scoring graph | ✅ **SPEC frozen** `5afabfc`+`0ed000d` | Do **not** salvage old Falcon/MicroPattern scores. Do **not** delete `market/falcon.go` until then. Roadmap: FORECAST-SPEC-1 ✅ → **FEATURE-TAPE-1** (when asked) → LABEL-SET-1 → FORECAST-MODEL-1 → FORECAST-CONFIDENCE-1 → FORECAST-RUNTIME-1 → DECISION-RESEARCH-1 → FINAL-VALIDATION-1 → (challenger / Reliability / Qdrant / automation later). |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **1A done** | SPEC `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅** (Fill + demand OR + parity). Next: **FEATURE-TAPE-1B** when asked. Then LABEL-SET-1 → MODEL → CONFIDENCE → RUNTIME → DECISION-RESEARCH → FINAL-VALIDATION. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

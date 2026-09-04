@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+---
+
+## FEATURE-TAPE-1A Fill host (Sep 2026)
+
+**Context:** Forecast must not import market; Frame must not learn FeatureIDs; demand must not be a one-shot SetRSXDemand.
+
+**Decision:** Evaluator lives in `market` (lowest closed-bar owner). `applied = client | internal | forecast`. AnalysisRecipe gains `DivLookback` so bind uses actual `EffectiveRSXSettings`.
+
+**Rejected:**
+- `featurebridge` package — **Reason:** no consumer, extra layer.
+- Frame.TVBullAgeFeature() — **Reason:** leaks ML vocabulary into Frame.
+- Epsilon float compare — **Reason:** hides dual-path truth.
+
+**Consequences:** 1B may only serialize vectors. No RequiredHistoryBars yet.
+
 ## FORECAST-SPEC-1 freeze (Sep 2026)
 
 **Context:** Kill-check found `FeaturePlan.RequiredHistory` overclaimed completeness; unused `Digest.IsZero` / filler interfaces had no consumer.

@@ -83,6 +83,16 @@ func TestAnalysisRecipe_RealChangeProducesDifferentDigest(t *testing.T) {
 	}
 }
 
+func TestAnalysisRecipe_DivLookbackChangesIdentity(t *testing.T) {
+	a, _ := ResolveAnalysisRecipe("a", AnalysisRecipeDraft{RSXLength: 14, DivLookback: 30, EnableTV: true}, analysisV1)
+	b, _ := ResolveAnalysisRecipe("a", AnalysisRecipeDraft{RSXLength: 14, DivLookback: 90, EnableTV: true}, analysisV1)
+	ida, _ := a.Identity()
+	idb, _ := b.Identity()
+	if ida.Digest == idb.Digest {
+		t.Fatal("DivLookback must change identity")
+	}
+}
+
 // E. A logic-version bump must change identity even with identical
 // resolved parameters (stale-cache-after-correctness-fix law).
 func TestAnalysisRecipe_LogicVersionBumpChangesIdentity(t *testing.T) {

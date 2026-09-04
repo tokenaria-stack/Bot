@@ -85,7 +85,7 @@ func ReplayDAGKlines(klines []exchange.Kline, rsx RSXSettings) *core.HistoryBus 
 func (a *Frame) initDAGShadowLocked() {
 	wozBirth := a.wozduhDemand | wozduhInternalMask()
 	a.dag = newDAGRunnerMasked(dagHistoryCap, a.effectiveRSXSettings(), wozBirth)
-	rsxBirth := a.rsxDemand | rsxInternalMask()
+	rsxBirth := a.rsxUnionLocked()
 	a.rsxDemand = rsxBirth
 	a.rsxApplied = rsxBirth
 	applyRSXBirthMask(a.dag, rsxBirth)

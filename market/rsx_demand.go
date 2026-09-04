@@ -16,16 +16,38 @@ func rsxInternalMask() nodes.RSXWorkMask {
 	return nodes.NeedRSXCore
 }
 
-// SetRSXDemand sets this Frame's analytical RSX mask to clientUnion OR internal Core.
+func (a *Frame) rsxUnionLocked() nodes.RSXWorkMask {
+	return a.rsxClientDemand | rsxInternalMask() | a.rsxForecastDemand
+}
+
+func (a *Frame) recomputeRSXDemandLocked() {
+	required := a.rsxUnionLocked()
+	a.rsxDemand = required
+	a.applyRSXDemandLocked(required)
+}
+
+// SetRSXDemand stores the chart/client RSX contribution and recomputes
+// applied = client | internal | forecast. It does not clear forecast demand.
 func (a *Frame) SetRSXDemand(clientUnion nodes.RSXWorkMask) {
 	if a == nil {
 		return
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	required := clientUnion | rsxInternalMask()
-	a.rsxDemand = required
-	a.applyRSXDemandLocked(required)
+	a.rsxClientDemand = clientUnion
+	a.recomputeRSXDemandLocked()
+}
+
+// SetRSXForecastDemand stores the Forecast RSX contribution and recomputes
+// applied = client | internal | forecast. It does not clear client demand.
+func (a *Frame) SetRSXForecastDemand(forecastMask nodes.RSXWorkMask) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.rsxForecastDemand = forecastMask
+	a.recomputeRSXDemandLocked()
 }
 
 func (a *Frame) applyRSXDemandLocked(required nodes.RSXWorkMask) {

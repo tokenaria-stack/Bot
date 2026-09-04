@@ -396,7 +396,9 @@ Future strategies live under `decision/`. They consume market state without impo
 
 ## Forecast Engine (FORECAST-SPEC-1 — contracts only, frozen)
 
-**Frozen at:** `5afabfc` + `0ed000d`. Do not reopen. Do not start FEATURE-TAPE-1 until asked.
+**Frozen at:** `5afabfc` + `0ed000d`. Do not reopen SPEC contracts.
+
+**FEATURE-TAPE-1A ✅** — trusted vectors, no files. Host: `market.FeatureEvaluator` (Frame stays FeatureID-free). `forecast` still does not import `market`. Next when asked: **FEATURE-TAPE-1B** (serialization only).
 
 **Package:** `forecast/`. **Status:** contracts/identity/laws only. No FeatureTape, no model, no runtime evaluation, no wiring into `market`/`decision` yet. Imports nothing from `exchange`/`market`/`decision`/`execution`.
 
@@ -455,6 +457,20 @@ An HTF value may be consumed only if that HTF bar was closed and authoritative b
 ### FeatureHistoryBars (feature-side only, not the complete closure)
 
 `FeatureRecipe.FeatureHistoryBars()` bounds age-bearing features (`age = min(actualAge, MaxAgeBars)`, default 256) and is carried onto `FeaturePlan.FeatureHistoryBars`. This is the **feature-side history contribution only** — it does not yet fold in `AnalysisRecipe`/Jurik/detector reconstruction requirements (no such field exists on `AnalysisRecipe` in this chapter). The complete closure is reserved under the name `RequiredHistoryBars` (`= max(AnalysisRuntime reconstruction requirement, FeatureHistoryBars, ...)`), implemented in FEATURE-TAPE-1 once a real AnalysisRuntime binding exists. A `FeaturePlan` must not remember more history than live can reconstruct while claiming the same identity; mismatch → refuse/NotReady.
+
+### FEATURE-TAPE-1A (trusted Fill, no files)
+
+Host: `market.FeatureEvaluator` binds `forecast.FeaturePlan` to Frame Jurik slots + `rsxTVFacts`. Frame has no FeatureID methods. `forecast` does not import `market`.
+
+Four columns: `rsx_value`, `rsx_signal`, `tv_bull_present`, `tv_bull_age`. `AnalysisRecipe` includes `DivLookback` so TV identity matches `EffectiveRSXSettings()`. Bind refuses digest mismatch.
+
+Demand: `applied = client | internal | forecast` (`rsxClientDemand`, `rsxForecastDemand`, `rsxInternalMask()`). Forecast is a persistent third contribution.
+
+Fill: compiled `[]FeatureID` + switch, one RLock, reverse TV-fact walk bounded by `FeatureHistoryBars` (facts are `ConfirmedAt`-sorted). `ConfirmedAt` gated, not `AnchorAt`. Steady-state Fill: 0 allocs/op.
+
+Parity: hydrate `NewFrame(prefix)` vs live-style `UpdateKlineTick(..., true)` — same At/Ready/first Ready At/`Float64bits` on every Ready bar.
+
+**HARD STOP.** No CSV. Next: FEATURE-TAPE-1B dump-only.
 
 ### Fail closed
 
@@ -569,4 +585,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **FEATURE-TAPE-1** when asked. FORECAST-SPEC-1 frozen `5afabfc`+`0ed000d`.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **FEATURE-TAPE-1B** when asked. FEATURE-TAPE-1A done.

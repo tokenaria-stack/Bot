@@ -73,34 +73,36 @@ type Frame struct {
 	prevZigHas            bool
 	rsxSettings           *RSXSettings
 	// DataBus — единый реестр синхронизированных серий (владелец — только Frame).
-	JurikLines       []float64
-	WozduhRed        []float64
-	WozduhGreen      []float64
-	Annotations      []ChartAnnotation
-	rsxTVFacts       []indicators.IndicatorFactEvent
-	rsxTVCloses      []float64
-	rsxTVOsc         []float64
-	rsxTVOpens       []int64
-	rsxZZFacts       []indicators.IndicatorFactEvent
-	zzCollector      ZZDivFactCollector
-	rsxFractalFacts  []indicators.IndicatorFactEvent
-	rsxFractalPrices []float64
-	rsxFractalOsc    []float64
-	rsxFractalOpens  []int64
-	streamingSnap    streamingSnapshot
-	mtfStates        map[string]*HTFState
-	closeLines       []float64
-	rsxPriceLines    []float64
-	bulkReplayMode   bool
-	dag              *core.DAGRunner
-	wozduhDemand     nodes.WozduhMask
-	rsxDemand        nodes.RSXWorkMask
-	rsxApplied       nodes.RSXWorkMask
-	tvEvals          int
-	fractalEvals     int
-	zzEvals          int
-	rsxFactRevision  int
-	rsxCoreRebuilds  int
+	JurikLines        []float64
+	WozduhRed         []float64
+	WozduhGreen       []float64
+	Annotations       []ChartAnnotation
+	rsxTVFacts        []indicators.IndicatorFactEvent
+	rsxTVCloses       []float64
+	rsxTVOsc          []float64
+	rsxTVOpens        []int64
+	rsxZZFacts        []indicators.IndicatorFactEvent
+	zzCollector       ZZDivFactCollector
+	rsxFractalFacts   []indicators.IndicatorFactEvent
+	rsxFractalPrices  []float64
+	rsxFractalOsc     []float64
+	rsxFractalOpens   []int64
+	streamingSnap     streamingSnapshot
+	mtfStates         map[string]*HTFState
+	closeLines        []float64
+	rsxPriceLines     []float64
+	bulkReplayMode    bool
+	dag               *core.DAGRunner
+	wozduhDemand      nodes.WozduhMask
+	rsxClientDemand   nodes.RSXWorkMask
+	rsxForecastDemand nodes.RSXWorkMask
+	rsxDemand         nodes.RSXWorkMask
+	rsxApplied        nodes.RSXWorkMask
+	tvEvals           int
+	fractalEvals      int
+	zzEvals           int
+	rsxFactRevision   int
+	rsxCoreRebuilds   int
 	// lastCommittedOpenTime is the OpenTime of the most recently Save-committed bar
 	// (streaming engines + DAG). Guards UpdateKlineTick's cross-bar handoff against
 	// double-committing a bar already closed via isClosed==true (Jeweler Protocol: no double IIR pass).

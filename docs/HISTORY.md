@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FEATURE-TAPE-1A — trusted feature vectors (Sep 2026) ✅
+
+- `market.FeatureEvaluator` reads Jurik slots + TV facts. Four FeatureIDs only. Persistent `rsxForecastDemand`.
+- Parity: hydrate prefix vs live-style closed ticks, `Float64bits` every Ready bar. Fill 0 allocs/op.
+- Next when asked: **FEATURE-TAPE-1B** (canonical rows / files). No Python.
+
 ## FORECAST-SPEC-1 — evidence→probability contracts (Sep 2026) ✅ frozen `5afabfc` + `0ed000d`
 
 - New `forecast/` package: identities and laws only. No FeatureTape, model, Python, or live inference.

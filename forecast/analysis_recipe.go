@@ -23,6 +23,7 @@ type AnalysisRecipeDraft struct {
 	RSXLength     int    // 0 => default
 	RSXSignal     int    // 0 => default
 	RSXSource     string // "" => default
+	DivLookback   int    // 0 => default; TV detector lookback (actual Frame setting)
 	EnableTV      bool
 	EnableFractal bool
 }
@@ -34,6 +35,7 @@ type AnalysisRecipeConfig struct {
 	RSXLength     int    `json:"rsx_length"`
 	RSXSignal     int    `json:"rsx_signal"`
 	RSXSource     string `json:"rsx_source"`
+	DivLookback   int    `json:"div_lookback"`
 	EnableTV      bool   `json:"enable_tv"`
 	EnableFractal bool   `json:"enable_fractal"`
 }
@@ -49,9 +51,10 @@ type AnalysisRecipe struct {
 }
 
 const (
-	defaultRSXLength = 14
-	defaultRSXSignal = 9
-	defaultRSXSource = "hlc3"
+	defaultRSXLength   = 14
+	defaultRSXSignal   = 9
+	defaultRSXSource   = "hlc3"
+	defaultDivLookback = 90 // matches market.RSXLookbackDefault; bind uses actual Frame settings
 )
 
 // ResolveAnalysisRecipe applies defaults, validates, and returns the
@@ -67,6 +70,7 @@ func ResolveAnalysisRecipe(name string, draft AnalysisRecipeDraft, logic LogicVe
 		RSXLength:     draft.RSXLength,
 		RSXSignal:     draft.RSXSignal,
 		RSXSource:     draft.RSXSource,
+		DivLookback:   draft.DivLookback,
 		EnableTV:      draft.EnableTV,
 		EnableFractal: draft.EnableFractal,
 	}
@@ -79,6 +83,9 @@ func ResolveAnalysisRecipe(name string, draft AnalysisRecipeDraft, logic LogicVe
 	if cfg.RSXSource == "" {
 		cfg.RSXSource = defaultRSXSource
 	}
+	if cfg.DivLookback == 0 {
+		cfg.DivLookback = defaultDivLookback
+	}
 	if cfg.RSXLength < 0 || cfg.RSXSignal < 0 {
 		return AnalysisRecipe{}, fmt.Errorf("forecast: analysis recipe periods must be >= 0")
 	}
@@ -87,7 +94,7 @@ func ResolveAnalysisRecipe(name string, draft AnalysisRecipeDraft, logic LogicVe
 
 // HumanKey is a readable identity hint, e.g. "rsx-l14-s9-hlc3". Not identity.
 func (r AnalysisRecipe) HumanKey() string {
-	return fmt.Sprintf("rsx-l%d-s%d-%s", r.Config.RSXLength, r.Config.RSXSignal, r.Config.RSXSource)
+	return fmt.Sprintf("rsx-l%d-s%d-%s-tv%d", r.Config.RSXLength, r.Config.RSXSignal, r.Config.RSXSource, r.Config.DivLookback)
 }
 
 type analysisIdentityPayload struct {
