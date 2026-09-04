@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FORECAST-SPEC-1 freeze (Sep 2026)
+
+**Context:** Kill-check found `FeaturePlan.RequiredHistory` overclaimed completeness; unused `Digest.IsZero` / filler interfaces had no consumer.
+
+**Decision:** Freeze SPEC as `5afabfc` + `0ed000d`. Honest name `FeatureHistoryBars`; reserve `RequiredHistoryBars` for FEATURE-TAPE-1. Delete unused APIs. Stop auditing SPEC.
+
+**Rejected:**
+- Comment-only keep of `RequiredHistory` — **Reason:** future `if retained >= plan.RequiredHistory` would look correct and be wrong.
+- Keep `FeaturePlanFiller` for later injection — **Reason:** no consumer; real Fill shape comes from real data flow.
+
+**Consequences:** FEATURE-TAPE-1 starts with `Fill` + live/replay parity, not CSV/cache/Python.
+
 ## DAG-DEMAND-1 before ScoreNodes (Aug 2026)
 
 **Context:** Wozduh demand is frozen. Unused 5s–45s Frames still run RSX, DAG ZigZag, and fact collectors. ScoreNodes would bury that CPU debt.

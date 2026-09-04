@@ -396,6 +396,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 ## Forecast Engine (FORECAST-SPEC-1 — contracts only, frozen)
 
+**Frozen at:** `5afabfc` + `0ed000d`. Do not reopen. Do not start FEATURE-TAPE-1 until asked.
+
 **Package:** `forecast/`. **Status:** contracts/identity/laws only. No FeatureTape, no model, no runtime evaluation, no wiring into `market`/`decision` yet. Imports nothing from `exchange`/`market`/`decision`/`execution`.
 
 Not a scoring engine. Evidence → probability engine:
@@ -567,4 +569,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — primary: **#76 ScoreNodes**. MICRO-IDLE-1 closed (measured residual negligible).
+**NEXT:** see `docs/OPEN_DEBTS.md` — **FEATURE-TAPE-1** when asked. FORECAST-SPEC-1 frozen `5afabfc`+`0ed000d`.

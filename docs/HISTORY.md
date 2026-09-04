@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FORECAST-SPEC-1 — evidence→probability contracts (Sep 2026) ✅ frozen `5afabfc` + `0ed000d`
+
+- New `forecast/` package: identities and laws only. No FeatureTape, model, Python, or live inference.
+- `0ed000d`: `FeatureHistoryBars` (not fake complete reconstruction history); deleted unused `Digest.IsZero`, `FeaturePlanFiller`, `FillSource`.
+- Next when asked: **FEATURE-TAPE-1** (`FeaturePlan.Fill` + live/replay vector parity). Not labels, not training.
+
 ## MICRO-IDLE-1 — residual 5s–45s cost (Aug 2026) ✅ closed, not implemented
 
 - Read-only measure (`TestMicroIdle_ResidualCostVsOldAnalytics`): idle ChartOnly, no micro charts.
