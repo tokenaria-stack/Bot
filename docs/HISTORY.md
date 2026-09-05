@@ -8,9 +8,10 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## ATR-TRUTH-1 — canonical ATR (Sep 2026) ✅
+## ATR-TRUTH-1 — canonical ATR (Sep 2026) ✅ frozen `84124a0`
 
 - `indicators.ATR` law `atr:wilder-rma-first-tr-v1`. `ATRSpec` + `UpdateClosed` + `ATRSeries`. `CalculateATR` deleted.
+- Kill-check GREEN. Do not reopen ATR unless a consumer regression.
 - `TargetSpec.ATR` is `indicators.ATRSpec`. Next when asked: **LABEL-SET-1A**.
 
 ## FEATURE-TAPE-1B — immutable feature tape (Sep 2026) ✅ frozen `6715718`

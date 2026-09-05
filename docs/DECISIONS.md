@@ -9,6 +9,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## ATR-TRUTH-1 freeze (Sep 2026)
+
+**Context:** Kill-check confirmed one `apply()` transition, TargetSpec owns `indicators.ATRSpec`, omitted vs explicit canonical ATR same digest, CalculateATR gone, OPEN_DEBTS ledger complete.
+
+**Decision:** Freeze ATR-TRUTH-1 at `84124a0`. Do not reopen ATR unless a later consumer regression. Manual UpdateClosed field commit is a future footgun, not a current bug — fix only if a new live field is added.
+
+**Rejected:**
+- Silent `*a = candidate` after GREEN — **Reason:** no correctness bug; freeze stands.
+- ATRSeries dst-buffer / zero-alloc in ATR-TRUTH-1 — **Reason:** no grid-search consumer yet.
+
+**Consequences:** LABEL-SET-1A consumes frozen ATR. Read OPEN_DEBTS LABEL-SET-1A rows as the chapter contract.
+
 ## ATR-TRUTH-1 canon (Sep 2026)
 
 **Context:** Multiple ATR formulas existed. LabelSet must not invent a fourth.
