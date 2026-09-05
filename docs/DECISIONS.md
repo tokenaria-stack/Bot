@@ -9,6 +9,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## LABEL-SET-1A causal labels (Sep 2026)
+
+**Context:** ATR-TRUTH-1 is frozen. Labels must answer what happened after each FeatureTape `At` without recalculating features or ATR formulas.
+
+**Decision:** Primary-TF first-passage only. `LabelLogicVersion` = `label:first-passage-primary-v1` is distinct from `TargetSpec.Logic` / `TargetDigest`. Continuity uses existing `data.NextBarOpen`. A missing primary bar before the outcome is known is `AMBIGUOUS` / `PRIMARY_GAP`. Caller ATR prefix is the actual IIR init (no invented history, no extra IncompleteInit class). `forecast` may import `data` for bar boundaries.
+
+**Rejected:**
+- Silent skip of missing future candles — **Reason:** can hide an earlier barrier touch.
+- Physical slice isolation / segment trees / ATR dst-buffer API — **Reason:** no consumer; index law is the look-ahead control.
+- Merging LabelLogicVersion into TargetSpec.Logic — **Reason:** question identity vs labeling semantics.
+- Implementing finer dual-hit in 1A — **Reason:** LABEL-SET-1B.
+
+**Consequences:** Changing TargetSpec relabels without rebuilding FeatureTape. 1B adds same-family finer history only.
+
 ## ATR-TRUTH-1 freeze (Sep 2026)
 
 **Context:** Kill-check confirmed one `apply()` transition, TargetSpec owns `indicators.ATRSpec`, omitted vs explicit canonical ATR same digest, CalculateATR gone, OPEN_DEBTS ledger complete.

@@ -26,7 +26,8 @@
 // # Position in the import DAG
 //
 // The existing Jeweler DAG is exchange → market → decision → execution.
-// package forecast imports indicators for ATRSpec ownership (ATR-TRUTH-1).
+// package forecast imports indicators for ATRSpec ownership (ATR-TRUTH-1)
+// and data.NextBarOpen / CurrentBarOpen for primary-gap continuity (calendar-safe).
 // It still imports NOTHING from exchange/market/decision/execution.
 //
 // # Governing law
@@ -50,6 +51,8 @@
 //   - TargetSpec: first-passage UP_FIRST/DOWN_FIRST/TIMEOUT event, frozen
 //     barriers, explicit dual-hit policy. AMBIGUOUS is a dataset status, not
 //     a fourth model class.
+//   - LabelSet (LABEL-SET-1A): immutable JSONL outcomes for one FeatureTape
+//   - TargetSpec using canonical ATR-TRUTH-1 and primary-TF first-passage.
 //   - ForecastFrame + PublishForecastFrame: the fail-closed gate. No frame is
 //     ever produced from a not-Ready fill or a nonfinite/out-of-range
 //     probability set.
@@ -81,7 +84,7 @@
 //
 // # Deliberately deferred (not in this chapter)
 //
-// FeatureTape (FEATURE-TAPE-1B JSONL dump), LabelSet, Python, training, model inference, multi-runtime
+// Python, training, model inference, multi-runtime
 // map/registry/refcounting, config database, Save As UI, activation
 // infrastructure (atomic.Pointer swap, EffectiveFrom seam ownership),
 // Decision, backtest. See docs/ARCHITECTURE.md "Forecast Engine (FORECAST-

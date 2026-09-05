@@ -402,9 +402,11 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **FEATURE-TAPE-1B ✅ frozen `6715718`.** JSONL FeatureTape dump. Do not re-audit unless decoded rows ≠ 1A Fill, digests fail integrity, or a real concurrent-writer requirement appears.
 
-**ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression. Next when asked: **LABEL-SET-1A**.
+**ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec`. `forecast` may import `indicators`; still not `exchange`/`market`/`decision`/`execution`.
+**LABEL-SET-1A ✅** — causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
+
+**Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
 Not a scoring engine. Evidence → probability engine:
 
@@ -492,7 +494,21 @@ Checked `UpdateClosed` refuses nonfinite / High<Low with no IIR mutation. ATR=0 
 
 `forecast.TargetSpec.ATR` is `indicators.ATRSpec` (no duplicate spec type). Changing Target ATR does not invalidate FeatureTape.
 
-**HARD STOP.** Frozen `84124a0`. Do not re-audit ATR. Next: LABEL-SET-1A when asked.
+**HARD STOP.** Frozen `84124a0`. Do not re-audit ATR.
+
+### LABEL-SET-1A (immutable first-passage labels)
+
+`forecast` owns LabelSet types, first-passage, writer/reader. `market.DumpLabelSet` converts materialized `[]Kline` → `CanonicalClosedBar` and calls `GenerateLabelSet`. FormatVersion `label-set-v1`. Label logic `label:first-passage-primary-v1` (how the question is scored). `TargetDigest` remains the target question.
+
+One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors are not copied. Header pins FeatureTape `PlanDigest` + `SourceRangeDigest` + `ContentDigest`.
+
+ATR: one `indicators.ATRSeries` pass on the consumed primary range `[caller ATR prefix | candidates | needed H tail]`. Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
+
+Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. Touches are inclusive High/Low. Same-bar dual-hit → `AMBIGUOUS` / `DUAL_HIT` (`DualHitExcludeAmbiguous` only; `resolve_finer_history` is refused). Complete H with no touch → `TIMEOUT`. Incomplete H without an earlier result → `AMBIGUOUS` / `TRUNCATED_HORIZON` (never fake TIMEOUT). An unexplained missing primary interval before the outcome is known → `AMBIGUOUS` / `PRIMARY_GAP` via `data.NextBarOpen` (calendar-safe). A later gap after a definitive hit is ignored.
+
+`LabelSourceRangeDigest` hashes the exact consumed primary bars (LS1S + MarketKey + OpenTime + OHLCV `Float64bits`). Extra caller bars after the used end are not hashed. `ContentDigest` covers header identities, every row `At/Outcome/HitAt/Reason`, and footer range metadata.
+
+**HARD STOP.** Do not begin LABEL-SET-1B (finer TF) unless asked.
 
 ### Fail closed
 
@@ -521,7 +537,7 @@ Walk-forward fold models exist only to produce honest out-of-fold predictions fo
 
 ### v1 scope / deferred machinery
 
-v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built in this chapter: FeatureTape, LabelSet, Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability. REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
+v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built in this chapter: LABEL-SET-1B finer dual-hit, Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability. REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
 
 **Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, Falcon, old scores, strategies, execution, backtest, Decision.
 
@@ -607,4 +623,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1A** when asked. ATR-TRUTH-1 frozen `84124a0`.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A done. ATR-TRUTH-1 frozen `84124a0`.

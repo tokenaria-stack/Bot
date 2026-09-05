@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). Next when asked: **LABEL-SET-1A**.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅**. Next when asked: **LABEL-SET-1B**.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -53,7 +53,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
-**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). Do not reopen ATR. Next when asked: **LABEL-SET-1A**.
+**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅**. Do not reopen ATR. Next when asked: **LABEL-SET-1B**.
 
 **MICRO-IDLE-1 ✅ closed (not worth implementing).** Idle ChartOnly, no micro charts: five child reducers + unused Frame ticks ≈ **6µs per 1s parent** (~6µs CPU per wall-clock second). Forming ticks dominate count (6000 forming / 505 closed per 1200 parents); that is OHLCV + empty DAG skip, not Jurik. Sleeping that path is not worth a second lifecycle. Reducers and sparse tip stay frozen.
 
@@ -75,15 +75,9 @@ At chapter start: read rows whose **Owner** is this chapter. Implement or reassi
 
 **ATR-TRUTH-1 resolved:** canonical `indicators.ATR` `atr:wilder-rma-first-tr-v1`; ATRSpec Period+Method+Logic; IIR provenance (spec ≠ state); `ATRSeries` over streamer; `ATRValues` legacy; `CalculateATR` deleted; `navigatorATR` noncanonical; ATR=0 legal; nonfinite/malformed no-commit; Save/Restore tested; no runtime map.
 
-### Owner: LABEL-SET-1A
+### Owner: LABEL-SET-1A ✅
 
-1. TargetSpec already pins `indicators.ATRSpec`. Changing TargetSpec must not rebuild FeatureTape.
-2. Label primary source = ATR init prefix + candidates + H tail; `LabelSourceRangeDigest` covers all consumed primary bars.
-3. Period bars are not bit-identical IIR reconstruction. One O(N) `ATRSeries` per ATRSpec+source; in-memory reuse across H/multiples; no disk ATR cache.
-4. Barriers freeze at close t: `close±multiple*atr[t]`. Future ATR must not move them. Scan `t+1…t+H` (existing bars, not wall-clock). High/Low touches.
-5. ATR<=0 → AMBIGUOUS/ATR_ZERO. Nonfinite ATR → fail closed. Truncated H → AMBIGUOUS/TRUNCATED_HORIZON (never fake TIMEOUT). Incomplete init → AMBIGUOUS, do not invent history.
-6. One LabelSet row per FeatureTape row (including Ready=false). Train-time filter later. Dual-hit → AMBIGUOUS, no OHLC guessing.
-7. No FeatureEvaluator / Jurik / TV / FeatureTape recompute. Canonical ATR only.
+Implemented: TargetSpec ATR does not rebuild FeatureTape; consumed source = ATR prefix + candidates + needed H tail; one `ATRSeries`; barriers frozen at `t`; scan `t+1`; High/Low; ATR<=0 → `ATR_ZERO`; nonfinite ATR/barriers refuse; truncated no-hit → `TRUNCATED_HORIZON`; caller prefix is the actual IIR init (no invented history); 1:1 tape rows including Ready=false; primary dual-hit → `DUAL_HIT`; primary path gap before outcome → `PRIMARY_GAP`; canonical ATR only.
 
 ### Owner: LABEL-SET-1B
 
@@ -111,7 +105,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **labels next** | SPEC frozen. 1A `b88bcd2`. 1B `6715718`. ATR-TRUTH-1 frozen `84124a0`. Next: **LABEL-SET-1A** when asked. Then 1B finer dual-hit → MODEL → … |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **1B next** | SPEC frozen. FeatureTape 1A/1B frozen. ATR-TRUTH-1 frozen `84124a0`. **LABEL-SET-1A ✅**. Next: **LABEL-SET-1B** when asked (finer dual-hit). Then MODEL → … |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
