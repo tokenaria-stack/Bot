@@ -8,17 +8,23 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FEATURE-TAPE-1A — trusted feature vectors (Sep 2026) ✅
+## FEATURE-TAPE-1B — immutable feature tape (Sep 2026) ✅
+
+- JSONL `feature-tape-v1`: header / row / footer. `forecast` writer/reader; `market.DumpFeatureTape` O(N) Fill dump.
+- Identities: PlanDigest (semantics), SourceRangeDigest (consumed OHLCV range), ContentDigest (file integrity).
+- Next when asked: **LABEL-SET-1**. No Python.
+
+## FEATURE-TAPE-1A — trusted feature vectors (Sep 2026) ✅ frozen `b88bcd2`
 
 - `market.FeatureEvaluator` reads Jurik slots + TV facts. Four FeatureIDs only. Persistent `rsxForecastDemand`.
 - Parity: hydrate prefix vs live-style closed ticks, `Float64bits` every Ready bar. Fill 0 allocs/op.
-- Next when asked: **FEATURE-TAPE-1B** (canonical rows / files). No Python.
+- Kill-check GREEN. Do not re-audit unless a later regression falsifies the contract.
 
 ## FORECAST-SPEC-1 — evidence→probability contracts (Sep 2026) ✅ frozen `5afabfc` + `0ed000d`
 
 - New `forecast/` package: identities and laws only. No FeatureTape, model, Python, or live inference.
 - `0ed000d`: `FeatureHistoryBars` (not fake complete reconstruction history); deleted unused `Digest.IsZero`, `FeaturePlanFiller`, `FillSource`.
-- Next when asked: **FEATURE-TAPE-1** (`FeaturePlan.Fill` + live/replay vector parity). Not labels, not training.
+- Next: FEATURE-TAPE-1A frozen; FEATURE-TAPE-1B done. **LABEL-SET-1** when asked.
 
 ## MICRO-IDLE-1 — residual 5s–45s cost (Aug 2026) ✅ closed, not implemented
 

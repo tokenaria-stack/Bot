@@ -86,7 +86,7 @@
 //
 // # Deliberately deferred (not in this chapter)
 //
-// FeatureTape, LabelSet, Python, training, model inference, multi-runtime
+// FeatureTape (FEATURE-TAPE-1B JSONL dump), LabelSet, Python, training, model inference, multi-runtime
 // map/registry/refcounting, config database, Save As UI, activation
 // infrastructure (atomic.Pointer swap, EffectiveFrom seam ownership),
 // Decision, backtest. See docs/ARCHITECTURE.md "Forecast Engine (FORECAST-

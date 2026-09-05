@@ -9,6 +9,32 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FEATURE-TAPE-1B file shape (Sep 2026)
+
+**Context:** Per-row identity would bloat the tape. PlanDigest must not be oversold as the entire future join. A source-bar hash does not detect a corrupted feature value.
+
+**Decision:** JSONL header/rows/footer. `PlanDigest` = feature-semantics identity only. `SourceRangeDigest` = consumed primary closed-bar range (not snapshot isolation, not `MarketDataSnapshotID`). `ContentDigest` = tape integrity. `RowCount` equals source bars. Caller owns the path.
+
+**Rejected:**
+- PlanDigest as the only future join key — **Reason:** LABEL-SET-1 needs MarketKey + overlapping range + At; label horizon/dual-hit sources may differ.
+- Identity on every row / sidecar manifest / SnapshotManager — **Reason:** no consumer; pairing and machinery risk.
+- Ready-only tape — **Reason:** cannot distinguish NotReady from a missing bar.
+- Prefix-hydrate per row — **Reason:** O(N²).
+- Hex-float encoding up front — **Reason:** prove stdlib JSON round-trip first.
+
+**Consequences:** 1B is a dumb writer, two hashes, O(N) dump. Materialize a coherent `[]Kline` (or existing stable read) before writing. Dump API takes that slice; it does not page SQLite.
+
+## FEATURE-TAPE-1A freeze (Sep 2026)
+
+**Context:** Kill-check confirmed DAG birth uses the same demand union, one `rsxUnionLocked` owner, and `ConfirmedAt` ordering under existing TV writers.
+
+**Decision:** Freeze FEATURE-TAPE-1A at `b88bcd2`. Do not re-audit 1A unless a regression falsifies hydrate≡live `At`/`Ready`/`Float64bits`.
+
+**Rejected:**
+- Extra identity commit for `DivLookback` — **Reason:** already in `b88bcd2`; ceremonial marker not required.
+
+**Consequences:** FEATURE-TAPE-1B serializes 1A vectors only. No new feature math.
+
 ## FEATURE-TAPE-1A Fill host (Sep 2026)
 
 **Context:** Forecast must not import market; Frame must not learn FeatureIDs; demand must not be a one-shot SetRSXDemand.

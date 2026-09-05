@@ -28,6 +28,22 @@ func (d Digest) String() string { return hex.EncodeToString(d[:]) }
 // only — never compare identities with Short().
 func (d Digest) Short() string { return hex.EncodeToString(d[:8]) }
 
+// ParseDigestHex decodes a full 64-character hex SHA-256. Short() forms are refused.
+func ParseDigestHex(s string) (Digest, error) {
+	var d Digest
+	if len(s) != hex.EncodedLen(len(d[:])) {
+		return d, fmt.Errorf("forecast: digest must be %d hex characters", hex.EncodedLen(len(d[:])))
+	}
+	n, err := hex.Decode(d[:], []byte(s))
+	if err != nil {
+		return Digest{}, fmt.Errorf("forecast: digest hex: %w", err)
+	}
+	if n != len(d[:]) {
+		return Digest{}, fmt.Errorf("forecast: digest hex length")
+	}
+	return d, nil
+}
+
 // Identity is a published object's machine identity: a human-readable key
 // (for logs/filenames only), the full digest of its resolved payload, and
 // the explicit logic version(s) it was resolved under. A friendly Name is

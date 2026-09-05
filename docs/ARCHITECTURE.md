@@ -398,9 +398,11 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **Frozen at:** `5afabfc` + `0ed000d`. Do not reopen SPEC contracts.
 
-**FEATURE-TAPE-1A ✅** — trusted vectors, no files. Host: `market.FeatureEvaluator` (Frame stays FeatureID-free). `forecast` still does not import `market`. Next when asked: **FEATURE-TAPE-1B** (serialization only).
+**FEATURE-TAPE-1A ✅ frozen `b88bcd2`.** Do not re-audit. Host: `market.FeatureEvaluator` (Frame stays FeatureID-free). `forecast` still does not import `market`.
 
-**Package:** `forecast/`. **Status:** contracts/identity/laws only. No FeatureTape, no model, no runtime evaluation, no wiring into `market`/`decision` yet. Imports nothing from `exchange`/`market`/`decision`/`execution`.
+**FEATURE-TAPE-1B ✅** — JSONL FeatureTape dump. Next when asked: **LABEL-SET-1**.
+
+**Package:** `forecast/`. **Status:** SPEC + tape format/writer/reader. Fill host and O(N) dump live in `market`. `forecast` imports nothing from `exchange`/`market`/`decision`/`execution`.
 
 Not a scoring engine. Evidence → probability engine:
 
@@ -470,7 +472,15 @@ Fill: compiled `[]FeatureID` + switch, one RLock, reverse TV-fact walk bounded b
 
 Parity: hydrate `NewFrame(prefix)` vs live-style `UpdateKlineTick(..., true)` — same At/Ready/first Ready At/`Float64bits` on every Ready bar.
 
-**HARD STOP.** No CSV. Next: FEATURE-TAPE-1B dump-only.
+**HARD STOP.** Frozen `b88bcd2`. Do not re-audit 1A.
+
+### FEATURE-TAPE-1B (immutable JSONL dump)
+
+`forecast` owns format/writer/reader. `market.DumpFeatureTape` owns O(N) Frame + frozen Fill. Caller passes a materialized `[]Kline`. FormatVersion `feature-tape-v1`. Empty source / existing final path refused.
+
+Identities: `PlanDigest` = feature semantics (not the whole future join). `SourceRangeDigest` = MarketKey + OpenTime + OHLCV `Float64bits` (not CloseTime, not snapshot isolation). `ContentDigest` = canonical semantic file hash excluding itself. `At` = source OpenTime.
+
+**HARD STOP.** Next: LABEL-SET-1 when asked.
 
 ### Fail closed
 
@@ -585,4 +595,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **FEATURE-TAPE-1B** when asked. FEATURE-TAPE-1A done.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1** when asked. FEATURE-TAPE-1B done.

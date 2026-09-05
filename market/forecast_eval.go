@@ -117,6 +117,20 @@ func (e *FeatureEvaluator) VectorLen() int {
 	return len(e.schema)
 }
 
+// LastBarOpenTime is the Frame tip OpenTime after the last closed ingest.
+// Dump uses this to refuse At off-by-one; it is not a feature calculation.
+func (e *FeatureEvaluator) LastBarOpenTime() int64 {
+	if e == nil || e.frame == nil {
+		return 0
+	}
+	e.frame.mu.RLock()
+	defer e.frame.mu.RUnlock()
+	if len(e.frame.klines) == 0 {
+		return 0
+	}
+	return e.frame.klines[len(e.frame.klines)-1].OpenTime
+}
+
 // FillOwned overwrites the evaluator-owned vector. Steady-state Fill must not allocate.
 func (e *FeatureEvaluator) FillOwned() (forecast.Ready, []float64, error) {
 	if e == nil {
