@@ -8,11 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FEATURE-TAPE-1B — immutable feature tape (Sep 2026) ✅
+## ATR-TRUTH-1 — canonical ATR (Sep 2026) ✅
+
+- `indicators.ATR` law `atr:wilder-rma-first-tr-v1`. `ATRSpec` + `UpdateClosed` + `ATRSeries`. `CalculateATR` deleted.
+- `TargetSpec.ATR` is `indicators.ATRSpec`. Next when asked: **LABEL-SET-1A**.
+
+## FEATURE-TAPE-1B — immutable feature tape (Sep 2026) ✅ frozen `6715718`
 
 - JSONL `feature-tape-v1`: header / row / footer. `forecast` writer/reader; `market.DumpFeatureTape` O(N) Fill dump.
 - Identities: PlanDigest (semantics), SourceRangeDigest (consumed OHLCV range), ContentDigest (file integrity).
-- Next when asked: **LABEL-SET-1**. No Python.
+- Storage kill-check GREEN. One writer per final path (rename not race-safe). Do not re-audit.
+- Next: **LABEL-SET-1A** after ATR-TRUTH-1.
 
 ## FEATURE-TAPE-1A — trusted feature vectors (Sep 2026) ✅ frozen `b88bcd2`
 

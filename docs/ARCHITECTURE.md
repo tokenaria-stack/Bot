@@ -400,9 +400,11 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **FEATURE-TAPE-1A ✅ frozen `b88bcd2`.** Do not re-audit. Host: `market.FeatureEvaluator` (Frame stays FeatureID-free). `forecast` still does not import `market`.
 
-**FEATURE-TAPE-1B ✅** — JSONL FeatureTape dump. Next when asked: **LABEL-SET-1**.
+**FEATURE-TAPE-1B ✅ frozen `6715718`.** JSONL FeatureTape dump. Do not re-audit unless decoded rows ≠ 1A Fill, digests fail integrity, or a real concurrent-writer requirement appears.
 
-**Package:** `forecast/`. **Status:** SPEC + tape format/writer/reader. Fill host and O(N) dump live in `market`. `forecast` imports nothing from `exchange`/`market`/`decision`/`execution`.
+**ATR-TRUTH-1 ✅** — canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Next when asked: **LABEL-SET-1A**.
+
+**Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec`. `forecast` may import `indicators`; still not `exchange`/`market`/`decision`/`execution`.
 
 Not a scoring engine. Evidence → probability engine:
 
@@ -422,7 +424,7 @@ MARKET TRUTH → ANALYTICAL TRUTH + FACTS → FeaturePlan → feature vector
 | `AnalysisRecipe` | indicator periods/sources/lookbacks, init/warmup law (via `LogicVersion`) | paint, weights, feature selection, TargetSpec, Decision thresholds |
 | `FeatureRecipe` | which deterministic measurements are extracted (reusable across `AnalysisRecipe`s) | weights, arbitrary scoring |
 | `FeaturePlan` | compiled bind of one `AnalysisRecipe` + one `FeatureRecipe` + logic versions | node graph / registry / plugin traversal |
-| `TargetSpec` | frozen first-passage event (UP_FIRST/DOWN_FIRST/TIMEOUT), dual-hit policy | trade exits (`ExecutionSpec`, later) |
+| `TargetSpec` | frozen first-passage event + canonical `indicators.ATRSpec` | trade exits (`ExecutionSpec`); FeatureTape columns |
 | `ForecastArtifactPinned` | which Market/Analysis/Features/Plan/Target identities a future artifact must pin | weights/scaler/calibration (added in FORECAST-RUNTIME-1) |
 | `ForecastFrame` | minimal output shape + fail-closed validators | model arithmetic |
 | `PaintPreset` | presentation only (concept, not yet a type) | anything numerical |
@@ -480,7 +482,17 @@ Parity: hydrate `NewFrame(prefix)` vs live-style `UpdateKlineTick(..., true)` �
 
 Identities: `PlanDigest` = feature semantics (not the whole future join). `SourceRangeDigest` = MarketKey + OpenTime + OHLCV `Float64bits` (not CloseTime, not snapshot isolation). `ContentDigest` = canonical semantic file hash excluding itself. `At` = source OpenTime.
 
-**HARD STOP.** Next: LABEL-SET-1 when asked.
+**HARD STOP.** Frozen `6715718`. Do not re-audit 1B.
+
+### ATR-TRUTH-1 (canonical ATR)
+
+Owner: `indicators.ATR` / `ATRSpec`. Law: `atr:wilder-rma-first-tr-v1` (first-TR seed, Wilder RMA). Same spec ⇒ same transition; bit-identical values also need the same prior state or the same ordered closed init history. Period is not a reconstruction-history guarantee.
+
+Checked `UpdateClosed` refuses nonfinite / High<Low with no IIR mutation. ATR=0 is Ready legal truth. `ATRSeries` loops that streamer only. Legacy `ATRValues` (nil when `len<=period`) unchanged. `navigatorATR` is a different SMA-of-TR statistic, not forecast ATR. Dead `CalculateATR` deleted.
+
+`forecast.TargetSpec.ATR` is `indicators.ATRSpec` (no duplicate spec type). Changing Target ATR does not invalidate FeatureTape.
+
+**HARD STOP.** Next: LABEL-SET-1A when asked.
 
 ### Fail closed
 
@@ -595,4 +607,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1** when asked. FEATURE-TAPE-1B done.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1A** when asked. ATR-TRUTH-1 done.

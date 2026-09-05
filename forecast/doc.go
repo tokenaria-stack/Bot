@@ -26,13 +26,8 @@
 // # Position in the import DAG
 //
 // The existing Jeweler DAG is exchange → market → decision → execution.
-// package forecast is new and, as of this chapter, imports NOTHING from
-// exchange/market/decision/execution. It defines self-contained identity
-// types (MarketKey, LogicVersion, Digest, Identity) rather than reusing Go
-// types from exchange/market, to avoid entangling a not-yet-wired engine
-// with frozen subsystems. When FEATURE-TAPE-1 wires a real AnalysisRuntime
-// source, forecast will sit conceptually between market and decision:
-// decision may import forecast; forecast must not import decision.
+// package forecast imports indicators for ATRSpec ownership (ATR-TRUTH-1).
+// It still imports NOTHING from exchange/market/decision/execution.
 //
 // # Governing law
 //

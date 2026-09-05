@@ -9,6 +9,30 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## ATR-TRUTH-1 canon (Sep 2026)
+
+**Context:** Multiple ATR formulas existed. LabelSet must not invent a fourth.
+
+**Decision:** Crown existing streaming `indicators.ATR` as `atr:wilder-rma-first-tr-v1`. Strict `ATRSpec`. `forecast.TargetSpec` embeds that type. Delete unused `CalculateATR`. Leave `ATRValues` and `navigatorATR`.
+
+**Rejected:**
+- SMA-of-N / TV `ta.atr` as silent v1 — **Reason:** different identity (`atr:wilder-sma-seed-v2`).
+- Changing `ATRValues` nil-when-short — **Reason:** Frame fractal filter contract.
+- ATRSpecDigest / runtime map — **Reason:** no second consumer.
+
+**Consequences:** LABEL-SET-1A consumes `UpdateClosed`/`ATRSeries` only. IIR provenance is documented; live reconstruction deferred.
+
+## FEATURE-TAPE-1B freeze (Sep 2026)
+
+**Context:** Storage kill-check confirmed length-prefixed canonical hashes, same Frame engine via `ApplyBacktestRSXConfig`, full ContentDigest coverage including explicit Ready, and single-writer overwrite contract.
+
+**Decision:** Freeze FEATURE-TAPE-1B at `6715718`. Do not re-audit unless tape≠Fill, digest integrity fails, or concurrent writers become a real consumer.
+
+**Rejected:**
+- File locking / renameat2 / artifact lease — **Reason:** no concurrent-writer consumer; one writer per final path is enough.
+
+**Consequences:** LABEL-SET-1 consumes FeatureTape; it must not recompute Jurik/TV.
+
 ## FEATURE-TAPE-1B file shape (Sep 2026)
 
 **Context:** Per-row identity would bloat the tape. PlanDigest must not be oversold as the entire future join. A source-bar hash does not detect a corrupted feature value.

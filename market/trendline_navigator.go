@@ -1474,6 +1474,8 @@ func navigatorTrueRange(high, low, prevClose float64) float64 {
 	return tr
 }
 
+// navigatorATR is a rolling SMA of recent true ranges for UI navigator
+// geometry. It is NOT canonical forecast/label ATR (atr:wilder-rma-first-tr-v1).
 func navigatorATR(highs, lows, closes []float64, endIdx, period int) float64 {
 	if period <= 0 || endIdx < 0 || endIdx >= len(closes) {
 		return 0

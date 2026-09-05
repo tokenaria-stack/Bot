@@ -3,6 +3,8 @@ package forecast
 import (
 	"math"
 	"testing"
+
+	"trading_bot/indicators"
 )
 
 const analysisV1 LogicVersion = "analysis:v1"
@@ -261,8 +263,11 @@ func TestTargetSpec_ResolveDefaultsAndOutcomes(t *testing.T) {
 	if ts.DualHit != DualHitExcludeAmbiguous {
 		t.Fatalf("expected default dual-hit policy to be exclude-ambiguous, got %s", ts.DualHit)
 	}
-	if ts.ATRPeriod != defaultATRPeriod {
-		t.Fatalf("expected default ATR period, got %d", ts.ATRPeriod)
+	if ts.ATR.Period != indicators.DefaultATRPeriod {
+		t.Fatalf("expected default ATR period, got %d", ts.ATR.Period)
+	}
+	if ts.ATR.Method != indicators.ATRMethodWilderRMA || ts.ATR.Logic != indicators.ATRLogicWilderRMAFirstTRV1 {
+		t.Fatalf("expected canonical ATRSpec, got %+v", ts.ATR)
 	}
 	if OutcomeAmbiguous == OutcomeUpFirst || OutcomeAmbiguous == OutcomeDownFirst || OutcomeAmbiguous == OutcomeTimeout {
 		t.Fatal("AMBIGUOUS must remain distinct from all three model outcomes")
@@ -305,5 +310,52 @@ func TestForecastArtifactPinned_MarketMismatchChangesDigest(t *testing.T) {
 	}
 	if dPerp == dSpot {
 		t.Fatal("spot vs perp MarketKey must produce different artifact pin digests")
+	}
+}
+
+func TestTargetSpec_ATRIdentity(t *testing.T) {
+	base := TargetSpecDraft{HorizonBars: 24, UpperATRMultiple: 1.5, LowerATRMultiple: 1.0}
+	a, err := ResolveTargetSpec("n1", base, "labels:v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ResolveTargetSpec("n2", TargetSpecDraft{
+		HorizonBars: 24, UpperATRMultiple: 1.5, LowerATRMultiple: 1.0, ATRPeriod: 14,
+		ATRMethod: indicators.ATRMethodWilderRMA, ATRLogic: indicators.ATRLogicWilderRMAFirstTRV1,
+	}, "labels:v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ida, _ := a.Identity()
+	idb, _ := b.Identity()
+	if ida.Digest != idb.Digest {
+		t.Fatal("omitted ATR defaults must match explicit canonical ATRSpec")
+	}
+	c, err := ResolveTargetSpec("n1", TargetSpecDraft{
+		HorizonBars: 24, UpperATRMultiple: 1.5, LowerATRMultiple: 1.0, ATRPeriod: 21,
+	}, "labels:v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	idc, _ := c.Identity()
+	if ida.Digest == idc.Digest {
+		t.Fatal("ATR period must change TargetDigest")
+	}
+	mut := a
+	mut.ATR.Method = "not_wilder"
+	idm, _ := mut.Identity()
+	if idm.Digest == ida.Digest {
+		t.Fatal("ATR Method must change TargetDigest")
+	}
+	mut = a
+	mut.ATR.Logic = "atr:wilder-sma-seed-v2"
+	idl, _ := mut.Identity()
+	if idl.Digest == ida.Digest {
+		t.Fatal("ATR Logic must change TargetDigest")
+	}
+	if _, err := ResolveTargetSpec("bad", TargetSpecDraft{
+		HorizonBars: 24, UpperATRMultiple: 1.5, LowerATRMultiple: 1.0, ATRPeriod: 14, ATRLogic: "nope",
+	}, "labels:v1"); err == nil {
+		t.Fatal("unknown ATR logic must refuse resolve")
 	}
 }

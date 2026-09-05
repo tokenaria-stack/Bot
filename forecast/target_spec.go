@@ -1,6 +1,10 @@
 package forecast
 
-import "fmt"
+import (
+	"fmt"
+
+	"trading_bot/indicators"
+)
 
 // TargetFamily names a first-passage target construction. v1 defines exactly
 // one family (FORECAST-SPEC-1 §15/§24: "first model: one TargetSpec only").
@@ -37,32 +41,34 @@ const (
 
 // TargetSpecDraft is mutable, pre-resolution input.
 type TargetSpecDraft struct {
-	Family           TargetFamily  // "" => TargetFamilyATRFirstPassage
-	HorizonBars      int           // required, > 0
-	UpperATRMultiple float64       // required, > 0
-	LowerATRMultiple float64       // required, > 0
-	ATRPeriod        int           // 0 => default
+	Family           TargetFamily // "" => TargetFamilyATRFirstPassage
+	HorizonBars      int          // required, > 0
+	UpperATRMultiple float64      // required, > 0
+	LowerATRMultiple float64      // required, > 0
+	ATRPeriod        int          // 0 => CanonicalATRSpec.Period
+	ATRMethod        indicators.ATRMethod
+	ATRLogic         string        // "" => atr:wilder-rma-first-tr-v1
 	DualHit          DualHitPolicy // "" => DualHitExcludeAmbiguous
 }
 
 // TargetSpec is a published, immutable first-passage event definition.
 // Barriers are frozen at candidate close t using information known at t;
 // future ATR/volatility/structure may never move them (FORECAST-SPEC-1 §15).
+// ATR is indicators.ATRSpec (canonical numerical law). Changing ATR does not
+// invalidate FeatureTape; it invalidates LabelSet / model / calibration.
 type TargetSpec struct {
 	Name             string // friendly — excluded from identity
 	Family           TargetFamily
 	HorizonBars      int
 	UpperATRMultiple float64
 	LowerATRMultiple float64
-	ATRPeriod        int
+	ATR              indicators.ATRSpec
 	DualHit          DualHitPolicy
 	Logic            LogicVersion
 }
 
-const defaultATRPeriod = 14
-
 // ResolveTargetSpec applies defaults, validates, and returns the immutable
-// published TargetSpec.
+// published TargetSpec. Omitted ATR fields resolve once to CanonicalATRSpec.
 func ResolveTargetSpec(name string, draft TargetSpecDraft, logic LogicVersion) (TargetSpec, error) {
 	if logic == "" {
 		return TargetSpec{}, fmt.Errorf("forecast: target spec requires a LogicVersion")
@@ -77,9 +83,23 @@ func ResolveTargetSpec(name string, draft TargetSpecDraft, logic LogicVersion) (
 	if draft.UpperATRMultiple <= 0 || draft.LowerATRMultiple <= 0 {
 		return TargetSpec{}, fmt.Errorf("forecast: target spec barrier multiples must be > 0")
 	}
-	atrPeriod := draft.ATRPeriod
-	if atrPeriod <= 0 {
-		atrPeriod = defaultATRPeriod
+	canon := indicators.CanonicalATRSpec()
+	atr := indicators.ATRSpec{
+		Period: draft.ATRPeriod,
+		Method: draft.ATRMethod,
+		Logic:  draft.ATRLogic,
+	}
+	if atr.Period <= 0 {
+		atr.Period = canon.Period
+	}
+	if atr.Method == "" {
+		atr.Method = canon.Method
+	}
+	if atr.Logic == "" {
+		atr.Logic = canon.Logic
+	}
+	if err := indicators.ValidateATRSpec(atr); err != nil {
+		return TargetSpec{}, err
 	}
 	dualHit := draft.DualHit
 	if dualHit == "" {
@@ -91,16 +111,15 @@ func ResolveTargetSpec(name string, draft TargetSpecDraft, logic LogicVersion) (
 		HorizonBars:      draft.HorizonBars,
 		UpperATRMultiple: draft.UpperATRMultiple,
 		LowerATRMultiple: draft.LowerATRMultiple,
-		ATRPeriod:        atrPeriod,
+		ATR:              atr,
 		DualHit:          dualHit,
 		Logic:            logic,
 	}, nil
 }
 
-// HumanKey is a readable identity hint, e.g. "atr_first_passage-h24-u1.50-d1.00".
-// Not identity.
+// HumanKey is a readable identity hint. Not identity.
 func (t TargetSpec) HumanKey() string {
-	return fmt.Sprintf("%s-h%d-u%.2f-d%.2f", t.Family, t.HorizonBars, t.UpperATRMultiple, t.LowerATRMultiple)
+	return fmt.Sprintf("%s-h%d-u%.2f-d%.2f-atr%d", t.Family, t.HorizonBars, t.UpperATRMultiple, t.LowerATRMultiple, t.ATR.Period)
 }
 
 type targetIdentityPayload struct {
@@ -108,20 +127,20 @@ type targetIdentityPayload struct {
 	HorizonBars      int
 	UpperATRMultiple float64
 	LowerATRMultiple float64
-	ATRPeriod        int
+	ATR              indicators.ATRSpec
 	DualHit          DualHitPolicy
 	Logic            LogicVersion
 }
 
 // Identity returns the resolved-config full digest identity. Name is
-// excluded.
+// excluded. ATR Period/Method/Logic are part of TargetDigest.
 func (t TargetSpec) Identity() (Identity, error) {
 	return NewIdentity(t.HumanKey(), targetIdentityPayload{
 		Family:           t.Family,
 		HorizonBars:      t.HorizonBars,
 		UpperATRMultiple: t.UpperATRMultiple,
 		LowerATRMultiple: t.LowerATRMultiple,
-		ATRPeriod:        t.ATRPeriod,
+		ATR:              t.ATR,
 		DualHit:          t.DualHit,
 		Logic:            t.Logic,
 	}, t.Logic)
