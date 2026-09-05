@@ -13,7 +13,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Context:** Kill-check found silent IIR bridging of prefix/inter-candidate primary gaps.
 
-**Decision:** Freeze LABEL-SET-1A as `690d0be` + ATR-history-gap fix. ATR source through last candidate must be contiguous (`data.NextBarOpen`) or generation REFUSES. Future gaps after a candidate stay per-row `PRIMARY_GAP`. `ATRSeries` input stops at last candidate. `LabelSourceRangeDigest` still covers `[init | candidates | needed H tail]`. Inclusive consumed end is `i+H` (`bars[:i+H+1]`).
+**Decision:** Freeze LABEL-SET-1A as `690d0be` + `1433626`. ATR source through last candidate must be contiguous (`data.NextBarOpen`) or generation REFUSES. Future gaps after a candidate stay per-row `PRIMARY_GAP`. `ATRSeries` input stops at last candidate. `LabelSourceRangeDigest` still covers `[init | candidates | needed H tail]`. Inclusive consumed end is `i+H` (`bars[:i+H+1]`).
 
 **Rejected:**
 - Per-row `ATR_HISTORY_GAP` — **Reason:** would persist an artifact with invalid ATR provenance.

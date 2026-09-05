@@ -404,7 +404,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**LABEL-SET-1A ✅ frozen** `690d0be` + gap-fix. Causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
+**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. Causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -510,7 +510,7 @@ Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. To
 
 `LabelSourceRangeDigest` hashes the exact consumed primary bars (LS1S + MarketKey + OpenTime + OHLCV `Float64bits`). Extra caller bars after the used end are not hashed. `ContentDigest` covers header identities, every row `At/Outcome/HitAt/Reason`, and footer range metadata.
 
-**HARD STOP.** Frozen `690d0be` + ATR-history-gap fix. Do not begin LABEL-SET-1B (finer TF) unless asked.
+**HARD STOP.** Frozen `690d0be` + `1433626`. Do not begin LABEL-SET-1B (finer TF) unless asked.
 
 ### Fail closed
 
@@ -625,4 +625,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A frozen `690d0be` + gap-fix.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A frozen `690d0be` + `1433626`.

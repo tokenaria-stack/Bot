@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## LABEL-SET-1A — causal first-passage labels (Sep 2026) ✅ frozen `690d0be` + gap-fix
+## LABEL-SET-1A — causal first-passage labels (Sep 2026) ✅ frozen `690d0be` + `1433626`
 
 - Immutable JSONL `label-set-v1`. Logic `label:first-passage-primary-v1`. One row per FeatureTape row.
 - ATR source `[init | candidates]` must be `NextBarOpen`-contiguous else REFUSE. `ATRSeries` stops at last candidate. Future-path gap → `PRIMARY_GAP`.
