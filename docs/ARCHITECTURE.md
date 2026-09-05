@@ -404,7 +404,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**LABEL-SET-1A ✅** — causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
+**LABEL-SET-1A ✅ frozen** `690d0be` + gap-fix. Causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -502,13 +502,15 @@ Checked `UpdateClosed` refuses nonfinite / High<Low with no IIR mutation. ATR=0 
 
 One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors are not copied. Header pins FeatureTape `PlanDigest` + `SourceRangeDigest` + `ContentDigest`.
 
-ATR: one `indicators.ATRSeries` pass on the consumed primary range `[caller ATR prefix | candidates | needed H tail]`. Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
+Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
-Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. Touches are inclusive High/Low. Same-bar dual-hit → `AMBIGUOUS` / `DUAL_HIT` (`DualHitExcludeAmbiguous` only; `resolve_finer_history` is refused). Complete H with no touch → `TIMEOUT`. Incomplete H without an earlier result → `AMBIGUOUS` / `TRUNCATED_HORIZON` (never fake TIMEOUT). An unexplained missing primary interval before the outcome is known → `AMBIGUOUS` / `PRIMARY_GAP` via `data.NextBarOpen` (calendar-safe). A later gap after a definitive hit is ignored.
+Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
+
+Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. Touches are inclusive High/Low. Same-bar dual-hit → `AMBIGUOUS` / `DUAL_HIT` (`DualHitExcludeAmbiguous` only; `resolve_finer_history` is refused). Complete H with no touch → `TIMEOUT`. Incomplete H without an earlier result → `AMBIGUOUS` / `TRUNCATED_HORIZON` (never fake TIMEOUT). An unexplained missing primary interval **after** the candidate and before the outcome is known → `AMBIGUOUS` / `PRIMARY_GAP`. A later gap after a definitive hit is ignored. A hole in ATR source is not `PRIMARY_GAP`.
 
 `LabelSourceRangeDigest` hashes the exact consumed primary bars (LS1S + MarketKey + OpenTime + OHLCV `Float64bits`). Extra caller bars after the used end are not hashed. `ContentDigest` covers header identities, every row `At/Outcome/HitAt/Reason`, and footer range metadata.
 
-**HARD STOP.** Do not begin LABEL-SET-1B (finer TF) unless asked.
+**HARD STOP.** Frozen `690d0be` + ATR-history-gap fix. Do not begin LABEL-SET-1B (finer TF) unless asked.
 
 ### Fail closed
 
@@ -623,4 +625,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A done. ATR-TRUTH-1 frozen `84124a0`.
+**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A frozen `690d0be` + gap-fix.

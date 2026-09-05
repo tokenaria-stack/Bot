@@ -245,6 +245,25 @@ func consumedEndIndex(lastCandidateIdx, horizon, nBars int) int {
 	return end
 }
 
+// validateATRHistoryContinuity refuses a hole anywhere in the IIR input
+// (caller prefix through last candidate). Future-horizon holes are not
+// this function; they remain per-candidate PRIMARY_GAP.
+func validateATRHistoryContinuity(atrBars []CanonicalClosedBar, interval string) error {
+	if len(atrBars) == 0 {
+		return fmt.Errorf("forecast: refuse empty ATR history")
+	}
+	for i := 1; i < len(atrBars); i++ {
+		expected, err := data.NextBarOpen(atrBars[i-1].OpenTime, interval)
+		if err != nil {
+			return fmt.Errorf("forecast: ATR history timeframe %q: %w", interval, err)
+		}
+		if atrBars[i].OpenTime != expected {
+			return fmt.Errorf("forecast: ATR history has a primary gap at OpenTime %d (expected %d)", atrBars[i].OpenTime, expected)
+		}
+	}
+	return nil
+}
+
 // LabelSourceHasher streams LabelSourceRangeDigest over MarketKey + consumed primary bars.
 type LabelSourceHasher struct {
 	h hash.Hash
@@ -365,13 +384,18 @@ func BuildLabelSet(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, 
 	if err != nil {
 		return LabelHeader{}, nil, Digest{}, err
 	}
-	usedEnd := consumedEndIndex(idxs[len(idxs)-1], spec.HorizonBars, len(bars))
+	lastCandidateIdx := idxs[len(idxs)-1]
+	usedEnd := consumedEndIndex(lastCandidateIdx, spec.HorizonBars, len(bars))
 	consumed := bars[:usedEnd+1]
+	atrBars := consumed[:lastCandidateIdx+1]
+	if err := validateATRHistoryContinuity(atrBars, th.Market.Timeframe); err != nil {
+		return LabelHeader{}, nil, Digest{}, err
+	}
 
-	high := make([]float64, len(consumed))
-	low := make([]float64, len(consumed))
-	close := make([]float64, len(consumed))
-	for i, b := range consumed {
+	high := make([]float64, len(atrBars))
+	low := make([]float64, len(atrBars))
+	close := make([]float64, len(atrBars))
+	for i, b := range atrBars {
 		high[i], low[i], close[i] = b.High, b.Low, b.Close
 	}
 	atr, err := indicators.ATRSeries(spec.ATR, high, low, close)

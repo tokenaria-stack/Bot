@@ -8,11 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## LABEL-SET-1A — causal first-passage labels (Sep 2026) ✅
+## LABEL-SET-1A — causal first-passage labels (Sep 2026) ✅ frozen `690d0be` + gap-fix
 
 - Immutable JSONL `label-set-v1`. Logic `label:first-passage-primary-v1`. One row per FeatureTape row.
-- Canonical `ATRSeries` once. Barriers freeze at `t`. Scan starts `t+1`. High/Low first-passage.
-- `ATR_ZERO` / `DUAL_HIT` / `PRIMARY_GAP` / `TRUNCATED_HORIZON` vs complete `TIMEOUT`.
+- ATR source `[init | candidates]` must be `NextBarOpen`-contiguous else REFUSE. `ATRSeries` stops at last candidate. Future-path gap → `PRIMARY_GAP`.
+- Barriers freeze at `t`. Scan starts `t+1`. High/Low first-passage. Consumed label source is `[0 .. i+H]` inclusive.
 - `market.DumpLabelSet` is Kline conversion only. Next when asked: **LABEL-SET-1B**.
 
 ## ATR-TRUTH-1 — canonical ATR (Sep 2026) ✅ frozen `84124a0`

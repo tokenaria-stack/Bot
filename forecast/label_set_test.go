@@ -285,6 +285,33 @@ func TestLabelSet_TruncatedWithoutHit(t *testing.T) {
 	}
 }
 
+func TestLabelSet_ATRHistoryGapInPrefixRefuses(t *testing.T) {
+	spec := testLabelSpec(t, 4, 2, 2, 2)
+	full := stampBars(t, boundBars(10))
+	c := 4
+	gapped := append(append([]CanonicalClosedBar{}, full[:2]...), full[3:]...)
+	tape := []CanonicalClosedBar{full[c]}
+	dir := t.TempDir()
+	tapePath, _ := writeLabelTape(t, dir, tape, nil)
+	err := GenerateLabelSet(filepath.Join(dir, "t.labelset"), tapePath, spec, gapped, nil)
+	if err == nil || !strings.Contains(err.Error(), "ATR history has a primary gap") {
+		t.Fatalf("prefix gap must refuse generation, got %v", err)
+	}
+}
+
+func TestLabelSet_ATRHistoryGapBetweenCandidatesRefuses(t *testing.T) {
+	spec := testLabelSpec(t, 3, 2, 2, 2)
+	full := stampBars(t, boundBars(12))
+	gapped := append(append([]CanonicalClosedBar{}, full[:6]...), full[7:]...)
+	tape := []CanonicalClosedBar{full[4], full[8]}
+	dir := t.TempDir()
+	tapePath, _ := writeLabelTape(t, dir, tape, nil)
+	err := GenerateLabelSet(filepath.Join(dir, "t.labelset"), tapePath, spec, gapped, nil)
+	if err == nil || !strings.Contains(err.Error(), "ATR history has a primary gap") {
+		t.Fatalf("inter-candidate gap must refuse generation, got %v", err)
+	}
+}
+
 func TestLabelSet_PrimaryGapBeforeOutcome(t *testing.T) {
 	spec := testLabelSpec(t, 5, 2, 2, 2)
 	full := stampBars(t, boundBars(10))
@@ -311,6 +338,42 @@ func TestLabelSet_GapAfterDefinitiveHit(t *testing.T) {
 	_, rows, _ := genLabels(t, spec, tape, gapped, nil)
 	if rows[0].Outcome != OutcomeUpFirst || rows[0].HitAt != full[c+1].OpenTime {
 		t.Fatalf("later gap must not unwind an earlier hit, got %+v", rows[0])
+	}
+}
+
+func TestLabelSet_HorizonNthBarIncludedAndNextExcluded(t *testing.T) {
+	spec := testLabelSpec(t, 3, 1, 1, 2)
+	primary := stampBars(t, boundBars(12))
+	c := 4
+	atr := atrThrough(t, spec, primary, c)
+	upper := primary[c].Close + spec.UpperATRMultiple*atr
+	tape := primary[c : c+1]
+
+	onH := append([]CanonicalClosedBar{}, primary...)
+	onH[c+3].High = upper
+	onH[c+3].Low = primary[c].Close
+	_, rowsH, ftH := genLabels(t, spec, tape, onH, nil)
+	if rowsH[0].Outcome != OutcomeUpFirst || rowsH[0].HitAt != onH[c+3].OpenTime {
+		t.Fatalf("H-th subsequent bar must be visible, got %+v", rowsH[0])
+	}
+	wantConsumed := onH[:consumedEndIndex(c, spec.HorizonBars, len(onH))+1]
+	if len(wantConsumed) != c+spec.HorizonBars+1 {
+		t.Fatalf("consumed len %d want %d", len(wantConsumed), c+spec.HorizonBars+1)
+	}
+	if ftH.LabelSourceRangeDigest != LabelSourceRangeDigest(testTapeHeader().Market, wantConsumed) {
+		t.Fatal("consumed range must be [0 .. i+H] inclusive")
+	}
+
+	beyond := append([]CanonicalClosedBar{}, primary...)
+	beyond[c+4].High = upper
+	beyond[c+4].Low = primary[c].Close
+	_, rowsB, ftB := genLabels(t, spec, tape, beyond, nil)
+	if rowsB[0].Outcome != OutcomeTimeout || rowsB[0].HitAt != 0 {
+		t.Fatalf("H+1 subsequent bar must be invisible, got %+v", rowsB[0])
+	}
+	wantTimeout := primary[:consumedEndIndex(c, spec.HorizonBars, len(primary))+1]
+	if ftB.LabelSourceRangeDigest != LabelSourceRangeDigest(testTapeHeader().Market, wantTimeout) {
+		t.Fatal("H+1 bar is outside consumed source")
 	}
 }
 
