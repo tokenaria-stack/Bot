@@ -8,11 +8,19 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FEATURE-TAPE-RSX-REGEN-1 — analysis:v2 tape (Sep 2026) ✅
+
+- Regenerated four-column FeatureTape (`rsx_value`, `rsx_signal`, `tv_bull_present`, `tv_bull_age`) via frozen `market.DumpFeatureTape`.
+- AnalysisLogicVersion `analysis:v2`. FeatureRecipe/schema unchanged. PlanDigest differs from analysis:v1.
+- Local artifact under `research/tapes/` (not committed). Next when asked: RESEARCH-DATASET-1.
+
+---
+
 ## RSX-TV-ONE-BRAIN-1 — one Everget transducer (Sep 2026) ✅ frozen `4688160`
 
 - `indicators.RSTVState.UpdateClosed` owns `rsx_tv_div` and `rsx_tv_pivot`. Deleted windowed/prefix reconstructors.
 - AnalysisLogicVersion `analysis:v2`. UI Bull/Bear match TradingView. `TV-BULL-QUARANTINE-1` closed.
-- Do not reopen RSX/Everget unless a real regression. Tape regen is **FEATURE-TAPE-RSX-REGEN-1**.
+- Do not reopen RSX/Everget unless a real regression. **FEATURE-TAPE-RSX-REGEN-1** closed.
 
 ---
 

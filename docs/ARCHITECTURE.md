@@ -400,7 +400,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **FEATURE-TAPE-1A ✅ frozen `b88bcd2`.** Do not re-audit. Host: `market.FeatureEvaluator` (Frame stays FeatureID-free). `forecast` still does not import `market`.
 
-**FEATURE-TAPE-1B ✅ frozen `6715718`.** JSONL FeatureTape dump. Do not re-audit unless decoded rows ≠ 1A Fill, digests fail integrity, or a real concurrent-writer requirement appears.
+**FEATURE-TAPE-1B ✅ frozen `6715718`.** JSONL FeatureTape dump. **FEATURE-TAPE-RSX-REGEN-1 ✅** regenerated the four-column tape under `analysis:v2` via the same dumper. Do not re-audit 1B.
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 

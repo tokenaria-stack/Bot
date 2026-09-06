@@ -35,8 +35,8 @@ On request / only when the task needs them:
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** |
-| NEXT | **MODEL** when asked. First: **FEATURE-TAPE-RSX-REGEN-1**. Parked: VOLUME-INGEST-1, FRACTAL-MARKER-SSOT-1, ATR-VALUES-FRAME-1. |
-| RSX | **RSX-TV-ONE-BRAIN-1 frozen** `4688160`. **MARKET-RSX-PARITY-1 closed.** **TV-BULL-QUARANTINE-1 closed.** Do not reopen RSX unless regression. |
+| NEXT | **RESEARCH-DATASET-1** when asked. Parked: VOLUME-INGEST-1, FRACTAL-MARKER-SSOT-1, ATR-VALUES-FRAME-1. |
+| RSX | **RSX-TV-ONE-BRAIN-1 frozen** `4688160`. **FEATURE-TAPE-RSX-REGEN-1 closed** (analysis:v2 tape). Do not reopen RSX unless regression. |
 | Wozduh | **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`) |
 
 Update the owning SSOT file — do not duplicate content here.
