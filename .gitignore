@@ -20,8 +20,9 @@ server/server/
 
 # Compiled binaries / test artifacts
 trading_bot
-# Research artifacts (local FeatureTape dumps; not identity SSOT)
+# Research artifacts (local FeatureTape / LabelSet dumps; not identity SSOT)
 research/tapes/
+research/labels/
 *.test
 *.exe
 *.out

@@ -152,6 +152,15 @@ func researchTapeFileName(key forecast.MarketKey, plan forecast.Digest) string {
 
 func loadResearchClosedBars(t *testing.T) []exchange.Kline {
 	t.Helper()
+	out := loadResearchClosedBarsTF(t, ResearchMarketKey().Timeframe)
+	if len(out) < 2000 {
+		t.Fatalf("archive too short: %d", len(out))
+	}
+	return out
+}
+
+func loadResearchClosedBarsTF(t *testing.T, timeframe string) []exchange.Kline {
+	t.Helper()
 	root, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
@@ -162,12 +171,12 @@ func loadResearchClosedBars(t *testing.T) []exchange.Kline {
 	}
 	now := time.Now().UnixMilli()
 	start := ResearchSourceStartMs(ResearchMarketKey())
-	candles, err := exchange.LoadContinuousContractFromDB("BTCUSDT", "15m", start, now, 0)
+	candles, err := exchange.LoadContinuousContractFromDB("BTCUSDT", timeframe, start, now, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candles) < 2000 {
-		t.Fatalf("archive too short: %d", len(candles))
+	if len(candles) == 0 {
+		t.Fatalf("no %s FUTURES_PERP research bars", timeframe)
 	}
 	out := make([]exchange.Kline, 0, len(candles))
 	for _, c := range candles {
@@ -181,11 +190,11 @@ func loadResearchClosedBars(t *testing.T) []exchange.Kline {
 		out = out[:len(out)-1]
 	}
 	if len(out) == 0 {
-		t.Fatal("no closed bars")
+		t.Fatalf("no closed %s bars", timeframe)
 	}
 	minAt := ResearchSourceStartMs(ResearchMarketKey())
 	if out[0].OpenTime < minAt {
-		t.Fatalf("FUTURES_PERP research bars must not start before futures genesis: first=%d genesis=%d", out[0].OpenTime, minAt)
+		t.Fatalf("FUTURES_PERP research %s must not start before futures genesis: first=%d genesis=%d", timeframe, out[0].OpenTime, minAt)
 	}
 	return out
 }
