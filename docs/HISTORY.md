@@ -8,11 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RESEARCH-DATASET-1 — tape + LabelSet consumption (Sep 2026) ✅
+
+- `forecast.BuildResearchDataset` opens both artifacts, checks all three tape identities + exact MarketKey + TargetDigest, locksteps `At[i]`, partitions eligibility. In-memory `ResearchRow` only.
+- Next when asked: VALIDATION-PLAN-1. Do not start it here.
+
 ## FEATURE-TAPE-RSX-REGEN-1 — analysis:v2 tape (Sep 2026) ✅
 
 - Regenerated four-column FeatureTape via frozen `market.DumpFeatureTape`.
 - First dump incorrectly used chart continuous-contract (spot from 2017). **Rejected.** Canonical tape starts at USD-M listing genesis (`BinanceFuturesGenesisMs`).
-- AnalysisLogicVersion `analysis:v2`. Next when asked: RESEARCH-DATASET-1 on the listing-genesis tape only.
+- AnalysisLogicVersion `analysis:v2`. Consumed by RESEARCH-DATASET-1.
 
 ---
 

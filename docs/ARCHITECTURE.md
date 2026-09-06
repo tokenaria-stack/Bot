@@ -502,6 +502,10 @@ Checked `UpdateClosed` refuses nonfinite / High<Low with no IIR mutation. ATR=0 
 
 One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors are not copied. Header pins FeatureTape `PlanDigest` + `SourceRangeDigest` + `ContentDigest`.
 
+### RESEARCH-DATASET-1 (strict consumption)
+
+`forecast.BuildResearchDataset(tapePath, labelPath, expect)` opens both artifacts. Provenance first: exact `MarketKey`, `FirstAt >=` caller floor (research: `BinanceFuturesGenesisMs`), current FeaturePlan digest, LabelSet pins all three tape identities, exact `TargetDigest`. Then lockstep `len` + `At[i]`. Then exclusive eligibility: `!Ready` → FeatureNotReady; else non `{UP,DOWN,TIMEOUT}` → `ExcludedByReason`; else copied `ResearchRow`. Partition must close. In-memory only — no dataset file. No `SameFamily` at this boundary. **HARD STOP** before VALIDATION-PLAN-1.
+
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
 Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
