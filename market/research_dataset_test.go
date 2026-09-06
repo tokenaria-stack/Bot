@@ -27,17 +27,9 @@ func TestBuildResearchDataset_CanonicalArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tapePath := filepath.Join(root, "research", "tapes", researchTapeFileName(wantKey, planID.Digest))
-	labelPath := filepath.Join(root, "research", "labels", researchLabelSetFileName(wantKey, planID.Digest, targetID.Digest))
-	if _, err := os.Stat(tapePath); err != nil {
-		t.Skip("canonical FeatureTape not present")
-	}
-	if _, err := os.Stat(labelPath); err != nil {
-		t.Skip("canonical LabelSet not present")
+	tapePath, labelPath, ok := canonicalResearchArtifactPaths(t, wantKey, planID.Digest, targetID.Digest)
+	if !ok {
+		t.Skip("canonical FeatureTape/LabelSet not present")
 	}
 
 	rows, acc, err := forecast.BuildResearchDataset(tapePath, labelPath, forecast.ResearchDatasetExpect{
@@ -61,4 +53,21 @@ func TestBuildResearchDataset_CanonicalArtifacts(t *testing.T) {
 		acc.ExcludedByReason[forecast.ReasonFinerDualHit] != 60 {
 		t.Fatalf("excluded snapshot %+v", acc.ExcludedByReason)
 	}
+}
+
+func canonicalResearchArtifactPaths(t *testing.T, key forecast.MarketKey, plan, target forecast.Digest) (tapePath, labelPath string, ok bool) {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tapePath = filepath.Join(root, "research", "tapes", researchTapeFileName(key, plan))
+	labelPath = filepath.Join(root, "research", "labels", researchLabelSetFileName(key, plan, target))
+	if _, err := os.Stat(tapePath); err != nil {
+		return "", "", false
+	}
+	if _, err := os.Stat(labelPath); err != nil {
+		return "", "", false
+	}
+	return tapePath, labelPath, true
 }
