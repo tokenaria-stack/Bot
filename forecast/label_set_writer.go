@@ -56,7 +56,7 @@ func CreateLabelWriter(finalPath string, hdr LabelHeader) (*LabelWriter, error) 
 		content: newLabelContentHasher(),
 	}
 	w.content.header(hdr)
-	if err := enc.Encode(labelHeaderJSON{
+	hj := labelHeaderJSON{
 		Kind:                         labelKindHeader,
 		FormatVersion:                hdr.FormatVersion,
 		Market:                       marketJSON(hdr.Market),
@@ -65,7 +65,12 @@ func CreateLabelWriter(finalPath string, hdr LabelHeader) (*LabelWriter, error) 
 		FeatureTapePlanDigest:        hdr.FeatureTapePlanDigest.String(),
 		FeatureTapeSourceRangeDigest: hdr.FeatureTapeSourceRangeDigest.String(),
 		FeatureTapeContentDigest:     hdr.FeatureTapeContentDigest.String(),
-	}); err != nil {
+	}
+	if hdr.FormatVersion == LabelSetFormatV2 {
+		fm := marketJSON(hdr.FinerMarket)
+		hj.FinerMarket = &fm
+	}
+	if err := enc.Encode(hj); err != nil {
 		w.abort()
 		return nil, err
 	}
@@ -104,8 +109,17 @@ func (w *LabelWriter) WriteRow(row LabelRow) error {
 	return nil
 }
 
-// Finish writes the footer, flushes, closes, and atomically renames temp → final.
+// Finish writes a v1 footer. v2 must go through writeLabelBuild so
+// FinerSourceDigest / FinerWindowCount are hashed.
 func (w *LabelWriter) Finish(sourceRange Digest) error {
+	if w != nil && !w.closed && w.hdr.FormatVersion == LabelSetFormatV2 {
+		w.abort()
+		return fmt.Errorf("forecast: label-set-v2 requires finer source provenance")
+	}
+	return w.finish(sourceRange, Digest{}, 0)
+}
+
+func (w *LabelWriter) finish(sourceRange, finerSource Digest, finerWindows int) error {
 	if w == nil || w.closed {
 		return fmt.Errorf("forecast: label-set writer is closed")
 	}
@@ -118,16 +132,21 @@ func (w *LabelWriter) Finish(sourceRange Digest) error {
 		w.abort()
 		return fmt.Errorf("forecast: LabelSourceRangeDigest is required")
 	}
-	w.content.meta(sourceRange, w.count, w.firstAt, w.lastAt)
+	w.content.meta(sourceRange, finerSource, finerWindows, w.count, w.firstAt, w.lastAt, w.hdr.FormatVersion)
 	content := w.content.sum()
-	if err := w.enc.Encode(labelFooterJSON{
+	fj := labelFooterJSON{
 		Kind:                   labelKindFooter,
 		LabelSourceRangeDigest: sourceRange.String(),
 		RowCount:               w.count,
 		FirstAt:                w.firstAt,
 		LastAt:                 w.lastAt,
 		ContentDigest:          content.String(),
-	}); err != nil {
+	}
+	if w.hdr.FormatVersion == LabelSetFormatV2 {
+		fj.FinerSourceDigest = finerSource.String()
+		fj.FinerWindowCount = finerWindows
+	}
+	if err := w.enc.Encode(fj); err != nil {
 		w.abort()
 		return err
 	}
@@ -170,22 +189,35 @@ func (w *LabelWriter) abort() {
 
 // GenerateLabelSet writes one immutable LabelSet for a FeatureTape + primary bars + TargetSpec.
 func GenerateLabelSet(finalPath, tapePath string, spec TargetSpec, bars []CanonicalClosedBar, expect *LabelExpect) error {
-	hdr, rows, src, err := BuildLabelSet(tapePath, spec, bars, expect)
+	b, err := buildLabels(tapePath, spec, bars, MarketKey{}, nil, expect)
 	if err != nil {
 		return err
 	}
-	return writeLabelSet(finalPath, hdr, rows, src)
+	return writeLabelBuild(finalPath, b)
+}
+
+// GenerateLabelSetWithFiner writes a v2 LabelSet using materialized finer history.
+func GenerateLabelSetWithFiner(finalPath, tapePath string, spec TargetSpec, bars []CanonicalClosedBar, finerMarket MarketKey, finer []CanonicalClosedBar, expect *LabelExpect) error {
+	b, err := buildLabels(tapePath, spec, bars, finerMarket, finer, expect)
+	if err != nil {
+		return err
+	}
+	return writeLabelBuild(finalPath, b)
 }
 
 func writeLabelSet(finalPath string, hdr LabelHeader, rows []LabelRow, src Digest) error {
-	w, err := CreateLabelWriter(finalPath, hdr)
+	return writeLabelBuild(finalPath, labelBuild{Header: hdr, Rows: rows, Source: src})
+}
+
+func writeLabelBuild(finalPath string, b labelBuild) error {
+	w, err := CreateLabelWriter(finalPath, b.Header)
 	if err != nil {
 		return err
 	}
-	for _, row := range rows {
+	for _, row := range b.Rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
 		}
 	}
-	return w.Finish(src)
+	return w.finish(b.Source, b.FinerSource, b.FinerWindows)
 }

@@ -404,7 +404,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. Causal primary-TF first-passage LabelSet. Next when asked: **LABEL-SET-1B**.
+**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. **LABEL-SET-1B** pinned same-family finer dual-hit resolution. Next when asked: model/training — not TARGET-RESOLUTION-2 unless asked.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -426,7 +426,7 @@ MARKET TRUTH → ANALYTICAL TRUTH + FACTS → FeaturePlan → feature vector
 | `AnalysisRecipe` | indicator periods/sources/lookbacks, init/warmup law (via `LogicVersion`) | paint, weights, feature selection, TargetSpec, Decision thresholds |
 | `FeatureRecipe` | which deterministic measurements are extracted (reusable across `AnalysisRecipe`s) | weights, arbitrary scoring |
 | `FeaturePlan` | compiled bind of one `AnalysisRecipe` + one `FeatureRecipe` + logic versions | node graph / registry / plugin traversal |
-| `TargetSpec` | frozen first-passage event + canonical `indicators.ATRSpec` | trade exits (`ExecutionSpec`); FeatureTape columns |
+| `TargetSpec` | frozen first-passage event + canonical `indicators.ATRSpec` + optional pinned `FinerTimeframe` | trade exits (`ExecutionSpec`); FeatureTape columns |
 | `ForecastArtifactPinned` | which Market/Analysis/Features/Plan/Target identities a future artifact must pin | weights/scaler/calibration (added in FORECAST-RUNTIME-1) |
 | `ForecastFrame` | minimal output shape + fail-closed validators | model arithmetic |
 | `PaintPreset` | presentation only (concept, not yet a type) | anything numerical |
@@ -454,7 +454,7 @@ Existing NaN-as-"output unavailable" sentinels (sleeping RSX/Wozduh slots) remai
 
 ### Candidate / TargetSpec / dual-hit
 
-v1 candidate universe: every eligible closed bar (no strategy pre-filter). One `TargetFamilyATRFirstPassage` in v1: barriers frozen at candidate close `t` from information known at `t`. Dual-hit (`DualHitPolicy`): resolve only with strictly finer history from the **same** `MarketKey` family (`SameFamily` — never spot resolving futures or vice versa), otherwise `TARGET_AMBIGUOUS` and **exclude from fitting** — never guessed, never a fourth model class.
+v1 candidate universe: every eligible closed bar (no strategy pre-filter). One `TargetFamilyATRFirstPassage` in v1: barriers frozen at candidate close `t` from information known at `t`. Dual-hit (`DualHitPolicy`): `exclude_ambiguous` stays `AMBIGUOUS`/`DUAL_HIT`; `resolve_finer_history` requires exactly one `FinerTimeframe` and one same-family finer stream (`SameFamily` — never spot resolving futures or vice versa). Never guessed, never a fourth model class.
 
 ### HTF closed availability / At vs actionable
 
@@ -506,11 +506,27 @@ Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous
 
 Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
 
-Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. Touches are inclusive High/Low. Same-bar dual-hit → `AMBIGUOUS` / `DUAL_HIT` (`DualHitExcludeAmbiguous` only; `resolve_finer_history` is refused). Complete H with no touch → `TIMEOUT`. Incomplete H without an earlier result → `AMBIGUOUS` / `TRUNCATED_HORIZON` (never fake TIMEOUT). An unexplained missing primary interval **after** the candidate and before the outcome is known → `AMBIGUOUS` / `PRIMARY_GAP`. A later gap after a definitive hit is ignored. A hole in ATR source is not `PRIMARY_GAP`.
+Scan starts at the next primary closed bar (`t+1`), never candidate High/Low. Touches are inclusive High/Low. Same-bar dual-hit → `AMBIGUOUS` / `DUAL_HIT` under `exclude_ambiguous`. Complete H with no touch → `TIMEOUT`. Incomplete H without an earlier result → `AMBIGUOUS` / `TRUNCATED_HORIZON` (never fake TIMEOUT). An unexplained missing primary interval **after** the candidate and before the outcome is known → `AMBIGUOUS` / `PRIMARY_GAP`. A later gap after a definitive hit is ignored. A hole in ATR source is not `PRIMARY_GAP`.
 
 `LabelSourceRangeDigest` hashes the exact consumed primary bars (LS1S + MarketKey + OpenTime + OHLCV `Float64bits`). Extra caller bars after the used end are not hashed. `ContentDigest` covers header identities, every row `At/Outcome/HitAt/Reason`, and footer range metadata.
 
-**HARD STOP.** Frozen `690d0be` + `1433626`. Do not begin LABEL-SET-1B (finer TF) unless asked.
+**HARD STOP.** LABEL-SET-1A frozen `690d0be` + `1433626`. Do not reopen primary first-passage physics.
+
+### LABEL-SET-1B (pinned finer dual-hit resolution)
+
+Not a second labeler. `firstPassage` stays 1A. Only a primary `DUAL_HIT` plus `DualHitPolicy=resolve_finer_history` may call `resolveFinerDualHit`. `exclude_ambiguous` rows stay 1A (`DUAL_HIT`).
+
+`TargetSpec.FinerTimeframe` is identity. Required and non-empty iff resolve; must be empty iff exclude. Empty field is `json omitempty` so frozen exclude `TargetDigest` bytes stay 1A-identical. `1m` vs `1s` are different digests. No fallback list.
+
+Finer source is one materialized same-family `FinerMarketKey` (`SameFamily` = venue+instrument+contract). Header timeframe must equal `TargetSpec.FinerTimeframe`. Caller materializes bars; `forecast` does not import `market`/`exchange` and does not query archives. `market.DumpLabelSetWithFiner` only converts both `[]Kline` slices.
+
+“Finer” is calendar tiling via `data.NextBarOpen`, not duration ranking: hops from parent open `P` must land exactly on `NextBarOpen(P, primaryTF)` and never jump past it. Current historical research TargetSpec pins **15m → 1m** (MarketKey 15m + FinerTimeframe 1m). Engine has no 1m/1s default and no runtime TF fallback.
+
+Parent window `[P, Q)`. Finer path must begin at `P`. Missing initial segment → `FINER_MISSING`. Gap before a result → `FINER_GAP`. A later gap after a definitive finer touch is ignored. A finer bar that itself dual-hits → `FINER_DUAL_HIT`. Complete contiguous finer tiling with no touch despite primary OHLC → `FINER_INCONSISTENT` (row-level; do not kill the LabelSet). Successful resolve → `UP_FIRST`/`DOWN_FIRST` and `Reason=NONE`. `HitAt` remains the **primary** dual-hit `OpenTime`.
+
+Format `label-set-v2`, logic `label:first-passage-finer-v1`. Header adds `FinerMarketKey`. Footer adds `FinerSourceDigest` (domain `LS1F` + FinerMarketKey + per dual-hit attempt: CandidateAt, PrimaryDualHitAt, consulted bars until stop) and `FinerWindowCount` (attempts, not successes). Zero primary dual-hits hashes FinerMarketKey with zero windows and does not consume unused finer archive. An attempted window with zero bars is a different digest. `ContentDigest` covers FinerMarketKey, rows, and those footer fields.
+
+**HARD STOP.** 1s historical microscope is **TARGET-RESOLUTION-2** in `OPEN_DEBTS.md` — a separate TargetSpec, not an upgrade of 15m→1m.
 
 ### Fail closed
 
@@ -539,7 +555,7 @@ Walk-forward fold models exist only to produce honest out-of-fold predictions fo
 
 ### v1 scope / deferred machinery
 
-v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built in this chapter: LABEL-SET-1B finer dual-hit, Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability. REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
+v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built here: Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability, TARGET-RESOLUTION-2 (separate 15m→1s TargetSpec). REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
 
 **Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, Falcon, old scores, strategies, execution, backtest, Decision.
 
@@ -625,4 +641,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md` — **LABEL-SET-1B** when asked. LABEL-SET-1A frozen `690d0be` + `1433626`.
+**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-1B done. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred.

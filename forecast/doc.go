@@ -51,8 +51,9 @@
 //   - TargetSpec: first-passage UP_FIRST/DOWN_FIRST/TIMEOUT event, frozen
 //     barriers, explicit dual-hit policy. AMBIGUOUS is a dataset status, not
 //     a fourth model class.
-//   - LabelSet (LABEL-SET-1A): immutable JSONL outcomes for one FeatureTape
-//   - TargetSpec using canonical ATR-TRUTH-1 and primary-TF first-passage.
+//   - LabelSet: immutable JSONL outcomes for one FeatureTape + TargetSpec.
+//     v1 is primary-TF first-passage. v2 may resolve primary DUAL_HIT with one
+//     pinned same-family FinerTimeframe (LABEL-SET-1B).
 //   - ForecastFrame + PublishForecastFrame: the fail-closed gate. No frame is
 //     ever produced from a not-Ready fill or a nonfinite/out-of-range
 //     probability set.

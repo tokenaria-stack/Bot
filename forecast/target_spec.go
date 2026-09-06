@@ -49,6 +49,7 @@ type TargetSpecDraft struct {
 	ATRMethod        indicators.ATRMethod
 	ATRLogic         string        // "" => atr:wilder-rma-first-tr-v1
 	DualHit          DualHitPolicy // "" => DualHitExcludeAmbiguous
+	FinerTimeframe   string        // required iff DualHit == DualHitResolveFinerHistory
 }
 
 // TargetSpec is a published, immutable first-passage event definition.
@@ -64,6 +65,7 @@ type TargetSpec struct {
 	LowerATRMultiple float64
 	ATR              indicators.ATRSpec
 	DualHit          DualHitPolicy
+	FinerTimeframe   string // empty iff DualHitExcludeAmbiguous
 	Logic            LogicVersion
 }
 
@@ -105,6 +107,18 @@ func ResolveTargetSpec(name string, draft TargetSpecDraft, logic LogicVersion) (
 	if dualHit == "" {
 		dualHit = DualHitExcludeAmbiguous
 	}
+	switch dualHit {
+	case DualHitExcludeAmbiguous:
+		if draft.FinerTimeframe != "" {
+			return TargetSpec{}, fmt.Errorf("forecast: exclude_ambiguous forbids FinerTimeframe")
+		}
+	case DualHitResolveFinerHistory:
+		if draft.FinerTimeframe == "" {
+			return TargetSpec{}, fmt.Errorf("forecast: resolve_finer_history requires FinerTimeframe")
+		}
+	default:
+		return TargetSpec{}, fmt.Errorf("forecast: unknown DualHitPolicy %q", dualHit)
+	}
 	return TargetSpec{
 		Name:             name,
 		Family:           family,
@@ -113,6 +127,7 @@ func ResolveTargetSpec(name string, draft TargetSpecDraft, logic LogicVersion) (
 		LowerATRMultiple: draft.LowerATRMultiple,
 		ATR:              atr,
 		DualHit:          dualHit,
+		FinerTimeframe:   draft.FinerTimeframe,
 		Logic:            logic,
 	}, nil
 }
@@ -129,11 +144,14 @@ type targetIdentityPayload struct {
 	LowerATRMultiple float64
 	ATR              indicators.ATRSpec
 	DualHit          DualHitPolicy
+	FinerTimeframe   string `json:"FinerTimeframe,omitempty"`
 	Logic            LogicVersion
 }
 
 // Identity returns the resolved-config full digest identity. Name is
 // excluded. ATR Period/Method/Logic are part of TargetDigest.
+// Empty FinerTimeframe is omitted so exclude_ambiguous digests stay
+// byte-identical to LABEL-SET-1A.
 func (t TargetSpec) Identity() (Identity, error) {
 	return NewIdentity(t.HumanKey(), targetIdentityPayload{
 		Family:           t.Family,
@@ -142,6 +160,7 @@ func (t TargetSpec) Identity() (Identity, error) {
 		LowerATRMultiple: t.LowerATRMultiple,
 		ATR:              t.ATR,
 		DualHit:          t.DualHit,
+		FinerTimeframe:   t.FinerTimeframe,
 		Logic:            t.Logic,
 	}, t.Logic)
 }

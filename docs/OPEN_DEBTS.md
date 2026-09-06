@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). Next when asked: **LABEL-SET-1B**.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B** pinned finer dual-hit. Next when asked: model/training. **TARGET-RESOLUTION-2** deferred.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -53,7 +53,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
-**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). Do not reopen ATR. Next when asked: **LABEL-SET-1B**.
+**FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B** done. Do not reopen ATR or 1A physics. **TARGET-RESOLUTION-2** deferred (separate 15m→1s TargetSpec).
 
 **MICRO-IDLE-1 ✅ closed (not worth implementing).** Idle ChartOnly, no micro charts: five child reducers + unused Frame ticks ≈ **6µs per 1s parent** (~6µs CPU per wall-clock second). Forming ticks dominate count (6000 forming / 505 closed per 1200 parents); that is OHLCV + empty DAG skip, not Jurik. Sleeping that path is not worth a second lifecycle. Reducers and sparse tip stay frozen.
 
@@ -79,9 +79,19 @@ At chapter start: read rows whose **Owner** is this chapter. Implement or reassi
 
 Implemented: TargetSpec ATR does not rebuild FeatureTape; label source = ATR prefix + candidates + needed H tail; ATR source = prefix + candidates and must be `NextBarOpen`-contiguous else REFUSE generation; `ATRSeries` stops at last candidate; future-path gap → `PRIMARY_GAP` (not whole-run refuse); barriers frozen at `t`; scan `t+1`; High/Low; ATR<=0 → `ATR_ZERO`; nonfinite ATR/barriers refuse; truncated no-hit → `TRUNCATED_HORIZON`; caller prefix is the actual IIR init (no invented history); 1:1 tape rows including Ready=false; primary dual-hit → `DUAL_HIT`; canonical ATR only.
 
-### Owner: LABEL-SET-1B
+### Owner: LABEL-SET-1B ✅
 
-SameFamily finer TF only (never spot↔perp). Finer bars closed inside the dual-hit primary candle. Missing/gapped/finer dual-hit → AMBIGUOUS. Separate `FinerSourceRangeDigest`. No UI MTF path.
+Implemented: one pinned `FinerTimeframe` on resolve TargetSpec (`omitempty` when empty so exclude digests stay 1A); SameFamily finer MarketKey; calendar tiling via `data.NextBarOpen`; resolver only after primary `DUAL_HIT`; `FINER_MISSING` / `FINER_GAP` / `FINER_DUAL_HIT` / `FINER_INCONSISTENT`; successful resolve is UP/DOWN + `Reason=NONE`; `HitAt` stays primary; `label-set-v2` + `FinerSourceDigest` of consulted evidence; `FinerWindowCount` = attempts. No 1s fallback, no provider, no second walker.
+
+### Owner: TARGET-RESOLUTION-2
+
+CURRENT LAW: historical 15m research TargetSpec pins `FinerTimeframe=1m` so deep-history resolution is uniform.
+
+DEFERRED: when durable 1s history exists, publish a **separate** TargetSpec (`primary=15m`, `finer=1s`). Do not silently upgrade 15m→1m. Different `FinerTimeframe` ⇒ different TargetDigest, LabelSet, and downstream ForecastArtifact/calibration/ranking.
+
+CURRENT 1s DATA: about 24h durable history today.
+
+RESEARCH BEFORE ADOPTION (do not implement in 1B): on the overlap where 1m and 1s both exist, compare total 15m primary dual-hits; % resolved by 1m; % remaining `FINER_DUAL_HIT` under 1m; % additionally resolved by 1s; 1m vs 1s UP/DOWN disagreement; ambiguity reduction from 1s. Purpose: whether years of durable 1s storage are worth the cost.
 
 ### Owner: chart TargetBarrier chapter
 
@@ -105,7 +115,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **1B next** | SPEC frozen. FeatureTape 1A/1B frozen. ATR-TRUTH-1 frozen `84124a0`. **LABEL-SET-1A frozen** `690d0be` + `1433626`. Next: **LABEL-SET-1B** when asked (finer dual-hit). Then MODEL → … |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **model next** | SPEC + FeatureTape 1A/1B + ATR-TRUTH-1 + LABEL-SET-1A + **LABEL-SET-1B** done. **TARGET-RESOLUTION-2** deferred. Next: MODEL when asked. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

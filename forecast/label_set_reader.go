@@ -63,6 +63,9 @@ func decodeLabelSet(r io.Reader, expect *LabelExpect) (LabelHeader, []LabelRow, 
 		FeatureTapeSourceRangeDigest: tapeSrc,
 		FeatureTapeContentDigest:     tapeContent,
 	}
+	if hj.FinerMarket != nil {
+		hdr.FinerMarket = marketFromJSON(*hj.FinerMarket)
+	}
 	if err := validateLabelHeader(hdr); err != nil {
 		return LabelHeader{}, nil, LabelFooter{}, err
 	}
@@ -154,7 +157,22 @@ func decodeLabelSet(r io.Reader, expect *LabelExpect) (LabelHeader, []LabelRow, 
 			if src == zero {
 				return LabelHeader{}, nil, LabelFooter{}, fmt.Errorf("forecast: LabelSourceRangeDigest is required")
 			}
-			content.meta(src, fj.RowCount, fj.FirstAt, fj.LastAt)
+			var finerSrc Digest
+			if hdr.FormatVersion == LabelSetFormatV2 {
+				if fj.FinerSourceDigest == "" {
+					return LabelHeader{}, nil, LabelFooter{}, fmt.Errorf("forecast: label-set-v2 FinerSourceDigest is required")
+				}
+				finerSrc, err = ParseDigestHex(fj.FinerSourceDigest)
+				if err != nil {
+					return LabelHeader{}, nil, LabelFooter{}, err
+				}
+				if finerSrc == zero {
+					return LabelHeader{}, nil, LabelFooter{}, fmt.Errorf("forecast: FinerSourceDigest is required")
+				}
+			} else if fj.FinerSourceDigest != "" || fj.FinerWindowCount != 0 {
+				return LabelHeader{}, nil, LabelFooter{}, fmt.Errorf("forecast: label-set-v1 forbids finer footer fields")
+			}
+			content.meta(src, finerSrc, fj.FinerWindowCount, fj.RowCount, fj.FirstAt, fj.LastAt, hdr.FormatVersion)
 			want := content.sum()
 			if want != gotContent {
 				return LabelHeader{}, nil, LabelFooter{}, fmt.Errorf("forecast: label-set ContentDigest mismatch")
@@ -165,6 +183,8 @@ func decodeLabelSet(r io.Reader, expect *LabelExpect) (LabelHeader, []LabelRow, 
 				FirstAt:                fj.FirstAt,
 				LastAt:                 fj.LastAt,
 				ContentDigest:          gotContent,
+				FinerSourceDigest:      finerSrc,
+				FinerWindowCount:       fj.FinerWindowCount,
 			}
 			sawFooter = true
 		default:

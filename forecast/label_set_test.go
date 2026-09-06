@@ -482,8 +482,8 @@ func TestLabelSet_TargetIdentity(t *testing.T) {
 		DualHit:          DualHitResolveFinerHistory,
 		Logic:            "labels:v1",
 	}, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "DualHitPolicy") {
-		t.Fatalf("1A must refuse finer dual-hit policy, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "FinerTimeframe") {
+		t.Fatalf("resolve_finer_history without FinerTimeframe must refuse, got %v", err)
 	}
 }
 

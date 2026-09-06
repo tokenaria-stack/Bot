@@ -9,6 +9,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## LABEL-SET-1B pinned microscope (Sep 2026)
+
+**Context:** Primary OHLC can prove both barriers were touched without encoding order. 15m history is deep; durable 1s history is ~24h.
+
+**Decision:** One explicit `FinerTimeframe` on TargetSpec. Empty field is omitted from the identity payload so exclude_ambiguous TargetDigest stays byte-identical to 1A. Resolve uses one materialized same-family stream. Historical 15m research pins 1m. Successful finer order becomes normal UP/DOWN; `HitAt` stays the primary dual-hit bar.
+
+**Rejected:**
+- Duration ranking / `primaryMs % finerMs` — **Reason:** calendar intervals (1M) are not a millisecond lattice.
+- 1s fallback when 1m is pinned — **Reason:** two observational laws under one TargetDigest.
+- Second primary walker / LabelerV2 — **Reason:** 1A physics must stay frozen.
+- Storing finer OpenTime in HitAt — **Reason:** one field, one timeline.
+- Implementing 15m→1s now — **Reason:** TARGET-RESOLUTION-2; needs overlap measurement first.
+
+**Consequences:** Changing FinerTimeframe is a new LabelSet. Do not upgrade 15m→1m in place.
+
 ## LABEL-SET-1A freeze (Sep 2026)
 
 **Context:** Kill-check found silent IIR bridging of prefix/inter-candidate primary gaps.
