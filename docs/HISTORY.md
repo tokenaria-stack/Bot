@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-TV-ONE-BRAIN-1 — one Everget transducer (Sep 2026) ✅ frozen `4688160`
+
+- `indicators.RSTVState.UpdateClosed` owns `rsx_tv_div` and `rsx_tv_pivot`. Deleted windowed/prefix reconstructors.
+- AnalysisLogicVersion `analysis:v2`. UI Bull/Bear match TradingView. `TV-BULL-QUARANTINE-1` closed.
+- Do not reopen RSX/Everget unless a real regression. Tape regen is **FEATURE-TAPE-RSX-REGEN-1**.
+
+---
+
 ## LABEL-SET-1B — pinned finer dual-hit resolution (Sep 2026) ✅ frozen `8e88844`
 
 - `TargetSpec.FinerTimeframe` is identity (`omitempty` keeps exclude TargetDigest = 1A).

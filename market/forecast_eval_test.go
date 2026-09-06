@@ -16,7 +16,7 @@ func tape1ASettings() RSXSettings {
 
 func tape1APlan(t *testing.T, s RSXSettings) forecast.FeaturePlan {
 	t.Helper()
-	analysis, err := AnalysisRecipeFromRSXSettings(s, true, false, analysisLogicV1)
+	analysis, err := AnalysisRecipeFromRSXSettings(s, true, false, analysisLogicV2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,11 +340,11 @@ func TestFeatureFill_AllocsPerRun(t *testing.T) {
 }
 
 func TestAnalysisRecipeFromRSXSettings_UsesActualLookback(t *testing.T) {
-	a, err := AnalysisRecipeFromRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30}, true, false, analysisLogicV1)
+	a, err := AnalysisRecipeFromRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 30}, true, false, analysisLogicV2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := AnalysisRecipeFromRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 90}, true, false, analysisLogicV1)
+	b, err := AnalysisRecipeFromRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3", DivLookback: 90}, true, false, analysisLogicV2)
 	if err != nil {
 		t.Fatal(err)
 	}

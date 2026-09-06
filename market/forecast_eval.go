@@ -11,7 +11,7 @@ import (
 	"trading_bot/indicators"
 )
 
-const analysisLogicV1 forecast.LogicVersion = "analysis:v2"
+const analysisLogicV2 forecast.LogicVersion = "analysis:v2"
 
 // AnalysisRecipeFromRSXSettings is the single conversion from the Frame's
 // authoritative effective RSX settings into a resolved AnalysisRecipe.
@@ -64,7 +64,7 @@ func BindFeatureEvaluator(frame *Frame, plan forecast.FeaturePlan) (*FeatureEval
 	if err := validateTape1ASchema(plan.Schema); err != nil {
 		return nil, err
 	}
-	logic := analysisLogicV1
+	logic := analysisLogicV2
 	if len(plan.Analysis.Logic) > 0 && plan.Analysis.Logic[0] != "" {
 		logic = plan.Analysis.Logic[0]
 	}
