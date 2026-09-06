@@ -8,9 +8,10 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## RESEARCH-DATASET-1 — tape + LabelSet consumption (Sep 2026) ✅
+## RESEARCH-DATASET-1 — tape + LabelSet consumption (Sep 2026) ✅ frozen `f311203`
 
 - `forecast.BuildResearchDataset` opens both artifacts, checks all three tape identities + exact MarketKey + TargetDigest, locksteps `At[i]`, partitions eligibility. In-memory `ResearchRow` only.
+- Provenance, lockstep, fail-closed mutations, eligibility partition, feature-copy immunity. No dataset file, no statistics.
 - Next when asked: VALIDATION-PLAN-1. Do not start it here.
 
 ## FEATURE-TAPE-RSX-REGEN-1 — analysis:v2 tape (Sep 2026) ✅

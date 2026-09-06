@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅**. Next when asked: **VALIDATION-PLAN-1**. **TARGET-RESOLUTION-2** deferred.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). Next when asked: **VALIDATION-PLAN-1**. **TARGET-RESOLUTION-2** deferred.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -132,7 +132,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **model next** | **RESEARCH-DATASET-1 closed.** Next when asked: **VALIDATION-PLAN-1**. **TARGET-RESOLUTION-2** deferred. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **model next** | **RESEARCH-DATASET-1 frozen** `f311203`. Next when asked: **VALIDATION-PLAN-1**. **TARGET-RESOLUTION-2** deferred. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
