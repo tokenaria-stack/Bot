@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). Next when asked: model/training. **TARGET-RESOLUTION-2** deferred.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **Do not start model / RESEARCH-DATASET-1.** Next: **RSX-TV-ONE-BRAIN-1**. **MARKET-RSX-PARITY-1** audit done (see below). **TARGET-RESOLUTION-2** deferred.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -54,6 +54,23 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
 **FORECAST-SPEC-1 ✅ frozen** (`5afabfc` + `0ed000d`). **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). Do not reopen ATR, 1A physics, or 1B. **TARGET-RESOLUTION-2** deferred (separate 15m→1s TargetSpec).
+
+**MARKET-RSX-PARITY-1 ✅ audit closed (no production code).** Stages 1–4: OHLC exact vs Binance; Jurik matches literal Pine replica; prefix cold-start ~105–130 then trailing facts match full archive; published TV facts miss a real Bear because `rsxTVHitAtDisplayBar` is a second Everget reconstruct (3×lookback ratchet restart, one winner). Full `scanRSXTVHits` has the Bear. Not TV builtin / not Jurik / not prefix. Fixture: BTCUSDT USD-M 15m AnchorAt `1788630300000` (2026-09-05 17:45 UTC = 01:45 UTC+8), ConfirmedAt `1788631200000`.
+
+**RSX-TV-ONE-BRAIN-1 (next chapter — implement when asked).** One closed-bar `RSTVState.UpdateClosed(openTime, close, rsx)` owns `rsx_tv_div` + `rsx_tv_pivot`. Consume authoritative SlotJurikRSX; never compute RSX. No Frame/index. No Snapshot (closed-only). Lookback immutable after `NewRSTVState`. Refuse NaN/Inf/non-increasing At with state unchanged. Preserve current full-scan extrema **tie** semantics (do not redesign `highestbars` in this chapter). Emit 0–4 events in fixed order (div bear, div bull, pivot high, pivot low). Neutral `RSTVEvent` in `indicators`; Frame maps to facts. One algorithm all modes; a second linear zip over `[]RSX` is allowed if it calls the same `UpdateClosed`. `scanRSXTVHits` may remain only as a zero-math wrapper. Delete/rewire: `rsxTVHitAtDisplayBar`, `TVDivergenceFactAt`, `TVPivotFactsAt`, `tvMaxMinRSISeries`, competing `RSTVFactsFromDAGHistory` reconstruct, calculating `RSXHitAtDisplayBar` (query facts or delete). Bump `AnalysisLogicVersion` only (no FeatureTape schema, no tape regen in-chapter). Do **not**: 3×lookback patch, deque, RequiredHistoryBars, history-cap change, Jurik change, volume, fractal merge, ATR, certification framework. Wake: new zero state + retained prefix; do not assert truncated-1024 vs 2019-origin from bar 0. Tests: known Bear; one pivot AnchorAt=i-2; replay A≡B; live-step ≡ batch; wake same prefix; `rg` kill-check.
+
+**Parked (found on the RSX audit path — not ONE-BRAIN):**
+
+| ID | What | Why later |
+|----|------|-----------|
+| **VOLUME-INGEST-1** | From 2026-09-06 00:45 UTC in Stage 1 sample, stored `Kline.Volume` matched Binance **taker-buy base**, not total `v`. OHLC exact. | All volume-derived facts uncertified. Not RSX. |
+| **FRACTAL-MARKER-SSOT-1** | `rsxFractalHitAtDisplayBar` / `scanRSXFractalHits` vs `FractalFacts` / `FractalFactsAt`. | Local-radius math, not Everget carry. Inventory consumers, then delete leftover marker path if unused. Do not reopen RSX-SIGNAL-3 detector math. |
+| **ATR-VALUES-FRAME-1** | `market/frame.go` still hydrates via `indicators.ATRValues` (legacy batch). ATR-TRUTH-1 left `ATRSeries` as canonical. | ATR leftover, not TV facts. |
+| **FEATURE-TAPE-RSX-REGEN-1** | After ONE-BRAIN freeze, FeaturePlan digest changes with AnalysisLogicVersion. | Regenerate tapes only when research needs them. Do not bake artifacts in ONE-BRAIN. |
+| **TV-BULL-QUARANTINE-1** | `tv_bull_present` / `tv_bull_age` still quarantined vs TV. | Lift only after ONE-BRAIN + TV spot-checks, as a later research/certify step. |
+| **TV-HIGHESTBARS-TIE-1** | Stage 3 leftover: possible TV builtin `highestbars` vs Go newest-wins on equal RSX. | Do **not** mix into ONE-BRAIN. Reopen only with real TV Data Window evidence of a mismatch after the Bear is published. |
+
+Do not start a generic “indicator certification framework.”
 
 **MICRO-IDLE-1 ✅ closed (not worth implementing).** Idle ChartOnly, no micro charts: five child reducers + unused Frame ticks ≈ **6µs per 1s parent** (~6µs CPU per wall-clock second). Forming ticks dominate count (6000 forming / 505 closed per 1200 parents); that is OHLCV + empty DAG skip, not Jurik. Sleeping that path is not worth a second lifecycle. Reducers and sparse tip stay frozen.
 
