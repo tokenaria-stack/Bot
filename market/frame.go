@@ -78,9 +78,7 @@ type Frame struct {
 	WozduhGreen       []float64
 	Annotations       []ChartAnnotation
 	rsxTVFacts        []indicators.IndicatorFactEvent
-	rsxTVCloses       []float64
-	rsxTVOsc          []float64
-	rsxTVOpens        []int64
+	rstv              *indicators.RSTVState
 	rsxZZFacts        []indicators.IndicatorFactEvent
 	zzCollector       ZZDivFactCollector
 	rsxFractalFacts   []indicators.IndicatorFactEvent

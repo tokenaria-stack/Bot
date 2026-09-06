@@ -77,26 +77,6 @@ func TestTVDivergenceFacts_EventPurity(t *testing.T) {
 	}
 }
 
-func TestTVDivergenceFactAt_MatchesFullScan(t *testing.T) {
-	t.Parallel()
-	closes, rsx, opens := tvForcedSeries()
-	all := indicators.TVDivergenceFacts(closes, rsx, opens, 90)
-	byConfirm := map[int64]indicators.IndicatorFactEvent{}
-	for _, ev := range all {
-		byConfirm[ev.ConfirmedAt] = ev
-	}
-	for i := 2; i < len(rsx); i++ {
-		got, ok := indicators.TVDivergenceFactAt(closes, rsx, opens, i, 90)
-		full, has := byConfirm[opens[i]]
-		if ok != has {
-			t.Fatalf("bar %d factAt=%v full=%v", i, ok, has)
-		}
-		if ok && got != full {
-			t.Fatalf("bar %d mismatch got=%+v full=%+v", i, got, full)
-		}
-	}
-}
-
 func TestTVDivergenceFacts_XbarsChangesHits(t *testing.T) {
 	t.Parallel()
 	n := 100

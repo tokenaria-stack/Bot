@@ -90,21 +90,20 @@ func scanRSXMarkersFromSlices(prices, closes, osc []float64, cfg RSXScanConfig) 
 	}
 }
 
-// RSXHitAtDisplayBar returns the strongest marker hit visible on displayBar, if any.
-// Streaming path: O(lookback) windowed scan — not a full-series ScanRSXMarkers.
+// RSXHitAtDisplayBar returns a fractal-mode marker visible on displayBar, if any.
+// TV Everget facts are owned by RSTVState — this API does not reconstruct them.
 func RSXHitAtDisplayBar(bus DataBus, displayBar int, cfg RSXScanConfig) RSXMarkerHit {
 	if displayBar < 0 || bus == nil {
 		return RSXMarkerHit{}
 	}
 	cfg = NormalizeRSXScanConfig(cfg)
-	closes := bus.CloseSeries()
 	osc := bus.JurikSeries()
 	switch cfg.Mode {
 	case RSXScanFractal:
 		prices := bus.RSXPriceSeries()
 		return rsxFractalHitAtDisplayBar(prices, osc, displayBar, cfg)
 	default:
-		return rsxTVHitAtDisplayBar(closes, osc, displayBar, cfg.Lookback)
+		return RSXMarkerHit{}
 	}
 }
 
@@ -322,108 +321,37 @@ func fractalHitStrength(hit RSXMarkerHit) int {
 	}
 }
 
-// rsxTVHitAtDisplayBar evaluates TV divergence markers for one display bar (O(lookback)).
-func rsxTVHitAtDisplayBar(closes, rsx []float64, displayBar, lookback int) RSXMarkerHit {
+func scanRSXTVHits(closes, rsx []float64, lookback int) []RSXMarkerHit {
 	n := len(rsx)
-	if displayBar < 2 || displayBar >= n || len(closes) != n {
-		return RSXMarkerHit{}
+	if n < 3 || len(closes) != n {
+		return nil
 	}
-	if lookback <= 0 {
-		lookback = DefaultRSXLookback
-	}
-	start := displayBar - 3*lookback
-	if start < 0 {
-		start = 0
-	}
-
-	var maxClose, maxRSX, minClose, minRSX float64
-	var hasMax, hasMin bool
-	var maxClosePrev, maxClosePrev2, minClosePrev, minClosePrev2 float64
+	st := NewRSTVState(lookback)
+	var hits []RSXMarkerHit
 	cfg := RSXScanConfig{Mode: RSXScanTV}
-
-	for i := start; i <= displayBar; i++ {
-		hb := highestBarsAgo(rsx, i, lookback)
-		lb := lowestBarsAgo(rsx, i, lookback)
-
-		if hb == 0 {
-			maxClose = closes[i]
-			maxRSX = rsx[i]
-			hasMax = true
-		} else if !hasMax {
-			maxClose = closes[i]
-			maxRSX = rsx[i]
-			hasMax = true
-		}
-
-		if lb == 0 {
-			minClose = closes[i]
-			minRSX = rsx[i]
-			hasMin = true
-		} else if !hasMin {
-			minClose = closes[i]
-			minRSX = rsx[i]
-			hasMin = true
-		}
-
-		if closes[i] > maxClose {
-			maxClose = closes[i]
-		}
-		if rsx[i] > maxRSX {
-			maxRSX = rsx[i]
-		}
-		if closes[i] < minClose {
-			minClose = closes[i]
-		}
-		if rsx[i] < minRSX {
-			minRSX = rsx[i]
-		}
-
-		maxClosePrev2, maxClosePrev = maxClosePrev, maxClose
-		minClosePrev2, minClosePrev = minClosePrev, minClose
-
-		if i != displayBar || i < 2 {
+	for i := 0; i < n; i++ {
+		evs, err := st.UpdateClosed(int64(i)+1, closes[i], rsx[i])
+		if err != nil {
 			continue
 		}
-
-		best := RSXMarkerHit{}
-		bestStrength := -1
-		if maxClosePrev > maxClosePrev2 &&
-			rsx[i-1] < maxRSX &&
-			rsx[i] <= rsx[i-1] {
+		for j := 0; j < int(evs.Count); j++ {
+			e := evs.Events[j]
+			if e.Family != RSTVFamilyDiv {
+				continue
+			}
+			label := "S"
+			if e.Direction == FactDirBullish {
+				label = "L"
+			}
 			pivot := i - 1
-			hit := RSXMarkerHit{
+			hits = append(hits, RSXMarkerHit{
 				PivotBar:   pivot,
-				DisplayBar: rsxDisplayBar(pivot, "S", cfg),
-				Label:      "S",
-			}
-			if hit.DisplayBar == displayBar {
-				st := rsxTradingMarkerStrength(hit.Label)
-				if st > bestStrength {
-					best = hit
-					bestStrength = st
-				}
-			}
+				DisplayBar: rsxDisplayBar(pivot, label, cfg),
+				Label:      label,
+			})
 		}
-		if minClosePrev < minClosePrev2 &&
-			rsx[i-1] > minRSX &&
-			rsx[i] >= rsx[i-1] {
-			pivot := i - 1
-			hit := RSXMarkerHit{
-				PivotBar:   pivot,
-				DisplayBar: rsxDisplayBar(pivot, "L", cfg),
-				Label:      "L",
-			}
-			if hit.DisplayBar == displayBar {
-				st := rsxTradingMarkerStrength(hit.Label)
-				if st > bestStrength {
-					best = hit
-					bestStrength = st
-				}
-			}
-		}
-		return best
 	}
-	return RSXMarkerHit{}
+	return hits
 }
 
 // rsxFractalHitAtDisplayBar finds fractal-mode markers visible on displayBar (O(lookback)).
@@ -484,88 +412,6 @@ func rsxFractalHitAtDisplayBar(prices, rsx []float64, displayBar int, cfg RSXSca
 		}
 	}
 	return best
-}
-
-func scanRSXTVHits(closes, rsx []float64, lookback int) []RSXMarkerHit {
-	n := len(rsx)
-	if n < 3 || len(closes) != n {
-		return nil
-	}
-	if lookback <= 0 {
-		lookback = DefaultRSXLookback
-	}
-
-	var hits []RSXMarkerHit
-	maxCloseHist := make([]float64, n)
-	minCloseHist := make([]float64, n)
-	var maxClose, maxRSX, minClose, minRSX float64
-	var hasMax, hasMin bool
-
-	for i := 0; i < n; i++ {
-		hb := highestBarsAgo(rsx, i, lookback)
-		lb := lowestBarsAgo(rsx, i, lookback)
-
-		if hb == 0 {
-			maxClose = closes[i]
-			maxRSX = rsx[i]
-			hasMax = true
-		} else if !hasMax {
-			maxClose = closes[i]
-			maxRSX = rsx[i]
-			hasMax = true
-		}
-
-		if lb == 0 {
-			minClose = closes[i]
-			minRSX = rsx[i]
-			hasMin = true
-		} else if !hasMin {
-			minClose = closes[i]
-			minRSX = rsx[i]
-			hasMin = true
-		}
-
-		if closes[i] > maxClose {
-			maxClose = closes[i]
-		}
-		if rsx[i] > maxRSX {
-			maxRSX = rsx[i]
-		}
-		if closes[i] < minClose {
-			minClose = closes[i]
-		}
-		if rsx[i] < minRSX {
-			minRSX = rsx[i]
-		}
-
-		maxCloseHist[i] = maxClose
-		minCloseHist[i] = minClose
-
-		if i >= 2 {
-			cfg := RSXScanConfig{Mode: RSXScanTV}
-			if maxCloseHist[i-1] > maxCloseHist[i-2] &&
-				rsx[i-1] < maxRSX &&
-				rsx[i] <= rsx[i-1] {
-				pivot := i - 1
-				hits = append(hits, RSXMarkerHit{
-					PivotBar:   pivot,
-					DisplayBar: rsxDisplayBar(pivot, "S", cfg),
-					Label:      "S",
-				})
-			}
-			if minCloseHist[i-1] < minCloseHist[i-2] &&
-				rsx[i-1] > minRSX &&
-				rsx[i] >= rsx[i-1] {
-				pivot := i - 1
-				hits = append(hits, RSXMarkerHit{
-					PivotBar:   pivot,
-					DisplayBar: rsxDisplayBar(pivot, "L", cfg),
-					Label:      "L",
-				})
-			}
-		}
-	}
-	return hits
 }
 
 func highestBarsAgo(values []float64, i, lookback int) int {

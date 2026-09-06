@@ -51,25 +51,6 @@ func TestTVPivotFacts_HighTwoBarDelay(t *testing.T) {
 	}
 }
 
-func TestTVPivotFactsAt_MatchesFullScan(t *testing.T) {
-	t.Parallel()
-	closes, rsx, opens := tvPivotPeakSeries()
-	all := indicators.TVPivotFacts(closes, rsx, opens, 90)
-	got := 0
-	for i := 3; i < len(rsx); i++ {
-		at := indicators.TVPivotFactsAt(closes, rsx, opens, i, 90)
-		got += len(at)
-		for _, ev := range at {
-			if ev.ConfirmedAt != opens[i] {
-				t.Fatalf("FactAt confirm must be display bar")
-			}
-		}
-	}
-	if got != len(all) {
-		t.Fatalf("FactAt n=%d full=%d", got, len(all))
-	}
-}
-
 func TestTVPivotFacts_NoLookahead(t *testing.T) {
 	t.Parallel()
 	closes, rsx, opens := tvPivotPeakSeries()

@@ -227,20 +227,14 @@ func (a *Frame) wakeTVFactsLocked(closed []exchange.Kline, rsx []float64) {
 		return
 	}
 	a.tvEvals++
-	rebuilt := RSTVFactsFromClosedSeries(closed, rsx, a.effectiveRSXSettings().DivLookback)
+	rebuilt, st := replayRSTV(closed, rsx, a.effectiveRSXSettings().DivLookback)
 	t0, t1 := windowOpenTimes(closed)
 	next, changed := replaceFamilyFacts(a.rsxTVFacts, rebuilt, map[string]bool{
 		indicators.FactSourceRSXTVDiv:   true,
 		indicators.FactSourceRSXTVPivot: true,
 	}, t0, t1)
 	a.rsxTVFacts = next
-	a.rsxTVCloses = make([]float64, len(closed))
-	a.rsxTVOsc = append([]float64(nil), rsx...)
-	a.rsxTVOpens = make([]int64, len(closed))
-	for i, k := range closed {
-		a.rsxTVCloses[i] = k.Close
-		a.rsxTVOpens[i] = k.OpenTime
-	}
+	a.rstv = st
 	if changed {
 		a.rsxFactRevision++
 	}

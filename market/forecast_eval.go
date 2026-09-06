@@ -11,7 +11,7 @@ import (
 	"trading_bot/indicators"
 )
 
-const analysisLogicV1 forecast.LogicVersion = "analysis:v1"
+const analysisLogicV1 forecast.LogicVersion = "analysis:v2"
 
 // AnalysisRecipeFromRSXSettings is the single conversion from the Frame's
 // authoritative effective RSX settings into a resolved AnalysisRecipe.

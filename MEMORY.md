@@ -35,7 +35,7 @@ On request / only when the task needs them:
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** |
-| NEXT | **RSX-TV-ONE-BRAIN-1** when asked. MODEL later. LABEL-SET-1B frozen. TARGET-RESOLUTION-2 deferred. Parked: VOLUME-INGEST-1, FRACTAL-MARKER-SSOT-1, ATR-VALUES-FRAME-1 (see OPEN_DEBTS). |
+| NEXT | **RSX-TV-ONE-BRAIN-1** (implementing). MODEL later. Parked: VOLUME-INGEST-1, FRACTAL-MARKER-SSOT-1, ATR-VALUES-FRAME-1, FEATURE-TAPE-RSX-REGEN-1, TV-BULL-QUARANTINE-1. |
 | RSX | **MARKET-RSX-PARITY-1 audit closed.** Next impl: **RSX-TV-ONE-BRAIN-1**. Frozen: SIGNAL-1.1 / 2A / 3 / VISIBILITY-1. |
 | Wozduh | **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`) |
 

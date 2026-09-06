@@ -309,9 +309,7 @@ func TestStage4DataWindowBar(t *testing.T) {
 		dump(idx + 1)
 	}
 	confirmI := idx + 1
-	winHit := rsxTVHitAtDisplayBar(closes, r.rsx, confirmI, probeXBars)
-	fmt.Printf("windowed TVDivergence at confirm i=%d label=%s pivot=%d display=%d\n",
-		confirmI, winHit.Label, winHit.PivotBar, winHit.DisplayBar)
+	_ = confirmI
 	start := confirmI - 3*probeXBars
 	if start < 0 {
 		start = 0

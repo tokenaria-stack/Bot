@@ -62,9 +62,7 @@ func (a *Frame) resetStreamingEngines() {
 	a.falcon.SetRSXSource(settings.Source)
 	a.Annotations = nil
 	a.rsxTVFacts = nil
-	a.rsxTVCloses = nil
-	a.rsxTVOsc = nil
-	a.rsxTVOpens = nil
+	a.rstv = nil
 	a.rsxZZFacts = nil
 	a.zzCollector = ZZDivFactCollector{}
 	a.rsxFractalFacts = nil

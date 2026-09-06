@@ -10,9 +10,14 @@ import (
 // RSTVFactsFromClosedSeries emits Pine TV divergence and TV pivot facts from aligned closed bars.
 // rsx[i] must be SlotJurikRSX for klines[i]. Lookback follows RSX settings.
 func RSTVFactsFromClosedSeries(klines []exchange.Kline, rsx []float64, lookback int) []indicators.IndicatorFactEvent {
+	facts, _ := replayRSTV(klines, rsx, lookback)
+	return facts
+}
+
+func replayRSTV(klines []exchange.Kline, rsx []float64, lookback int) ([]indicators.IndicatorFactEvent, *indicators.RSTVState) {
 	n := len(klines)
 	if n == 0 || len(rsx) != n {
-		return nil
+		return nil, indicators.NewRSTVState(lookback)
 	}
 	closes := make([]float64, n)
 	opens := make([]int64, n)
@@ -20,10 +25,7 @@ func RSTVFactsFromClosedSeries(klines []exchange.Kline, rsx []float64, lookback 
 		closes[i] = k.Close
 		opens[i] = k.OpenTime
 	}
-	return indicators.MergeTVFacts(
-		indicators.TVDivergenceFacts(closes, rsx, opens, lookback),
-		indicators.TVPivotFacts(closes, rsx, opens, lookback),
-	)
+	return indicators.ReplayRSTV(opens, closes, rsx, lookback)
 }
 
 func RSTVFactsFromDAGHistory(klines []exchange.Kline, hist *core.HistoryBus, settings RSXSettings) []indicators.IndicatorFactEvent {
@@ -67,59 +69,29 @@ func (a *Frame) noteRSTVFactLocked(isClosed bool, barIndex int) {
 	}
 	k := a.klines[barIndex]
 	osc := bus.Cur.Get(core.SlotJurikRSX)
-	if len(a.rsxTVOpens) == barIndex+1 && a.rsxTVOpens[barIndex] == k.OpenTime {
-		a.rsxTVCloses[barIndex] = k.Close
-		a.rsxTVOsc[barIndex] = osc
-	} else if len(a.rsxTVOpens) == barIndex {
-		a.rsxTVCloses = append(a.rsxTVCloses, k.Close)
-		a.rsxTVOsc = append(a.rsxTVOsc, osc)
-		a.rsxTVOpens = append(a.rsxTVOpens, k.OpenTime)
-	} else {
-		hist := a.dagHistoryLocked()
-		if hist != nil && hist.Count() == len(a.klines) {
-			a.resyncRSTVSeriesLocked(hist, barIndex+1)
-		} else {
-			return
-		}
+	if a.rstv == nil {
+		a.rstv = indicators.NewRSTVState(a.effectiveRSXSettings().DivLookback)
 	}
-	if len(a.rsxTVOpens) < 3 || barIndex != len(a.rsxTVOpens)-1 {
+	if a.rstv.Started() && a.rstv.LastOpenTime() == k.OpenTime {
 		return
 	}
-	lookback := a.effectiveRSXSettings().DivLookback
-	events := indicators.TVFactsAt(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, barIndex, lookback)
-	confirmed := a.rsxTVOpens[barIndex]
+	evs, err := a.rstv.UpdateClosed(k.OpenTime, k.Close, osc)
+	if err != nil {
+		return
+	}
+	confirmed := k.OpenTime
 	kept := a.rsxTVFacts[:0]
 	for _, ev := range a.rsxTVFacts {
 		if ev.ConfirmedAt != confirmed {
 			kept = append(kept, ev)
 		}
 	}
-	a.rsxTVFacts = append(kept, events...)
-}
-
-func (a *Frame) resyncRSTVSeriesLocked(hist *core.HistoryBus, n int) {
-	rsx := historySlotSeries(hist, core.SlotJurikRSX)
-	if len(rsx) < n {
-		n = len(rsx)
-	}
-	if n > len(a.klines) {
-		n = len(a.klines)
-	}
-	a.rsxTVCloses = make([]float64, n)
-	a.rsxTVOsc = make([]float64, n)
-	a.rsxTVOpens = make([]int64, n)
-	for i := 0; i < n; i++ {
-		a.rsxTVCloses[i] = a.klines[i].Close
-		a.rsxTVOsc[i] = rsx[i]
-		a.rsxTVOpens[i] = a.klines[i].OpenTime
-	}
+	a.rsxTVFacts = append(kept, evs.Facts()...)
 }
 
 func (a *Frame) rebuildRSTVFactsLocked() {
 	a.rsxTVFacts = nil
-	a.rsxTVCloses = nil
-	a.rsxTVOsc = nil
-	a.rsxTVOpens = nil
+	a.rstv = nil
 	hist := a.dagHistoryLocked()
 	if hist == nil {
 		return
@@ -131,32 +103,22 @@ func (a *Frame) rebuildRSTVFactsLocked() {
 	if n < 3 {
 		return
 	}
-	a.resyncRSTVSeriesLocked(hist, n)
-	lookback := a.effectiveRSXSettings().DivLookback
-	a.rsxTVFacts = indicators.MergeTVFacts(
-		indicators.TVDivergenceFacts(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, lookback),
-		indicators.TVPivotFacts(a.rsxTVCloses, a.rsxTVOsc, a.rsxTVOpens, lookback),
-	)
+	rsx := historySlotSeries(hist, core.SlotJurikRSX)
+	if len(rsx) < n {
+		n = len(rsx)
+	}
+	facts, st := replayRSTV(a.klines[:n], rsx[:n], a.effectiveRSXSettings().DivLookback)
+	a.rsxTVFacts = facts
+	a.rstv = st
 }
 
 func (a *Frame) trimRSTVFactsLocked() {
 	if len(a.klines) == 0 {
 		a.rsxTVFacts = nil
-		a.rsxTVCloses = nil
-		a.rsxTVOsc = nil
-		a.rsxTVOpens = nil
+		a.rstv = nil
 		return
 	}
 	minOpen := a.klines[0].OpenTime
-	drop := 0
-	for drop < len(a.rsxTVOpens) && a.rsxTVOpens[drop] < minOpen {
-		drop++
-	}
-	if drop > 0 {
-		a.rsxTVCloses = a.rsxTVCloses[drop:]
-		a.rsxTVOsc = a.rsxTVOsc[drop:]
-		a.rsxTVOpens = a.rsxTVOpens[drop:]
-	}
 	if len(a.rsxTVFacts) == 0 {
 		return
 	}
@@ -180,7 +142,7 @@ func (a *Frame) dagHistoryLocked() *core.HistoryBus {
 	return bus.Hist
 }
 
-// RSTVFactsSnapshot copies published rsx_tv_div facts (read-only).
+// RSTVFactsSnapshot copies published rsx_tv_div / rsx_tv_pivot facts (read-only).
 func (a *Frame) RSTVFactsSnapshot() []indicators.IndicatorFactEvent {
 	if a == nil {
 		return nil
