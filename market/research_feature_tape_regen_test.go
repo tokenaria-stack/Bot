@@ -14,6 +14,17 @@ import (
 	"trading_bot/indicators"
 )
 
+func TestResearchSourceStartMs_FuturesPerpIsListingGenesis(t *testing.T) {
+	t.Parallel()
+	got := ResearchSourceStartMs(ResearchMarketKey())
+	if got != exchange.BinanceFuturesGenesisMs {
+		t.Fatalf("FUTURES_PERP start=%d want listing genesis %d", got, exchange.BinanceFuturesGenesisMs)
+	}
+	if got <= exchange.BinanceSpotGenesisMs {
+		t.Fatal("research FUTURES_PERP must not use spot genesis")
+	}
+}
+
 func TestResearchFeaturePlan_AnalysisV2DiffersFromV1(t *testing.T) {
 	t.Parallel()
 	v1, err := ResearchFeaturePlan("analysis:v1")
@@ -150,7 +161,8 @@ func loadResearchClosedBars(t *testing.T) []exchange.Kline {
 		t.Fatal(err)
 	}
 	now := time.Now().UnixMilli()
-	candles, err := exchange.LoadContinuousContractFromDB("BTCUSDT", "15m", exchange.BinanceSpotGenesisMs, now, 0)
+	start := ResearchSourceStartMs(ResearchMarketKey())
+	candles, err := exchange.LoadContinuousContractFromDB("BTCUSDT", "15m", start, now, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +182,10 @@ func loadResearchClosedBars(t *testing.T) []exchange.Kline {
 	}
 	if len(out) == 0 {
 		t.Fatal("no closed bars")
+	}
+	minAt := ResearchSourceStartMs(ResearchMarketKey())
+	if out[0].OpenTime < minAt {
+		t.Fatalf("FUTURES_PERP research bars must not start before futures genesis: first=%d genesis=%d", out[0].OpenTime, minAt)
 	}
 	return out
 }

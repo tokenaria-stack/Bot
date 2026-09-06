@@ -3,6 +3,7 @@ package market
 import (
 	"fmt"
 
+	"trading_bot/exchange"
 	"trading_bot/forecast"
 )
 
@@ -14,6 +15,16 @@ func ResearchMarketKey() forecast.MarketKey {
 		Contract:   "FUTURES_PERP",
 		Timeframe:  "15m",
 	}
+}
+
+// ResearchSourceStartMs is the earliest OpenTime allowed for a research FeatureTape
+// on this MarketKey. FUTURES_PERP uses Binance USD-M listing genesis — not the
+// chart continuous-contract spot stitch.
+func ResearchSourceStartMs(key forecast.MarketKey) int64 {
+	if key.Contract == "FUTURES_PERP" {
+		return exchange.BinanceFuturesGenesisMs
+	}
+	return 0
 }
 
 // ResearchRSXSettings is live default RSX (length 14, signal 9, hlc3, div lookback 90).

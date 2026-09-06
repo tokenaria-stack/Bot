@@ -9,7 +9,19 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
-## LABEL-SET-1B freeze (Sep 2026)
+## FUTURES_PERP research source range (Sep 2026)
+
+**Context:** First analysis:v2 FeatureTape used `LoadContinuousContractFromDB` from spot genesis. FirstAt was 2017-10-20 while MarketKey was `FUTURES_PERP` and USD-M listing is 2019-09-08 (`BinanceFuturesGenesisMs`). Those early rows are chart continuous-contract **spot** bars (`BTCUSDT_SPOT` storage), not perpetual futures.
+
+**Decision:** Research FeatureTape for `FUTURES_PERP` starts at `BinanceFuturesGenesisMs`. Chart GetWindow stitch remains unchanged.
+
+**Rejected:**
+- Training on stitched spot→futures under a `FUTURES_PERP` MarketKey — **Reason:** SPEC SameFamily forbids mixing contract types; SourceRangeDigest cannot repair a wrong market.
+- New synthetic continuous MarketKey this chapter — **Reason:** no research requirement; keep first model on listed futures only.
+
+**Consequences:** The 2017–listing stitch tape is historical/rejected. Regenerate from listing genesis. Do not open RESEARCH-DATASET-1 on the stitch artifact.
+
+---
 
 **Context:** Kill-check GREEN on `8e88844`. Primary walker unchanged; finer path is post-`DUAL_HIT` only.
 

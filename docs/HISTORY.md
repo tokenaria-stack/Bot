@@ -10,9 +10,9 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ## FEATURE-TAPE-RSX-REGEN-1 — analysis:v2 tape (Sep 2026) ✅
 
-- Regenerated four-column FeatureTape (`rsx_value`, `rsx_signal`, `tv_bull_present`, `tv_bull_age`) via frozen `market.DumpFeatureTape`.
-- AnalysisLogicVersion `analysis:v2`. FeatureRecipe/schema unchanged. PlanDigest differs from analysis:v1.
-- Local artifact under `research/tapes/` (not committed). Next when asked: RESEARCH-DATASET-1.
+- Regenerated four-column FeatureTape via frozen `market.DumpFeatureTape`.
+- First dump incorrectly used chart continuous-contract (spot from 2017). **Rejected.** Canonical tape starts at USD-M listing genesis (`BinanceFuturesGenesisMs`).
+- AnalysisLogicVersion `analysis:v2`. Next when asked: RESEARCH-DATASET-1 on the listing-genesis tape only.
 
 ---
 
