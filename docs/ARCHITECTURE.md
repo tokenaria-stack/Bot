@@ -404,7 +404,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. **LABEL-SET-1B** pinned same-family finer dual-hit resolution. Next when asked: model/training — not TARGET-RESOLUTION-2 unless asked.
+**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. **LABEL-SET-1B ✅ frozen** `8e88844`. Next when asked: model/training — not TARGET-RESOLUTION-2 unless asked.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -526,7 +526,7 @@ Parent window `[P, Q)`. Finer path must begin at `P`. Missing initial segment �
 
 Format `label-set-v2`, logic `label:first-passage-finer-v1`. Header adds `FinerMarketKey`. Footer adds `FinerSourceDigest` (domain `LS1F` + FinerMarketKey + per dual-hit attempt: CandidateAt, PrimaryDualHitAt, consulted bars until stop) and `FinerWindowCount` (attempts, not successes). Zero primary dual-hits hashes FinerMarketKey with zero windows and does not consume unused finer archive. An attempted window with zero bars is a different digest. `ContentDigest` covers FinerMarketKey, rows, and those footer fields.
 
-**HARD STOP.** 1s historical microscope is **TARGET-RESOLUTION-2** in `OPEN_DEBTS.md` — a separate TargetSpec, not an upgrade of 15m→1m.
+**HARD STOP.** Frozen `8e88844`. Kill-check GREEN. Do not reopen 1B. 1s historical microscope is **TARGET-RESOLUTION-2** in `OPEN_DEBTS.md` — a separate TargetSpec, not an upgrade of 15m→1m.
 
 ### Fail closed
 
@@ -641,4 +641,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-1B done. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-1B frozen `8e88844`. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred.

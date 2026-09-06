@@ -35,7 +35,7 @@ On request / only when the task needs them:
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** |
-| NEXT | **MODEL** when asked. LABEL-SET-1B done. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred. ATR-TRUTH-1 frozen `84124a0`. FeatureTape 1B frozen `6715718` |
+| NEXT | **MODEL** when asked. LABEL-SET-1B frozen `8e88844`. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred. ATR-TRUTH-1 frozen `84124a0`. FeatureTape 1B frozen `6715718` |
 | RSX | **RSX-SIGNAL-1.1 frozen** (`b4ac2ae`) + **2A/2A.1** (`39d6f78`) + **2B** (`3f20255`) + **LEGACY-SCORE-CLEAN-1** (`08e5f28`) + **SLOT-CLEAN-1** (`af06ea8`) + **FALCON-SCORE-CLEAN-1** + **RSX-SIGNAL-3 frozen** (`c856fef`) + **RSX-VISIBILITY-1 frozen** (`749912f`) |
 | Wozduh | **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`) |
 

@@ -9,6 +9,17 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## LABEL-SET-1B freeze (Sep 2026)
+
+**Context:** Kill-check GREEN on `8e88844`. Primary walker unchanged; finer path is post-`DUAL_HIT` only.
+
+**Decision:** Freeze LABEL-SET-1B as `8e88844`. Do not reopen tiling, SameFamily, `FinerTimeframe` identity, `FINER_*` reasons, v2 provenance, or HitAt granularity.
+
+**Rejected:**
+- Silently upgrading 15m→1m to 1s — **Reason:** TARGET-RESOLUTION-2; different TargetDigest.
+
+**Consequences:** Next forecast chapter is model/training when asked. TARGET-RESOLUTION-2 stays deferred.
+
 ## LABEL-SET-1B pinned microscope (Sep 2026)
 
 **Context:** Primary OHLC can prove both barriers were touched without encoding order. 15m history is deep; durable 1s history is ~24h.

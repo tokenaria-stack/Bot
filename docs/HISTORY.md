@@ -8,13 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## LABEL-SET-1B — pinned finer dual-hit resolution (Sep 2026) ✅
+## LABEL-SET-1B — pinned finer dual-hit resolution (Sep 2026) ✅ frozen `8e88844`
 
 - `TargetSpec.FinerTimeframe` is identity (`omitempty` keeps exclude TargetDigest = 1A).
 - One primary walker; `resolveFinerDualHit` only on primary `DUAL_HIT` + `resolve_finer_history`.
 - Same-family finer MarketKey; `NextBarOpen` tiling; no TF fallback. Research pin: 15m→1m.
 - v2 LabelSet: `label:first-passage-finer-v1`, `FinerSourceDigest` of consulted bars, `FinerWindowCount` = attempts.
-- Deferred: **TARGET-RESOLUTION-2** (separate 15m→1s TargetSpec).
+- Deferred: **TARGET-RESOLUTION-2** (separate 15m→1s TargetSpec). Kill-check GREEN. Do not reopen.
 
 ## LABEL-SET-1A — causal first-passage labels (Sep 2026) ✅ frozen `690d0be` + `1433626`
 
