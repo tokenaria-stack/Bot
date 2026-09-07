@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## VALIDATION-PLAN-1 — outcome-blind walk-forward geometry (Sep 2026) ✅
+## VALIDATION-PLAN-1 — outcome-blind walk-forward geometry (Sep 2026) ✅ frozen `0737c59`
 
 - `forecast.CompileValidationPlan` packs four 17568-bar 15m windows backward from the holdout causal edge. Rules-only identity `validation:walk-forward-v1`. Binding in `market.ResearchValidationPlan` (TargetH from TargetSpec).
 - Next when asked: OOF-MATRIX-1. Do not start it here.

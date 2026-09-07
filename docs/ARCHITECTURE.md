@@ -508,9 +508,11 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 **HARD STOP.** Frozen `f311203`. Reopen only if a downstream regression falsifies this contract.
 
-### VALIDATION-PLAN-1 (outcome-blind walk-forward) ✅
+### VALIDATION-PLAN-1 (outcome-blind walk-forward) ✅ frozen `0737c59`
 
-`forecast.CompileValidationPlan(at, tf, plan)` is the only geometry owner. Inputs: strictly increasing `At[]`, timeframe, resolved `ValidationPlan` (logic `validation:walk-forward-v1`). Market-time packing from the holdout wall via `CurrentBarOpen` / `PreviousBarOpen` / `HorizonEnd`. Causal gap = `TargetH + ExtraGapBars` (no independent `PurgeBars`). Expanding train; disjoint val windows; fixed `HoldoutStartAt`; seam rows are not a third class. Identity hashes **rules only** (includes timeframe + TargetH resolved from TargetSpec). Ranges, not per-row tags. BTCUSDT 15m binding lives in `market.ResearchValidationPlan`. **HARD STOP** before OOF-MATRIX-1.
+`forecast.CompileValidationPlan(at, tf, plan)` is the only geometry owner. Inputs: strictly increasing `At[]`, timeframe, resolved `ValidationPlan` (logic `validation:walk-forward-v1`). Market-time packing from the holdout wall via `CurrentBarOpen` / `PreviousBarOpen` / `HorizonEnd`. Causal gap = `TargetH + ExtraGapBars` (no independent `PurgeBars`). Expanding train; disjoint val windows; fixed `HoldoutStartAt`; seam rows are not a third class. Identity hashes **rules only** (includes timeframe + TargetH resolved from TargetSpec). Ranges, not per-row tags. BTCUSDT 15m binding lives in `market.ResearchValidationPlan`.
+
+**HARD STOP.** Frozen `0737c59`. Do not start OOF-MATRIX-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
