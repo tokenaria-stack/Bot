@@ -25,6 +25,7 @@ research/tapes/
 research/labels/
 research/oof/
 research/logits/
+research/calibrations/
 research/modelfit/.venv/
 *.test
 *.exe
