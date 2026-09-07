@@ -528,9 +528,17 @@ Python-only fitting brain (`python -m research.modelfit`). Input is one explicit
 
 ### CALIBRATION-1 (one global inverse temperature)
 
-Sibling of RANK-1 (not implemented here). `python -m research.calibration` reads frozen `oof-logits-v1` via existing `read_oof_logits` (no MODEL-FIT sklearn gate). Fits one `β ≥ 0` on all OOF rows: `softmax(β z)`, mean NLL, analytic gradient, SciPy L-BFGS-B with explicit `gtol` and `ftol` in CalibrationSpec. Product is one JSON `temperature-calibration-v1` (β + provenance), not a probability dataset. Execution pin: Python/NumPy/SciPy only. No metrics, rank, holdout, or final development-model fit.
+Sibling of RANK-1. `python -m research.calibration` reads frozen `oof-logits-v1` via existing `read_oof_logits` (no MODEL-FIT sklearn gate). Fits one `β ≥ 0` on all OOF rows: `softmax(β z)`, mean NLL, analytic gradient, SciPy L-BFGS-B with explicit `gtol` and `ftol` in CalibrationSpec. Product is one JSON `temperature-calibration-v1` (β + provenance), not a probability dataset. Execution pin: Python/NumPy/SciPy only. No metrics, rank, holdout, or final development-model fit.
 
-**HARD STOP.** Frozen `4c8c08e` + ftol pin `b550613`. Do not start RANK-1 here.
+**HARD STOP.** Frozen `4c8c08e` + ftol pin `b550613`. Do not reopen calibration.
+
+### RANK-1 (exact empirical directional rank)
+
+Sibling of CALIBRATION-1 (no import, no β). `python -m research.rank` reads the same frozen `oof-logits-v1` via `read_oof_logits`. Directional evidence is `D = logit[UP_FIRST] - logit[DOWN_FIRST]` after an exact source `class_order` match. The product is one JSON `empirical-rank-v1`: exact sorted float64 sample plus `RankSpecDigest`. Query law is a scalar step-CDF midrank (`searchsorted` left/right index convention; NumPy is implementation, not a rules-digest symbol). Uniform row weights; finite D and finite query required. Reader validates sortedness and does not repair. Runtime gate is Python/NumPy only.
+
+Statistical assumption (documented, not repaired): this reference pools expanding-fold OOF logits; a later full-development model is assumed sufficiently compatible in directional scale/order. No per-fold CDFs or rescaling.
+
+**HARD STOP.** Do not start RECIPE-FREEZE here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

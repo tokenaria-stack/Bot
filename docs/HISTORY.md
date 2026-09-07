@@ -8,13 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RANK-1 — exact empirical directional rank (Sep 2026)
+
+- `research.rank`: raw `D = UP − DOWN` on frozen `oof-logits-v1`; exact sorted sample; midrank step CDF; signed rank `2u−1`; `empirical-rank-v1`.
+- Sibling of CALIBRATION-1: no β, no `research.calibration` import. Runtime gate is Python/NumPy only.
+- Next when asked: RECIPE-FREEZE. Do not start it here.
+
 ## CALIBRATION-1 — global inverse temperature (Sep 2026) ✅ frozen `4c8c08e` + `b550613`
 
-- `research.calibration`: one `β` on all OOF logits; `temperature-calibration-v1`; sibling of RANK-1 (not started).
+- `research.calibration`: one `β` on all OOF logits; `temperature-calibration-v1`; sibling of RANK-1.
 - L-BFGS-B `ftol` is explicit in CalibrationSpec (SciPy 1.13.1 default made a resolved rule). Logic version not bumped.
 - Reuses `read_oof_logits`. Runtime gate is Python/NumPy/SciPy only.
 - MODEL-FIT-1 remains frozen `0d60270` + `29cb928`.
-- Next when asked: RANK-1. Do not start it here.
 
 ## MODEL-FIT-1 — train-only OOF logits (Sep 2026) ✅ frozen `0d60270` + `29cb928`
 
