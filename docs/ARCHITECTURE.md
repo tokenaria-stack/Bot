@@ -506,7 +506,11 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 `forecast.BuildResearchDataset(tapePath, labelPath, expect)` opens both artifacts. Provenance first: exact `MarketKey`, `FirstAt >=` caller floor (research: `BinanceFuturesGenesisMs`), current FeaturePlan digest, LabelSet pins all three tape identities, exact `TargetDigest`. Then lockstep `len` + `At[i]`. Then exclusive eligibility: `!Ready` → FeatureNotReady; else non `{UP,DOWN,TIMEOUT}` → `ExcludedByReason`; else copied `ResearchRow`. Partition must close. In-memory only — no dataset file. No `SameFamily` at this boundary.
 
-**HARD STOP.** Frozen `f311203`. Reopen only if a downstream regression falsifies this contract. Do not start VALIDATION-PLAN-1 here.
+**HARD STOP.** Frozen `f311203`. Reopen only if a downstream regression falsifies this contract.
+
+### VALIDATION-PLAN-1 (outcome-blind walk-forward) ✅
+
+`forecast.CompileValidationPlan(at, tf, plan)` is the only geometry owner. Inputs: strictly increasing `At[]`, timeframe, resolved `ValidationPlan` (logic `validation:walk-forward-v1`). Market-time packing from the holdout wall via `CurrentBarOpen` / `PreviousBarOpen` / `HorizonEnd`. Causal gap = `TargetH + ExtraGapBars` (no independent `PurgeBars`). Expanding train; disjoint val windows; fixed `HoldoutStartAt`; seam rows are not a third class. Identity hashes **rules only** (includes timeframe + TargetH resolved from TargetSpec). Ranges, not per-row tags. BTCUSDT 15m binding lives in `market.ResearchValidationPlan`. **HARD STOP** before OOF-MATRIX-1.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

@@ -57,6 +57,36 @@ func ResearchFeaturePlan(analysisLogic forecast.LogicVersion) (forecast.FeatureP
 	return plan, nil
 }
 
+// ResearchTargetSpec is the intended first-passage research target (15m→1m).
+func ResearchTargetSpec() (forecast.TargetSpec, error) {
+	return forecast.ResolveTargetSpec("research-15m-1m", forecast.TargetSpecDraft{
+		HorizonBars:      24,
+		UpperATRMultiple: 1.5,
+		LowerATRMultiple: 1.0,
+		ATRPeriod:        14,
+		DualHit:          forecast.DualHitResolveFinerHistory,
+		FinerTimeframe:   "1m",
+	}, "labels:v1")
+}
+
+// ResearchValidationPlan is the pinned BTCUSDT 15m walk-forward experiment.
+// TargetH is taken from ResearchTargetSpec, not a parallel constant.
+func ResearchValidationPlan() (forecast.ValidationPlan, error) {
+	spec, err := ResearchTargetSpec()
+	if err != nil {
+		return forecast.ValidationPlan{}, err
+	}
+	key := ResearchMarketKey()
+	return forecast.ResolveValidationPlan(forecast.ValidationPlanDraft{
+		Timeframe:          key.Timeframe,
+		HoldoutStartAt:     1767225600000, // 2026-01-01 00:00:00 UTC
+		ValidationSpanBars: 17568,         // 183 elapsed days at 15m
+		FoldCount:          4,
+		ExtraGapBars:       0,
+		MinTrainRows:       35040,
+	}, spec, forecast.ValidationLogicWalkForwardV1)
+}
+
 func ResearchFeaturePlanMust(analysisLogic forecast.LogicVersion) (forecast.FeaturePlan, error) {
 	plan, err := ResearchFeaturePlan(analysisLogic)
 	if err != nil {

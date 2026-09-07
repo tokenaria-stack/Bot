@@ -146,14 +146,7 @@ func TestLabelSetPreflight1(t *testing.T) {
 }
 
 func resolveIntendedResearchTargetSpec() (forecast.TargetSpec, error) {
-	return forecast.ResolveTargetSpec("research-15m-1m", forecast.TargetSpecDraft{
-		HorizonBars:      24,
-		UpperATRMultiple: 1.5,
-		LowerATRMultiple: 1.0,
-		ATRPeriod:        14,
-		DualHit:          forecast.DualHitResolveFinerHistory,
-		FinerTimeframe:   "1m",
-	}, "labels:v1")
+	return ResearchTargetSpec()
 }
 
 func researchLabelSetFileName(key forecast.MarketKey, plan, target forecast.Digest) string {

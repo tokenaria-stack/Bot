@@ -56,6 +56,8 @@
 //     pinned same-family FinerTimeframe (LABEL-SET-1B).
 //   - RESEARCH-DATASET-1: BuildResearchDataset opens tape+labels, checks
 //     provenance, locksteps At, partitions eligibility into in-memory rows.
+//   - VALIDATION-PLAN-1: CompileValidationPlan(At[], tf, resolved plan) is the
+//     sole outcome-blind walk-forward geometry owner.
 //   - ForecastFrame + PublishForecastFrame: the fail-closed gate. No frame is
 //     ever produced from a not-Ready fill or a nonfinite/out-of-range
 //     probability set.

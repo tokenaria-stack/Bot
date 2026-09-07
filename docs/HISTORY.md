@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## VALIDATION-PLAN-1 — outcome-blind walk-forward geometry (Sep 2026) ✅
+
+- `forecast.CompileValidationPlan` packs four 17568-bar 15m windows backward from the holdout causal edge. Rules-only identity `validation:walk-forward-v1`. Binding in `market.ResearchValidationPlan` (TargetH from TargetSpec).
+- Next when asked: OOF-MATRIX-1. Do not start it here.
+
 ## RESEARCH-DATASET-1 — tape + LabelSet consumption (Sep 2026) ✅ frozen `f311203`
 
 - `forecast.BuildResearchDataset` opens both artifacts, checks all three tape identities + exact MarketKey + TargetDigest, locksteps `At[i]`, partitions eligibility. In-memory `ResearchRow` only.

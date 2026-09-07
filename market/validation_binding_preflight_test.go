@@ -10,8 +10,6 @@ import (
 	"trading_bot/forecast"
 )
 
-// TestValidationBindingPreflight1 is MODE A: chronology + year-open table.
-// It does not compile a ValidationPlan and does not search for a binding.
 func TestValidationBindingPreflight1(t *testing.T) {
 	rows, spec, tf := loadCanonicalTrainableRows(t)
 	ats := make([]int64, len(rows))
@@ -68,8 +66,81 @@ func TestValidationBindingPreflight1(t *testing.T) {
 	}
 
 	report("READY FOR HUMAN BINDING")
-	report("pin: HoldoutStartAt ValidationSpanBars FoldCount ExtraGapBars MinTrainRows")
 	fmt.Fprintf(os.Stderr, "VALIDATION-BINDING-PREFLIGHT-1 MODE A N=%d H=%d\n", len(ats), h)
+}
+
+func TestCompileValidationPlan_CanonicalBTCGeometry(t *testing.T) {
+	const (
+		holdoutStartAt int64 = 1767225600000 // 2026-01-01 00:00:00 UTC
+		devExclusive   int64 = 1767204000000 // 2025-12-31 18:00 UTC
+		fold0Start     int64 = 1703959200000 // 2023-12-30 18:00 UTC
+		fold0End       int64 = 1719770400000
+		fold1End       int64 = 1735581600000
+		fold2End       int64 = 1751392800000
+		fold3End       int64 = 1767204000000
+		train0Last     int64 = 1703936700000 // 2023-12-30 11:45 UTC
+	)
+	rows, spec, tf := loadCanonicalTrainableRows(t)
+	ats := make([]int64, len(rows))
+	for i := range rows {
+		ats[i] = rows[i].At
+	}
+	plan, err := ResearchValidationPlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.TargetH != spec.HorizonBars {
+		t.Fatalf("TargetH=%d spec.H=%d", plan.TargetH, spec.HorizonBars)
+	}
+	if plan.HoldoutStartAt != holdoutStartAt || plan.ValidationSpanBars != 17568 || plan.FoldCount != 4 ||
+		plan.ExtraGapBars != 0 || plan.MinTrainRows != 35040 || plan.Timeframe != tf {
+		t.Fatalf("binding %+v", plan)
+	}
+	got, err := forecast.CompileValidationPlan(ats, tf, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HoldoutStartAt != holdoutStartAt || got.DevelopmentExclusiveEndAt != devExclusive {
+		t.Fatalf("holdout/devEnd %d %d", got.HoldoutStartAt, got.DevelopmentExclusiveEndAt)
+	}
+	seam := got.HoldoutBeginIndex - got.DevelopmentEndIndex
+	if seam != 24 {
+		t.Fatalf("seam rows %d want 24", seam)
+	}
+	wantBounds := [][2]int64{{fold0Start, fold0End}, {fold0End, fold1End}, {fold1End, fold2End}, {fold2End, fold3End}}
+	wantValN := []int{17564, 17561, 17568, 17566}
+	wantTrainN := []int{151022, 168586, 186147, 203715}
+	if len(got.Folds) != 4 {
+		t.Fatalf("folds %d", len(got.Folds))
+	}
+	causal, err := plan.TotalCausalBars()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, f := range got.Folds {
+		if f.ValBoundaryStartAt != wantBounds[i][0] || f.ValBoundaryEndAt != wantBounds[i][1] {
+			t.Fatalf("fold %d bounds [%d,%d)", i, f.ValBoundaryStartAt, f.ValBoundaryEndAt)
+		}
+		if f.ValEnd-f.ValBegin != wantValN[i] || f.TrainEnd-f.TrainBegin != wantTrainN[i] {
+			t.Fatalf("fold %d valN=%d trainN=%d", i, f.ValEnd-f.ValBegin, f.TrainEnd-f.TrainBegin)
+		}
+		he, err := forecast.HorizonEnd(f.TrainLastAt, tf, causal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if he >= f.ValBoundaryStartAt {
+			t.Fatalf("fold %d HorizonEnd(TrainLast)=%d >= V=%d", i, he, f.ValBoundaryStartAt)
+		}
+		if f.ValEnd > got.HoldoutBeginIndex || f.TrainEnd > got.HoldoutBeginIndex {
+			t.Fatalf("fold %d crosses holdout", i)
+		}
+	}
+	if got.Folds[0].TrainLastAt != train0Last {
+		t.Fatalf("fold0 TrainLastAt %d want %d", got.Folds[0].TrainLastAt, train0Last)
+	}
+	if got.HoldoutBeginIndex != 221329 {
+		t.Fatalf("HoldoutBeginIndex %d", got.HoldoutBeginIndex)
+	}
 }
 
 func loadCanonicalTrainableRows(t *testing.T) ([]forecast.ResearchRow, forecast.TargetSpec, string) {
@@ -83,7 +154,7 @@ func loadCanonicalTrainableRows(t *testing.T) ([]forecast.ResearchRow, forecast.
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, err := resolveIntendedResearchTargetSpec()
+	spec, err := ResearchTargetSpec()
 	if err != nil {
 		t.Fatal(err)
 	}
