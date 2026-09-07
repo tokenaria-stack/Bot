@@ -8,10 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FINAL-MODEL-FIT-1 — all-development base model (Sep 2026)
+
+- `research.finalfit`: recipe→logits→matrix provenance; reuse `fit_fold_model` on all OOF-matrix rows; `final-base-model-v1`.
+- Next when asked: FORECAST-BUNDLE-1. Do not start it here.
+
 ## RECIPE-FREEZE-1 — forecast composition (Sep 2026) ✅ frozen `c2d278a`
 
 - `research.recipe`: tiny `forecast-recipe-v1`; load without OOF logits; independent P and rank projection.
-- Next when asked: FINAL-MODEL-FIT-1. Do not start it here.
 
 ## RANK-1 — exact empirical directional rank (Sep 2026) ✅ frozen `cc49528`
 

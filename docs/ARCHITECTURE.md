@@ -546,7 +546,13 @@ Statistical assumption (documented, not repaired): this reference pools expandin
 
 Transfer assumptions (documented, not repaired): OOF-learned β and pooled directional rank remain meaningful for a later full-development model.
 
-**HARD STOP.** Frozen `c2d278a`. Do not start FINAL-MODEL-FIT-1 here.
+**HARD STOP.** Frozen `c2d278a`. Do not reopen recipe.
+
+### FINAL-MODEL-FIT-1 (all-development raw-logit model)
+
+`python -m research.finalfit` uses frozen `forecast-recipe-v1` as precommit root (`read_recipe` only — not `load_forecast_recipe`). Provenance: recipe → `oof-logits-v1` → `oof-matrix-v1`. One fresh `fit_fold_model(X_all, y_all, pinned_model_spec())` on every matrix row in stored order. Product is `final-base-model-v1` (scaler/coef/intercept only). Recipe digest is not stored on the model. MATCH does not fit and does not require current sklearn/SciPy. No metrics, portable inference, bundle, or holdout.
+
+**HARD STOP.** Do not start FORECAST-BUNDLE-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

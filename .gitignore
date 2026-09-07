@@ -28,6 +28,7 @@ research/logits/
 research/calibrations/
 research/ranks/
 research/recipes/
+research/final_models/
 research/modelfit/.venv/
 *.test
 *.exe
