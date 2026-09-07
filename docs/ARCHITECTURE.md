@@ -530,7 +530,7 @@ Python-only fitting brain (`python -m research.modelfit`). Input is one explicit
 
 Sibling of RANK-1 (not implemented here). `python -m research.calibration` reads frozen `oof-logits-v1` via existing `read_oof_logits` (no MODEL-FIT sklearn gate). Fits one `β ≥ 0` on all OOF rows: `softmax(β z)`, mean NLL, analytic gradient, SciPy L-BFGS-B. Product is one JSON `temperature-calibration-v1` (β + provenance), not a probability dataset. Execution pin: Python/NumPy/SciPy only. No metrics, rank, holdout, or final development-model fit.
 
-**HARD STOP.** Do not start RANK-1 here.
+**HARD STOP.** Frozen `4c8c08e`. Do not start RANK-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
