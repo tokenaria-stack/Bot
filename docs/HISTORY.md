@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## OOF-MATRIX-1 — development-only interchange (Sep 2026)
+## OOF-MATRIX-1 — development-only interchange (Sep 2026) ✅ frozen `d749042`
 
 - `forecast.GenerateOOFMatrix` writes `oof-matrix-v1` JSONL: legal development prefix, no seam, no holdout, raw canonical X/y, matrix-local fold ranges, existing tape/label provenance, ValidationPlan identity, OOF ContentDigest.
 - VALIDATION-PLAN-1 remains frozen `0737c59` / docs `45155eb`.

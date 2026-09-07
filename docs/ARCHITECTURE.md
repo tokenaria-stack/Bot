@@ -518,7 +518,7 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 `forecast.GenerateOOFMatrix(tapePath, labelPath, outPath, expect, validationPlan)` opens FeatureTape + LabelSet, TOCTOU-compares full source identities, calls frozen `BuildResearchDataset`, extracts `At[]`, calls frozen `CompileValidationPlan`, and writes `ResearchRows[0:DevelopmentEndIndex)` as JSONL `oof-matrix-v1` (`AtUnit=unix_ms`). Causal seam and holdout rows are physically absent. Rows are raw `At` + ordered features + `UP_FIRST|DOWN_FIRST|TIMEOUT`. Fold indices are matrix-local ranges (not per-row tags). `ValidationPlanDigest` hashes experiment rules only. Footer `ContentDigest` hashes this realized development matrix (including compiled ranges). One slot under `research/oof/`; existing exact artifact MATCH; any difference REFUSE. No scaler, model, holdout file, or SQLite reread.
 
-**HARD STOP.** Do not start MODEL-FIT-1 here.
+**HARD STOP.** Frozen `d749042`. Do not start MODEL-FIT-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
