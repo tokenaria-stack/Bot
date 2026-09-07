@@ -538,7 +538,7 @@ Sibling of CALIBRATION-1 (no import, no β). `python -m research.rank` reads the
 
 Statistical assumption (documented, not repaired): this reference pools expanding-fold OOF logits; a later full-development model is assumed sufficiently compatible in directional scale/order. No per-fold CDFs or rescaling.
 
-**HARD STOP.** Do not start RECIPE-FREEZE here.
+**HARD STOP.** Frozen `cc49528`. Do not start RECIPE-FREEZE here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

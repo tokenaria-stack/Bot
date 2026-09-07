@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## RANK-1 — exact empirical directional rank (Sep 2026)
+## RANK-1 — exact empirical directional rank (Sep 2026) ✅ frozen `cc49528`
 
 - `research.rank`: raw `D = UP − DOWN` on frozen `oof-logits-v1`; exact sorted sample; midrank step CDF; signed rank `2u−1`; `empirical-rank-v1`.
 - Sibling of CALIBRATION-1: no β, no `research.calibration` import. Runtime gate is Python/NumPy only.
