@@ -8,10 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## OOF-MATRIX-1 — development-only interchange (Sep 2026)
+
+- `forecast.GenerateOOFMatrix` writes `oof-matrix-v1` JSONL: legal development prefix, no seam, no holdout, raw canonical X/y, matrix-local fold ranges, existing tape/label provenance, ValidationPlan identity, OOF ContentDigest.
+- VALIDATION-PLAN-1 remains frozen `0737c59` / docs `45155eb`.
+- Next when asked: MODEL-FIT-1. Do not start it here.
+
 ## VALIDATION-PLAN-1 — outcome-blind walk-forward geometry (Sep 2026) ✅ frozen `0737c59`
 
 - `forecast.CompileValidationPlan` packs four 17568-bar 15m windows backward from the holdout causal edge. Rules-only identity `validation:walk-forward-v1`. Binding in `market.ResearchValidationPlan` (TargetH from TargetSpec).
-- Next when asked: OOF-MATRIX-1. Do not start it here.
+- Frozen. Do not reopen packing.
 
 ## RESEARCH-DATASET-1 — tape + LabelSet consumption (Sep 2026) ✅ frozen `f311203`
 

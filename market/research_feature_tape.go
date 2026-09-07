@@ -87,6 +87,13 @@ func ResearchValidationPlan() (forecast.ValidationPlan, error) {
 	}, spec, forecast.ValidationLogicWalkForwardV1)
 }
 
+// ResearchOOFMatrixFileName is a navigation slot name under research/oof/.
+// Authority is header provenance + ContentDigest, not this filename.
+func ResearchOOFMatrixFileName(key forecast.MarketKey, tapeContent, labelContent, valPlan forecast.Digest) string {
+	return key.Venue + "_" + key.Instrument + "_" + key.Contract + "_" + key.Timeframe +
+		"_tape-" + tapeContent.Short() + "_labels-" + labelContent.Short() + "_valplan-" + valPlan.Short() + ".oofmatrix"
+}
+
 func ResearchFeaturePlanMust(analysisLogic forecast.LogicVersion) (forecast.FeaturePlan, error) {
 	plan, err := ResearchFeaturePlan(analysisLogic)
 	if err != nil {

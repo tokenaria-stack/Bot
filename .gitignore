@@ -23,6 +23,7 @@ trading_bot
 # Research artifacts (local FeatureTape / LabelSet dumps; not identity SSOT)
 research/tapes/
 research/labels/
+research/oof/
 *.test
 *.exe
 *.out
