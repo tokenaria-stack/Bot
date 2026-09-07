@@ -28,6 +28,7 @@ class CalibrationSpec:
     initial_beta: float
     max_iter: int
     gtol: float
+    ftol: float
 
     def payload(self) -> Dict[str, Any]:
         return {
@@ -36,6 +37,7 @@ class CalibrationSpec:
             "constraint": self.constraint,
             "dtype": self.dtype,
             "family": self.family,
+            "ftol": self.ftol,
             "gtol": self.gtol,
             "initial_beta": self.initial_beta,
             "logic": self.logic,
@@ -74,6 +76,7 @@ def pinned_calibration_spec() -> CalibrationSpec:
         initial_beta=1.0,
         max_iter=1000,
         gtol=1e-12,
+        ftol=2.220446049250313e-09,  # SciPy 1.13.1 L-BFGS-B default, now explicit
     )
 
 
@@ -93,4 +96,5 @@ def spec_from_json(d: Dict[str, Any]) -> CalibrationSpec:
         initial_beta=float(d["initial_beta"]),
         max_iter=int(d["max_iter"]),
         gtol=float(d["gtol"]),
+        ftol=float(d["ftol"]),
     )

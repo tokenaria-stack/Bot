@@ -48,7 +48,7 @@ def fit_temperature(y: np.ndarray, logits: np.ndarray, spec: CalibrationSpec) ->
         jac=True,
         method="L-BFGS-B",
         bounds=[(0.0, None)],
-        options={"maxiter": spec.max_iter, "gtol": spec.gtol},
+        options={"maxiter": spec.max_iter, "gtol": spec.gtol, "ftol": spec.ftol},
     )
     if not bool(result.success):
         raise CalibrationError(f"calibration: optimizer failed: {result.message}")

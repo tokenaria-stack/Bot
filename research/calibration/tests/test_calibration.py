@@ -51,6 +51,9 @@ class TestSpecIdentity(unittest.TestCase):
         self.assertNotIn("source", a.payload())
         self.assertNotIn("beta", a.payload())
         self.assertNotIn("sklearn", a.payload())
+        self.assertIn("ftol", a.payload())
+        other_ftol = CalibrationSpec(**{**a.__dict__, "ftol": 1e-8})
+        self.assertNotEqual(a.digest_hex(), other_ftol.digest_hex())
 
 
 class TestObjective(unittest.TestCase):
