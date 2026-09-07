@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## CALIBRATION-1 — global inverse temperature (Sep 2026) ✅ frozen `4c8c08e`
+## CALIBRATION-1 — global inverse temperature (Sep 2026) ✅ frozen `4c8c08e` + `b550613`
 
 - `research.calibration`: one `β` on all OOF logits; `temperature-calibration-v1`; sibling of RANK-1 (not started).
 - L-BFGS-B `ftol` is explicit in CalibrationSpec (SciPy 1.13.1 default made a resolved rule). Logic version not bumped.
