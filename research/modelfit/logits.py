@@ -72,6 +72,7 @@ def hash_oof_logits(header: Dict[str, Any], rows: List[Dict[str, Any]]) -> bytes
     put_string(h, rt["python"])
     put_string(h, rt["numpy"])
     put_string(h, rt["sklearn"])
+    put_string(h, rt["scipy"])
     folds = header["folds"]
     put_u32(h, len(folds))
     for fj in folds:

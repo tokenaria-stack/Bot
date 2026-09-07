@@ -42,9 +42,15 @@ class TestModelSpecIdentity(unittest.TestCase):
         self.assertEqual(a.digest_hex(), b.digest_hex())
         other = ModelSpec(**{**a.__dict__, "C": 10.0})
         self.assertNotEqual(a.digest_hex(), other.digest_hex())
-        # rules only: digest payload has no matrix field
+        # rules only: digest payload has no matrix field and no runtime versions
         self.assertNotIn("matrix", a.payload())
         self.assertNotIn("fold", str(a.payload()).lower())
+        self.assertNotIn("scipy", a.payload())
+        self.assertNotIn("numpy", a.payload())
+        self.assertEqual(
+            a.digest_hex(),
+            "66a9ac20dfb335f664180f5a1d63c5d81e3f2b6e782a7cf936cd355c603e8794",
+        )
 
 
 class TestMatrixGolden(unittest.TestCase):
@@ -194,6 +200,9 @@ class TestCanonical(unittest.TestCase):
         self.assertEqual(m.feature_ids, ["rsx_value", "rsx_signal", "tv_bull_present", "tv_bull_age"])
         out = out_dir / logits_filename(m.header["market"], m.content_digest, spec.digest())
         h, f, _ = generate_oof_logits(path, expect, str(out))
+        self.assertEqual(h["runtime"]["scipy"], "1.13.1")
+        self.assertEqual(h["runtime"]["sklearn"], "1.5.2")
+        self.assertEqual(h["model_spec_digest"], spec.digest_hex())
         self.assertEqual(f["row_count"], 70259)
         self.assertEqual(len(h["folds"]), 4)
         want_n = [17564, 17561, 17568, 17566]

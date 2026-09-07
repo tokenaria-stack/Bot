@@ -522,7 +522,7 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 ### MODEL-FIT-1 (train-only multinomial logistic OOF logits)
 
-Python-only fitting brain (`python -m research.modelfit`). Input is one explicit `oof-matrix-v1` path plus CLI `--expect-matrix` ContentDigest. Per fold: `fit_fold_model(X_train, y_train, spec)` then `predict_fold_logits(fitted, X_val)`. sklearn `StandardScaler` + `LogisticRegression` (lbfgs, C=1.0) are the numerical owner. Output `oof-logits-v1`: `At`, `Outcome`, `Logits[3]` only; fold lineage is source/output ranges in the header. Existing slot MATCH rehashes the file and does not refit. No metrics, calibration, holdout path, or Go logits stack.
+Python-only fitting brain (`python -m research.modelfit`). Input is one explicit `oof-matrix-v1` path plus CLI `--expect-matrix` ContentDigest. Per fold: `fit_fold_model(X_train, y_train, spec)` then `predict_fold_logits(fitted, X_val)`. sklearn `StandardScaler` + `LogisticRegression` (lbfgs, C=1.0) are the numerical owner. Runtime pin is Python + NumPy + sklearn + SciPy (L-BFGS execution provenance; not `ModelSpecDigest`). Output `oof-logits-v1`: `At`, `Outcome`, `Logits[3]` only; fold lineage is source/output ranges in the header. Existing slot MATCH rehashes the file and does not refit. No metrics, calibration, holdout path, or Go logits stack.
 
 **HARD STOP.** Frozen `0d60270`. Do not start CALIBRATION-1 here.
 
