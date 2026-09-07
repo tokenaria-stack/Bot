@@ -8,11 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RECIPE-FREEZE-1 — forecast composition (Sep 2026)
+
+- `research.recipe`: tiny `forecast-recipe-v1`; load without OOF logits; independent P and rank projection.
+- Next when asked: FINAL-MODEL-FIT-1. Do not start it here.
+
 ## RANK-1 — exact empirical directional rank (Sep 2026) ✅ frozen `cc49528`
 
 - `research.rank`: raw `D = UP − DOWN` on frozen `oof-logits-v1`; exact sorted sample; midrank step CDF; signed rank `2u−1`; `empirical-rank-v1`.
 - Sibling of CALIBRATION-1: no β, no `research.calibration` import. Runtime gate is Python/NumPy only.
-- Next when asked: RECIPE-FREEZE. Do not start it here.
 
 ## CALIBRATION-1 — global inverse temperature (Sep 2026) ✅ frozen `4c8c08e` + `b550613`
 

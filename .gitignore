@@ -27,6 +27,7 @@ research/oof/
 research/logits/
 research/calibrations/
 research/ranks/
+research/recipes/
 research/modelfit/.venv/
 *.test
 *.exe

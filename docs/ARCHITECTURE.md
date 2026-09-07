@@ -538,7 +538,15 @@ Sibling of CALIBRATION-1 (no import, no β). `python -m research.rank` reads the
 
 Statistical assumption (documented, not repaired): this reference pools expanding-fold OOF logits; a later full-development model is assumed sufficiently compatible in directional scale/order. No per-fold CDFs or rescaling.
 
-**HARD STOP.** Frozen `cc49528`. Do not start RECIPE-FREEZE here.
+**HARD STOP.** Frozen `cc49528`. Do not reopen rank.
+
+### RECIPE-FREEZE-1 (forecast composition, no learning)
+
+`python -m research.recipe` binds frozen `oof-logits-v1` + `temperature-calibration-v1` + `empirical-rank-v1` into one tiny `forecast-recipe-v1` (child ContentDigests + composition law tokens). Construction reads all three children (logits prove `ModelSpecDigest` via `pinned_model_spec()`). Runtime `load_forecast_recipe(recipe, calibration, rank)` does **not** reopen OOF logits. Scalar `project_forecast` exposes `ForecastEvidence{probabilities[3], directional_rank}`: independent branches (`β=0` uniform before max-shift softmax; raw `query_rank` from RANK-1). No β/sorted_D copy, no runtime versions in the durable recipe, no score, no thresholds, no final fit.
+
+Transfer assumptions (documented, not repaired): OOF-learned β and pooled directional rank remain meaningful for a later full-development model.
+
+**HARD STOP.** Do not start FINAL-MODEL-FIT-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
