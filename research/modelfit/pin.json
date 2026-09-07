@@ -1,0 +1,6 @@
+{
+  "python_major": 3,
+  "python_minor": 9,
+  "numpy": "1.26.4",
+  "sklearn": "1.5.2"
+}

@@ -45,6 +45,42 @@ func writeTinyOOFWorld(t *testing.T, dir string, n int, mutTape func(i int, v []
 	return tapePath, labelPath, expect, plan
 }
 
+func TestExportPythonGoldenOOFMatrix(t *testing.T) {
+	dir := t.TempDir()
+	tape, labels, expect, plan := writeTinyOOFWorld(t, dir, 80, nil)
+	root := filepath.Join("..", "research", "modelfit", "testdata")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "tiny.oofmatrix")
+	digestPath := filepath.Join(root, "tiny.contentdigest")
+	tmp := filepath.Join(dir, "m.oofmatrix")
+	_, ft, _, err := GenerateOOFMatrix(tape, labels, tmp, expect, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ft.ContentDigest.String()
+	if _, err := os.Stat(out); err != nil {
+		data, err := os.ReadFile(tmp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(out, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(digestPath, []byte(want+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(digestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(got)) != want {
+		t.Fatalf("python golden digest drift: file=%s generate=%s", strings.TrimSpace(string(got)), want)
+	}
+}
+
 func TestGenerateOOFMatrix_PhysicalSplitExcludesSeamHoldout(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

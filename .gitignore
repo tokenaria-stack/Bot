@@ -24,6 +24,8 @@ trading_bot
 research/tapes/
 research/labels/
 research/oof/
+research/logits/
+research/modelfit/.venv/
 *.test
 *.exe
 *.out
