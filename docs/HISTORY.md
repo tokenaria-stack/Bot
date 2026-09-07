@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## RECIPE-FREEZE-1 — forecast composition (Sep 2026)
+## RECIPE-FREEZE-1 — forecast composition (Sep 2026) ✅ frozen `c2d278a`
 
 - `research.recipe`: tiny `forecast-recipe-v1`; load without OOF logits; independent P and rank projection.
 - Next when asked: FINAL-MODEL-FIT-1. Do not start it here.

@@ -546,7 +546,7 @@ Statistical assumption (documented, not repaired): this reference pools expandin
 
 Transfer assumptions (documented, not repaired): OOF-learned β and pooled directional rank remain meaningful for a later full-development model.
 
-**HARD STOP.** Do not start FINAL-MODEL-FIT-1 here.
+**HARD STOP.** Frozen `c2d278a`. Do not start FINAL-MODEL-FIT-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
