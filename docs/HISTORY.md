@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## MODEL-FIT-1 — train-only OOF logits (Sep 2026)
+## MODEL-FIT-1 — train-only OOF logits (Sep 2026) ✅ frozen `0d60270`
 
 - Python `research.modelfit`: pinned `model-fit:multinomial-logistic-v1`, train-only scaler+logistic, validation-only `decision_function`, `oof-logits-v1` logits only.
 - Consumes frozen OOF-MATRIX-1 `d749042`. No metrics, no calibration, no holdout.
