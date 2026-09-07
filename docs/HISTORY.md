@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FINAL-MODEL-FIT-1 — all-development base model (Sep 2026)
+## FINAL-MODEL-FIT-1 — all-development base model (Sep 2026) ✅ frozen `9cb03f5`
 
 - `research.finalfit`: recipe→logits→matrix provenance; reuse `fit_fold_model` on all OOF-matrix rows; `final-base-model-v1`.
 - Next when asked: FORECAST-BUNDLE-1. Do not start it here.
