@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DECISION-RESEARCH-1 — frozen 9×9 selector (Sep 2026) ✅ frozen `789ddcd`
+
+- Train selects one DecisionSpec or `ABSTAIN_BASELINE`; validation evaluates that one result. `decision.ApplyDecision` is the only decision brain. Target-space TotalUtility; no PnL/execution/holdout/final spec.
+- Canonical development run: all four folds selected baseline; `eligible_for_finalization=false`. Valid frozen negative experiment. Do not densify the grid. Do not start FINAL-DECISION-SPEC-1 unless eligible and explicitly asked.
+
 ## DECISION-CONTRACT-1 — runtime decision language (Sep 2026) ✅ frozen `b7a76b4`
 
 - `decision.ApplyDecision`: ForecastEvidence + DecisionSpec → UP_INTENT/DOWN_INTENT/ABSTAIN. Target-space EU, independent rank gate. No selector, folds, metrics, execution, or holdout.

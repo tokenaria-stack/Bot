@@ -568,7 +568,7 @@ Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout
 
 Statistical hierarchy (honesty): OOF raw logits are honest relative to base-model fitting. This evidence table applies the frozen global β and global rank reference (self-inclusion on historical D). It is suitable for decision development, not an unbiased end-to-end evaluation of the complete forecaster. Future decision temporal folds are robustness/selection discipline only. Sealed holdout remains the first honest full-system evaluation. Do not create fold-local β/rank variants.
 
-Roadmap after evidence: DECISION-VALIDATION-PLAN-1 (frozen `a0da055`) → DECISION-CONTRACT-1 → DECISION-RESEARCH-1 (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
+Roadmap after evidence: DECISION-VALIDATION-PLAN-1 (frozen `a0da055`) → DECISION-CONTRACT-1 (frozen `b7a76b4`) → DECISION-RESEARCH-1 (selector; not holdout).
 
 **HARD STOP.** Frozen `124f273`. Do not start decision research or HOLDOUT-EVAL here.
 
@@ -584,7 +584,13 @@ Honesty: development selection/robustness only. Not end-to-end evaluation. `evid
 
 `decision.ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)` is the only v1 decision brain (`decision:target-utility-rank-gate-v1`). Intent is `UP_INTENT` / `DOWN_INTENT` / `ABSTAIN` — not an order. Input is frozen `ForecastEvidence` only (no `At`, Outcome, folds). `DecisionSpec` copies TargetSpec barrier multiples as target-space utilities (not PnL) plus two future search knobs (`min_EU`, `min_abs_rank`) with `0 < min_EU < min(U,L)` and `0 < min_rank < 1`. One quantity `EU = U*P_UP - L*P_DOWN`; `EU_DOWN ≡ -EU`. Conjunction of utility and rank gates. Invalid evidence is an error, never ABSTAIN. Does not reuse `ScoreDecision` BUY/SELL/WAIT. Selector/grid/folds/metrics/execution/holdout are later chapters.
 
-**HARD STOP.** Frozen `b7a76b4`. Do not start DECISION-RESEARCH-1, execution timing, or HOLDOUT-EVAL here.
+**HARD STOP.** Frozen `b7a76b4`. Do not reopen the runtime contract. Selector/grid live in DECISION-RESEARCH-1.
+
+### DECISION-RESEARCH-1 (frozen selector over development ForecastEvidence)
+
+`python -m research.decisionresearch` binds a frozen `decision-validation-plan-v1` to `oof-forecast-evidence-v1` and runs `decision-research:fixed-grid-v1` in Go (`decisionresearch`, `cmd/research_decision_research`). Grid is exactly utility_decile × rank_decile `1..9` (81 candidates). Thresholds resolve as `base=min(U,L); min_EU=base*(float64(du)/10.0); min_rank=float64(dr)/10.0` from the existing TargetSpec owner (U/L are not hardcoded). Train selects one candidate or research-only `ABSTAIN_BASELINE` (TotalUtility 0; replace only if candidate TotalUtility `>` 0). Positive ties: higher utility_decile, then higher rank_decile. Validation evaluates only that selection via `decision.ApplyDecision` (never Outcome, never At). Evaluator owns integer intent×outcome counts and `TotalUtility = U*(up_up - down_up) + L*(down_down - up_down)`. Pooled validation sums counts then applies the same law. Acceptance is two gates: pooled validation TotalUtility `>` 0, and `positive_folds * 4 >= fold_count * 3`. `eligible_for_finalization` is that development robustness result only — not PnL, not deployable, not holdout. A negative result is a valid frozen experiment; do not densify the grid or invent indicator knobs. MATCH verifies the artifact and does not reenact the selector. Format `decision-research-v1`. No scoreboard of losing candidates. Holdout remains sealed. Do not start FINAL-DECISION-SPEC-1 or EXECUTION-TIMING-1 here.
+
+**HARD STOP.** Frozen `789ddcd`. Research result `eligible_for_finalization=false` is a completed experiment, not an implementation failure. Do not start FINAL-DECISION-SPEC-1 or EXECUTION-TIMING-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
