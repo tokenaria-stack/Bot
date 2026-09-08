@@ -552,7 +552,15 @@ Transfer assumptions (documented, not repaired): OOF-learned β and pooled direc
 
 `python -m research.finalfit` uses frozen `forecast-recipe-v1` as precommit root (`read_recipe` only — not `load_forecast_recipe`). Provenance: recipe → `oof-logits-v1` → `oof-matrix-v1`. One fresh `fit_fold_model(X_all, y_all, pinned_model_spec())` on every matrix row in stored order. Product is `final-base-model-v1` (scaler/coef/intercept only). Recipe digest is not stored on the model. MATCH does not fit and does not require current sklearn/SciPy. No metrics, portable inference, bundle, or holdout.
 
-**HARD STOP.** Frozen `9cb03f5`. Do not start FORECAST-BUNDLE-1 here.
+**HARD STOP.** Frozen `9cb03f5`. Do not reopen final-model-fit.
+
+### FORECAST-BUNDLE-1 (executable forecast contract)
+
+`python -m research.bundle` proves one research world (final model + recipe + calibration + rank, with OOF logits/matrix as construction witnesses only). Durable `forecast-bundle-v1` binds law-only contracts from oof-matrix-v1 field names: ordered `feature_ids` + `feature_plan_digest`; `class_order` + `target_digest` + `label_logic_version`. No tape ContentDigest in the live feature contract. Runtime load does not use OOF artifacts. Type-state: `bind_feature_contract` → `BoundForecaster` → scalar `forecast`. Portable affine application of stored mean/scale/coef/intercept; composition is existing `project_forecast`. Python/NumPy only at execute. No metrics, decisions, or holdout.
+
+Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout until a frozen decision/trading law.
+
+**HARD STOP.** Do not start decision research or HOLDOUT-EVAL-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

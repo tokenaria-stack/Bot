@@ -8,10 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FORECAST-BUNDLE-1 — executable forecast contract (Sep 2026)
+
+- `research.bundle`: `forecast-bundle-v1`; feature_plan_digest + target_digest law bind; portable raw logits; existing recipe projector; type-state feature bind.
+- Holdout fork documented, not chosen. Next when asked: do not start holdout or decision research here.
+
 ## FINAL-MODEL-FIT-1 — all-development base model (Sep 2026) ✅ frozen `9cb03f5`
 
 - `research.finalfit`: recipe→logits→matrix provenance; reuse `fit_fold_model` on all OOF-matrix rows; `final-base-model-v1`.
-- Next when asked: FORECAST-BUNDLE-1. Do not start it here.
 
 ## RECIPE-FREEZE-1 — forecast composition (Sep 2026) ✅ frozen `c2d278a`
 

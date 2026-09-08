@@ -29,6 +29,7 @@ research/calibrations/
 research/ranks/
 research/recipes/
 research/final_models/
+research/bundles/
 research/modelfit/.venv/
 *.test
 *.exe
