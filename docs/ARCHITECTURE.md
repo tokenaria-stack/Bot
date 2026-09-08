@@ -568,7 +568,7 @@ Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout
 
 Statistical hierarchy (honesty): OOF raw logits are honest relative to base-model fitting. This evidence table applies the frozen global β and global rank reference (self-inclusion on historical D). It is suitable for decision development, not an unbiased end-to-end evaluation of the complete forecaster. Future decision temporal folds are robustness/selection discipline only. Sealed holdout remains the first honest full-system evaluation. Do not create fold-local β/rank variants.
 
-Roadmap after evidence: DECISION-VALIDATION-PLAN-1 (frozen `a0da055`) → decision research (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
+Roadmap after evidence: DECISION-VALIDATION-PLAN-1 (frozen `a0da055`) → DECISION-CONTRACT-1 → DECISION-RESEARCH-1 (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
 
 **HARD STOP.** Frozen `124f273`. Do not start decision research or HOLDOUT-EVAL here.
 
@@ -579,6 +579,12 @@ Roadmap after evidence: DECISION-VALIDATION-PLAN-1 (frozen `a0da055`) → decisi
 Honesty: development selection/robustness only. Not end-to-end evaluation. `evidence.At` is the closed candidate bar, not an execution time.
 
 **HARD STOP.** Frozen `a0da055`. Do not start decision research, execution timing, or HOLDOUT-EVAL here.
+
+### DECISION-CONTRACT-1 (runtime decision language)
+
+`decision.ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)` is the only v1 decision brain (`decision:target-utility-rank-gate-v1`). Intent is `UP_INTENT` / `DOWN_INTENT` / `ABSTAIN` — not an order. Input is frozen `ForecastEvidence` only (no `At`, Outcome, folds). `DecisionSpec` copies TargetSpec barrier multiples as target-space utilities (not PnL) plus two future search knobs (`min_EU`, `min_abs_rank`) with `0 < min_EU < min(U,L)` and `0 < min_rank < 1`. One quantity `EU = U*P_UP - L*P_DOWN`; `EU_DOWN ≡ -EU`. Conjunction of utility and rank gates. Invalid evidence is an error, never ABSTAIN. Does not reuse `ScoreDecision` BUY/SELL/WAIT. Selector/grid/folds/metrics/execution/holdout are later chapters.
+
+**HARD STOP.** Do not start DECISION-RESEARCH-1, execution timing, or HOLDOUT-EVAL here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

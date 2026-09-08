@@ -8,6 +8,10 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DECISION-CONTRACT-1 — runtime decision language (Sep 2026)
+
+- `decision.ApplyDecision`: ForecastEvidence + DecisionSpec → UP_INTENT/DOWN_INTENT/ABSTAIN. Target-space EU, independent rank gate. No selector, folds, metrics, execution, or holdout.
+
 ## DECISION-VALIDATION-PLAN-1 — decision-research geometry (Sep 2026) ✅ frozen `a0da055`
 
 - Evidence `At[]` only into existing `CompileValidationPlan`; fresh `decision-validation:walk-forward-v1`; same sealed wall + TargetH; 4×90d val; MinTrainRows 35040.
