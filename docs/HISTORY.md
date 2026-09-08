@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## OOF-FORECAST-EVIDENCE-1 — decision-development evidence (Sep 2026)
+
+- `research.evidence`: `oof-forecast-evidence-v1`; OOF logits → existing frozen recipe; matrix target-law witness; numerical Python/NumPy provenance; MATCH does not reenact projection or load rank.
+- Not end-to-end evaluation. Future DECISION-VALIDATION-PLAN-1 / decision research / HOLDOUT-EVAL not started.
+
 ## FORECAST-BUNDLE-1 — executable forecast contract (Sep 2026) ✅ frozen `a9e1228`
 
 - `research.bundle`: `forecast-bundle-v1`; feature_plan_digest + target_digest law bind; portable raw logits; existing recipe projector; type-state feature bind.

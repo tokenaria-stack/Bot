@@ -30,6 +30,7 @@ research/ranks/
 research/recipes/
 research/final_models/
 research/bundles/
+research/forecast_evidence/
 research/modelfit/.venv/
 *.test
 *.exe

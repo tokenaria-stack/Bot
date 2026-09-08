@@ -562,6 +562,16 @@ Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout
 
 **HARD STOP.** Frozen `a9e1228`. Do not start decision research or HOLDOUT-EVAL-1 here.
 
+### OOF-FORECAST-EVIDENCE-1 (decision-development evidence snapshot)
+
+`python -m research.evidence` materializes frozen `forecast-recipe-v1` over honest `oof-logits-v1` rows in source order. Product is `oof-forecast-evidence-v1`: `At`, copied `Outcome`, `probabilities[3]`, `directional_rank`. Matrix is a target-law witness only (`market`, `at_unit`, `target_digest`, `label_logic_version`). No final-model or bundle execution. No metrics, decisions, or holdout.
+
+Statistical hierarchy (honesty): OOF raw logits are honest relative to base-model fitting. This evidence table applies the frozen global β and global rank reference (self-inclusion on historical D). It is suitable for decision development, not an unbiased end-to-end evaluation of the complete forecaster. Future decision temporal folds are robustness/selection discipline only. Sealed holdout remains the first honest full-system evaluation. Do not create fold-local β/rank variants.
+
+Roadmap (not implemented here): DECISION-VALIDATION-PLAN-1 → decision research (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
+
+**HARD STOP.** Do not start DECISION-VALIDATION-PLAN-1, decision research, or HOLDOUT-EVAL here.
+
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
 Barriers freeze at candidate close: `close[t] ± multiple * atr[t]`. Future ATR cannot move them. `atr[t] <= 0` → `AMBIGUOUS` / `ATR_ZERO`. Nonfinite ATR or barriers refuse generation.
