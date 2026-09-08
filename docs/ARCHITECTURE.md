@@ -570,7 +570,7 @@ Statistical hierarchy (honesty): OOF raw logits are honest relative to base-mode
 
 Roadmap (not implemented here): DECISION-VALIDATION-PLAN-1 → decision research (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
 
-**HARD STOP.** Do not start DECISION-VALIDATION-PLAN-1, decision research, or HOLDOUT-EVAL here.
+**HARD STOP.** Frozen `124f273`. Do not start DECISION-VALIDATION-PLAN-1, decision research, or HOLDOUT-EVAL here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
