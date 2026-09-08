@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DECISION-VALIDATION-PLAN-1 — decision-research geometry (Sep 2026)
+
+- Evidence `At[]` only into existing `CompileValidationPlan`; fresh `decision-validation:walk-forward-v1`; same sealed wall + TargetH; 4×90d val; MinTrainRows 35040.
+- Not performance. Execution timing / decision research / holdout not started.
+
 ## OOF-FORECAST-EVIDENCE-1 — decision-development evidence (Sep 2026) ✅ frozen `124f273`
 
 - `research.evidence`: `oof-forecast-evidence-v1`; OOF logits → existing frozen recipe; matrix target-law witness; numerical Python/NumPy provenance; MATCH does not reenact projection or load rank.

@@ -568,9 +568,17 @@ Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout
 
 Statistical hierarchy (honesty): OOF raw logits are honest relative to base-model fitting. This evidence table applies the frozen global β and global rank reference (self-inclusion on historical D). It is suitable for decision development, not an unbiased end-to-end evaluation of the complete forecaster. Future decision temporal folds are robustness/selection discipline only. Sealed holdout remains the first honest full-system evaluation. Do not create fold-local β/rank variants.
 
-Roadmap (not implemented here): DECISION-VALIDATION-PLAN-1 → decision research (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
+Roadmap after this frozen chapter: DECISION-VALIDATION-PLAN-1 → decision research (`decision(Evidence)` never Outcome) → freeze DecisionSpec → execution/risk law → STRATEGY-BUNDLE → sealed HOLDOUT-EVAL.
 
-**HARD STOP.** Frozen `124f273`. Do not start DECISION-VALIDATION-PLAN-1, decision research, or HOLDOUT-EVAL here.
+**HARD STOP.** Frozen `124f273`. Do not start decision research or HOLDOUT-EVAL here.
+
+### DECISION-VALIDATION-PLAN-1 (temporal decision-research geometry)
+
+`python -m research.decisionplan` reads frozen `oof-forecast-evidence-v1`, extracts `At[]` only, and calls existing `forecast.CompileValidationPlan` via a thin Go stdin bridge (`cmd/research_decision_plan`). Matrix is a target/holdout-wall witness only. Fresh logic `decision-validation:walk-forward-v1`. Current binding: 4×8640-bar (~90d) val eras, `MinTrainRows=35040`, `ExtraGapBars=0`, `TargetH` from `ResearchTargetSpec`, same `ResearchHoldoutStartAt` as the model plan. Evidence-local ranges; no model FoldID reuse. Decision logic may compile an `At[]` that ends before the wall (no holdout rows in evidence); model logic still requires a holdout membership in `At[]`.
+
+Honesty: development selection/robustness only. Not end-to-end evaluation. `evidence.At` is the closed candidate bar, not an execution time.
+
+**HARD STOP.** Do not start decision research, execution timing, or HOLDOUT-EVAL here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

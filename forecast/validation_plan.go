@@ -10,6 +10,10 @@ import (
 
 const ValidationLogicWalkForwardV1 LogicVersion = "validation:walk-forward-v1"
 
+// DecisionValidationLogicWalkForwardV1 is the decision-research geometry
+// identity. Same compiler as VALIDATION-PLAN-1; not the model plan.
+const DecisionValidationLogicWalkForwardV1 LogicVersion = "decision-validation:walk-forward-v1"
+
 // ValidationPlanDraft is mutable input. TargetH is NOT a draft field — it is
 // copied from TargetSpec at resolve time.
 type ValidationPlanDraft struct {
@@ -201,7 +205,9 @@ func CompileValidationPlan(at []int64, tf string, plan ValidationPlan) (Compiled
 	}
 	holdoutIdx := lb(plan.HoldoutStartAt)
 	if holdoutIdx == len(at) {
-		return z, fmt.Errorf("forecast: empty final holdout")
+		if plan.Logic != DecisionValidationLogicWalkForwardV1 {
+			return z, fmt.Errorf("forecast: empty final holdout")
+		}
 	}
 	devIdx := lb(devEnd)
 	illegalTrain := make([]int64, plan.FoldCount)

@@ -69,6 +69,12 @@ func ResearchTargetSpec() (forecast.TargetSpec, error) {
 	}, "labels:v1")
 }
 
+// ResearchHoldoutStartAt is the sealed experiment wall (2026-01-01 00:00:00 UTC).
+// Shared by model VALIDATION-PLAN-1 and DECISION-VALIDATION-PLAN-1.
+func ResearchHoldoutStartAt() int64 {
+	return 1767225600000
+}
+
 // ResearchValidationPlan is the pinned BTCUSDT 15m walk-forward experiment.
 // TargetH is taken from ResearchTargetSpec, not a parallel constant.
 func ResearchValidationPlan() (forecast.ValidationPlan, error) {
@@ -79,12 +85,31 @@ func ResearchValidationPlan() (forecast.ValidationPlan, error) {
 	key := ResearchMarketKey()
 	return forecast.ResolveValidationPlan(forecast.ValidationPlanDraft{
 		Timeframe:          key.Timeframe,
-		HoldoutStartAt:     1767225600000, // 2026-01-01 00:00:00 UTC
-		ValidationSpanBars: 17568,         // 183 elapsed days at 15m
+		HoldoutStartAt:     ResearchHoldoutStartAt(),
+		ValidationSpanBars: 17568, // 183 elapsed days at 15m
 		FoldCount:          4,
 		ExtraGapBars:       0,
 		MinTrainRows:       35040,
 	}, spec, forecast.ValidationLogicWalkForwardV1)
+}
+
+// ResearchDecisionValidationPlan is the pinned decision-development geometry.
+// Same sealed wall and TargetSpec as the model experiment; different span/identity.
+// TargetH is copied from ResearchTargetSpec, not a parallel constant.
+func ResearchDecisionValidationPlan() (forecast.ValidationPlan, error) {
+	spec, err := ResearchTargetSpec()
+	if err != nil {
+		return forecast.ValidationPlan{}, err
+	}
+	key := ResearchMarketKey()
+	return forecast.ResolveValidationPlan(forecast.ValidationPlanDraft{
+		Timeframe:          key.Timeframe,
+		HoldoutStartAt:     ResearchHoldoutStartAt(),
+		ValidationSpanBars: 8640, // 90 elapsed days at 15m
+		FoldCount:          4,
+		ExtraGapBars:       0,
+		MinTrainRows:       35040, // one 365-day 15m year of evidence rows
+	}, spec, forecast.DecisionValidationLogicWalkForwardV1)
 }
 
 // ResearchOOFMatrixFileName is a navigation slot name under research/oof/.
