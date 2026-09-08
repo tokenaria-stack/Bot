@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## DECISION-CONTRACT-1 — runtime decision language (Sep 2026)
+## DECISION-CONTRACT-1 — runtime decision language (Sep 2026) ✅ frozen `b7a76b4`
 
 - `decision.ApplyDecision`: ForecastEvidence + DecisionSpec → UP_INTENT/DOWN_INTENT/ABSTAIN. Target-space EU, independent rank gate. No selector, folds, metrics, execution, or holdout.
 

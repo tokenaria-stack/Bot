@@ -584,7 +584,7 @@ Honesty: development selection/robustness only. Not end-to-end evaluation. `evid
 
 `decision.ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)` is the only v1 decision brain (`decision:target-utility-rank-gate-v1`). Intent is `UP_INTENT` / `DOWN_INTENT` / `ABSTAIN` — not an order. Input is frozen `ForecastEvidence` only (no `At`, Outcome, folds). `DecisionSpec` copies TargetSpec barrier multiples as target-space utilities (not PnL) plus two future search knobs (`min_EU`, `min_abs_rank`) with `0 < min_EU < min(U,L)` and `0 < min_rank < 1`. One quantity `EU = U*P_UP - L*P_DOWN`; `EU_DOWN ≡ -EU`. Conjunction of utility and rank gates. Invalid evidence is an error, never ABSTAIN. Does not reuse `ScoreDecision` BUY/SELL/WAIT. Selector/grid/folds/metrics/execution/holdout are later chapters.
 
-**HARD STOP.** Do not start DECISION-RESEARCH-1, execution timing, or HOLDOUT-EVAL here.
+**HARD STOP.** Frozen `b7a76b4`. Do not start DECISION-RESEARCH-1, execution timing, or HOLDOUT-EVAL here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 
