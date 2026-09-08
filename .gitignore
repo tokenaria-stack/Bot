@@ -32,6 +32,7 @@ research/final_models/
 research/bundles/
 research/forecast_evidence/
 research/decision_validation/
+research/decision_research/
 research/modelfit/.venv/
 *.test
 *.exe
