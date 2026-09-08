@@ -560,7 +560,7 @@ Transfer assumptions (documented, not repaired): OOF-learned β and pooled direc
 
 Roadmap fork (not chosen here): holdout for forecast quality vs preserve holdout until a frozen decision/trading law.
 
-**HARD STOP.** Do not start decision research or HOLDOUT-EVAL-1 here.
+**HARD STOP.** Frozen `a9e1228`. Do not start decision research or HOLDOUT-EVAL-1 here.
 
 Two source ranges in one run: **ATR source** = `[init | candidates]` (contiguous via `data.NextBarOpen`, else REFUSE generation — not a row reason); **label source** = that prefix plus the needed H tail. `ATRSeries` runs only on ATR source. `LabelSourceRangeDigest` still hashes the full label source. Restart after an archive hole is the caller's input-slice choice.
 

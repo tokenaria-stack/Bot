@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FORECAST-BUNDLE-1 — executable forecast contract (Sep 2026)
+## FORECAST-BUNDLE-1 — executable forecast contract (Sep 2026) ✅ frozen `a9e1228`
 
 - `research.bundle`: `forecast-bundle-v1`; feature_plan_digest + target_digest law bind; portable raw logits; existing recipe projector; type-state feature bind.
 - Holdout fork documented, not chosen. Next when asked: do not start holdout or decision research here.
