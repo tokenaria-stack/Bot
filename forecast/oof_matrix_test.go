@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -43,6 +44,31 @@ func writeTinyOOFWorld(t *testing.T, dir string, n int, mutTape func(i int, v []
 	expect = testResearchExpect(hdr, target)
 	plan = tinyValPlan(t, ats[70])
 	return tapePath, labelPath, expect, plan
+}
+
+func TestOOFClassOrder_Contract(t *testing.T) {
+	t.Parallel()
+	want := [...]TargetOutcome{OutcomeUpFirst, OutcomeDownFirst, OutcomeTimeout}
+	if OOFClassOrder != want {
+		t.Fatalf("OOFClassOrder=%v want %v", OOFClassOrder, want)
+	}
+}
+
+func TestOOFMatrixFormatV1_IsGeneric(t *testing.T) {
+	t.Parallel()
+	rt := reflect.TypeOf(OOFRow{})
+	if _, ok := rt.FieldByName("FoldID"); ok {
+		t.Fatal("per-row FoldID is forbidden")
+	}
+	if _, ok := rt.FieldByName("Logits"); ok {
+		t.Fatal("logits must not live on OOFRow")
+	}
+	ht := reflect.TypeOf(OOFHeader{})
+	for _, banned := range []string{"Signal9", "Horizon24", "Logistic", "CatBoost", "FeatureSpecIdentity"} {
+		if _, ok := ht.FieldByName(banned); ok {
+			t.Fatalf("header field %s would lie or fork identity", banned)
+		}
+	}
 }
 
 func TestExportPythonGoldenOOFMatrix(t *testing.T) {
@@ -258,7 +284,7 @@ func TestOOFSourceSnap_TOCTOUEqual(t *testing.T) {
 	if !a.equal(b) {
 		t.Fatal("identical sequential reads must match")
 	}
-	b.tapeFt.ContentDigest[0] ^= 1
+	b.TapeContent[0] ^= 1
 	if a.equal(b) {
 		t.Fatal("changed tape ContentDigest must refuse equality")
 	}

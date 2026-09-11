@@ -13,6 +13,10 @@ const (
 	OOFAtUnitUnixMs   = "unix_ms"
 )
 
+// OOFClassOrder is the frozen model-logit meaning for oof-matrix-v1 rows.
+// logits[0]=UP_FIRST, [1]=DOWN_FIRST, [2]=TIMEOUT. Not a header digest field.
+var OOFClassOrder = [...]TargetOutcome{OutcomeUpFirst, OutcomeDownFirst, OutcomeTimeout}
+
 const (
 	oofKindHeader = "header"
 	oofKindRow    = "row"
@@ -61,10 +65,14 @@ type OOFFooter struct {
 }
 
 type oofSourceSnap struct {
-	tapeHdr TapeHeader
-	tapeFt  TapeFooter
-	labHdr  LabelHeader
-	labFt   LabelFooter
+	Market      MarketKey
+	PlanDigest  Digest
+	FeatureIDs  []FeatureID
+	VectorLen   int
+	TapeSource  Digest
+	TapeContent Digest
+	labHdr      LabelHeader
+	labFt       LabelFooter
 }
 
 func readOOFSources(tapePath, labelPath string) (oofSourceSnap, error) {
@@ -77,15 +85,28 @@ func readOOFSources(tapePath, labelPath string) (oofSourceSnap, error) {
 	if err != nil {
 		return z, err
 	}
-	return oofSourceSnap{tapeHdr: th, tapeFt: tf, labHdr: lh, labFt: lf}, nil
+	return oofSourceSnap{
+		Market: th.Market, PlanDigest: th.PlanDigest, FeatureIDs: th.FeatureIDs, VectorLen: th.VectorLen,
+		TapeSource: tf.SourceRangeDigest, TapeContent: tf.ContentDigest, labHdr: lh, labFt: lf,
+	}, nil
 }
 
 func (a oofSourceSnap) equal(b oofSourceSnap) bool {
-	return a.tapeHdr.Market == b.tapeHdr.Market &&
-		a.tapeHdr.PlanDigest == b.tapeHdr.PlanDigest &&
-		a.tapeFt.SourceRangeDigest == b.tapeFt.SourceRangeDigest &&
-		a.tapeFt.ContentDigest == b.tapeFt.ContentDigest &&
-		a.labHdr.Market == b.labHdr.Market &&
+	if a.Market != b.Market || a.PlanDigest != b.PlanDigest || a.VectorLen != b.VectorLen {
+		return false
+	}
+	if a.TapeSource != b.TapeSource || a.TapeContent != b.TapeContent {
+		return false
+	}
+	if len(a.FeatureIDs) != len(b.FeatureIDs) {
+		return false
+	}
+	for i := range a.FeatureIDs {
+		if a.FeatureIDs[i] != b.FeatureIDs[i] {
+			return false
+		}
+	}
+	return a.labHdr.Market == b.labHdr.Market &&
 		a.labHdr.TargetDigest == b.labHdr.TargetDigest &&
 		a.labHdr.FeatureTapePlanDigest == b.labHdr.FeatureTapePlanDigest &&
 		a.labHdr.FeatureTapeSourceRangeDigest == b.labHdr.FeatureTapeSourceRangeDigest &&
@@ -127,6 +148,69 @@ func GenerateOOFMatrix(tapePath, labelPath, outPath string, expect ResearchDatas
 	if err != nil {
 		return z, zf, false, err
 	}
+	return commitOOFMatrix(outPath, hdr, exported)
+}
+
+func readOOFSources2(tape2Path, labelPath string) (oofSourceSnap, error) {
+	var z oofSourceSnap
+	th, _, tf, err := ReadTape2(tape2Path)
+	if err != nil {
+		return z, err
+	}
+	lh, _, lf, err := ReadLabelSet(labelPath, nil)
+	if err != nil {
+		return z, err
+	}
+	return oofSourceSnap{
+		Market: th.Primary, PlanDigest: th.PlanDigest, FeatureIDs: th.FeatureIDs, VectorLen: th.VectorLen,
+		TapeSource: th.PrimarySource, TapeContent: tf.ContentDigest, labHdr: lh, labFt: lf,
+	}, nil
+}
+
+func researchRowsFromV2(in []ResearchRow2) []ResearchRow {
+	out := make([]ResearchRow, len(in))
+	for i, r := range in {
+		out[i] = ResearchRow{At: r.At, Features: r.Features.Slice(), Outcome: r.Outcome}
+	}
+	return out
+}
+
+// GenerateOOFMatrixFromTape2 is the Brain-V2 OOF-MATRIX-C door.
+// Native Tape2 + Dataset-C + ValidationPlan-C. Shared assemble/writer with V1.
+func GenerateOOFMatrixFromTape2(tape2Path, labelPath, outPath string, spec2 FeatureSpec2, expect ResearchDataset2Expect, plan ValidationPlan) (OOFHeader, OOFFooter, bool, error) {
+	var z OOFHeader
+	var zf OOFFooter
+	if plan.TargetH != spec2.Target.HorizonBars {
+		return z, zf, false, fmt.Errorf("forecast: ValidationPlan TargetH %d != FeatureSpec2 HorizonBars %d", plan.TargetH, spec2.Target.HorizonBars)
+	}
+	if plan.Timeframe != spec2.Primary.Timeframe {
+		return z, zf, false, fmt.Errorf("forecast: ValidationPlan timeframe %q != Primary %q", plan.Timeframe, spec2.Primary.Timeframe)
+	}
+	pre, err := readOOFSources2(tape2Path, labelPath)
+	if err != nil {
+		return z, zf, false, err
+	}
+	rows2, _, err := BuildResearchDatasetFromTape2(tape2Path, labelPath, spec2, expect)
+	if err != nil {
+		return z, zf, false, err
+	}
+	post, err := readOOFSources2(tape2Path, labelPath)
+	if err != nil {
+		return z, zf, false, err
+	}
+	if !pre.equal(post) {
+		return z, zf, false, fmt.Errorf("forecast: OOF matrix source identities changed during dataset build")
+	}
+	hdr, exported, err := assembleOOFMatrix(researchRowsFromV2(rows2), pre, plan)
+	if err != nil {
+		return z, zf, false, err
+	}
+	return commitOOFMatrix(outPath, hdr, exported)
+}
+
+func commitOOFMatrix(outPath string, hdr OOFHeader, exported []OOFRow) (OOFHeader, OOFFooter, bool, error) {
+	var z OOFHeader
+	var zf OOFFooter
 	want := hashOOFMatrix(hdr, exported)
 	if _, err := os.Stat(outPath); err == nil {
 		gotH, gotRows, gotF, err := ReadOOFMatrix(outPath)
@@ -163,7 +247,7 @@ func assembleOOFMatrix(rows []ResearchRow, src oofSourceSnap, plan ValidationPla
 	for i := range rows {
 		ats[i] = rows[i].At
 	}
-	tf := src.tapeHdr.Market.Timeframe
+	tf := src.Market.Timeframe
 	compiled, err := CompileValidationPlan(ats, tf, plan)
 	if err != nil {
 		return z, nil, err
@@ -176,8 +260,8 @@ func assembleOOFMatrix(rows []ResearchRow, src oofSourceSnap, plan ValidationPla
 		return z, nil, err
 	}
 	exported := make([]OOFRow, devN)
-	width := src.tapeHdr.VectorLen
-	ids := append([]FeatureID(nil), src.tapeHdr.FeatureIDs...)
+	width := src.VectorLen
+	ids := append([]FeatureID(nil), src.FeatureIDs...)
 	if len(ids) != width {
 		return z, nil, fmt.Errorf("forecast: tape FeatureIDs len %d != VectorLen %d", len(ids), width)
 	}
@@ -201,11 +285,11 @@ func assembleOOFMatrix(rows []ResearchRow, src oofSourceSnap, plan ValidationPla
 	hdr := OOFHeader{
 		FormatVersion: OOFMatrixFormatV1,
 		AtUnit:        OOFAtUnitUnixMs,
-		Market:        src.tapeHdr.Market,
+		Market:        src.Market,
 		FeatureIDs:    ids,
-		PlanDigest:    src.tapeHdr.PlanDigest,
-		TapeSource:    src.tapeFt.SourceRangeDigest,
-		TapeContent:   src.tapeFt.ContentDigest,
+		PlanDigest:    src.PlanDigest,
+		TapeSource:    src.TapeSource,
+		TapeContent:   src.TapeContent,
 		LabelContent:  src.labFt.ContentDigest,
 		TargetDigest:  src.labHdr.TargetDigest,
 		LabelSource:   src.labFt.LabelSourceRangeDigest,
