@@ -404,7 +404,11 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **ATR-TRUTH-1 ✅ frozen `84124a0`.** Canonical `indicators.ATR` (`atr:wilder-rma-first-tr-v1`). Do not reopen ATR unless a consumer regression.
 
-**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. **LABEL-SET-1B ✅ frozen** `8e88844`. Next when asked: model/training — not TARGET-RESOLUTION-2 unless asked.
+**LABEL-SET-1A ✅ frozen** `690d0be` + `1433626`. **LABEL-SET-1B ✅ frozen** `8e88844`.
+
+**FEATURE-SPEC-2** — CatBoost V1 sensory contract only (no tape Fill, no labels, no model). Target C is a **new** TargetSpec (`research-15m-1m-c`, H=72, U=L=2.0, ATR-14 Wilder, finer 1m). Frozen v1 remains H=24 / 1.5 / 1.0. `q = H/4 = 18` (refuse if H%4≠0). Analysis: `analysis:v2`, RSX 14 / signal **14** / hlc3 / TV lookback 90 (not live `rsx_settings.json` signal 9). Width **64**: 42 primary 15m + 11 native 1h + 11 native 4h. Identity is `FeatureRecipe` + `FeaturePlan` (`features:v2` / `plan:v2`) plus `FeatureSpec2.Identity()` — no FeatureSchemaHash. HTF is native MarketKeys, latest closed row by `CloseTime(HTF) <= CloseTime(15m)`; latest NotReady ⇒ primary NotReady (no stale fallback, no 15m aggregation). HistoryDemand is per-TF native window bars; IIR (Jurik/ATR/TV) is from certified source start. Volume quarantined. Next: FEATURE-TAPE-2 only when asked.
+
+**LABEL-SET-1A/1B** remain frozen. TARGET-RESOLUTION-2 deferred. Do not start FEATURE-TAPE-2 here.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 

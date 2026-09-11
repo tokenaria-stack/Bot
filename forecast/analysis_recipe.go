@@ -13,6 +13,7 @@ const (
 	CapabilityRSX     AnalysisCapability = "rsx"
 	CapabilityTV      AnalysisCapability = "tv"
 	CapabilityFractal AnalysisCapability = "fractal"
+	CapabilityOHLC    AnalysisCapability = "ohlc" // closed OHLCV + canonical ATR; always on
 )
 
 // AnalysisRecipeDraft is mutable, pre-resolution input. Zero values mean
@@ -112,7 +113,7 @@ func (r AnalysisRecipe) Identity() (Identity, error) {
 // computes. FeaturePlan binding uses this to REFUSE (never zero-fill) a
 // FeatureRecipe that requires an unavailable capability.
 func (r AnalysisRecipe) Capabilities() map[AnalysisCapability]bool {
-	caps := map[AnalysisCapability]bool{CapabilityRSX: true}
+	caps := map[AnalysisCapability]bool{CapabilityRSX: true, CapabilityOHLC: true}
 	if r.Config.EnableTV {
 		caps[CapabilityTV] = true
 	}

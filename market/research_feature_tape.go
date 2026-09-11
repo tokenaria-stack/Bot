@@ -57,7 +57,7 @@ func ResearchFeaturePlan(analysisLogic forecast.LogicVersion) (forecast.FeatureP
 	return plan, nil
 }
 
-// ResearchTargetSpec is the intended first-passage research target (15m→1m).
+// ResearchTargetSpec is the frozen first-passage research target (15m→1m, H=24, U=1.5, L=1.0).
 func ResearchTargetSpec() (forecast.TargetSpec, error) {
 	return forecast.ResolveTargetSpec("research-15m-1m", forecast.TargetSpecDraft{
 		HorizonBars:      24,
@@ -67,6 +67,36 @@ func ResearchTargetSpec() (forecast.TargetSpec, error) {
 		DualHit:          forecast.DualHitResolveFinerHistory,
 		FinerTimeframe:   "1m",
 	}, "labels:v1")
+}
+
+// ResearchTargetSpecC is FEATURE-SPEC-2 Target C (H=72, U=L=2.0). Does not replace ResearchTargetSpec.
+func ResearchTargetSpecC() (forecast.TargetSpec, error) {
+	return forecast.ResolveTargetSpec("research-15m-1m-c", forecast.TargetSpecDraft{
+		HorizonBars:      forecast.Spec2TargetHorizon,
+		UpperATRMultiple: forecast.Spec2UpperATR,
+		LowerATRMultiple: forecast.Spec2LowerATR,
+		ATRPeriod:        14,
+		DualHit:          forecast.DualHitResolveFinerHistory,
+		FinerTimeframe:   "1m",
+	}, "labels:v1")
+}
+
+// ResearchFeatureSpec2 binds CatBoost V1 64-column contract. Signal length 14 (not live JSON).
+func ResearchFeatureSpec2() (forecast.FeatureSpec2, error) {
+	analysis, err := AnalysisRecipeFromRSXSettings(RSXSettings{
+		Length:       forecast.Spec2RSXLength,
+		SignalLength: forecast.Spec2RSXSignal,
+		Source:       forecast.Spec2RSXSource,
+		DivLookback:  forecast.Spec2TVLookback,
+	}, true, false, analysisLogicV2)
+	if err != nil {
+		return forecast.FeatureSpec2{}, err
+	}
+	target, err := ResearchTargetSpecC()
+	if err != nil {
+		return forecast.FeatureSpec2{}, err
+	}
+	return forecast.ResolveFeatureSpec2(ResearchMarketKey(), target, analysis)
 }
 
 // ResearchHoldoutStartAt is the sealed experiment wall (2026-01-01 00:00:00 UTC).

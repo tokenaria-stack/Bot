@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FEATURE-SPEC-2 — 64-feature causal input contract (Sep 2026) ✅
+
+- Exact ordered 64 FeatureIDs, Target C (H=72, U=L=2.0), q=18, analysis:v2 RSX14/signal14, named pattern templates, native 1h/4h join, structured HistoryDemand.
+- Does **not** generate FeatureTape-v2, labels, CatBoost, or holdout. Frozen v1 tape/target/plan identities unchanged.
+- Next when asked: FEATURE-TAPE-2. Do not start it here.
+
 ## DECISION-RESEARCH-1 — frozen 9×9 selector (Sep 2026) ✅ frozen `789ddcd`
 
 - Train selects one DecisionSpec or `ABSTAIN_BASELINE`; validation evaluates that one result. `decision.ApplyDecision` is the only decision brain. Target-space TotalUtility; no PnL/execution/holdout/final spec.
