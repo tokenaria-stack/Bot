@@ -408,7 +408,9 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **FEATURE-SPEC-2 ✅ frozen `0c54848`.** CatBoost V1 sensory contract only (no tape Fill, no labels, no model). Target C is a **new** TargetSpec (`research-15m-1m-c`, H=72, U=L=2.0, ATR-14 Wilder, finer 1m). Frozen v1 remains H=24 / 1.5 / 1.0. `q = H/4 = 18` (refuse if H%4≠0). Analysis: `analysis:v2`, RSX 14 / signal **14** / hlc3 / TV lookback 90 (not live `rsx_settings.json` signal 9). Width **64**: 42 primary 15m + 11 native 1h + 11 native 4h. Identity is `FeatureRecipe` + `FeaturePlan` (`features:v2` / `plan:v2`) plus `FeatureSpec2.Identity()` — no FeatureSchemaHash. HTF is native MarketKeys, latest closed row by `CloseTime(HTF) <= CloseTime(15m)`; latest NotReady ⇒ primary NotReady (no stale fallback, no 15m aggregation). HistoryDemand is per-TF native window bars; IIR (Jurik/ATR/TV) is from certified source start. Volume quarantined. TARGET-RESOLUTION-2 deferred.
 
-**FEATURE-TAPE-2 ✅ frozen `61d5ca0`.** Brain V2 sensory runtime: `market.FeatureRuntime2` (thin Jurik/RSTV/ATR wrap, no Frame DAG) + `feature-tape-v2`. Dump API is `DumpFeatureTape2(spec, src15, src1h, src4h)`. V1 `FeatureEvaluator` / `DumpFeatureTape` remain historical only. Next when asked: **LABEL-SET-C**. Do not start CatBoost or live host here.
+**FEATURE-TAPE-2 ✅ frozen `61d5ca0`.** Brain V2 sensory runtime: `market.FeatureRuntime2` (thin Jurik/RSTV/ATR wrap, no Frame DAG) + `feature-tape-v2`. Dump API is `DumpFeatureTape2(spec, src15, src1h, src4h)`. V1 `FeatureEvaluator` / `DumpFeatureTape` remain historical only.
+
+**LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only. No Dataset-C / CatBoost / holdout.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -622,6 +624,12 @@ Format `label-set-v2`, logic `label:first-passage-finer-v1`. Header adds `FinerM
 
 **HARD STOP.** Frozen `8e88844`. Kill-check GREEN. Do not reopen 1B. 1s historical microscope is **TARGET-RESOLUTION-2** in `OPEN_DEBTS.md` — a separate TargetSpec, not an upgrade of 15m→1m.
 
+### LABEL-SET-C (Brain V2 native labels)
+
+Product path: `feature-tape-v2` → `GenerateLabelSetFromTape2` → canonical label core. Shared core knows ordered `At[]`, primary/finer bars, and `TargetSpec` only. It does not read `Values[64]`. Ready and NotReady tape rows are both candidates (one tape row → one LabelSet row). `FeatureTapeSourceRangeDigest` binds Tape2 **primary** `PrimarySource`. `FeatureTapeContentDigest` witnesses the exact Tape2 realization (including HTF columns that are not label math). Format remains `label-set-v2`. V1 dump/entrypoints unchanged.
+
+**HARD STOP.** Frozen `ce3e542`. Next when asked: DATASET-C / VALIDATION-PLAN-C preparation. Do not start here.
+
 ### Fail closed
 
 `PublishForecastFrame` is the single gate: `NotReady` or an invalid/nonfinite probability set (`ValidateForecastFrame`: finite, in `[0,1]`, sums to ~1) → **no** `ForecastFrame`. Never zero-fill, never reuse a stale vector/frame, never fall back to a default recipe. Same law applies to `MarketKey` mismatch, schema/logic mismatch, and artifact digest failure once those paths exist.
@@ -735,4 +743,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-1B frozen `8e88844`. LABEL-SET-1A frozen `690d0be` + `1433626`. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-C next chapter is DATASET-C / VALIDATION-PLAN-C preparation. LABEL-SET-1B frozen `8e88844`. TARGET-RESOLUTION-2 deferred.

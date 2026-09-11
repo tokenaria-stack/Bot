@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## LABEL-SET-C — Brain V2 native Tape2 labels (Sep 2026) ✅ frozen `ce3e542`
+
+- Native `GenerateLabelSetFromTape2` reads `feature-tape-v2`. Canonical core `buildLabelsFromCandidates` is tape-format agnostic. V1 `GenerateLabelSet` still opens `feature-tape-v1` only as a legacy door.
+- Target C (H=72, U=L=2.0). Format `label-set-v2`. New artifact slot. No Dataset-C, validation, OOF, CatBoost, or holdout.
+- Next when asked: RESEARCH-DATASET-C / VALIDATION-PLAN-C preparation. Do not start it here.
+
 ## FEATURE-TAPE-2 — Brain V2 sensory runtime + feature-tape-v2 (Sep 2026) ✅ frozen `61d5ca0`
 
 - `FeatureRuntime2` one-pass native 15m/1h/4h; `DumpFeatureTape2(FeatureSpec2, …)`; format `feature-tape-v2`.
