@@ -188,6 +188,7 @@ func (w *LabelWriter) abort() {
 }
 
 // GenerateLabelSet writes one immutable LabelSet for a FeatureTape + primary bars + TargetSpec.
+// Legacy V1 tape door. Label math lives in buildLabelsFromCandidates.
 func GenerateLabelSet(finalPath, tapePath string, spec TargetSpec, bars []CanonicalClosedBar, expect *LabelExpect) error {
 	b, err := buildLabels(tapePath, spec, bars, MarketKey{}, nil, expect)
 	if err != nil {
@@ -197,8 +198,19 @@ func GenerateLabelSet(finalPath, tapePath string, spec TargetSpec, bars []Canoni
 }
 
 // GenerateLabelSetWithFiner writes a v2 LabelSet using materialized finer history.
+// Legacy V1 tape door.
 func GenerateLabelSetWithFiner(finalPath, tapePath string, spec TargetSpec, bars []CanonicalClosedBar, finerMarket MarketKey, finer []CanonicalClosedBar, expect *LabelExpect) error {
 	b, err := buildLabels(tapePath, spec, bars, finerMarket, finer, expect)
+	if err != nil {
+		return err
+	}
+	return writeLabelBuild(finalPath, b)
+}
+
+// GenerateLabelSetFromTape2 writes one LabelSet from feature-tape-v2 + Target C
+// inside spec2. Native V2 door — does not ReadTape (v1).
+func GenerateLabelSetFromTape2(finalPath, tape2Path string, spec2 FeatureSpec2, bars []CanonicalClosedBar, finerMarket MarketKey, finer []CanonicalClosedBar, expect *LabelExpect) error {
+	b, err := buildLabelsFromTape2(tape2Path, spec2, bars, finerMarket, finer, expect)
 	if err != nil {
 		return err
 	}

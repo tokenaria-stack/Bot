@@ -50,6 +50,10 @@ const (
 )
 
 // LabelHeader is file-level identity for one immutable LabelSet.
+// FeatureTape* fields bind the candidate-source artifact (feature-tape-v1 or
+// feature-tape-v2). They are not V1-only. FeatureTapeSourceRangeDigest is the
+// primary consumed source digest recorded on that tape (v1 SourceRangeDigest
+// or v2 PrimarySource). HTF hashes are not label mathematics and are not stored.
 type LabelHeader struct {
 	FormatVersion                string
 	Market                       MarketKey
@@ -260,15 +264,42 @@ func isFinite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
-func joinTapeToPrimary(bars []CanonicalClosedBar, rows []TapeRow) ([]int, error) {
-	idx := make([]int, len(rows))
+// labelCandidateUniverse is the ordered candidate population to label.
+// Tape-format agnostic. Not a FeatureTape interface or plugin bus.
+type labelCandidateUniverse struct {
+	Ats           []int64
+	Market        MarketKey
+	PlanDigest    Digest
+	PrimarySource Digest
+	TapeContent   Digest
+}
+
+func validateCandidateAts(ats []int64) error {
+	if len(ats) == 0 {
+		return fmt.Errorf("forecast: refuse empty label candidate universe")
+	}
+	var prev int64
+	for i, at := range ats {
+		if at <= 0 {
+			return fmt.Errorf("forecast: candidate At must be > 0")
+		}
+		if i > 0 && at <= prev {
+			return fmt.Errorf("forecast: candidate At must be strictly increasing (got %d after %d)", at, prev)
+		}
+		prev = at
+	}
+	return nil
+}
+
+func joinCandidatesToPrimary(bars []CanonicalClosedBar, ats []int64) ([]int, error) {
+	idx := make([]int, len(ats))
 	j := 0
-	for i, row := range rows {
-		for j < len(bars) && bars[j].OpenTime < row.At {
+	for i, at := range ats {
+		for j < len(bars) && bars[j].OpenTime < at {
 			j++
 		}
-		if j >= len(bars) || bars[j].OpenTime != row.At {
-			return nil, fmt.Errorf("forecast: FeatureTape At %d is missing from primary source", row.At)
+		if j >= len(bars) || bars[j].OpenTime != at {
+			return nil, fmt.Errorf("forecast: candidate At %d is missing from primary source", at)
 		}
 		idx[i] = j
 		j++
@@ -423,14 +454,6 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 	if err := validateSpecForLabels(spec); err != nil {
 		return z, err
 	}
-	tid, err := spec.Identity()
-	if err != nil {
-		return z, err
-	}
-	if expect != nil && expect.Target != nil && *expect.Target != tid.Digest {
-		return z, fmt.Errorf("forecast: TargetDigest mismatch")
-	}
-
 	var expectMarket *MarketKey
 	var expectPlan *Digest
 	if expect != nil {
@@ -441,19 +464,57 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 	if err != nil {
 		return z, err
 	}
+	ats := make([]int64, len(trows))
+	for i := range trows {
+		ats[i] = trows[i].At
+	}
+	u := labelCandidateUniverse{
+		Ats:           ats,
+		Market:        th.Market,
+		PlanDigest:    th.PlanDigest,
+		PrimarySource: tf.SourceRangeDigest,
+		TapeContent:   tf.ContentDigest,
+	}
+	return buildLabelsFromCandidates(u, spec, bars, finerMarket, finer, expect)
+}
+
+func buildLabelsFromCandidates(u labelCandidateUniverse, spec TargetSpec, bars []CanonicalClosedBar, finerMarket MarketKey, finer []CanonicalClosedBar, expect *LabelExpect) (labelBuild, error) {
+	var z labelBuild
+	if err := validateSpecForLabels(spec); err != nil {
+		return z, err
+	}
+	tid, err := spec.Identity()
+	if err != nil {
+		return z, err
+	}
+	if err := validateCandidateAts(u.Ats); err != nil {
+		return z, err
+	}
+	if err := u.Market.Validate(); err != nil {
+		return z, err
+	}
 	if expect != nil {
-		if expect.TapeSource != nil && *expect.TapeSource != tf.SourceRangeDigest {
+		if expect.Market != nil && *expect.Market != u.Market {
+			return z, fmt.Errorf("forecast: MarketKey mismatch")
+		}
+		if expect.Target != nil && *expect.Target != tid.Digest {
+			return z, fmt.Errorf("forecast: TargetDigest mismatch")
+		}
+		if expect.TapePlan != nil && *expect.TapePlan != u.PlanDigest {
+			return z, fmt.Errorf("forecast: FeatureTape PlanDigest mismatch")
+		}
+		if expect.TapeSource != nil && *expect.TapeSource != u.PrimarySource {
 			return z, fmt.Errorf("forecast: FeatureTape SourceRangeDigest mismatch")
 		}
-		if expect.TapeContent != nil && *expect.TapeContent != tf.ContentDigest {
+		if expect.TapeContent != nil && *expect.TapeContent != u.TapeContent {
 			return z, fmt.Errorf("forecast: FeatureTape ContentDigest mismatch")
 		}
 	}
 
-	if err := validatePrimaryBars(bars, th.Market.Timeframe); err != nil {
+	if err := validatePrimaryBars(bars, u.Market.Timeframe); err != nil {
 		return z, err
 	}
-	idxs, err := joinTapeToPrimary(bars, trows)
+	idxs, err := joinCandidatesToPrimary(bars, u.Ats)
 	if err != nil {
 		return z, err
 	}
@@ -461,7 +522,7 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 	usedEnd := consumedEndIndex(lastCandidateIdx, spec.HorizonBars, len(bars))
 	consumed := bars[:usedEnd+1]
 	atrBars := consumed[:lastCandidateIdx+1]
-	if err := validateATRHistoryContinuity(atrBars, th.Market.Timeframe); err != nil {
+	if err := validateATRHistoryContinuity(atrBars, u.Market.Timeframe); err != nil {
 		return z, err
 	}
 
@@ -478,24 +539,24 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 
 	var finerRun *finerResolve
 	hdr := LabelHeader{
-		Market:                       th.Market,
+		Market:                       u.Market,
 		TargetDigest:                 tid.Digest,
-		FeatureTapePlanDigest:        th.PlanDigest,
-		FeatureTapeSourceRangeDigest: tf.SourceRangeDigest,
-		FeatureTapeContentDigest:     tf.ContentDigest,
+		FeatureTapePlanDigest:        u.PlanDigest,
+		FeatureTapeSourceRangeDigest: u.PrimarySource,
+		FeatureTapeContentDigest:     u.TapeContent,
 	}
 	if spec.DualHit == DualHitResolveFinerHistory {
 		if finerMarket == (MarketKey{}) {
-			finerMarket = th.Market
+			finerMarket = u.Market
 			finerMarket.Timeframe = spec.FinerTimeframe
 		}
 		if finerMarket.Timeframe != spec.FinerTimeframe {
 			return z, fmt.Errorf("forecast: FinerMarketKey timeframe %q != TargetSpec.FinerTimeframe %q", finerMarket.Timeframe, spec.FinerTimeframe)
 		}
-		if !th.Market.SameFamily(finerMarket) {
+		if !u.Market.SameFamily(finerMarket) {
 			return z, fmt.Errorf("forecast: finer MarketKey is not SameFamily as primary")
 		}
-		if err := finerTilesPrimary(th.Market.Timeframe, spec.FinerTimeframe, bars[0].OpenTime); err != nil {
+		if err := finerTilesPrimary(u.Market.Timeframe, spec.FinerTimeframe, bars[0].OpenTime); err != nil {
 			return z, err
 		}
 		if len(finer) > 0 {
@@ -506,7 +567,7 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 		hdr.FormatVersion = LabelSetFormatV2
 		hdr.LabelLogicVersion = LabelLogicFirstPassageFinerV1
 		hdr.FinerMarket = finerMarket
-		finerRun = newFinerResolve(finerMarket, th.Market.Timeframe, finer)
+		finerRun = newFinerResolve(finerMarket, u.Market.Timeframe, finer)
 	} else {
 		if finerMarket != (MarketKey{}) || len(finer) > 0 {
 			return z, fmt.Errorf("forecast: exclude_ambiguous LabelSet forbids finer source")
@@ -515,20 +576,20 @@ func buildLabels(tapePath string, spec TargetSpec, bars []CanonicalClosedBar, fi
 		hdr.LabelLogicVersion = LabelLogicFirstPassagePrimaryV1
 	}
 
-	out := make([]LabelRow, len(trows))
-	for i, tr := range trows {
-		row, err := labelCandidate(spec, consumed, atr, idxs[i], th.Market.Timeframe, finerRun)
+	out := make([]LabelRow, len(u.Ats))
+	for i, at := range u.Ats {
+		row, err := labelCandidate(spec, consumed, atr, idxs[i], u.Market.Timeframe, finerRun)
 		if err != nil {
 			return z, err
 		}
-		row.At = tr.At
+		row.At = at
 		if err := validateLabelRow(row); err != nil {
 			return z, err
 		}
 		out[i] = row
 	}
 
-	src := LabelSourceRangeDigest(th.Market, consumed)
+	src := LabelSourceRangeDigest(u.Market, consumed)
 	if err := validateLabelHeader(hdr); err != nil {
 		return z, err
 	}

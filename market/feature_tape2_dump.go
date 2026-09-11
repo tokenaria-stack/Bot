@@ -270,3 +270,23 @@ func ResearchFeatureTape2FileName(spec forecast.FeatureSpec2) (string, error) {
 	return spec.Primary.Venue + "_" + spec.Primary.Instrument + "_" + spec.Primary.Contract +
 		"_15m_spec2-" + id.Digest.Short() + ".featuretape2", nil
 }
+
+// ResearchLabelSetCFileName is a navigation slot under research/labels/ for Target C.
+// Distinct from the H=24 V1 slot. Authority is header+ContentDigest, not this name.
+func ResearchLabelSetCFileName(spec forecast.FeatureSpec2) (string, error) {
+	sid, err := spec.Identity()
+	if err != nil {
+		return "", err
+	}
+	pid, err := spec.Plan.Identity()
+	if err != nil {
+		return "", err
+	}
+	tid, err := spec.Target.Identity()
+	if err != nil {
+		return "", err
+	}
+	return spec.Primary.Venue + "_" + spec.Primary.Instrument + "_" + spec.Primary.Contract +
+		"_" + spec.Primary.Timeframe + "_spec2-" + sid.Digest.Short() +
+		"_plan-" + pid.Digest.Short() + "_target-" + tid.Digest.Short() + ".labelset", nil
+}

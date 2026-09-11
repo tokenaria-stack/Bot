@@ -34,6 +34,23 @@ func DumpLabelSetWithFiner(path, tapePath string, spec forecast.TargetSpec, prim
 	return forecast.GenerateLabelSetWithFiner(path, tapePath, spec, p, finerMarket, f, expect)
 }
 
+// DumpLabelSetFromTape2 writes LabelSet-C from feature-tape-v2. Kline conversion
+// only; native V2 door lives in forecast.GenerateLabelSetFromTape2.
+func DumpLabelSetFromTape2(path, tape2Path string, spec2 forecast.FeatureSpec2, primary, finer []exchange.Kline, finerMarket forecast.MarketKey, expect *forecast.LabelExpect) error {
+	p, err := klinesToCanonical(primary)
+	if err != nil {
+		return err
+	}
+	var f []forecast.CanonicalClosedBar
+	if len(finer) > 0 {
+		f, err = klinesToCanonical(finer)
+		if err != nil {
+			return err
+		}
+	}
+	return forecast.GenerateLabelSetFromTape2(path, tape2Path, spec2, p, finerMarket, f, expect)
+}
+
 func klinesToCanonical(bars []exchange.Kline) ([]forecast.CanonicalClosedBar, error) {
 	if len(bars) == 0 {
 		return nil, fmt.Errorf("market: refuse empty label-set source")

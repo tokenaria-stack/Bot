@@ -51,9 +51,10 @@
 //   - TargetSpec: first-passage UP_FIRST/DOWN_FIRST/TIMEOUT event, frozen
 //     barriers, explicit dual-hit policy. AMBIGUOUS is a dataset status, not
 //     a fourth model class.
-//   - LabelSet: immutable JSONL outcomes for one FeatureTape + TargetSpec.
-//     v1 is primary-TF first-passage. v2 may resolve primary DUAL_HIT with one
-//     pinned same-family FinerTimeframe (LABEL-SET-1B).
+//   - LabelSet: immutable JSONL outcomes. Format v1/v2 is the label artifact,
+//     not the feature-tape version. Brain V2 uses GenerateLabelSetFromTape2
+//     (native tape-v2 door) into the same first-passage/finer core. V1
+//     GenerateLabelSet remains a legacy tape door.
 //   - RESEARCH-DATASET-1: BuildResearchDataset opens tape+labels, checks
 //     provenance, locksteps At, partitions eligibility into in-memory rows.
 //   - VALIDATION-PLAN-1: CompileValidationPlan(At[], tf, resolved plan) is the
