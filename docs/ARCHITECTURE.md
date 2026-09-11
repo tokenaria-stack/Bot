@@ -416,6 +416,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **OOF-MATRIX-C ✅ frozen `307b5e8`.** Model-neutral certified X/y/fold socket (`GenerateOOFMatrixFromTape2`). Format stays `oof-matrix-v1` (width = `len(FeatureIDs)`). Not CatBoost OOF logits. Holdout and causal seam are physically absent. V1 `GenerateOOFMatrix` remains a legacy door into the same assembler/writer.
 
+**CATBOOST-BRAIN-1 ✅ frozen.** First certified model consumer of OOF-MATRIX-C. `CatBoostSpec1` is the hypothesis; Python only calls `CatBoost.fit`; `portable-catboost-v1` + Go evaluator own official raw logits. Quantization is fit-local. Inner-tail end is `NextBarOpen(last outerTrain At)`, not outer ValStart. HARD STOP before calibration/rank/recipe/holdout/final development model.
+
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
 Not a scoring engine. Evidence → probability engine:
@@ -536,13 +538,25 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 `forecast.GenerateOOFMatrixFromTape2` is the native V2 door: `ReadTape2` + `BuildResearchDatasetFromTape2` + `ResearchValidationPlanC` / caller plan + `CompileValidationPlan`. It does not convert Tape2→Tape1, call `ReadTape`, or use `FeatureEvaluator`. Shared `assembleOOFMatrix` + JSONL writer with the V1 door.
 
-The artifact is certified supervised input: ordered FeatureSpec2 `X[64]`, Target-C outcomes, development `At[]`, compiled Plan-C ranges in the header. It is **not** model output (no logits, no CatBoost). Future model families consume this file; CATBOOST-BRAIN-1 must need only matrix path + expected ContentDigest + ModelSpec.
+The artifact is certified supervised input: ordered FeatureSpec2 `X[64]`, Target-C outcomes, development `At[]`, compiled Plan-C ranges in the header. It is **not** model output (no logits, no CatBoost). Future model families consume this file; CATBOOST-BRAIN-1 needs only matrix path + expected ContentDigest + CatBoostSpec1.
 
 Population is Dataset-C trainable rows `[0:DevelopmentEndIndex)` — full development, not the validation-slice union. Causal seam and holdout are physically absent. No per-row FoldID. Class order contract (not a header hash): `UP_FIRST`, `DOWN_FIRST`, `TIMEOUT`. Format remains `oof-matrix-v1`. New `research/oof/` slot via existing filename helper. MATCH exact / REFUSE different or corrupt.
 
-**NEXT:** CATBOOST-BRAIN-1. Do not start here.
-
 **HARD STOP.** Frozen `307b5e8`.
+
+### CATBOOST-BRAIN-1 (first certified OOF-MATRIX-C learner)
+
+Go owns CatBoostSpec1, class map `UP_FIRST=0 / DOWN_FIRST=1 / TIMEOUT=2`, `SplitCausalTail`, resolved FitPlan, vendor JSON → `portable-catboost-v1`, prefix logloss, tree-count selection, official OOF logits. Python `research.catboost1` is `CatBoost.fit` only (numeric y, fit-local Pool, no eval_set / early stopping / scaler / class weights).
+
+Inner tail: `tailExclusiveEnd = NextBarOpen(last outerTrain At, 15m)`. Do not reuse `CompileValidationPlan` as a fake-holdout. Outer fold ranges stay frozen from the matrix header.
+
+Official logits are Go(`portable-catboost-v1`) on the union of the four outer-val slices (`catboost-oof-logits-v1`). V1 `oof-logits-v1` is logistic-specific and is not reused. Vendor `.cbm`/JSON are witnesses. Quantization/borders are learned per fit on that fit's train rows only.
+
+Predeclared, not implemented: later final development model uses the same inner-tail selection on all development rows, then a fresh fit with `N_final`. Never average OOF N.
+
+**NEXT:** CatBoost OOF calibration/rank/forecast-recipe. Do not start here.
+
+**HARD STOP.** Frozen after the feat commit recorded in HISTORY.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -767,4 +781,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **CATBOOST-BRAIN-1**. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is CatBoost OOF calibration/rank/forecast-recipe. TARGET-RESOLUTION-2 deferred.

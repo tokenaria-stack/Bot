@@ -169,6 +169,11 @@ func ResearchOOFMatrixFileName(key forecast.MarketKey, tapeContent, labelContent
 		"_tape-" + tapeContent.Short() + "_labels-" + labelContent.Short() + "_valplan-" + valPlan.Short() + ".oofmatrix"
 }
 
+func ResearchCatBoostLogitsFileName(key forecast.MarketKey, matrix, spec forecast.Digest) string {
+	return key.Venue + "_" + key.Instrument + "_" + key.Contract + "_" + key.Timeframe +
+		"_matrix-" + matrix.Short() + "_spec-" + spec.Short() + ".catboostlogits"
+}
+
 func ResearchFeaturePlanMust(analysisLogic forecast.LogicVersion) (forecast.FeaturePlan, error) {
 	plan, err := ResearchFeaturePlan(analysisLogic)
 	if err != nil {

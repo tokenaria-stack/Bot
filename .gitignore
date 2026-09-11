@@ -26,6 +26,8 @@ research/tapes2/
 research/labels/
 research/oof/
 research/logits/
+research/catboost/
+research/catboost_models/
 research/calibrations/
 research/ranks/
 research/recipes/
