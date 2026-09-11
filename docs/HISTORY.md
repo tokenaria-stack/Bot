@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FEATURE-TAPE-2 — Brain V2 sensory runtime + feature-tape-v2 (Sep 2026) ✅
+## FEATURE-TAPE-2 — Brain V2 sensory runtime + feature-tape-v2 (Sep 2026) ✅ frozen `61d5ca0`
 
 - `FeatureRuntime2` one-pass native 15m/1h/4h; `DumpFeatureTape2(FeatureSpec2, …)`; format `feature-tape-v2`.
 - V1 FeatureEvaluator/tape-v1 unchanged. No labels, CatBoost, or live host.
