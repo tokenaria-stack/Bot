@@ -412,7 +412,9 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
-**DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files. Next when asked: **OOF-MATRIX-C**.
+**DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.
+
+**OOF-MATRIX-C ✅ frozen `307b5e8`.** Model-neutral certified X/y/fold socket (`GenerateOOFMatrixFromTape2`). Format stays `oof-matrix-v1` (width = `len(FeatureIDs)`). Not CatBoost OOF logits. Holdout and causal seam are physically absent. V1 `GenerateOOFMatrix` remains a legacy door into the same assembler/writer.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -528,9 +530,19 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 
 `market.ResearchValidationPlanC()` binds the pinned forecast policy (`HoldoutStartAt=1767225600000`, `FoldCount=4`, `ExtraGapBars=0`, `MinTrainRows=35040` observation floor, `ValidationSpanBars=17568` 183-day 15m clock, not DecisionResearch 8640). TargetH is copied from Target C (72). Compile with `CompileValidationPlan(trainable At[])` only. Causal gap is `HorizonEnd(..., 72)`, not `index-72`. Realized ValN may be < 17568. Do not copy V1 fold indexes. No OOF file, no CatBoost.
 
-**NEXT:** OOF-MATRIX-C. Do not start here.
-
 **HARD STOP.** Frozen `151e530`.
+
+### OOF-MATRIX-C (Brain V2 model-neutral X/y/fold socket)
+
+`forecast.GenerateOOFMatrixFromTape2` is the native V2 door: `ReadTape2` + `BuildResearchDatasetFromTape2` + `ResearchValidationPlanC` / caller plan + `CompileValidationPlan`. It does not convert Tape2→Tape1, call `ReadTape`, or use `FeatureEvaluator`. Shared `assembleOOFMatrix` + JSONL writer with the V1 door.
+
+The artifact is certified supervised input: ordered FeatureSpec2 `X[64]`, Target-C outcomes, development `At[]`, compiled Plan-C ranges in the header. It is **not** model output (no logits, no CatBoost). Future model families consume this file; CATBOOST-BRAIN-1 must need only matrix path + expected ContentDigest + ModelSpec.
+
+Population is Dataset-C trainable rows `[0:DevelopmentEndIndex)` — full development, not the validation-slice union. Causal seam and holdout are physically absent. No per-row FoldID. Class order contract (not a header hash): `UP_FIRST`, `DOWN_FIRST`, `TIMEOUT`. Format remains `oof-matrix-v1`. New `research/oof/` slot via existing filename helper. MATCH exact / REFUSE different or corrupt.
+
+**NEXT:** CATBOOST-BRAIN-1. Do not start here.
+
+**HARD STOP.** Frozen `307b5e8`.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -755,4 +767,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **OOF-MATRIX-C**. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **CATBOOST-BRAIN-1**. TARGET-RESOLUTION-2 deferred.

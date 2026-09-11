@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## OOF-MATRIX-C — Brain V2 certified X/y/fold socket (Sep 2026) ✅ frozen `307b5e8`
+
+- Native `GenerateOOFMatrixFromTape2`; shared `assembleOOFMatrix` / JSONL writer with V1. Format kept `oof-matrix-v1` (generic width). Class order: UP_FIRST, DOWN_FIRST, TIMEOUT.
+- Development-only matrix: Dataset-C trainable `[0:DevelopmentEndIndex)`. Holdout and H=72 seam absent. No CatBoost, logits, scaler, or holdout eval.
+- Canonical snapshot: 221058 rows; ContentDigest `6793d8fe01a8533fc20ec372801b4c864396adde0c493aaeb9f3eed107c8e4e7`.
+- Next when asked: CATBOOST-BRAIN-1. Do not start it here.
+
 ## DATASET-C + VALIDATION-PLAN-C — Brain V2 population and H=72 geometry (Sep 2026) ✅ frozen `151e530`
 
 - Native `BuildResearchDatasetFromTape2`; shared exclusive partition with V1. `ResearchRow2` keeps `FeatureVector2`. In-memory only.
