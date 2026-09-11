@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## CATBOOST-BRAIN-1 — first certified OOF-MATRIX-C CatBoost consumer (Sep 2026) ✅
+## CATBOOST-BRAIN-1 — first certified OOF-MATRIX-C CatBoost consumer (Sep 2026) ✅ frozen `cecc5a3`
 
 - Gates A–C: CatBoostSpec1 + `SplitCausalTail` FitPlan; vendor JSON → Go `portable-catboost-v1`; four-fold inner MaxIterations / Go prefix logloss / fresh outer N; official Go OOF logits.
 - Python is `CatBoost.fit` only. Class map UP/DOWN/TIMEOUT = 0/1/2. Inner tail end = `NextBarOpen(last outerTrain At)`. No scaler, class weights, eval_set, holdout, final development model, or Brain registry.
@@ -20,7 +20,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - Native `GenerateOOFMatrixFromTape2`; shared `assembleOOFMatrix` / JSONL writer with V1. Format kept `oof-matrix-v1` (generic width). Class order: UP_FIRST, DOWN_FIRST, TIMEOUT.
 - Development-only matrix: Dataset-C trainable `[0:DevelopmentEndIndex)`. Holdout and H=72 seam absent. No CatBoost, logits, scaler, or holdout eval.
 - Canonical snapshot: 221058 rows; ContentDigest `6793d8fe01a8533fc20ec372801b4c864396adde0c493aaeb9f3eed107c8e4e7`.
-- Next when asked: CATBOOST-BRAIN-1. Do not start it here.
+- Next: CATBOOST-BRAIN-1 (`cecc5a3`). Do not reopen this socket.
 
 ## DATASET-C + VALIDATION-PLAN-C — Brain V2 population and H=72 geometry (Sep 2026) ✅ frozen `151e530`
 

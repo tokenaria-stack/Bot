@@ -416,7 +416,7 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **OOF-MATRIX-C ✅ frozen `307b5e8`.** Model-neutral certified X/y/fold socket (`GenerateOOFMatrixFromTape2`). Format stays `oof-matrix-v1` (width = `len(FeatureIDs)`). Not CatBoost OOF logits. Holdout and causal seam are physically absent. V1 `GenerateOOFMatrix` remains a legacy door into the same assembler/writer.
 
-**CATBOOST-BRAIN-1 ✅ frozen.** First certified model consumer of OOF-MATRIX-C. `CatBoostSpec1` is the hypothesis; Python only calls `CatBoost.fit`; `portable-catboost-v1` + Go evaluator own official raw logits. Quantization is fit-local. Inner-tail end is `NextBarOpen(last outerTrain At)`, not outer ValStart. HARD STOP before calibration/rank/recipe/holdout/final development model.
+**CATBOOST-BRAIN-1 ✅ frozen `cecc5a3`.** First certified model consumer of OOF-MATRIX-C. `CatBoostSpec1` is the hypothesis; Python only calls `CatBoost.fit`; `portable-catboost-v1` + Go evaluator own official raw logits. Quantization is fit-local. Inner-tail end is `NextBarOpen(last outerTrain At)`, not outer ValStart. HARD STOP before calibration/rank/recipe/holdout/final development model.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -556,7 +556,7 @@ Predeclared, not implemented: later final development model uses the same inner-
 
 **NEXT:** CatBoost OOF calibration/rank/forecast-recipe. Do not start here.
 
-**HARD STOP.** Frozen after the feat commit recorded in HISTORY.
+**HARD STOP.** Frozen `cecc5a3`.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
