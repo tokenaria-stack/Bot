@@ -123,6 +123,26 @@ func ResearchValidationPlan() (forecast.ValidationPlan, error) {
 	}, spec, forecast.ValidationLogicWalkForwardV1)
 }
 
+// ResearchValidationPlanC is Brain V2 forecast validation policy (Target C, H=72).
+// TargetH is copied from ResearchTargetSpecC. MinTrainRows is a trainable
+// observation floor, not a calendar-year guarantee. ValidationSpanBars is a
+// 183-day 15m market-clock window (not DecisionResearch 8640).
+func ResearchValidationPlanC() (forecast.ValidationPlan, error) {
+	spec, err := ResearchTargetSpecC()
+	if err != nil {
+		return forecast.ValidationPlan{}, err
+	}
+	key := ResearchMarketKey()
+	return forecast.ResolveValidationPlan(forecast.ValidationPlanDraft{
+		Timeframe:          key.Timeframe,
+		HoldoutStartAt:     ResearchHoldoutStartAt(),
+		ValidationSpanBars: 17568,
+		FoldCount:          4,
+		ExtraGapBars:       0,
+		MinTrainRows:       35040,
+	}, spec, forecast.ValidationLogicWalkForwardV1)
+}
+
 // ResearchDecisionValidationPlan is the pinned decision-development geometry.
 // Same sealed wall and TargetSpec as the model experiment; different span/identity.
 // TargetH is copied from ResearchTargetSpec, not a parallel constant.

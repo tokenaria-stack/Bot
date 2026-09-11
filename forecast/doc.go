@@ -57,8 +57,11 @@
 //     GenerateLabelSet remains a legacy tape door.
 //   - RESEARCH-DATASET-1: BuildResearchDataset opens tape+labels, checks
 //     provenance, locksteps At, partitions eligibility into in-memory rows.
+//   - RESEARCH-DATASET-C: BuildResearchDatasetFromTape2 is the native Tape2
+//     door into the same exclusive partition core. ResearchRow2 keeps FeatureVector2.
 //   - VALIDATION-PLAN-1: CompileValidationPlan(At[], tf, resolved plan) is the
-//     sole outcome-blind walk-forward geometry owner.
+//     sole outcome-blind walk-forward geometry owner. Plan-C is a new binding
+//     (TargetH from Target C); not a second compiler.
 //   - ForecastFrame + PublishForecastFrame: the fail-closed gate. No frame is
 //     ever produced from a not-Ready fill or a nonfinite/out-of-range
 //     probability set.
