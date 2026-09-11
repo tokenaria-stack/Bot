@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DATASET-C + VALIDATION-PLAN-C — Brain V2 population and H=72 geometry (Sep 2026) ✅ frozen `151e530`
+
+- Native `BuildResearchDatasetFromTape2`; shared exclusive partition with V1. `ResearchRow2` keeps `FeatureVector2`. In-memory only.
+- `ResearchValidationPlanC()` + existing `CompileValidationPlan` on trainable `At[]`. TargetH from Target C. Policy: holdout wall unchanged, span 17568, MinTrainRows 35040 observations, ExtraGapBars 0.
+- Next when asked: OOF-MATRIX-C. Do not start it here.
+
 ## LABEL-SET-C — Brain V2 native Tape2 labels (Sep 2026) ✅ frozen `ce3e542`
 
 - Native `GenerateLabelSetFromTape2` reads `feature-tape-v2`. Canonical core `buildLabelsFromCandidates` is tape-format agnostic. V1 `GenerateLabelSet` still opens `feature-tape-v1` only as a legacy door.

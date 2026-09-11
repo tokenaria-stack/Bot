@@ -410,7 +410,9 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **FEATURE-TAPE-2 ✅ frozen `61d5ca0`.** Brain V2 sensory runtime: `market.FeatureRuntime2` (thin Jurik/RSTV/ATR wrap, no Frame DAG) + `feature-tape-v2`. Dump API is `DumpFeatureTape2(spec, src15, src1h, src4h)`. V1 `FeatureEvaluator` / `DumpFeatureTape` remain historical only.
 
-**LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only. No Dataset-C / CatBoost / holdout.
+**LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
+
+**DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files. Next when asked: **OOF-MATRIX-C**.
 
 **Package:** `forecast/`. **Status:** SPEC + tape + TargetSpec pins `indicators.ATRSpec` + LabelSet JSONL. `forecast` may import `indicators` and `data` (`NextBarOpen` / `CurrentBarOpen` only). Still not `exchange`/`market`/`decision`/`execution`.
 
@@ -519,6 +521,16 @@ One LabelSet row per FeatureTape row, including `Ready=false`. Feature vectors a
 `forecast.CompileValidationPlan(at, tf, plan)` is the only geometry owner. Inputs: strictly increasing `At[]`, timeframe, resolved `ValidationPlan` (logic `validation:walk-forward-v1`). Market-time packing from the holdout wall via `CurrentBarOpen` / `PreviousBarOpen` / `HorizonEnd`. Causal gap = `TargetH + ExtraGapBars` (no independent `PurgeBars`). Expanding train; disjoint val windows; fixed `HoldoutStartAt`; seam rows are not a third class. Identity hashes **rules only** (includes timeframe + TargetH resolved from TargetSpec). Ranges, not per-row tags. BTCUSDT 15m binding lives in `market.ResearchValidationPlan`.
 
 **HARD STOP.** Frozen `0737c59`. Docs freeze `45155eb`. Do not reopen packing.
+
+### RESEARCH-DATASET-C + VALIDATION-PLAN-C (Brain V2 population + H=72 geometry)
+
+`forecast.BuildResearchDatasetFromTape2` reads `feature-tape-v2` + LabelSet-C natively. Shared `partitionResearchPopulation` with V1. Exclusive order: Tape2 `Ready==false` → FeatureNotReady (even with a legal label); else non-{UP,DOWN,TIMEOUT} → Excluded(reason); else `ResearchRow2` with copied `FeatureVector2`. In-memory only.
+
+`market.ResearchValidationPlanC()` binds the pinned forecast policy (`HoldoutStartAt=1767225600000`, `FoldCount=4`, `ExtraGapBars=0`, `MinTrainRows=35040` observation floor, `ValidationSpanBars=17568` 183-day 15m clock, not DecisionResearch 8640). TargetH is copied from Target C (72). Compile with `CompileValidationPlan(trainable At[])` only. Causal gap is `HorizonEnd(..., 72)`, not `index-72`. Realized ValN may be < 17568. Do not copy V1 fold indexes. No OOF file, no CatBoost.
+
+**NEXT:** OOF-MATRIX-C. Do not start here.
+
+**HARD STOP.** Frozen `151e530`.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -743,4 +755,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. LABEL-SET-C next chapter is DATASET-C / VALIDATION-PLAN-C preparation. LABEL-SET-1B frozen `8e88844`. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **OOF-MATRIX-C**. TARGET-RESOLUTION-2 deferred.

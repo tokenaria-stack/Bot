@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Next: **DATASET-C / VALIDATION-PLAN-C** only when asked. V1 KEEP ≠ SUPPORT.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). **DATASET-C / VALIDATION-PLAN-C ✅ frozen** (`151e530`). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Next: **OOF-MATRIX-C** only when asked. V1 KEEP ≠ SUPPORT.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**NEXT (only when explicitly asked):** **RESEARCH-DATASET-C / VALIDATION-PLAN-C preparation**. LABEL-SET-C frozen `ce3e542`. HARD STOP before OOF / CatBoost / holdout.
+**NEXT (only when explicitly asked):** **OOF-MATRIX-C**. DATASET-C / VALIDATION-PLAN-C frozen `151e530`. HARD STOP before CatBoost / holdout.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -142,8 +142,8 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 |---|---------|-----|------------------|
 | 1 | **FEATURE-TAPE-2** | `FeatureRuntime2` + `feature-tape-v2`. One forward pass, three native streams. | Labels, CatBoost, live host, Frame DAG, V1 dump |
 | 2 | **LABEL-SET-C** ✅ `ce3e542` | Same first-passage + 1m dual-hit engine; Target C (H=72, U=L=2.0). Native Tape2 door. | New label math |
-| 3 | **RESEARCH-DATASET-C** | Tape2 + LabelSet-C lockstep on `At`. | Statistics / training |
-| 4 | **VALIDATION-PLAN-C** | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
+| 3 | **RESEARCH-DATASET-C** ✅ `151e530` | Tape2 + LabelSet-C lockstep on `At`. In-memory `ResearchRow2`. | Statistics / training |
+| 4 | **VALIDATION-PLAN-C** ✅ `151e530` | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
 | 5 | **OOF-MATRIX-C** | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic |
 | 6 | **CATBOOST-BRAIN-1** | Learner sees only X, y, folds. Portable dump later. | RSX/HTF/SQL/patterns inside the model |
 | 7 | **FORECAST-PROJECTION-2** | Same β/rank math; new child artifacts. | New probability axioms |
@@ -188,6 +188,14 @@ KEEP frozen evidence (tapes, OOF, logistic, Decision-Research-1). Do not moderni
 
 VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 comparison study; feature-importance theater; generic multi-brain / feature plugin / snapshot frameworks.
 
+**Later optimization — do not build in DATASET-C / VALIDATION-PLAN-C / OOF-MATRIX-C / CATBOOST-BRAIN-1.** Two real consumers first; extract the stable abstraction second.
+
+| ID | What | Trigger | Not now |
+|----|------|---------|---------|
+| **CANDIDATE-UNIVERSE-1** | LabelSet identity today binds Tape2 `PlanDigest` + `ContentDigest` + `At[]`. That is strict and correct for Brain V2. FeatureSpec3 (same 15m candidates / 15m+1m truth / Target C, different HTF or columns) would force a new LabelSet file even if first-passage math is identical. Eventual shape: candidate-universe digest + TargetSpec → LabelSet; FeatureTape identity stays on Dataset/OOF for `X`. | Second sensory tape or FeatureSpec3 that actually shares the primary candidate population | `CandidateUniverse-v1` type, public FeatureTape interface, LabelSet-v3 just to drop ContentDigest |
+| **MODEL-SOCKET-1** | Durable model-facing socket is OOF-MATRIX (`At`, `X[N]`, `Outcome`, fold ranges in the header). CatBoost / LightGBM / NN each own a trainer. | Second real model family consuming the same matrix | Go `Brain` interface, trainer plugin bus, Model registry |
+| **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → projection → evidence → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After OOF-C + at least one Brain V2 model artifact exist | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
+
 ### Owner: FEATURE-TAPE-2 ✅
 
 Implemented: FeatureRuntime2 + feature-tape-v2; DumpFeatureTape2(spec, 15m, 1h, 4h); HistoryDemand/IIR from ResearchSourceStartMs; consumed-range SourceRangeDigest; equal-CloseTime HTF-before-primary; no FeatureEvaluator. Frozen `61d5ca0`.
@@ -196,9 +204,13 @@ Implemented: FeatureRuntime2 + feature-tape-v2; DumpFeatureTape2(spec, 15m, 1h, 
 
 Native `GenerateLabelSetFromTape2` / `DumpLabelSetFromTape2`. Canonical core `buildLabelsFromCandidates`. Format `label-set-v2`. New Target-C slot. No new label math. Frozen `ce3e542`.
 
-### Owner: RESEARCH-DATASET-C / VALIDATION-PLAN-C / OOF-MATRIX-C
+### Owner: RESEARCH-DATASET-C ✅ / VALIDATION-PLAN-C ✅
 
-Reuse compilers; new identities (TargetH=72). If any needs a new algorithm, stop — architecture failed.
+Native Tape2 dataset door + shared partition core; V1 `BuildResearchDataset` stays a legacy door. In-memory join only. `ResearchRow2` keeps `FeatureVector2 [64]`. Exclusive partition: FeatureNotReady first. `ResearchValidationPlanC` + `CompileValidationPlan` on trainable `At[]`. Market-time H=72. Frozen `151e530`.
+
+### Owner: OOF-MATRIX-C
+
+Generic matrix of `At` + `X[64]` + outcome + Plan-C geometry in the header. No RSX/pattern/CatBoost fields on rows. If this needs a new algorithm, stop — architecture failed.
 
 ### Owner: CATBOOST-BRAIN-1
 
@@ -218,7 +230,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **FEATURE-SPEC-2 frozen** `0c54848`. **FEATURE-TAPE-2 frozen** `61d5ca0`. **LABEL-SET-C frozen** `ce3e542`. Next when asked: **DATASET-C / VALIDATION-PLAN-C**. V1 KEEP ≠ SUPPORT. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **FEATURE-SPEC-2 frozen** `0c54848`. **FEATURE-TAPE-2 frozen** `61d5ca0`. **LABEL-SET-C frozen** `ce3e542`. **DATASET-C / VALIDATION-PLAN-C frozen** `151e530`. Next when asked: **OOF-MATRIX-C**. V1 KEEP ≠ SUPPORT. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
