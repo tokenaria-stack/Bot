@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## FEATURE-SPEC-2 — 64-feature causal input contract (Sep 2026) ✅
+## FEATURE-SPEC-2 — 64-feature causal input contract (Sep 2026) ✅ frozen `0c54848`
 
 - Exact ordered 64 FeatureIDs, Target C (H=72, U=L=2.0), q=18, analysis:v2 RSX14/signal14, named pattern templates, native 1h/4h join, structured HistoryDemand.
 - Does **not** generate FeatureTape-v2, labels, CatBoost, or holdout. Frozen v1 tape/target/plan identities unchanged.
