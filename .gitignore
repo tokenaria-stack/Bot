@@ -22,6 +22,7 @@ server/server/
 trading_bot
 # Research artifacts (local FeatureTape / LabelSet dumps; not identity SSOT)
 research/tapes/
+research/tapes2/
 research/labels/
 research/oof/
 research/logits/

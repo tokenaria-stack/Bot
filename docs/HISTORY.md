@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FEATURE-TAPE-2 — Brain V2 sensory runtime + feature-tape-v2 (Sep 2026) ✅
+
+- `FeatureRuntime2` one-pass native 15m/1h/4h; `DumpFeatureTape2(FeatureSpec2, …)`; format `feature-tape-v2`.
+- V1 FeatureEvaluator/tape-v1 unchanged. No labels, CatBoost, or live host.
+- Next when asked: LABEL-SET-C. Do not start it here.
+
 ## FEATURE-SPEC-2 — 64-feature causal input contract (Sep 2026) ✅ frozen `0c54848`
 
 - Exact ordered 64 FeatureIDs, Target C (H=72, U=L=2.0), q=18, analysis:v2 RSX14/signal14, named pattern templates, native 1h/4h join, structured HistoryDemand.

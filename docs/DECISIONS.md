@@ -7,6 +7,23 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## Brain V2 vs historical V1 (Sep 2026)
+
+**Context:** FEATURE-SPEC-2 (`0c54848`) is a new hypothesis package (H=72, U=L=2.0, signal 14, 64 features, CatBoost later). The four-column logistic world is frozen evidence. Production should not depend on it.
+
+**Decision:** KEEP V1 ≠ SUPPORT V1. Quarantine V1 (buildable research artifacts). Production brain path is FeatureRuntime2 / tape-v2 / Target C / CatBoost. FEATURE-TAPE-2 dump accepts only `FeatureSpec2` + three native sources. Shared primitives (Jurik, RSTV, ATR, labels compiler, validation compiler, DecisionContract) are allowed; feature orchestration is not shared. Tape-2 ships runtime + artifact in one chapter; live host later feeds the same `UpdateClosed`. Do not reopen frozen `RSTVState` for Snapshot/Restore. SourceRangeDigest hashes causally consumed prefixes only.
+
+**Rejected:**
+- Delete/refactor V1 now — **Reason:** digest/test churn, zero product benefit.
+- `FeatureEngine` V1/V2 interface or `plan.Version` on the live path — **Reason:** permanently contaminates Brain V2.
+- Separate FEATURE-RUNTIME-2 chapter with no tape consumer — **Reason:** power plant.
+- Jump Tape-2 → CatBoost — **Reason:** Target C needs LabelSet-C and ValidationPlan-C (TargetH=72).
+- Universal FeatureRuntime for every future spec — **Reason:** god-engine; version assemblies, reuse primitives.
+- Homemade HTF from 15m — **Reason:** second market truth.
+- Snapshot framework / RSTV surgery in Tape-2 — **Reason:** closed-bar research; frozen owner.
+
+**Consequences:** Full sequence and Tape-2 freeze live in `docs/OPEN_DEBTS.md` BRAIN-V2 ledger. LEGACY-V1-QUARANTINE-1 only if imports still leak after the live path exists. V2 success is not an ablation vs logistic unless separately predeclared.
+
 ---
 
 ## FUTURES_PERP research source range (Sep 2026)

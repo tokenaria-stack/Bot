@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). Holdout remains sealed. **TARGET-RESOLUTION-2** deferred. Next: **FEATURE-TAPE-2** only when asked.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2** this chapter. Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Next: **LABEL-SET-C** only when asked. V1 KEEP ≠ SUPPORT.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -128,11 +128,97 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 ---
 
+## BRAIN-V2 production ledger (Sep 2026)
+
+**Product law:** KEEP V1 ≠ SUPPORT V1. Logistic four-column experiment is frozen historical evidence. Production architecture is designed as if **Brain V2 is the first production brain**. No production arrow to `FeatureEvaluator` / `feature-tape-v1` / signal-9 / H=24 OOF.
+
+**FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
+
+**NEXT (only when explicitly asked):** **LABEL-SET-C**. FEATURE-TAPE-2 implemented this chapter. HARD STOP before VALIDATION-PLAN-C / CatBoost.
+
+### Chapter sequence (do not skip causal prerequisites)
+
+| # | Chapter | Job | Not this chapter |
+|---|---------|-----|------------------|
+| 1 | **FEATURE-TAPE-2** | `FeatureRuntime2` + `feature-tape-v2`. One forward pass, three native streams. | Labels, CatBoost, live host, Frame DAG, V1 dump |
+| 2 | **LABEL-SET-C** | Same first-passage + 1m dual-hit engine; Target C (H=72, U=L=2.0). New artifact. | New label math |
+| 3 | **RESEARCH-DATASET-C** | Tape2 + LabelSet-C lockstep on `At`. | Statistics / training |
+| 4 | **VALIDATION-PLAN-C** | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
+| 5 | **OOF-MATRIX-C** | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic |
+| 6 | **CATBOOST-BRAIN-1** | Learner sees only X, y, folds. Portable dump later. | RSX/HTF/SQL/patterns inside the model |
+| 7 | **FORECAST-PROJECTION-2** | Same β/rank math; new child artifacts. | New probability axioms |
+| 8 | **DECISION-RESEARCH-C** | Same `DecisionContract` + 9×9 selector on new evidence. | New decision brain |
+| 9 | Holdout / live | Only if research eligible. Live host feeds **same** `FeatureRuntime2.UpdateClosed`. | Second live feature formula |
+
+Do not present V2 success as an ablation vs logistic-v1 unless a separate predeclared experiment exists.
+
+### FEATURE-TAPE-2 design freeze (implement in that chapter)
+
+**Split (one chapter, three objects):** FeatureSpec2 = meaning; FeatureRuntime2 = causal state; feature-tape-v2 = durable provenance.
+
+**API firewall:** `DumpFeatureTape2(spec FeatureSpec2, src15, src1h, src4h)`. Never `(plan, RSXSettings, []Kline)`. Runtime constructed from bound AnalysisRecipe (RSX14 / signal **14** / hlc3 / TV90 / analysis:v2). No `ResearchRSXSettings`, `FeatureHistoryBars`, `BindFeatureEvaluator`, `validateTape1ASchema`, `feature-tape-v1`.
+
+**Packages:** `forecast/` identity + tape-v2 IO + `FeatureVector2 [64]float64`; `indicators/` + existing RSTV/ATR owners (wrap, do not reimplement); `market/` FeatureRuntime2 + dump host (sources, continuity, CloseTime merge). `forecast` does not import `market`. No Go `research/featuretape2` package. Python `research/` does not compute the 64 values.
+
+**Runtime:** created once; `Update4h` / `Update1h` / `Update15m` (or equivalent); no DB inside runtime; no labels. Thin NativeRSXContext ×3. Primary adds pivots, 50-cross, ATR, naive H=72 price windows, four O(1) pattern automata. HTF exposes exactly 11. Not a mega-engine for every future FeatureSpec — reusable **primitives**, versioned **Runtime2** assembly. FeatureSpec3 may be Runtime3.
+
+**Scheduler (invariant):** at canonical `CloseTime` T (`data.BarCloseTimeMs`, not spoken “11:00”): apply 4h@T, then 1h@T, then 15m@T, then emit. Host owns merge; runtime fail-closed `latestHTF.CloseTime <= primary.CloseTime`.
+
+**HTF cache:** hold-last-state between native closes is legal. Replacing cache with a newer closed NotReady row ⇒ primary NotReady. Skipping a newer closed row / using previous Ready when the latest is NotReady or missing ⇒ illegal (gap abort if expected bar absent).
+
+**HistoryDemand:** only warmup authority. Finite 90 = windows/ages/TV lookback, **not** IIR start. IIR from `ResearchSourceStartMs(MarketKey)` per TF. Native 15m / 1h / 4h; never 15m aggregation.
+
+**Provenance:** SourceRangeDigest = actually consumed prefix: 15m start→last primary At; 1h/4h start→latest HTF row with CloseTime ≤ last primary CloseTime. Future SQLite rows after T do not enter the digest. Stable source cut (snapshot or hash-before/after). Do not change WAL/MCP.
+
+**Rows:** one row per primary closed 15m bar. Ready ⇒ Values `[64]` finite, no NaN repair. NotReady ⇒ reason only (`PRIMARY_WARMUP` / `HTF_1H_WARMUP` / `HTF_4H_WARMUP` / `PRICE_NOT_READY`); no fake zero vector. Unexpected gap ⇒ abort `SOURCE_GAP`. Typed blocks encode to Spec-2 order (20+6+16+11+11); offset must equal 64. No FeatureID string switch on the hot path.
+
+**Determinism:** double generate ⇒ identical ContentDigest and `Float64bits`. Single-thread per tape; parallelize across symbols later.
+
+**Snapshot/Restore:** do **not** reopen frozen `RSTVState`. Tape-2-local state may be trivially copyable for fork tests. No snapshot framework.
+
+**Live:** design `UpdateClosed` so a later host can share math. Do **not** build live subscriptions, forming bars, or recovery in Tape-2. Production binary must not import tape writers / trainers.
+
+### V1 quarantine (later, not Tape-2)
+
+**Owner: LEGACY-V1-QUARANTINE-1** — only if the import graph still creates real friction after the CatBoost live path exists.
+
+KEEP frozen evidence (tapes, OOF, logistic, Decision-Research-1). Do not modernize V1. Do not add `FeatureEngine` V1/V2 interface or `if plan.Version` on the production path. Optional later: rename legacy cmds, docs HISTORICAL / NOT PRODUCTION, package move only if linker/startup still reach V1.
+
+### Parked (not Brain V2 now)
+
+VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 comparison study; feature-importance theater; generic multi-brain / feature plugin / snapshot frameworks.
+
+### Owner: FEATURE-TAPE-2 ✅
+
+Implemented: FeatureRuntime2 + feature-tape-v2; DumpFeatureTape2(spec, 15m, 1h, 4h); HistoryDemand/IIR from ResearchSourceStartMs; consumed-range SourceRangeDigest; equal-CloseTime HTF-before-primary; no FeatureEvaluator. Frozen when GREEN (commit in HISTORY).
+
+### Owner: LABEL-SET-C
+
+Same first-passage + 1m dual-hit engine; Target C (H=72, U=L=2.0). New artifact only. No new label math.
+
+### Owner: VALIDATION-PLAN-C / RESEARCH-DATASET-C / OOF-MATRIX-C
+
+Reuse compilers; new identities (TargetH=72). If any needs a new algorithm, stop — architecture failed.
+
+### Owner: CATBOOST-BRAIN-1
+
+No Kline/RSX/TV/ATR/HTF/pattern/DB in the trainer. Portable model later. Depth/LR/L2 etc. live only here.
+
+### Owner: FORECAST-RUNTIME / live brain host
+
+Later: same FeatureRuntime2 + portable-catboost + existing β/rank + DecisionContract. Reconstruction of live IIR vs research genesis still undecided (do not claim 1024-bar live replay equals 2019→2026). Chart TargetBarrier remains a separate owner.
+
+### Owner: future FeatureSpec3+
+
+New certified fact / TF / named pattern ⇒ new FeatureSpec version + native demand. Same tape primitives / later same CatBoost host / same decision architecture. No indicator-specific decision knobs.
+
+---
+
 ## NEXT (priority)
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **CatBoost path** | **FEATURE-SPEC-2 frozen** `0c54848`. Next when asked: **FEATURE-TAPE-2** (not CatBoost, not labels, not holdout). **DECISION-RESEARCH-1 frozen** `789ddcd` (not eligible for finalization). **TARGET-RESOLUTION-2** deferred. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **FEATURE-SPEC-2 frozen** `0c54848`. **FEATURE-TAPE-2** this chapter. Next when asked: **LABEL-SET-C**. V1 KEEP ≠ SUPPORT. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
