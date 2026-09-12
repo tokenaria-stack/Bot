@@ -13,7 +13,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 - Gates A–C: CatBoostSpec1 + `SplitCausalTail` FitPlan; vendor JSON → Go `portable-catboost-v1`; four-fold inner MaxIterations / Go prefix logloss / fresh outer N; official Go OOF logits.
 - Python is `CatBoost.fit` only. Class map UP/DOWN/TIMEOUT = 0/1/2. Inner tail end = `NextBarOpen(last outerTrain At)`. No scaler, class weights, eval_set, holdout, final development model, or Brain registry.
 - Canonical OOF-MATRIX-C `6793d8fe01a8533fc20ec372801b4c864396adde0c493aaeb9f3eed107c8e4e7`. Selected N `[97, 150, 286, 182]`. OOF logits ContentDigest `71213ef705dc390ee7d551695c1fc9c275044dab4625b86f8a6176fbc67c96ad` (70264 rows). DETERMINISM_PROVEN. Artifacts under gitignored `research/catboost/`.
-- Next when asked: DECISION-RESEARCH-C (causal projection is Gate A). Do not start it here.
+- Next when asked: DECISION-RESEARCH-C (causal projection as Gate A). Do not start it here.
 
 ## OOF-MATRIX-C — Brain V2 certified X/y/fold socket (Sep 2026) ✅ frozen `307b5e8`
 

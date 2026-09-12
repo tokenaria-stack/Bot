@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**NEXT (only when explicitly asked):** **DECISION-RESEARCH-C** (Gate A causal projection, Gate B plan from logits `At[]`, Gate C frozen 9×9). **CAUSAL-PROJECTION-1**. CATBOOST-BRAIN-1 frozen `cecc5a3`. Do not open holdout / final recipe / final CatBoost / scout-window framework.
+**NEXT (only when explicitly asked):** **DECISION-RESEARCH-C** (Gate A causal projection, Gate B plan from logits `At[]`, Gate C frozen 9×9). **CAUSAL-PROJECTION-1**. CATBOOST-BRAIN-1 frozen `cecc5a3`. No FORECAST-PROJECTION-C chapter. Do not open holdout / final recipe / final CatBoost fit.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -146,9 +146,9 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 4 | **VALIDATION-PLAN-C** ✅ `151e530` | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
 | 5 | **OOF-MATRIX-C** ✅ | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic / CatBoost |
 | 6 | **CATBOOST-BRAIN-1** ✅ | Learner sees only X, y, folds. Portable dump + Go logits. | RSX/HTF/SQL/patterns inside the model |
-| 7 | **DECISION-RESEARCH-C** | Gate A: CatBoost logits door + fold-local β/rank; project **train and val**. Gate B: DecisionValidationPlan-C from logits `At[]` (H=72, decision span 8640). Gate C: frozen DecisionContract + 9×9. | FORECAST-PROJECTION-C chapter; global recipe/evidence; new decision knobs |
-| 8 | **FINALIZATION-C** | Only if ELIGIBLE: final β/rank/recipe **and** `SplitCausalTail` → `N_final` → fresh development CatBoost. | Premature global recipe; fitting because CatBoost exists |
-| 9 | Holdout / live | Sealed holdout after both final branches. Live host later. | Opening holdout to debug development |
+| 7 | **DECISION-RESEARCH-C** | Gate A: CatBoost logits door + fold-local β/rank; project **train and val**. Gate B: plan from logits `At[]`, H=72, decision span 8640. Gate C: frozen DecisionContract + 9×9 (`train_select_one; validation_evaluate_selected_only`). | Global recipe/evidence; new decision knobs; FORECAST-PROJECTION-C chapter |
+| 8 | **FINALIZATION-C** | Only if ELIGIBLE: final β/rank/recipe + `SplitCausalTail` `N_final` + full-development CatBoost. | Premature global recipe or final fit |
+| 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
 Do not present V2 success as an ablation vs logistic-v1 unless a separate predeclared experiment exists.
 
@@ -195,8 +195,8 @@ VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 compariso
 | **CANDIDATE-UNIVERSE-1** | LabelSet identity today binds Tape2 `PlanDigest` + `ContentDigest` + `At[]`. That is strict and correct for Brain V2. FeatureSpec3 (same 15m candidates / 15m+1m truth / Target C, different HTF or columns) would force a new LabelSet file even if first-passage math is identical. Eventual shape: candidate-universe digest + TargetSpec → LabelSet; FeatureTape identity stays on Dataset/OOF for `X`. | Second sensory tape or FeatureSpec3 that actually shares the primary candidate population | `CandidateUniverse-v1` type, public FeatureTape interface, LabelSet-v3 just to drop ContentDigest |
 | **MODEL-SOCKET-1** | Durable model-facing socket is OOF-MATRIX (`At`, `X[N]`, `Outcome`, fold ranges in the header). CatBoost / LightGBM / NN each own a trainer. | Second real model family consuming the same matrix | Go `Brain` interface, trainer plugin bus, Model registry |
 | **MODEL-IDENTITY-LAYERS-1** | CATBOOST-BRAIN-1 mixed hypothesis + execution + vendor `get_all_params` into one `CatBoostSpec1`. Frozen `cecc5a3` stays. Next family binds ModelSpec + ExecutionProfile + RunWitness separately. | Second model family, second trainer environment, or UI model editor | Splitting CatBoostSpec1 now; UI showing 47 CatBoost internals; double full train as everyday automation |
-| **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → projection → evidence → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After OOF-C + at least one Brain V2 model artifact exist | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
-| **RESEARCH-SCOUT-1** | Fast iteration on a **shorter source range** or another `MarketKey` (coin). Same FeatureSpec/ModelSpec may be reused; tape `SourceRangeDigest` + ValidationPlan + OOF matrix digest change, so the CatBoost result is a **new run identity**. Scout runs: one train, no double-certification, not MATCH against the full-history freeze. Certified freeze of a scout tuple is a later explicit pin (ExecutionProfile + double-run). Auto-split by history length is RESEARCH-AUTOMATION-1. | Second coin, or a declared shorter research window, or UI “scout vs certify” | `TRAIN_MODE=quick` under CatBoostSpec1; silently slicing frozen OOF-MATRIX-C; raising `thread_count` on `cecc5a3`; auto-cutter framework now |
+| **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After DecisionResearch-C exists | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
+| **RESEARCH-WINDOW-1** | Fast iteration must be a **declared source window / ValidationPlan policy**, which produces **new** tape/label/matrix/model identities. Never silently truncate OOF-MATRIX-C / CATBOOST-BRAIN-1 and keep their digests. Split knobs already exist (`HoldoutStartAt`, `ValidationSpanBars`, `FoldCount`, `MinTrainRows`, `InnerSpanBars`). Automation later chooses them from listing length/TF. | Second coin or a shorter BTC scout window as an explicit experiment | PreviewMode that lies about full-history identity; SplitStrategy interface; changing CatBoostSpec1 MaxIterations in place |
 
 ### Owner: FEATURE-TAPE-2 ✅
 
@@ -232,7 +232,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next: **DECISION-RESEARCH-C**. **CAUSAL-PROJECTION-1**. Scout windows: **RESEARCH-SCOUT-1**. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next: **DECISION-RESEARCH-C** (causal projection as Gate A). **CAUSAL-PROJECTION-1**. **RESEARCH-WINDOW-1** parked. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |
