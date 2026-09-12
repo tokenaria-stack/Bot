@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
+	"trading_bot/forecast"
 	"trading_bot/market"
 )
 
 type compileIn struct {
-	At []int64 `json:"at"`
+	At     []int64 `json:"at"`
+	Target string  `json:"target"`
 }
 
 type foldOut struct {
@@ -57,7 +60,20 @@ func run() error {
 	if err := dec.Decode(&in); err != nil {
 		return fmt.Errorf("stdin: %w", err)
 	}
-	compiled, plan, spec, err := market.CompileResearchDecisionValidation(in.At)
+	var (
+		compiled forecast.CompiledValidationPlan
+		plan     forecast.ValidationPlan
+		spec     forecast.TargetSpec
+		err      error
+	)
+	switch strings.TrimSpace(in.Target) {
+	case "", "v1":
+		compiled, plan, spec, err = market.CompileResearchDecisionValidation(in.At)
+	case "c":
+		compiled, plan, spec, err = market.CompileResearchDecisionValidationC(in.At)
+	default:
+		return fmt.Errorf("unknown target %q", in.Target)
+	}
 	if err != nil {
 		return err
 	}

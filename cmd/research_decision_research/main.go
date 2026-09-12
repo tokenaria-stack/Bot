@@ -102,20 +102,17 @@ func run() error {
 	if err := dec.Decode(&in); err != nil {
 		return fmt.Errorf("stdin: %w", err)
 	}
-	spec, err := market.ResearchTargetSpec()
+	want, err := forecast.ParseDigestHex(in.TargetDigest)
+	if err != nil {
+		return err
+	}
+	spec, err := market.BindResearchTarget(want)
 	if err != nil {
 		return err
 	}
 	id, err := spec.Identity()
 	if err != nil {
 		return err
-	}
-	want, err := forecast.ParseDigestHex(in.TargetDigest)
-	if err != nil {
-		return err
-	}
-	if id.Digest != want {
-		return fmt.Errorf("target_digest mismatch")
 	}
 	n := len(in.Outcome)
 	if len(in.PUp) != n || len(in.PDown) != n || len(in.PTimeout) != n || len(in.Rank) != n {

@@ -8,12 +8,20 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DECISION-RESEARCH-C — causal projection + frozen DecisionContract on CatBoost OOF (Sep 2026) ✅
+
+- Gate A: native `catboost-oof-logits-v1` door; fold-local `fit_temperature` / `build_rank_reference` / `project_forecast` on decision TRAIN; project TRAIN and VAL with the same β/rankRef.
+- Gate B: `ResearchDecisionValidationPlanC` + existing compiler; TargetH=72; decision span 8640 (not CatBoost 17568). Formats `decision-validation-plan-c` (DV2C) and `decision-research-c` (DR2C) because V1 source fields name forecast evidence.
+- Gate C: existing 9×9 selector (`train_select_one; validation_evaluate_selected_only`), per-fold Go Run (overlapping trains cannot share one projected array). No global recipe/evidence. No CatBoost retrain. Holdout sealed.
+- Canonical logits `71213ef705dc390ee7d551695c1fc9c275044dab4625b86f8a6176fbc67c96ad`. Plan-C `54f349437d3f27a73a8399dd34b6a6d7a0a7e8298d955ae7cf3d4ad771c31d38`. Research-C `5d6b4e31dd74ee440e37c9f208467b442b17d607e10f4a2878f6e834ac307f12`. `eligible_for_finalization=false` (pooled U=−664, 1/4 positive). Two complete runs bit-matched.
+- HARD STOP. Do not start FINALIZATION-C. Next hypothesis may trigger RESEARCH-WINDOW-1.
+
 ## CATBOOST-BRAIN-1 — first certified OOF-MATRIX-C CatBoost consumer (Sep 2026) ✅ frozen `cecc5a3`
 
 - Gates A–C: CatBoostSpec1 + `SplitCausalTail` FitPlan; vendor JSON → Go `portable-catboost-v1`; four-fold inner MaxIterations / Go prefix logloss / fresh outer N; official Go OOF logits.
 - Python is `CatBoost.fit` only. Class map UP/DOWN/TIMEOUT = 0/1/2. Inner tail end = `NextBarOpen(last outerTrain At)`. No scaler, class weights, eval_set, holdout, final development model, or Brain registry.
 - Canonical OOF-MATRIX-C `6793d8fe01a8533fc20ec372801b4c864396adde0c493aaeb9f3eed107c8e4e7`. Selected N `[97, 150, 286, 182]`. OOF logits ContentDigest `71213ef705dc390ee7d551695c1fc9c275044dab4625b86f8a6176fbc67c96ad` (70264 rows). DETERMINISM_PROVEN. Artifacts under gitignored `research/catboost/`.
-- Next when asked: DECISION-RESEARCH-C (causal projection as Gate A). Do not start it here.
+- Consumed by DECISION-RESEARCH-C. Do not reopen CatBoostSpec1.
 
 ## OOF-MATRIX-C — Brain V2 certified X/y/fold socket (Sep 2026) ✅ frozen `307b5e8`
 

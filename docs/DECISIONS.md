@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## DECISION-RESEARCH-C identity (Sep 2026)
+
+**Context:** V1 `decision-validation-plan-v1` hashes `source.evidence_content_digest`. V1 `decision-research-v1` hashes `source.oof_forecast_evidence_content_digest`. This chapter has no global ForecastEvidence-C. V1 RankSpec `reference_population=all_rows_of_source_oof_logits_v1` would lie if fold-local train is the sample. V1 `ResearchDecisionValidationPlan` copies TargetH from H=24. `decisionresearch.Run` assumes one evidence array for all folds; nested trains overlap so one row cannot carry one β.
+
+**Decision:** New formats `decision-validation-plan-c` (DV2C) and `decision-research-c` (DR2C). `ResearchDecisionValidationPlanC` + `CompileResearchDecisionValidationC` (H=72, span 8640). `BindResearchTarget` looks up the two frozen TargetSpec digests (not a model registry). Rank math reused; C-local RankSpec population `decision_fold_train_raw_logits`. Selector Go package unchanged; Python calls it once per fold. CalibrationSpec pin reused. Projection logic string `forecast-recipe:composition-v1` names the existing `project_forecast` laws, not a recipe file and not logistic ModelSpec.
+
+**Rejected:**
+- Write a fake global evidence JSONL to feed V1 generate_decision_research — **Reason:** semantic lie.
+- Mutate `pinned_rank_spec()` population in place — **Reason:** would rewrite V1 identity.
+- ProjectionEngine / Brain interface / generic provider — **Reason:** three functions + one extra plan binding.
+- One `Run()` over a globally projected table — **Reason:** overlapping trains, conflicting β.
+
+**Consequences:** NOT_ELIGIBLE is frozen. Do not rescue with a new β family, rank law, grid, or target. Do not start FINALIZATION-C.
+
+---
+
 ## RESEARCH-SCALE-1 (Sep 2026)
 
 **Context:** Full CatBoost on OOF-MATRIX-C is expensive (~one thermal-heavy qualification run). Repeating double full-history training for every indicator/parameter idea is not a research loop. GPT/Grok refinement: shorten the **research candidate population**, not blindly cut source history (IIR/state would cold-start). A real second consumer appears only when Brain V2 starts a hypothesis sweep (FeatureSpec3 / CatBoostSpec2 / new coin).

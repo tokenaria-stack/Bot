@@ -27,7 +27,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
 4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). **DATASET-C / VALIDATION-PLAN-C ✅ frozen** (`151e530`). **OOF-MATRIX-C ✅ frozen** (`307b5e8`). **CATBOOST-BRAIN-1 ✅ frozen** (`cecc5a3`). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Next: CatBoost calibration/rank/recipe only when asked. V1 KEEP ≠ SUPPORT.
+5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). **DATASET-C / VALIDATION-PLAN-C ✅ frozen** (`151e530`). **OOF-MATRIX-C ✅ frozen** (`307b5e8`). **CATBOOST-BRAIN-1 ✅ frozen** (`cecc5a3`). **DECISION-RESEARCH-C ✅ frozen** (NOT_ELIGIBLE). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Do not start FINALIZATION-C. V1 KEEP ≠ SUPPORT.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**NEXT (only when explicitly asked):** **DECISION-RESEARCH-C** on frozen CatBoost OOF logits. Gates A–C. **CAUSAL-PROJECTION-1**. Scout/window law parked **RESEARCH-SCALE-1** / **RESEARCH-WINDOW-1** (after this chapter). Do not open holdout / final recipe / final CatBoost fit.
+**DECISION-RESEARCH-C ✅ frozen** (NOT_ELIGIBLE_FOR_FINALIZATION). Do not start FINALIZATION-C. Scout/window law parked **RESEARCH-SCALE-1** / **RESEARCH-WINDOW-1** (before the next hypothesis sweep). Holdout sealed.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -146,8 +146,8 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 4 | **VALIDATION-PLAN-C** ✅ `151e530` | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
 | 5 | **OOF-MATRIX-C** ✅ | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic / CatBoost |
 | 6 | **CATBOOST-BRAIN-1** ✅ | Learner sees only X, y, folds. Portable dump + Go logits. | RSX/HTF/SQL/patterns inside the model |
-| 7 | **DECISION-RESEARCH-C** | Gate A: CatBoost logits door + fold-local β/rank; project **train and val**. Gate B: plan from logits `At[]`, H=72, decision span 8640. Gate C: frozen DecisionContract + 9×9 (`train_select_one; validation_evaluate_selected_only`). | Global recipe/evidence; new decision knobs; FORECAST-PROJECTION-C chapter |
-| 8 | **FINALIZATION-C** | Only if ELIGIBLE: final β/rank/recipe + `SplitCausalTail` `N_final` + full-development CatBoost. | Premature global recipe or final fit |
+| 7 | **DECISION-RESEARCH-C** ✅ | Gate A–C on frozen CatBoost OOF logits. NOT_ELIGIBLE. | Finalization; rescue via new β/grid/target |
+| 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
 Do not present V2 success as an ablation vs logistic-v1 unless a separate predeclared experiment exists.
@@ -195,7 +195,7 @@ VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 compariso
 | **CANDIDATE-UNIVERSE-1** | LabelSet identity today binds Tape2 `PlanDigest` + `ContentDigest` + `At[]`. That is strict and correct for Brain V2. FeatureSpec3 (same 15m candidates / 15m+1m truth / Target C, different HTF or columns) would force a new LabelSet file even if first-passage math is identical. Eventual shape: candidate-universe digest + TargetSpec → LabelSet; FeatureTape identity stays on Dataset/OOF for `X`. | Second sensory tape or FeatureSpec3 that actually shares the primary candidate population | `CandidateUniverse-v1` type, public FeatureTape interface, LabelSet-v3 just to drop ContentDigest |
 | **MODEL-SOCKET-1** | Durable model-facing socket is OOF-MATRIX (`At`, `X[N]`, `Outcome`, fold ranges in the header). CatBoost / LightGBM / NN each own a trainer. | Second real model family consuming the same matrix | Go `Brain` interface, trainer plugin bus, Model registry |
 | **MODEL-IDENTITY-LAYERS-1** | CATBOOST-BRAIN-1 mixed hypothesis + execution + vendor `get_all_params` into one `CatBoostSpec1`. Frozen `cecc5a3` stays. Next family binds ModelSpec + ExecutionProfile + RunWitness separately. | Second model family, second trainer environment, or UI model editor | Splitting CatBoostSpec1 now; UI showing 47 CatBoost internals; double full train as everyday automation |
-| **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After DecisionResearch-C exists | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
+| **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After RESEARCH-WINDOW-1 / next hypothesis | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
 | **RESEARCH-WINDOW-1** | `ResearchWindow` = candidate `[StartAt, EndAt)`. Does not reset IIR/source. Scout ≠ qualification (never ELIGIBLE). Reuse parent X/y when FeatureSpec+Target unchanged. New FeatureSpec: replay from source start, emit in window. One scout run; one full qualification run; second full run only if ELIGIBLE; MATCH = 0. Planner never uses outcomes. Contiguous market-clock only. See **RESEARCH-SCALE-1**. | Before next hypothesis sweep (FeatureSpec3 / CatBoostSpec2 / second coin), after DECISION-RESEARCH-C | PreviewMode digest lie; IIR restart at window start; random row subsample; SplitStrategy; changing CatBoostSpec1 in place; always double-train |
 
 ### Owner: FEATURE-TAPE-2 ✅
@@ -218,6 +218,10 @@ Native Tape2 door `GenerateOOFMatrixFromTape2`. Shared generic assembler/writer.
 
 No Kline/RSX/TV/ATR/HTF/pattern/DB on the trainer path. Python fits only. Go owns portable-catboost-v1 and official OOF logits. Frozen `cecc5a3`.
 
+### Owner: DECISION-RESEARCH-C ✅
+
+Causal fold-local projection + frozen DecisionContract on CatBoost OOF logits. NOT_ELIGIBLE. No global recipe/evidence. Do not start FINALIZATION-C.
+
 ### Owner: FORECAST-RUNTIME / live brain host
 
 Later: same FeatureRuntime2 + portable-catboost + existing β/rank + DecisionContract. Reconstruction of live IIR vs research genesis still undecided (do not claim 1024-bar live replay equals 2019→2026). Chart TargetBarrier remains a separate owner.
@@ -232,7 +236,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next: **DECISION-RESEARCH-C** (causal projection as Gate A). **CAUSAL-PROJECTION-1**. **RESEARCH-WINDOW-1** parked. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **DECISION-RESEARCH-C frozen** (NOT_ELIGIBLE). Do **not** start FINALIZATION-C. Next explicit ask: **RESEARCH-WINDOW-1** before FeatureSpec3 / CatBoostSpec2. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

@@ -554,9 +554,21 @@ Official logits are Go(`portable-catboost-v1`) on the union of the four outer-va
 
 Predeclared, not implemented: later final development model uses the same inner-tail selection on all development rows, then a fresh fit with `N_final`. Never average OOF N.
 
-**NEXT:** DECISION-RESEARCH-C (causal projection is Gate A). **CAUSAL-PROJECTION-1**. Do not start here.
-
 **HARD STOP.** Frozen `cecc5a3`.
+
+### DECISION-RESEARCH-C (causal projection Gate A + frozen DecisionContract)
+
+Canonical input is official `catboost-oof-logits-v1` (`read_catboost_oof_logits`; never V1 `read_oof_logits` / OL1C). DecisionValidationPlan-C is compiled from logits `At[]` via existing `CompileValidationPlan` + `ResearchDecisionValidationPlanC` (walk-forward-v1, span **8640**, `MinTrainRows=35040`, ExtraGap=0, TargetH=**72** from Target C). Matrix is holdout-wall / TargetDigest / label-logic witness only.
+
+V1 `decision-validation-plan-v1` / `decision-research-v1` source fields name forecast-evidence ContentDigest. Those formats are not reused. C artifacts: `decision-validation-plan-c` (DV2C) and `decision-research-c` (DR2C).
+
+Projection mathematics are unchanged (`fit_temperature`, `build_rank_reference`, `project_forecast`). Parameters are fitted **inside each decision fold on TRAIN only**, then used to project TRAIN and VAL. Rank population pin is `decision_fold_train_raw_logits` (same D / midrank laws as RankSpec-v1; V1 `pinned_rank_spec` population token is not claimed). One global evidence array cannot be projected once: nested walk-forward trains overlap, so the existing Go selector runs **once per fold** on that fold’s projected TRAIN∥VAL. Grid, thresholds, selector, and `Eligible` are unchanged.
+
+No durable Calibration-C / Rank-C / Recipe-C / OOF-ForecastEvidence-C. Fold β and rank_n are audit fields on the research result. Holdout sealed. Negative eligibility is a completed experiment.
+
+Canonical: logits `71213ef705dc390ee7d551695c1fc9c275044dab4625b86f8a6176fbc67c96ad` (70264). Plan-C `54f349437d3f27a73a8399dd34b6a6d7a0a7e8298d955ae7cf3d4ad771c31d38`. Research-C `5d6b4e31dd74ee440e37c9f208467b442b17d607e10f4a2878f6e834ac307f12`. `eligible_for_finalization=false` (pooled validation TotalUtility −664; 1/4 positive folds). Two complete runs bit-matched ContentDigest (including SciPy β).
+
+**HARD STOP.** Do not start FINALIZATION-C. Next hypothesis may trigger RESEARCH-WINDOW-1 (parked), not FeatureSpec3 / CatBoostSpec2 inside this freeze.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -781,4 +793,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **DECISION-RESEARCH-C**. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **DECISION-RESEARCH-C** frozen (NOT_ELIGIBLE). Do not start FINALIZATION-C. TARGET-RESOLUTION-2 deferred.

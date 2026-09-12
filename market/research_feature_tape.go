@@ -162,6 +162,25 @@ func ResearchDecisionValidationPlan() (forecast.ValidationPlan, error) {
 	}, spec, forecast.DecisionValidationLogicWalkForwardV1)
 }
 
+// ResearchDecisionValidationPlanC is the Brain V2 decision-development geometry.
+// Same walk-forward policy and 8640-bar decision span as V1; TargetH from Target C.
+// Does not replace ResearchDecisionValidationPlan. Does not use the model 17568 span.
+func ResearchDecisionValidationPlanC() (forecast.ValidationPlan, error) {
+	spec, err := ResearchTargetSpecC()
+	if err != nil {
+		return forecast.ValidationPlan{}, err
+	}
+	key := ResearchMarketKey()
+	return forecast.ResolveValidationPlan(forecast.ValidationPlanDraft{
+		Timeframe:          key.Timeframe,
+		HoldoutStartAt:     ResearchHoldoutStartAt(),
+		ValidationSpanBars: 8640, // 90 elapsed days at 15m — decision span, not CatBoost 17568
+		FoldCount:          4,
+		ExtraGapBars:       0,
+		MinTrainRows:       35040,
+	}, spec, forecast.DecisionValidationLogicWalkForwardV1)
+}
+
 // ResearchOOFMatrixFileName is a navigation slot name under research/oof/.
 // Authority is header provenance + ContentDigest, not this filename.
 func ResearchOOFMatrixFileName(key forecast.MarketKey, tapeContent, labelContent, valPlan forecast.Digest) string {
