@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**NEXT (only when explicitly asked):** **DECISION-RESEARCH-C** (Gate A causal projection, Gate B plan from logits `At[]`, Gate C frozen 9×9). **CAUSAL-PROJECTION-1**. CATBOOST-BRAIN-1 frozen `cecc5a3`. No FORECAST-PROJECTION-C chapter. Do not open holdout / final recipe / final CatBoost fit.
+**NEXT (only when explicitly asked):** **DECISION-RESEARCH-C** on frozen CatBoost OOF logits. Gates A–C. **CAUSAL-PROJECTION-1**. Scout/window law parked **RESEARCH-SCALE-1** / **RESEARCH-WINDOW-1** (after this chapter). Do not open holdout / final recipe / final CatBoost fit.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -196,7 +196,7 @@ VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 compariso
 | **MODEL-SOCKET-1** | Durable model-facing socket is OOF-MATRIX (`At`, `X[N]`, `Outcome`, fold ranges in the header). CatBoost / LightGBM / NN each own a trainer. | Second real model family consuming the same matrix | Go `Brain` interface, trainer plugin bus, Model registry |
 | **MODEL-IDENTITY-LAYERS-1** | CATBOOST-BRAIN-1 mixed hypothesis + execution + vendor `get_all_params` into one `CatBoostSpec1`. Frozen `cecc5a3` stays. Next family binds ModelSpec + ExecutionProfile + RunWitness separately. | Second model family, second trainer environment, or UI model editor | Splitting CatBoostSpec1 now; UI showing 47 CatBoost internals; double full train as everyday automation |
 | **RESEARCH-AUTOMATION-1** | MATCH / GENERATE / REFUSE over frozen identities (FeatureSpec → Tape → Target → LabelSet → Dataset → ValPlan → OOF → ModelSpec → Model → decision). UI later **selects** those specs; it does not own H / U/L / formulas. | After DecisionResearch-C exists | Orchestrator that reruns the whole stack; UI that duplicates Target/Feature math |
-| **RESEARCH-WINDOW-1** | Fast iteration must be a **declared source window / ValidationPlan policy**, which produces **new** tape/label/matrix/model identities. Never silently truncate OOF-MATRIX-C / CATBOOST-BRAIN-1 and keep their digests. Split knobs already exist (`HoldoutStartAt`, `ValidationSpanBars`, `FoldCount`, `MinTrainRows`, `InnerSpanBars`). Automation later chooses them from listing length/TF. | Second coin or a shorter BTC scout window as an explicit experiment | PreviewMode that lies about full-history identity; SplitStrategy interface; changing CatBoostSpec1 MaxIterations in place |
+| **RESEARCH-WINDOW-1** | `ResearchWindow` = candidate `[StartAt, EndAt)`. Does not reset IIR/source. Scout ≠ qualification (never ELIGIBLE). Reuse parent X/y when FeatureSpec+Target unchanged. New FeatureSpec: replay from source start, emit in window. One scout run; one full qualification run; second full run only if ELIGIBLE; MATCH = 0. Planner never uses outcomes. Contiguous market-clock only. See **RESEARCH-SCALE-1**. | Before next hypothesis sweep (FeatureSpec3 / CatBoostSpec2 / second coin), after DECISION-RESEARCH-C | PreviewMode digest lie; IIR restart at window start; random row subsample; SplitStrategy; changing CatBoostSpec1 in place; always double-train |
 
 ### Owner: FEATURE-TAPE-2 ✅
 

@@ -7,6 +7,36 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RESEARCH-SCALE-1 (Sep 2026)
+
+**Context:** Full CatBoost on OOF-MATRIX-C is expensive (~one thermal-heavy qualification run). Repeating double full-history training for every indicator/parameter idea is not a research loop. GPT/Grok refinement: shorten the **research candidate population**, not blindly cut source history (IIR/state would cold-start). A real second consumer appears only when Brain V2 starts a hypothesis sweep (FeatureSpec3 / CatBoostSpec2 / new coin).
+
+**Decision (law now; implementation when RESEARCH-WINDOW-1 triggers):**
+
+1. **Scout ≠ qualification.** Scout may be PROMISING / NOT_PROMISING. Scout can never be ELIGIBLE_FOR_FINALIZATION.
+2. **`ResearchWindow = (CandidateStartAt, CandidateEndAtExclusive)`.** It selects which rows enter validation/model/decision research. It does **not** reset FeatureSpec2 `IIRFromSourceStart`. Source/context start ≠ candidate start.
+3. **Resolved timestamps are identity.** Phrases (“last 2 years”, “5-minute scout”) are not. Budget/quality-tier are planner inputs; the run binds explicit geometry (window, folds, spans, MaxIterations), never the budget string.
+4. **Reuse certified X/y** when FeatureSpec+Target are unchanged: window the parent matrix rows + **new** ValidationPlan. No tape/label replay. New FeatureSpec: replay causal runtime from source start, **emit** only inside the window (plus Target H tail for labels).
+5. **Run tiers:** smoke = fixtures; scout = 1 short-window run; full qualification = 1 full development run; **second identical full run only if ELIGIBLE** (determinism before freeze/finalization); MATCH = 0. Failed qualification does not pay Run B.
+6. **Future ResearchPlanner** (RESEARCH-AUTOMATION-1) may use history length, TF, genesis/gaps, FeatureSpec demand, Target H, min rows, compute budget. It must **not** choose windows from outcomes or in-sample performance.
+7. **Contiguous market-clock windows only.** No every-Nth-bar / random subsample. Spans/gaps/inner tail stay market-clock; MinTrainRows stays observation count.
+8. **Holdout is spendable once.** After it is opened and a hypothesis changes because of it, that holdout is spent.
+9. Scout policy (shorter window, fewer folds, smaller spans/MinTrain/MaxIterations) is an explicit **other** ModelSpec/ValidationPlan, not CatBoostSpec1 in disguise.
+10. Do not refactor OOF-MATRIX-C for this. A scoped matrix with different rows/plan is a new honest ContentDigest.
+
+**Rejected:**
+- PreviewMode / FastMode that keeps frozen digests — **Reason:** identity lie.
+- Slice source and restart IIR at scout start — **Reason:** changes FeatureSpec2 values.
+- Always double-train full history — **Reason:** certification tool, not workflow.
+- Random/strided row sampling — **Reason:** destroys causal time.
+- Outcome-aware auto-split — **Reason:** splitter becomes an optimizer.
+- ResearchPlanner / ExperimentHashUniverse now — **Reason:** next chapter is DECISION-RESEARCH-C on paid logits.
+- Parallel folds to beat heat — **Reason:** worse thermals; pauses are execution, not Spec.
+
+**Consequences:** Do not implement ResearchWindow in DECISION-RESEARCH-C. Trigger RESEARCH-WINDOW-1 before the next hypothesis sweep. CatBoostSpec1 / OOF-MATRIX-C stay frozen.
+
+---
+
 ## CAUSAL-PROJECTION-1 (Sep 2026)
 
 **Context:** CATBOOST-BRAIN-1 (`cecc5a3`) froze honest **model** OOF logits. V1 then fitted one global β and one global rank reference on all OOF rows, materialized `oof-forecast-evidence-v1`, and ran DecisionValidation folds on that table. ARCHITECTURE for OOF-FORECAST-EVIDENCE-1 recorded the honesty gap: model logits are OOF; projection is not OOF relative to decision val (val labels enter β; val/future D enter the rank sample). V1 treated decision folds as robustness/selection only and reserved holdout as first full-system eval. Brain V2 uses `eligible_for_finalization` as a real gate. Copying global projection would make that gate leak.
@@ -47,7 +77,7 @@ CatBoost **model** folds stay frozen; decision-train may pool OOF logits from se
 - Probability-difference rank — **Reason:** new hypothesis.
 - Reopen V1 evidence/research artifacts — **Reason:** KEEP ≠ SUPPORT.
 
-**Consequences:** Next implementation chapter is **DECISION-RESEARCH-C** (Gates A/B/C). GREEN is ELIGIBLE or NOT_ELIGIBLE. FINALIZATION (global recipe + `N_final` CatBoost) only after ELIGIBLE. V1 “do not create fold-local β/rank variants” does not apply to Brain V2.
+**Consequences:** Next implementation chapter is **DECISION-RESEARCH-C** on frozen CatBoost OOF logits (`cecc5a3`, 70264 rows). GREEN is ELIGIBLE or NOT_ELIGIBLE. Scout windows / short history are **RESEARCH-SCALE-1**, implemented only before the next hypothesis sweep — not inside this chapter. FINALIZATION only after ELIGIBLE.
 
 ---
 
@@ -68,7 +98,7 @@ Canonical result identity binds matrix + ModelSpec + ExecutionProfile + resolved
 - Generic Brain / ModelPlugin bus now — **Reason:** still one model family; MODEL-SOCKET-1 trigger is the second consumer.
 - Treat portable-catboost-v1 as a universal CatBoost runtime — **Reason:** recertify the converter on a new CatBoost major; do not magically support 2.x.
 
-**Consequences:** Do not split CatBoostSpec1 in DECISION-RESEARCH-C. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity. Projection causality is **CAUSAL-PROJECTION-1**. Double full CatBoost is **certification**, not everyday MATCH.
+**Consequences:** Do not split CatBoostSpec1 in DECISION-RESEARCH-C. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity. Projection causality is **CAUSAL-PROJECTION-1**. Run-count policy is **RESEARCH-SCALE-1** (double CatBoost is certification after ELIGIBLE, not everyday research).
 
 ---
 
