@@ -554,7 +554,7 @@ Official logits are Go(`portable-catboost-v1`) on the union of the four outer-va
 
 Predeclared, not implemented: later final development model uses the same inner-tail selection on all development rows, then a fresh fit with `N_final`. Never average OOF N.
 
-**NEXT:** FORECAST-PROJECTION-C (causal train→val projection; no global recipe). **CAUSAL-PROJECTION-1**. Do not start here.
+**NEXT:** DECISION-RESEARCH-C (causal projection is Gate A). **CAUSAL-PROJECTION-1**. Do not start here.
 
 **HARD STOP.** Frozen `cecc5a3`.
 
@@ -781,4 +781,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **FORECAST-PROJECTION-C** (causal projection). TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. Next chapter is **DECISION-RESEARCH-C**. TARGET-RESOLUTION-2 deferred.

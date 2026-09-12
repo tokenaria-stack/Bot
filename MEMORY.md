@@ -35,7 +35,7 @@ On request / only when the task needs them:
 | Import DAG | `exchange → market → decision → execution` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** |
-| NEXT | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next: **FORECAST-PROJECTION-C** (causal train→val; no global recipe). **CAUSAL-PROJECTION-1** + **MODEL-IDENTITY-LAYERS-1** in `docs/DECISIONS.md`. |
+| NEXT | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next: **DECISION-RESEARCH-C** (causal projection is Gate A, not a chapter). **CAUSAL-PROJECTION-1**. Scout/other-coin windows: **RESEARCH-SCOUT-1** — new tape range/matrix, never a silent slice of the freeze. |
 | RSX | **RSX-TV-ONE-BRAIN-1 frozen** `4688160`. **MARKET-RSX-PARITY-1 closed.** **FEATURE-TAPE-RSX-REGEN-1 closed.** **RESEARCH-DATASET-1 frozen** `f311203`. **VALIDATION-PLAN-1 frozen** `0737c59`. **OOF-MATRIX-1 frozen** `d749042`. **MODEL-FIT-1 frozen** `0d60270`+`29cb928`. **CALIBRATION-1 frozen** `4c8c08e`+`b550613`. **RANK-1 frozen** `cc49528`. **RECIPE-FREEZE-1 frozen** `c2d278a`. **FINAL-MODEL-FIT-1 frozen** `9cb03f5`. **FORECAST-BUNDLE-1 frozen** `a9e1228`. **OOF-FORECAST-EVIDENCE-1 frozen** `124f273`. **DECISION-VALIDATION-PLAN-1 frozen** `a0da055`. **DECISION-CONTRACT-1 frozen** `b7a76b4`. **DECISION-RESEARCH-1 frozen** `789ddcd`. Do not reopen RSX unless regression. |
 | Wozduh | **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`) |
 

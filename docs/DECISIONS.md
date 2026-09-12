@@ -11,29 +11,32 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Context:** CATBOOST-BRAIN-1 (`cecc5a3`) froze honest **model** OOF logits. V1 then fitted one global β and one global rank reference on all OOF rows, materialized `oof-forecast-evidence-v1`, and ran DecisionValidation folds on that table. ARCHITECTURE for OOF-FORECAST-EVIDENCE-1 recorded the honesty gap: model logits are OOF; projection is not OOF relative to decision val (val labels enter β; val/future D enter the rank sample). V1 treated decision folds as robustness/selection only and reserved holdout as first full-system eval. Brain V2 uses `eligible_for_finalization` as a real gate. Copying global projection would make that gate leak.
 
-**Decision:** At the **decision consumer**, projection is fold-local:
+**Decision:** Causal projection is **Gate A of DECISION-RESEARCH-C**, not a separate product chapter. It has no durable artifact and no independent consumer.
 
-```
-decisionTrain logits + targets → fit_temperature / build_rank_reference
-decisionVal logits             → project_forecast (existing math)
-```
+Order:
 
-Do not fit β or build the rank sample on decision-val labels or on future Ats. Compile DecisionValidationPlan-C from official CatBoost OOF **logits `At[]`**, not from a pre-projected global evidence file. ExtraGapBars / HorizonEnd on that plan keep train-label horizons off the val window.
+1. Compile **DecisionValidationPlan-C** from CatBoost OOF logits `At[]` first (geometry independent of P/rank). Reuse the V1 decision-validation owner: TargetH=72, declared decision span (8640), not CatBoost’s 17568 model span.
+2. For each decision fold, **fit** `fit_temperature(y_train, z_train)` and `build_rank_reference(z_train)` on decision-train only (`D = z_UP − z_DOWN`).
+3. **Project both** train and val with those frozen train-derived objects (`project_forecast`). Selector law stays frozen: `train_select_one; validation_evaluate_selected_only` (`decisionresearch.ProtocolLaw`). Never choose the 9×9 cell on val.
+4. Do not persist per-fold calibration/rank/evidence files. β (and optional rank-ref digest) may appear inside the DecisionResearch result as audit. Identity binds logits digest + plan digest + CalibrationSpec + RankSpec + projection logic + DecisionContract + selector logic — not a hash forest of ephemeral internals.
 
-Do **not** publish a global Calibration-C / Rank-C / ForecastRecipe-C / OOF-ForecastEvidence-C until DecisionResearch-C is ELIGIBLE. That final recipe is a second consumer (holdout / live / final model), not a prerequisite.
+No global Calibration-C / Rank-C / ForecastRecipe-C / Evidence-C until ELIGIBLE.
 
-Reuse `fit_temperature`, `build_rank_reference`, `project_forecast`. Native CatBoost logits door — never `read_oof_logits` / OL1C. Rank stays `D = z_UP − z_DOWN`. Do not port softmax to Go in this step.
+Reuse `fit_temperature`, `build_rank_reference`, `project_forecast`. Native CatBoost logits door → arrays `(At, y, z)` — never `read_oof_logits` / OL1C. No `if catboost` inside math. No `RawModelEvidence` until a second live model family. Do not port softmax to Go in this step.
 
-CatBoost **model** folds stay frozen; do not nest them inside decision folds. Decision-train still pools expanding-window OOF logits from several fold models (same as V1 pooling). That is accepted. Class coverage `{0,1,2}` is required on each decision-train slice (`fit_temperature` already refuses otherwise).
+CatBoost **model** folds stay frozen; do not nest them inside decision folds. Decision-train still pools expanding-window OOF logits from several fold models. Class coverage `{0,1,2}` required on each decision-train slice.
 
 **Rejected:**
+- Separate FORECAST-PROJECTION-C chapter — **Reason:** no durable artifact; first consumer is DecisionResearch; complexity must pay rent.
 - Copy V1 global β/rank then “holdout will save us” — **Reason:** Brain V2 eligibility would be in-sample for the projection layer.
-- Two projection laws (global file for convenience + causal for decision) — **Reason:** two truths.
-- `ProjectionEngine` / `RawModelEvidence` / cross-fit framework — **Reason:** three existing functions; first real consumer is the decision fold loop.
+- Project val only — **Reason:** selector must still maximize train TotalUtility; val-only projection would leak selection onto val.
+- Two projection laws (global file + causal) — **Reason:** two truths.
+- `ProjectionEngine` / `RawModelEvidence` / cross-fit framework — **Reason:** three existing functions.
 - Probability-difference rank — **Reason:** new hypothesis.
-- Reopen V1 evidence/research artifacts — **Reason:** KEEP ≠ SUPPORT; V1 freeze stands including its documented limitation.
+- Durable per-fold projection artifacts — **Reason:** deterministically reproducible from parent identities.
+- Reopen V1 evidence/research artifacts — **Reason:** KEEP ≠ SUPPORT.
 
-**Consequences:** Next implementation chapter is FORECAST-PROJECTION-C (CatBoost logits adapter + causal train→val law tests; no final recipe) then DECISION-RESEARCH-C (first product consumer). FINAL-FORECAST-RECIPE-C only after ELIGIBLE. V1 “do not create fold-local β/rank variants” does not apply to Brain V2.
+**Consequences:** Next implementation chapter is **DECISION-RESEARCH-C** (Gates A projection, B plan, C unchanged 9×9). FINAL-FORECAST-RECIPE-C / final CatBoost only after ELIGIBLE. V1 “do not create fold-local β/rank variants” does not apply to Brain V2.
 
 ---
 
@@ -54,7 +57,7 @@ Canonical result identity binds matrix + ModelSpec + ExecutionProfile + resolved
 - Generic Brain / ModelPlugin bus now — **Reason:** still one model family; MODEL-SOCKET-1 trigger is the second consumer.
 - Treat portable-catboost-v1 as a universal CatBoost runtime — **Reason:** recertify the converter on a new CatBoost major; do not magically support 2.x.
 
-**Consequences:** Do not split CatBoostSpec1 in FORECAST-PROJECTION-C. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity. Projection causality is **CAUSAL-PROJECTION-1**, not this debt.
+**Consequences:** Do not split CatBoostSpec1 in DECISION-RESEARCH-C. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity. Projection causality is **CAUSAL-PROJECTION-1**. Scout vs certified windows are **RESEARCH-SCOUT-1**, not a silent slice of a frozen matrix.
 
 ---
 
