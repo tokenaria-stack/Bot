@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**DECISION-RESEARCH-C ✅ frozen** (NOT_ELIGIBLE_FOR_FINALIZATION). Do not start FINALIZATION-C. Scout/window law parked **RESEARCH-SCALE-1** / **RESEARCH-WINDOW-1** (before the next hypothesis sweep). Holdout sealed.
+**DECISION-RESEARCH-C ✅ frozen** `018309b` (NOT_ELIGIBLE_FOR_FINALIZATION). Do not start FINALIZATION-C. Scout/window law parked **RESEARCH-SCALE-1** / **RESEARCH-WINDOW-1** (before the next hypothesis sweep). Holdout sealed.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -146,7 +146,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 4 | **VALIDATION-PLAN-C** ✅ `151e530` | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
 | 5 | **OOF-MATRIX-C** ✅ | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic / CatBoost |
 | 6 | **CATBOOST-BRAIN-1** ✅ | Learner sees only X, y, folds. Portable dump + Go logits. | RSX/HTF/SQL/patterns inside the model |
-| 7 | **DECISION-RESEARCH-C** ✅ | Gate A–C on frozen CatBoost OOF logits. NOT_ELIGIBLE. | Finalization; rescue via new β/grid/target |
+| 7 | **DECISION-RESEARCH-C** ✅ `018309b` | Gate A–C on frozen CatBoost OOF logits. NOT_ELIGIBLE. | Finalization; rescue via new β/grid/target |
 | 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
@@ -220,7 +220,7 @@ No Kline/RSX/TV/ATR/HTF/pattern/DB on the trainer path. Python fits only. Go own
 
 ### Owner: DECISION-RESEARCH-C ✅
 
-Causal fold-local projection + frozen DecisionContract on CatBoost OOF logits. NOT_ELIGIBLE. No global recipe/evidence. Do not start FINALIZATION-C.
+Causal fold-local projection + frozen DecisionContract on CatBoost OOF logits. NOT_ELIGIBLE. No global recipe/evidence. Frozen `018309b`. Do not start FINALIZATION-C.
 
 ### Owner: FORECAST-RUNTIME / live brain host
 
@@ -236,7 +236,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **DECISION-RESEARCH-C frozen** (NOT_ELIGIBLE). Do **not** start FINALIZATION-C. Next explicit ask: **RESEARCH-WINDOW-1** before FeatureSpec3 / CatBoostSpec2. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **DECISION-RESEARCH-C frozen** `018309b` (NOT_ELIGIBLE). Do **not** start FINALIZATION-C. Next explicit ask: **RESEARCH-WINDOW-1** before FeatureSpec3 / CatBoostSpec2. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

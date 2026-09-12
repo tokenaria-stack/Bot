@@ -8,7 +8,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
-## DECISION-RESEARCH-C — causal projection + frozen DecisionContract on CatBoost OOF (Sep 2026) ✅
+## DECISION-RESEARCH-C — causal projection + frozen DecisionContract on CatBoost OOF (Sep 2026) ✅ frozen `018309b`
 
 - Gate A: native `catboost-oof-logits-v1` door; fold-local `fit_temperature` / `build_rank_reference` / `project_forecast` on decision TRAIN; project TRAIN and VAL with the same β/rankRef.
 - Gate B: `ResearchDecisionValidationPlanC` + existing compiler; TargetH=72; decision span 8640 (not CatBoost 17568). Formats `decision-validation-plan-c` (DV2C) and `decision-research-c` (DR2C) because V1 source fields name forecast evidence.
