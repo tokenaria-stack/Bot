@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**NEXT (only when explicitly asked):** CatBoost OOF calibration / rank / forecast-recipe. CATBOOST-BRAIN-1 is frozen. HARD STOP before those chapters. Do not open holdout.
+**NEXT (only when explicitly asked):** **FORECAST-PROJECTION-C** (CatBoost logits door + causal train→val projection law; no global recipe). Then **DECISION-RESEARCH-C**. See **CAUSAL-PROJECTION-1** in `docs/DECISIONS.md`. CATBOOST-BRAIN-1 frozen `cecc5a3`. Do not open holdout / final recipe / final CatBoost fit.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -146,9 +146,10 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 4 | **VALIDATION-PLAN-C** ✅ `151e530` | `CompileValidationPlan`, TargetH=72. New digest. | New compiler; reuse H=24 folds |
 | 5 | **OOF-MATRIX-C** ✅ | Generic matrix of X[64] + y + C folds. | Feature-specific OOF logic / CatBoost |
 | 6 | **CATBOOST-BRAIN-1** ✅ | Learner sees only X, y, folds. Portable dump + Go logits. | RSX/HTF/SQL/patterns inside the model |
-| 7 | **FORECAST-PROJECTION-2** | Same β/rank math; new child artifacts. | New probability axioms |
-| 8 | **DECISION-RESEARCH-C** | Same `DecisionContract` + 9×9 selector on new evidence. | New decision brain |
-| 9 | Holdout / live | Only if research eligible. Live host feeds **same** `FeatureRuntime2.UpdateClosed`. | Second live feature formula |
+| 7 | **FORECAST-PROJECTION-C** | Native CatBoost logits door; reuse `fit_temperature` / rank / `project_forecast`; **causal train→val** law. | Global β/rank/recipe/evidence; new probability axioms |
+| 8 | **DECISION-RESEARCH-C** | Plan from logits `At[]`; each fold fits projection on Train only, projects Val only; same DecisionContract + 9×9. | New decision brain; global evidence table as SSOT |
+| 9 | **FINAL-FORECAST-RECIPE-C** | Only if ELIGIBLE: one β + rank sample on all development OOF logits. | Premature global recipe |
+| 10 | **FINAL-MODEL-FIT-C** / holdout / live | Predeclared `SplitCausalTail` → `N_final` → fresh development CatBoost; then sealed holdout. | Fitting final/holdout because CatBoost exists |
 
 Do not present V2 success as an ablation vs logistic-v1 unless a separate predeclared experiment exists.
 
@@ -231,7 +232,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **FEATURE-SPEC-2 frozen** `0c54848`. **FEATURE-TAPE-2 frozen** `61d5ca0`. **LABEL-SET-C frozen** `ce3e542`. **DATASET-C / VALIDATION-PLAN-C frozen** `151e530`. **OOF-MATRIX-C frozen** `307b5e8`. **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next when asked: CatBoost calibration/rank/recipe. V1 KEEP ≠ SUPPORT. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **CATBOOST-BRAIN-1 frozen** `cecc5a3`. Next when asked: **FORECAST-PROJECTION-C** (causal, not global V1 copy). **CAUSAL-PROJECTION-1**. V1 KEEP ≠ SUPPORT. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

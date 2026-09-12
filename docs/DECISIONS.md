@@ -7,6 +7,36 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## CAUSAL-PROJECTION-1 (Sep 2026)
+
+**Context:** CATBOOST-BRAIN-1 (`cecc5a3`) froze honest **model** OOF logits. V1 then fitted one global β and one global rank reference on all OOF rows, materialized `oof-forecast-evidence-v1`, and ran DecisionValidation folds on that table. ARCHITECTURE for OOF-FORECAST-EVIDENCE-1 recorded the honesty gap: model logits are OOF; projection is not OOF relative to decision val (val labels enter β; val/future D enter the rank sample). V1 treated decision folds as robustness/selection only and reserved holdout as first full-system eval. Brain V2 uses `eligible_for_finalization` as a real gate. Copying global projection would make that gate leak.
+
+**Decision:** At the **decision consumer**, projection is fold-local:
+
+```
+decisionTrain logits + targets → fit_temperature / build_rank_reference
+decisionVal logits             → project_forecast (existing math)
+```
+
+Do not fit β or build the rank sample on decision-val labels or on future Ats. Compile DecisionValidationPlan-C from official CatBoost OOF **logits `At[]`**, not from a pre-projected global evidence file. ExtraGapBars / HorizonEnd on that plan keep train-label horizons off the val window.
+
+Do **not** publish a global Calibration-C / Rank-C / ForecastRecipe-C / OOF-ForecastEvidence-C until DecisionResearch-C is ELIGIBLE. That final recipe is a second consumer (holdout / live / final model), not a prerequisite.
+
+Reuse `fit_temperature`, `build_rank_reference`, `project_forecast`. Native CatBoost logits door — never `read_oof_logits` / OL1C. Rank stays `D = z_UP − z_DOWN`. Do not port softmax to Go in this step.
+
+CatBoost **model** folds stay frozen; do not nest them inside decision folds. Decision-train still pools expanding-window OOF logits from several fold models (same as V1 pooling). That is accepted. Class coverage `{0,1,2}` is required on each decision-train slice (`fit_temperature` already refuses otherwise).
+
+**Rejected:**
+- Copy V1 global β/rank then “holdout will save us” — **Reason:** Brain V2 eligibility would be in-sample for the projection layer.
+- Two projection laws (global file for convenience + causal for decision) — **Reason:** two truths.
+- `ProjectionEngine` / `RawModelEvidence` / cross-fit framework — **Reason:** three existing functions; first real consumer is the decision fold loop.
+- Probability-difference rank — **Reason:** new hypothesis.
+- Reopen V1 evidence/research artifacts — **Reason:** KEEP ≠ SUPPORT; V1 freeze stands including its documented limitation.
+
+**Consequences:** Next implementation chapter is FORECAST-PROJECTION-C (CatBoost logits adapter + causal train→val law tests; no final recipe) then DECISION-RESEARCH-C (first product consumer). FINAL-FORECAST-RECIPE-C only after ELIGIBLE. V1 “do not create fold-local β/rank variants” does not apply to Brain V2.
+
+---
+
 ## MODEL-IDENTITY-LAYERS-1 (Sep 2026)
 
 **Context:** CATBOOST-BRAIN-1 (`cecc5a3`) is GREEN. Gate A pinned CatBoost 1.2.7 `get_all_params()` internals (`bayesian_matrix_reg`, `force_unit_auto_pair_weights`, `thread_count` constructor vs resolved None, float32 learning rate) into `CatBoostSpec1` because the chapter rule was “every model-affecting parameter is Spec identity.” The frozen result is deterministic. The struct mixed three different facts.
@@ -24,7 +54,7 @@ Canonical result identity binds matrix + ModelSpec + ExecutionProfile + resolved
 - Generic Brain / ModelPlugin bus now — **Reason:** still one model family; MODEL-SOCKET-1 trigger is the second consumer.
 - Treat portable-catboost-v1 as a universal CatBoost runtime — **Reason:** recertify the converter on a new CatBoost major; do not magically support 2.x.
 
-**Consequences:** Next CatBoost chapter (calibration/rank/recipe) consumes frozen logits; it does not split Spec. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity.
+**Consequences:** Do not split CatBoostSpec1 in FORECAST-PROJECTION-C. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity. Projection causality is **CAUSAL-PROJECTION-1**, not this debt.
 
 ---
 
