@@ -29,58 +29,71 @@ const (
 	CatBoostSpecExtraGapBars  = 0
 )
 
-// CatBoostSpec1 is the frozen Brain-V2 CatBoost hypothesis. Matrix digest is a run pin, not this identity.
+// CatBoostSpec1 is the frozen Brain-V2 CatBoost run contract (cecc5a3).
+// Matrix digest is a run pin, not this identity.
+//
+// Field layout is frozen. Do not split this struct for prettier layers:
+// Identity hashes catBoostSpec1Payload of these fields. MODEL-IDENTITY-LAYERS-1
+// is the later split (ModelSpec / ExecutionProfile / RunWitness) when a second
+// model family or trainer environment exists. Comments below are that map.
 type CatBoostSpec1 struct {
-	Logic                          LogicVersion
-	Family                         string
-	Loss                           string
-	ClassCount                     int
-	ClassOrder                     [3]TargetOutcome
-	NumericOnly                    bool
-	MissingValues                  string
-	StandardScaler                 string
-	ClassWeights                   string
-	AutoClassWeights               string
-	TaskType                       string
-	GrowPolicy                     string
-	BoostingType                   string
-	BootstrapType                  string
-	BaggingTemperature             float64
-	BorderCount                    int
-	FeatureBorderType              string
-	LeafEstimationMethod           string
-	LeafEstimationIterations       int
-	LeafEstimationBacktracking     string
-	RandomStrength                 float64
-	RSM                            float64
-	SamplingFrequency              string
-	ScoreFunction                  string
-	ModelShrinkRate                float64
-	ModelShrinkMode                string
-	ModelSizeReg                   float64
-	MinDataInLeaf                  int
-	PosteriorSampling              bool
-	BoostFromAverage               bool
-	UseBestModel                   bool
-	RandomScoreType                string
+	// Hypothesis: class geometry and loss.
+	Logic            LogicVersion
+	Family           string
+	Loss             string
+	ClassCount       int
+	ClassOrder       [3]TargetOutcome
+	NumericOnly      bool
+	MissingValues    string
+	StandardScaler   string
+	ClassWeights     string
+	AutoClassWeights string
+	// Hypothesis: tree-growing choices.
+	TaskType                   string
+	GrowPolicy                 string
+	BoostingType               string
+	BootstrapType              string
+	BaggingTemperature         float64
+	BorderCount                int
+	FeatureBorderType          string
+	LeafEstimationMethod       string
+	LeafEstimationIterations   int
+	LeafEstimationBacktracking string
+	RandomStrength             float64
+	RSM                        float64
+	SamplingFrequency          string
+	ScoreFunction              string
+	ModelShrinkRate            float64
+	ModelShrinkMode            string
+	ModelSizeReg               float64
+	MinDataInLeaf              int
+	PosteriorSampling          bool
+	BoostFromAverage           bool
+	UseBestModel               bool
+	RandomScoreType            string
+	// Execution / vendor-resolved pins mixed into this chapter's identity
+	// because they can change trees. Not a scientific hypothesis.
 	BayesianMatrixReg              float64
 	PenaltiesCoefficient           float64
 	BestModelMinTrees              int
 	EvalFraction                   float64
 	ForceUnitAutoPairWeights       bool
 	SparseFeaturesConflictFraction float64
-	Depth                          int
-	LearningRate                   float64
-	L2LeafReg                      float64
-	MaxIterations                  int
-	RandomSeed                     int
-	ThreadCount                    int
-	InnerSpanBars                  int
-	MinInnerTrainRows              int
-	ExtraGapBars                   int
-	IterationSelectionMetric       string
-	TieRule                        string
-	IterationCapLaw                string
+	// Hypothesis: size / rate / seed.
+	Depth         int
+	LearningRate  float64
+	L2LeafReg     float64
+	MaxIterations int
+	RandomSeed    int
+	// Execution: bit-reproducibility, not an ML hypothesis.
+	ThreadCount int
+	// Causal inner-tail / Go selection law (not CatBoost vendor knobs).
+	InnerSpanBars            int
+	MinInnerTrainRows        int
+	ExtraGapBars             int
+	IterationSelectionMetric string
+	TieRule                  string
+	IterationCapLaw          string
 }
 
 type catBoostSpec1Payload struct {

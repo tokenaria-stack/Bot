@@ -7,6 +7,27 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## MODEL-IDENTITY-LAYERS-1 (Sep 2026)
+
+**Context:** CATBOOST-BRAIN-1 (`cecc5a3`) is GREEN. Gate A pinned CatBoost 1.2.7 `get_all_params()` internals (`bayesian_matrix_reg`, `force_unit_auto_pair_weights`, `thread_count` constructor vs resolved None, float32 learning rate) into `CatBoostSpec1` because the chapter rule was “every model-affecting parameter is Spec identity.” The frozen result is deterministic. The struct mixed three different facts.
+
+**Decision:** Do **not** reopen `cecc5a3` or change CatBoostSpec1 field layout / digest. Keep comments on the frozen struct as the layer map. Before a **second** model family, a second trainer environment, or a UI model editor, split conceptually:
+
+- **ModelSpec** — intentional statistical hypothesis (loss, classes, depth, lr, L2, grow/bootstrap, inner-tail law).
+- **ExecutionProfile** — deterministic trainer conditions that can change trees (thread_count, pinned CatBoost version, seed, CPU).
+- **RunWitness** — `get_all_params()`, OS, Python/NumPy, resolved internals. Verify when they can alter canonical artifacts; do not automatically promote them to ModelSpec.
+
+Canonical result identity binds matrix + ModelSpec + ExecutionProfile + resolved causal FitPlan. Certification (double full train) is for a new ModelSpec/environment. Everyday MATCH of an already-certified tuple is one run.
+
+**Rejected:**
+- Refactor CatBoostSpec1 into three types now — **Reason:** would change ContentDigest and void MATCH of frozen OOF logits; no production bug.
+- Generic Brain / ModelPlugin bus now — **Reason:** still one model family; MODEL-SOCKET-1 trigger is the second consumer.
+- Treat portable-catboost-v1 as a universal CatBoost runtime — **Reason:** recertify the converter on a new CatBoost major; do not magically support 2.x.
+
+**Consequences:** Next CatBoost chapter (calibration/rank/recipe) consumes frozen logits; it does not split Spec. LightGBM or CatBoostSpec2 is the first legitimate consumer of the three-layer identity.
+
+---
+
 ## Brain V2 vs historical V1 (Sep 2026)
 
 **Context:** FEATURE-SPEC-2 (`0c54848`) is a new hypothesis package (H=72, U=L=2.0, signal 14, 64 features, CatBoost later). The four-column logistic world is frozen evidence. Production should not depend on it.
