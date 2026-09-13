@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STRUCTURAL-STOP-1 — 50-cross fractal invalidation (Sep 2026) ✅
+
+- v0: last confirmed `rsx_fractal_pivot` (LOW/HIGH), stop = AnchorAt bar Low/High, H=72. No ATR stop, no age cap, no buffer. Overlay consumes assignment JSON. **NO TARGET SELECTED.**
+- Archive: LONG VALID 6916 / INVALID 488 / NO_STRUCTURE 0. Median R ≈ 2.14 ATR15 (not ~4). +2 ATR ≈ 0.94R median. MFE_full_H > MFE_before_stop (stop often precedes later move).
+- HARD STOP. Human review of 30 even LONG samples (`[` / `]`). Do not freeze +2R or train CatBoost.
+
 ## CANDIDATE-GEOMETRY-1 — event-conditional path geometry (Sep 2026) ✅
 
 - Four atoms × both sides; ignition `age==0`; TV=`ConfirmedAt`; zone-exit from Tape2 RSX series. Canonical `EvaluateBarriers` on explicit 15m-close ± k,2k v. v = ATR14 15m or last-closed native 1h. H=72, R=2, k∈{1,2}.

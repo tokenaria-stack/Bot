@@ -586,6 +586,14 @@ Path truth is exported `EvaluateBarriers` (LABEL-SET-1A `firstPassage` + 1B 1m d
 
 **NO TARGET SELECTED.** HARD STOP before SETUP-TARGET-1 / LabelSet / CatBoost / ResearchWindow / combinations.
 
+### STRUCTURAL-STOP-1 (50-cross + fractal-pivot invalidation)
+
+v0 stop for RSX 50-cross ignition (`age==0`): last `rsx_fractal_pivot` LOW/HIGH with `ConfirmedAt <= At`; stop = **AnchorAt bar Low/High** (not fact `AnchorPrice` / hlc3). No buffer, no max age, no ATR fallback. `NO_STRUCTURE` / `INVALID_GEOMETRY` keep the event. H=72. Path uses `EvaluateBarriers`. Overlay paints the assignment JSON (`GET /api/research/structural-stop-1?sample=i`); it does not recompute fractals or read `rsx_settings.json`. Sample review reuses boot `seekHistoryIsland` (existing HISTORY hydrate), not a ResearchWindow. Fractal scan for the study is analysis:v2 Jurik RSX + default pivot radius 2.
+
+Human review: family accepted; TOO_TIGHT / WRONG_PIVOT. **PIVOT-DISAGREEMENT-AUDIT** B+D. **PRICE-SWING-LAW** k=2 closer than k=1. **STRUCTURAL-SIGNIFICANCE-AUDIT:** trader freezes **S0** (latest causal price k=2) as wick owner; rare S1 (e.g. 25/26) deferred. **STRUCTURAL-STOP-2:** RSX = timing; stop = S0 wick; **no 0.25 ATR yet**; no CatBoost.
+
+**NO TARGET SELECTED.**
+
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
 `forecast.GenerateOOFMatrix(tapePath, labelPath, outPath, expect, validationPlan)` opens FeatureTape + LabelSet, TOCTOU-compares full source identities, calls frozen `BuildResearchDataset`, extracts `At[]`, calls frozen `CompileValidationPlan`, and writes `ResearchRows[0:DevelopmentEndIndex)` as JSONL `oof-matrix-v1` (`AtUnit=unix_ms`). Causal seam and holdout rows are physically absent. Rows are raw `At` + ordered features + `UP_FIRST|DOWN_FIRST|TIMEOUT`. Fold indices are matrix-local ranges (not per-row tags). `ValidationPlanDigest` hashes experiment rules only. Footer `ContentDigest` hashes this realized development matrix (including compiled ranges). One slot under `research/oof/`; existing exact artifact MATCH; any difference REFUSE. No scaler, model, holdout file, or SQLite reread.
@@ -809,4 +817,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **CANDIDATE-GEOMETRY-1** complete. **NO TARGET SELECTED.** Do not mint SETUP-TARGET-1 until review. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **STRUCTURAL-STOP-1** complete. **NO TARGET SELECTED.** Human overlay review next. TARGET-RESOLUTION-2 deferred.

@@ -1831,6 +1831,16 @@
     }
   }
 
+  window.seekHistoryIsland = function seekHistoryIsland(centerTimeMs, visibleBars) {
+    return loadDashboard({
+      viewportAnchor: {
+        intent: 'HISTORY',
+        centerTimeMs,
+        visibleBars: visibleBars || 140,
+      },
+    });
+  };
+
   function safeInit(label, fn) {
     try { fn(); } catch (err) { console.error(`[Renaissance] ${label}:`, err); }
   }
@@ -1893,6 +1903,9 @@
       initLiveWebSocket();
       await loadDashboard();
       window.isAppInitialized = true;
+      if (typeof StructuralStopOverlay !== 'undefined' && StructuralStopOverlay.start) {
+        StructuralStopOverlay.start().catch(() => {});
+      }
     })().catch((err) => console.error('[Renaissance] boot async failed:', err));
   }
 

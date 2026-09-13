@@ -7,6 +7,30 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STRUCTURAL-STOP-2 S0 (Sep 2026)
+
+**Context:** STOP-1 RSX fractal was the wrong stop owner. Significance audit: trader chooses latest causal price k=2 (S0) almost everywhere; S1 only on rare washouts (25/26).
+
+**Decision:** Invalidation wick = **latest causal OHLC Williams k=2** with `ConfirmedAt ≤` 50-cross. RSX owns timing only. S1/prominence walk is deferred until statistics force a revisit. No 0.25 ATR buffer in this freeze.
+
+**Rejected:** Always S1 / min-R-from-entry walk-back — **Reason:** distance-from-entry is not significance; rare misses accepted. Last opposite 50-cross episode — **Reason:** often too short. Prominence τ scan — **Reason:** optimization.
+
+**Consequences:** Overlay `snapshot_s0.json`. Buffer and SETUP-TARGET-1 still later.
+
+---
+
+## STRUCTURAL-STOP-1 (Sep 2026)
+
+**Context:** Need a causal invalidation for 50-cross that matches visual structure, with H=72 kept.
+
+**Decision:** Last confirmed `rsx_fractal_pivot` matching side; stop from AnchorAt OHLC Low/High. Research Jurik + default radius 2, not live settings. Overlay projects assignment JSON. Missing/inverted structure are statuses, not ATR fallbacks.
+
+**Rejected:** `fact.AnchorPrice` as stop — **Reason:** that field is RSX-source (hlc3), not the wick. Age cap 65 — **Reason:** not in the trader rule. Live chart fractals as overlay source — **Reason:** radius/settings can differ from research.
+
+**Consequences:** Human review decides if v0 is “the stop I mean.” No SETUP-TARGET-1 yet.
+
+---
+
 ## CANDIDATE-GEOMETRY-1 (Sep 2026)
 
 **Context:** Need event-conditional path description without minting a ticket identity.
