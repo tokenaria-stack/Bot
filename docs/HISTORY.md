@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## CANDIDATE-GEOMETRY-1 — event-conditional path geometry (Sep 2026) ✅
+
+- Four atoms × both sides; ignition `age==0`; TV=`ConfirmedAt`; zone-exit from Tape2 RSX series. Canonical `EvaluateBarriers` on explicit 15m-close ± k,2k v. v = ATR14 15m or last-closed native 1h. H=72, R=2, k∈{1,2}.
+- MFE/MAE over full H; 1m dual-hit; no TargetSpec winner; no CatBoost. Archive two-run report bit-matched. **NO TARGET SELECTED.**
+- HARD STOP. Next: human review, then at most ONE setup-target hypothesis.
+
 ## SIGNAL-DIAGNOSTICS-C — read-only CatBoost OOF ranking autopsy (Sep 2026) ✅
 
 - Frozen logits only. `D` tails at 50/20/10/5/2/1%. `q` is β=1 readout of `D`. CatBoost OOF folds for stability. `du=1/dr=8` EU-band autopsy via existing causal projection. Predeclared RSX/TV/50-cross baselines. No model, ticket, SHAP, UI, or eligibility.

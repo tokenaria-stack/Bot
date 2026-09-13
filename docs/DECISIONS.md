@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## CANDIDATE-GEOMETRY-1 (Sep 2026)
+
+**Context:** Need event-conditional path description without minting a ticket identity.
+
+**Decision:** Export `EvaluateBarriers` (existing firstPassage + 1m finer) as the second consumer of explicit prices. 1h risk unit is last-closed native ATR14 hold-last; skip if that bar's ATR is unusable. Zone-exit from adjacent Ready Tape2 RSX. Ignition = `present==1 && age==0`.
+
+**Rejected:** Four exploratory TargetSpecs — **Reason:** TargetSpec ATR is primary 15m series; 1h ATR would be a lie. Second High/Low scanner — **Reason:** would desync LabelSet later. Auto `argmax(EV)` / class-balance accept — **Reason:** disguised optimizer.
+
+**Consequences:** Geometry does not certify a target. SETUP-TARGET-1 is a later human freeze.
+
+---
+
 ## SIGNAL-DIAGNOSTICS-C readout (Sep 2026)
 
 **Context:** Need OOF ranking autopsy without claiming 2R quality or re-running DecisionResearch.

@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**SIGNAL-DIAGNOSTICS-C ✅ MIXED** (read-only OOF autopsy). Do not start ticket geometry until discussed. Do not start FINALIZATION-C. **RESEARCH-WINDOW-1** still parked.
+**CANDIDATE-GEOMETRY-1 ✅** (descriptive; **NO TARGET SELECTED**). Do not mint SETUP-TARGET-1 / LabelSet / CatBoost until review. Do not start FINALIZATION-C. **RESEARCH-WINDOW-1** still parked.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -148,6 +148,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 6 | **CATBOOST-BRAIN-1** ✅ | Learner sees only X, y, folds. Portable dump + Go logits. | RSX/HTF/SQL/patterns inside the model |
 | 7 | **DECISION-RESEARCH-C** ✅ `018309b` | Gate A–C on frozen CatBoost OOF logits. NOT_ELIGIBLE. | Finalization; rescue via new β/grid/target |
 | 7b | **SIGNAL-DIAGNOSTICS-C** ✅ MIXED | Read-only D-tail / baseline / du=1 autopsy on paid OOF. | Ticket geometry, SHAP, new CatBoost |
+| 7c | **CANDIDATE-GEOMETRY-1** ✅ | Event path geometry; no TargetSpec. **NO TARGET SELECTED.** | SETUP-TARGET-1, CatBoost, combinations |
 | 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
@@ -237,7 +238,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **SIGNAL-DIAGNOSTICS-C MIXED**. Next discussion: candidate atoms + ticket geometry (not a fit). Do **not** start FINALIZATION-C / SHAP / FeatureSpec3. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **CANDIDATE-GEOMETRY-1** done, **NO TARGET SELECTED**. Next: review then at most one SETUP-TARGET-1. Do **not** start FINALIZATION-C / SHAP / FeatureSpec3. Holdout sealed. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

@@ -576,7 +576,15 @@ Frozen CatBoost OOF logits only (`python -m research.signaldiagnosticsc`). Ranki
 
 **Result: MIXED.** Bear D-tail improves (1% intended DOWN 61.5%, U/obs +0.54). Bull D-tail inverts in aggregate (1% intended UP 45.2%, U/obs −0.15) and fails in later OOF folds. TIMEOUT ≈ 1.8% on this sample. Predeclared fact baselines are near coin-flip. `du=1/dr=8` mass is |EU|∈[0.2,0.4) inside |rank|≥0.8.
 
-**HARD STOP.** Next discussion: candidate atoms + ticket geometry. Not FeatureSpec3, not CatBoostSpec2, not SHAP.
+**HARD STOP.** Frozen `d67f6f1`. Next: CANDIDATE-GEOMETRY-1 (done). Not FeatureSpec3, not CatBoostSpec2, not SHAP.
+
+### CANDIDATE-GEOMETRY-1 (event-conditional path geometry)
+
+Descriptive study only. Four predeclared atoms × both sides × 15m ATR14 vs last-closed native 1h ATR14 × k∈{1,2} × R=2 × H=72. Ignition is FeatureSpec2 `age==0` (not `present=1`). TV time is RSTV `ConfirmedAt`. Zone-exit is derived from consecutive Ready Tape2 `rsx_value` (prev≤30∧cur>30 / prev≥70∧cur<70), not a FeatureSpec2 column. Entry = candidate 15m close.
+
+Path truth is exported `EvaluateBarriers` (LABEL-SET-1A `firstPassage` + 1B 1m dual-hit) on **explicit prices**. No new TargetSpec. 1h ATR is hold-last by CloseTime; unusable latest 1h is skip, not stale fallback. MFE/MAE/time-to are full-H diagnostics in frozen-v units and are not ticket PnL.
+
+**NO TARGET SELECTED.** HARD STOP before SETUP-TARGET-1 / LabelSet / CatBoost / ResearchWindow / combinations.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -801,4 +809,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **SIGNAL-DIAGNOSTICS-C MIXED.** Do not start ticket geometry until discussed. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **CANDIDATE-GEOMETRY-1** complete. **NO TARGET SELECTED.** Do not mint SETUP-TARGET-1 until review. TARGET-RESOLUTION-2 deferred.
