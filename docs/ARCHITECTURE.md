@@ -568,7 +568,15 @@ No durable Calibration-C / Rank-C / Recipe-C / OOF-ForecastEvidence-C. Fold β a
 
 Canonical: logits `71213ef705dc390ee7d551695c1fc9c275044dab4625b86f8a6176fbc67c96ad` (70264). Plan-C `54f349437d3f27a73a8399dd34b6a6d7a0a7e8298d955ae7cf3d4ad771c31d38`. Research-C `5d6b4e31dd74ee440e37c9f208467b442b17d607e10f4a2878f6e834ac307f12`. `eligible_for_finalization=false` (pooled validation TotalUtility −664; 1/4 positive folds). Two complete runs bit-matched ContentDigest (including SciPy β).
 
-**HARD STOP.** Frozen `018309b`. Do not start FINALIZATION-C. Next hypothesis may trigger RESEARCH-WINDOW-1 (parked), not FeatureSpec3 / CatBoostSpec2 inside this freeze.
+**HARD STOP.** Frozen `018309b`. Do not start FINALIZATION-C from that experiment.
+
+### SIGNAL-DIAGNOSTICS-C (read-only OOF ranking autopsy)
+
+Frozen CatBoost OOF logits only (`python -m research.signaldiagnosticsc`). Ranking score is raw `D = z_UP − z_DOWN`. `q = P_UP/(P_UP+P_DOWN)` is β=1 softmax, a monotone readout of `D`, not causal β and not a second signal. Coverage knots 50/20/10/5/2/1%. Utility = Target-C always-UP / always-DOWN on the tail (U=L=2). Chronological slices = CatBoost OOF `output_*` folds, percentiles **local to each fold**. No SHAP, no UI, no new artifacts, no eligibility.
+
+**Result: MIXED.** Bear D-tail improves (1% intended DOWN 61.5%, U/obs +0.54). Bull D-tail inverts in aggregate (1% intended UP 45.2%, U/obs −0.15) and fails in later OOF folds. TIMEOUT ≈ 1.8% on this sample. Predeclared fact baselines are near coin-flip. `du=1/dr=8` mass is |EU|∈[0.2,0.4) inside |rank|≥0.8.
+
+**HARD STOP.** Next discussion: candidate atoms + ticket geometry. Not FeatureSpec3, not CatBoostSpec2, not SHAP.
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
@@ -793,4 +801,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **DECISION-RESEARCH-C** frozen (NOT_ELIGIBLE). Do not start FINALIZATION-C. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **SIGNAL-DIAGNOSTICS-C MIXED.** Do not start ticket geometry until discussed. TARGET-RESOLUTION-2 deferred.

@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SIGNAL-DIAGNOSTICS-C — read-only CatBoost OOF ranking autopsy (Sep 2026) ✅
+
+- Frozen logits only. `D` tails at 50/20/10/5/2/1%. `q` is β=1 readout of `D`. CatBoost OOF folds for stability. `du=1/dr=8` EU-band autopsy via existing causal projection. Predeclared RSX/TV/50-cross baselines. No model, ticket, SHAP, UI, or eligibility.
+- **MIXED:** bear elite ranks better than population; bull elite inverts and is fold-unstable. TIMEOUT ~2%. Isolated TV/50-cross present=1 ≈ coin-flip on Target C.
+- HARD STOP. Next: candidate-event discussion, not a new fit.
+
 ## DECISION-RESEARCH-C — causal projection + frozen DecisionContract on CatBoost OOF (Sep 2026) ✅ frozen `018309b`
 
 - Gate A: native `catboost-oof-logits-v1` door; fold-local `fit_temperature` / `build_rank_reference` / `project_forecast` on decision TRAIN; project TRAIN and VAL with the same β/rankRef.

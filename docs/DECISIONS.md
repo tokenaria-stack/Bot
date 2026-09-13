@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SIGNAL-DIAGNOSTICS-C readout (Sep 2026)
+
+**Context:** Need OOF ranking autopsy without claiming 2R quality or re-running DecisionResearch.
+
+**Decision:** Rank by raw `D`. Publish `q` only as β=1 softmax (same order as `D`). Stability uses CatBoost OOF output folds, percentiles inside each fold. `du/dr` autopsy reuses Decision-Research-C fold-local projection. Fact baselines predeclared (RSX value/delta, TV present, 50-cross present) — binaries as present=1, not fake 1% tails.
+
+**Rejected:** Causal-β `q` on a global D-tail — **Reason:** fold-local β would make `q` a different ranking than `D`. SHAP/UI — **Reason:** mixed/inverted bull tail is not worth explaining yet.
+
+**Consequences:** MIXED is not eligibility. Meta-label events remain allowed even if every-bar D ranking is weak.
+
+---
+
 ## DECISION-RESEARCH-C identity (Sep 2026)
 
 **Context:** V1 `decision-validation-plan-v1` hashes `source.evidence_content_digest`. V1 `decision-research-v1` hashes `source.oof_forecast_evidence_content_digest`. This chapter has no global ForecastEvidence-C. V1 RankSpec `reference_population=all_rows_of_source_oof_logits_v1` would lie if fold-local train is the sample. V1 `ResearchDecisionValidationPlan` copies TargetH from H=24. `decisionresearch.Run` assumes one evidence array for all folds; nested trains overlap so one row cannot carry one β.
