@@ -8,10 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TP-STOP-INFORMATION-FORK-1 — locked binary probe (Sep 2026) ✅
+
+- Spec `888c103b…` frozen before audit. Inner resolved train ≥1145. N*=65/78/155/83. Python≈Go binary parity passed.
+- Pooled binary OOF logloss 0.632 vs prior 0.631 (Δ −0.001). Only 2023 beats the prior. Verdict **FACT_GAP_SUPPORTED**. Next: TP-STOP-FACT-GAP-1.
+
 ## SETUP-PROBABILITY-DECOMPOSITION-1 — a vs q (Sep 2026) ✅
 
 - Frozen OOF `72bb757e…`. a ranks TIMEOUT out 4/4 (STRONG_RESOLUTION). q resolved-only 50% TP rate 32.5%→34.0%; pooled binary logloss **loses** to causal resolved prior (−0.004).
-- Spearman ρ(a,q)≈0.41. q_undefined=0. Verdict **FLAT_Q**. Result `9c068648…`. HARD STOP. Next: TP-vs-STOP FACT-GAP-1.
+- Spearman ρ(a,q)≈0.41. q_undefined=0. Verdict **FLAT_Q**. Result `9c068648…`. HARD STOP. Consumed by TP-STOP-INFORMATION-FORK-1.
 
 ## SETUP-QUALITY-CURVE-1 — fold-local P(TP) ranking (Sep 2026) ✅
 

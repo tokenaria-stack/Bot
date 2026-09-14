@@ -618,7 +618,11 @@ Read-only ranking of frozen `brain3-oof-logits-v1` by fold-local `P(TP_FIRST)`. 
 
 ### SETUP-PROBABILITY-DECOMPOSITION-1 ✅
 
-Read-only `a=1-P(TIMEOUT)`, `q=P(TP)/a` on frozen OOF. `a` is a strong resolution ranker (TIMEOUT down 4/4). `q` does not beat a causal resolved-class prior in binary logloss (**FLAT_Q**). Spearman ρ(a,q)≈0.41 (not collinear). Next: **TP-vs-STOP FACT-GAP-1**. Do not collapse `a*q`. Do not add a second ignition yet.
+Read-only `a=1-P(TIMEOUT)`, `q=P(TP)/a` on frozen OOF. `a` is a strong resolution ranker. `q` is **FLAT_Q**.
+
+### TP-STOP-INFORMATION-FORK-1 ✅
+
+Locked `TPStopBinaryProbeSpec1` digested **before** the audit. Resolved-only binary Logloss CatBoost on the same 66 facts. Portable evaluator gained a real 2-class consumer (margin + sigmoid; 3-class tests remain green). Audit is descriptive only. Probe pooled Δ vs causal resolved prior **−0.001**. Verdict **FACT_GAP_SUPPORTED**. Next: **TP-STOP-FACT-GAP-1** (target-side room to +2R), not CatBoost retune, not TV-div ignition.
 
 ### SETUP-DATASET-1 (DEV join only) ✅
 

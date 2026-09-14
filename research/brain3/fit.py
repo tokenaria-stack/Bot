@@ -1,4 +1,4 @@
-"""Numeric CatBoost fitter. No folds, classes-as-names, or trading semantics."""
+"""Numeric CatBoost fitter. No folds, class names, or trading semantics."""
 
 from __future__ import annotations
 
@@ -29,6 +29,10 @@ def _load_xy(x_path: str, y_path: str):
     return X, y
 
 
+def _loss(params: Dict[str, Any]) -> str:
+    return str(params.get("loss_function") or params.get("loss") or "")
+
+
 def fit(plan: Dict[str, Any]) -> None:
     X, y = _load_xy(plan["x_path"], plan["y_path"])
     params = dict(plan["catboost_params"])
@@ -40,23 +44,33 @@ def fit(plan: Dict[str, Any]) -> None:
     names = [str(n) for n in plan["feature_names"]]
     if len(names) != X.shape[1]:
         raise RuntimeError("brain3.fit: width")
+    loss = _loss(params)
     model = CatBoostClassifier(**params)
     model.fit(Pool(X, y, feature_names=names))
     classes = [int(c) for c in model.classes_]
-    if classes != [0, 1, 2]:
-        raise RuntimeError("brain3.fit: classes != [0,1,2]")
+    if loss == "Logloss":
+        if classes != [0, 1]:
+            raise RuntimeError("brain3.fit: binary classes != [0,1]")
+        if int(y.max()) > 1:
+            raise RuntimeError("brain3.fit: binary y has class > 1")
+    elif loss == "MultiClass":
+        if classes != [0, 1, 2]:
+            raise RuntimeError("brain3.fit: classes != [0,1,2]")
+    else:
+        raise RuntimeError("brain3.fit: unknown loss %s" % loss)
     if int(model.tree_count_) != int(plan["iterations"]):
         raise RuntimeError("brain3.fit: tree_count")
     model.save_model(plan["out_json"], format="json")
     wit = {
         "tree_count": int(model.tree_count_),
         "classes": classes,
+        "loss": loss,
         "catboost_version": getattr(model, "__module__", "catboost"),
         "get_params": model.get_params(),
     }
     with open(plan["out_witness"], "w", encoding="utf-8") as f:
         json.dump(wit, f, default=str)
-    print("brain3.fit ok trees=%d" % model.tree_count_, file=sys.stderr)
+    print("brain3.fit ok trees=%d loss=%s" % (model.tree_count_, loss), file=sys.stderr)
 
 
 def predict(plan: Dict[str, Any]) -> None:
@@ -65,9 +79,14 @@ def predict(plan: Dict[str, Any]) -> None:
     model.load_model(plan["model_json"], format="json")
     raw = model.predict(X, prediction_type="RawFormulaVal")
     arr = np.asarray(raw, dtype=np.float64)
+    proba = None
     if arr.ndim == 1:
-        raise RuntimeError("brain3.fit: expected multiclass logits")
-    out = arr.tolist()
+        proba = np.asarray(model.predict_proba(X), dtype=np.float64)
+        if proba.ndim != 2 or proba.shape[1] != 2:
+            raise RuntimeError("brain3.fit: binary predict_proba shape")
+        out = {"raw": arr.tolist(), "p1": proba[:, 1].tolist()}
+    else:
+        out = arr.tolist()
     with open(plan["out_pred"], "w", encoding="utf-8") as f:
         json.dump(out, f)
 

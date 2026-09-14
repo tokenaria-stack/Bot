@@ -51,7 +51,19 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Rejected:** Score shopping / binary CatBoost / TV-div ignition / opening 2026 — **Reason:** this chapter diagnoses the existing simplex. Treat tiny resolved-TP ticks as BROAD_Q — **Reason:** pooled q logloss loses to the causal resolved prior.
 
-**Consequences:** a = STRONG_RESOLUTION_RANKING. q = FLAT_Q. Result digest `9c068648164d78e4b9fdbb26dbf84c469e0dadc7bde2ec7e4971880a7fd46c04`. Next is TP-vs-STOP FACT-GAP-1. HARD STOP.
+**Consequences:** a = STRONG_RESOLUTION_RANKING. q = FLAT_Q. Result digest `9c068648164d78e4b9fdbb26dbf84c469e0dadc7bde2ec7e4971880a7fd46c04`. Next was TP-STOP-INFORMATION-FORK-1 (audit + locked binary probe). HARD STOP.
+
+---
+
+## TP-STOP-INFORMATION-FORK-1 (Sep 2026)
+
+**Context:** Flat 3-class q does not prove the 66 facts are empty on TP-vs-STOP. Need to separate an objective/readout gap from a practical fact gap.
+
+**Decision:** Freeze `TPStopBinaryProbeSpec1` first (resolved-only, Logloss, Spec1 knobs, min 1000 resolved inner train). Preflight all four causal tails. Then a signed rank-biserial audit that cannot mutate the spec. Then one binary OOF vs outer-train resolved prior. Portable CatBoost gained binary margin+sigmoid as the first 2-class consumer.
+
+**Rejected:** Audit-driven feature subsets / CatBoost grid / shrinking minTrain / 2026 / a*q / second ignition — **Reason:** would mix questions. Call OBJECTIVE_GAP from univariate same-sign counts — **Reason:** the probe owns the proof.
+
+**Consequences:** Spec digest `888c103bfcaaa87897ba6274f52e2751f4e8264f091bf4d56f2aaf3e9882661f`. Binary OOF digest `e2a61f574c3b409100b6b20153b71ada2125e4d660827d9a9b654225f53b6a11`. Verdict **FACT_GAP_SUPPORTED**. Next is TP-STOP-FACT-GAP-1 (target-side structural room). HARD STOP.
 
 ---
 

@@ -13,10 +13,9 @@ const (
 	MaxWidthSafety = 4096
 	MaxTreesSafety = 4096
 	MaxDepthSafety = 16
-	portableMaxCls = 3
 )
 
-// Model is the one Go-owned SymmetricTree numeric MultiClass evaluator.
+// Model is the one Go-owned SymmetricTree evaluator (3-class or binary Logloss).
 type Model struct {
 	Format     string
 	Names      []string
@@ -73,7 +72,7 @@ func ConvertVendor(raw []byte, featureNames []string, classCount, maxTrees, maxD
 	if inputWidth == 0 || inputWidth > MaxWidthSafety {
 		return z, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL feature width")
 	}
-	if classCount != portableMaxCls {
+	if classCount != 2 && classCount != 3 {
 		return z, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL class count")
 	}
 	if maxTrees <= 0 || maxTrees > MaxTreesSafety || maxDepth <= 0 || maxDepth > MaxDepthSafety {
@@ -116,7 +115,8 @@ func ConvertVendor(raw []byte, featureNames []string, classCount, maxTrees, maxD
 			return z, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL tree %d depth %d", ti, d)
 		}
 		nleaf := 1 << d
-		if len(tr.LeafValues) != nleaf*classCount {
+		wantLeaf := nleaf * outputDim(classCount)
+		if len(tr.LeafValues) != wantLeaf {
 			return z, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL tree %d leaf size %d", ti, len(tr.LeafValues))
 		}
 		splits := make([]Split, d)
@@ -150,6 +150,13 @@ func ConvertVendor(raw []byte, featureNames []string, classCount, maxTrees, maxD
 	}, nil
 }
 
+func outputDim(classCount int) int {
+	if classCount == 2 {
+		return 1
+	}
+	return classCount
+}
+
 func parseScaleBias(raw json.RawMessage, classCount int) (float64, [3]float64, error) {
 	var bias [3]float64
 	if len(raw) == 0 || string(raw) == "null" {
@@ -175,12 +182,21 @@ func parseScaleBias(raw json.RawMessage, classCount int) (float64, [3]float64, e
 		if err2 := json.Unmarshal(pair[1], &s); err2 != nil {
 			return 0, bias, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL bias")
 		}
-		b = []float64{s, s, s}
+		if classCount == 2 {
+			b = []float64{s}
+		} else {
+			b = []float64{s, s, s}
+		}
 	}
-	if len(b) != classCount {
+	need := outputDim(classCount)
+	if classCount == 3 && len(b) != 3 {
 		return 0, bias, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL bias len")
 	}
-	for i := 0; i < classCount; i++ {
+	if classCount == 2 && len(b) != 1 {
+		return 0, bias, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL binary bias len")
+	}
+	_ = need
+	for i := 0; i < len(b) && i < 3; i++ {
 		if math.IsNaN(b[i]) || math.IsInf(b[i], 0) {
 			return 0, bias, fmt.Errorf("ml: UNSUPPORTED_VENDOR_MODEL nonfinite bias")
 		}
@@ -193,7 +209,7 @@ func (m Model) Validate(expectNames []string, classCount, maxTrees, maxDepth int
 	if m.Format != PortableCatBoostV1 {
 		return fmt.Errorf("ml: portable format %q", m.Format)
 	}
-	if m.ClassCount != classCount || classCount != 3 {
+	if m.ClassCount != classCount || (classCount != 2 && classCount != 3) {
 		return fmt.Errorf("ml: CLASS_ORDER_MISMATCH portable classes")
 	}
 	if len(m.Names) != len(expectNames) {
@@ -223,7 +239,7 @@ func (m Model) Validate(expectNames []string, classCount, maxTrees, maxDepth int
 		if len(tr.Splits) > maxDepth || len(tr.Splits) == 0 {
 			return fmt.Errorf("ml: portable depth")
 		}
-		if len(tr.Leaves) != (1<<len(tr.Splits))*classCount {
+		if len(tr.Leaves) != (1<<len(tr.Splits))*outputDim(classCount) {
 			return fmt.Errorf("ml: portable leaf size")
 		}
 		for _, sp := range tr.Splits {
@@ -272,6 +288,9 @@ func FloatGt(x, border float64) bool {
 
 func (m Model) logitsPrefix(x []float64, nTrees int) ([3]float64, error) {
 	var z [3]float64
+	if m.ClassCount != 3 {
+		return z, fmt.Errorf("ml: Logits requires classCount=3")
+	}
 	if len(x) != len(m.Names) {
 		return z, fmt.Errorf("ml: portable eval width")
 	}
@@ -289,7 +308,7 @@ func (m Model) logitsPrefix(x []float64, nTrees int) ([3]float64, error) {
 				leaf |= 1 << i
 			}
 		}
-		off := leaf * m.ClassCount
+		off := leaf * 3
 		for c := 0; c < 3; c++ {
 			z[c] += m.Scale * tr.Leaves[off+c]
 		}
@@ -302,12 +321,65 @@ func (m Model) logitsPrefix(x []float64, nTrees int) ([3]float64, error) {
 	return z, nil
 }
 
+func (m Model) marginPrefix(x []float64, nTrees int) (float64, error) {
+	if m.ClassCount != 2 {
+		return 0, fmt.Errorf("ml: Margin requires classCount=2")
+	}
+	if len(x) != len(m.Names) {
+		return 0, fmt.Errorf("ml: portable eval width")
+	}
+	if nTrees < 0 || nTrees > len(m.Trees) {
+		return 0, fmt.Errorf("ml: portable prefix")
+	}
+	z := m.Bias[0]
+	for ti := 0; ti < nTrees; ti++ {
+		tr := m.Trees[ti]
+		leaf := 0
+		for i, sp := range tr.Splits {
+			if FloatGt(x[sp.Feature], sp.Border) {
+				leaf |= 1 << i
+			}
+		}
+		z += m.Scale * tr.Leaves[leaf]
+	}
+	if math.IsNaN(z) || math.IsInf(z, 0) {
+		return 0, fmt.Errorf("ml: NONFINITE_LOGITS")
+	}
+	return z, nil
+}
+
 func (m Model) Logits(x []float64) ([3]float64, error) {
 	return m.logitsPrefix(x, len(m.Trees))
 }
 
 func (m Model) PrefixLogits(x []float64, n int) ([3]float64, error) {
 	return m.logitsPrefix(x, n)
+}
+
+func (m Model) Margin(x []float64) (float64, error) {
+	return m.marginPrefix(x, len(m.Trees))
+}
+
+func (m Model) PrefixMargin(x []float64, n int) (float64, error) {
+	return m.marginPrefix(x, n)
+}
+
+func Sigmoid(z float64) float64 {
+	if z > 40 {
+		return 1
+	}
+	if z < -40 {
+		return 0
+	}
+	return 1 / (1 + math.Exp(-z))
+}
+
+func (m Model) ProbTP(x []float64) (float64, error) {
+	z, err := m.Margin(x)
+	if err != nil {
+		return 0, err
+	}
+	return Sigmoid(z), nil
 }
 
 func logSumExp3(z [3]float64) float64 {
@@ -341,6 +413,9 @@ func Softmax3(z [3]float64) [3]float64 {
 }
 
 func PrefixMeanLogLoss(m Model, xs [][]float64, ys []int) ([]float64, error) {
+	if m.ClassCount == 2 {
+		return prefixMeanBinaryLogLoss(m, xs, ys)
+	}
 	t := len(m.Trees)
 	if t == 0 {
 		return nil, fmt.Errorf("ml: empty portable forest")
@@ -363,7 +438,7 @@ func PrefixMeanLogLoss(m Model, xs [][]float64, ys []int) ([]float64, error) {
 					leaf |= 1 << si
 				}
 			}
-			off := leaf * m.ClassCount
+			off := leaf * 3
 			for c := 0; c < 3; c++ {
 				z[c] += m.Scale * tr.Leaves[off+c]
 			}
@@ -383,6 +458,72 @@ func PrefixMeanLogLoss(m Model, xs [][]float64, ys []int) ([]float64, error) {
 		}
 	}
 	return out, nil
+}
+
+func prefixMeanBinaryLogLoss(m Model, xs [][]float64, ys []int) ([]float64, error) {
+	t := len(m.Trees)
+	if t == 0 {
+		return nil, fmt.Errorf("ml: empty portable forest")
+	}
+	if len(xs) == 0 || len(xs) != len(ys) {
+		return nil, fmt.Errorf("ml: prefix loss population")
+	}
+	sum := make([]float64, t)
+	for i, x := range xs {
+		if ys[i] != 0 && ys[i] != 1 {
+			return nil, fmt.Errorf("ml: binary y=%d", ys[i])
+		}
+		z := m.Bias[0]
+		for ti := 0; ti < t; ti++ {
+			tr := m.Trees[ti]
+			leaf := 0
+			for si, sp := range tr.Splits {
+				if FloatGt(x[sp.Feature], sp.Border) {
+					leaf |= 1 << si
+				}
+			}
+			z += m.Scale * tr.Leaves[leaf]
+			p := Sigmoid(z)
+			row, err := BinaryLogLoss(p, ys[i])
+			if err != nil {
+				return nil, err
+			}
+			sum[ti] += row
+		}
+	}
+	n := float64(len(xs))
+	out := make([]float64, t)
+	for i := range sum {
+		out[i] = sum[i] / n
+		if math.IsNaN(out[i]) || math.IsInf(out[i], 0) {
+			return nil, fmt.Errorf("ml: NONFINITE_LOGITS mean loss")
+		}
+	}
+	return out, nil
+}
+
+const binaryLogFloor = 1e-15
+
+func BinaryLogLoss(p float64, y int) (float64, error) {
+	if y != 0 && y != 1 {
+		return 0, fmt.Errorf("ml: binary y=%d", y)
+	}
+	if p < binaryLogFloor {
+		p = binaryLogFloor
+	}
+	if p > 1-binaryLogFloor {
+		p = 1 - binaryLogFloor
+	}
+	var v float64
+	if y == 1 {
+		v = -math.Log(p)
+	} else {
+		v = -math.Log(1 - p)
+	}
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("ml: NONFINITE_LOGITS logloss")
+	}
+	return v, nil
 }
 
 func SelectTreeCount(loss []float64, maxIterations int) (int, error) {
