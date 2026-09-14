@@ -39,6 +39,7 @@ research/decision_research/
 research/structuralstop1/
 research/setuplabels/
 research/setupdataset/
+research/brain3/
 research/modelfit/.venv/
 *.test
 *.exe

@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## BRAIN3-FOUNDATION-1 (Sep 2026)
+
+**Context:** Brain V1/V2 are frozen prototypes. A MetaLabel CatBoost on SETUP-DATASET-1 must not become a Frankenstein (`setupMode`, UP=TP, width=64). Research must not re-certify CatBoost vendor internals before the hypothesis flies.
+
+**Decision:** New `brain3` package (no V2 orchestration imports). Numerical portable CatBoost moved to `ml` (one implementation; V2 wraps it). Foundation loads SETUP-DATASET-1 + SETUP-VALIDATION-1, resolves four outer folds by exact compiled `At`, refuses holdout. Width invariant is `FeatureIndex < inputWidth`. Feature-65 fixture required. No fitter, no inner tail spec, no OOF artifacts.
+
+**Rejected:** Transform CatBoostSpec1 in place — **Reason:** compatibility mode. Copy portable math — **Reason:** two walkers. Python fitter / inner 365d in this chapter — **Reason:** no consumer / that is MetaLabelSpec. Hash `get_all_params()` into Brain 3 — **Reason:** Brain 2 ceremony.
+
+**Consequences:** HARD STOP. `BRAIN3-METALABEL-1` owns the first hypothesis. V2 runtime stays until a later delete chapter.
+
+---
+
 ## SETUP-DATASET-1 (Sep 2026)
 
 **Context:** Model-eligible LONG 50-cross rows need FeatureSpec2 context plus two setup-local facts, without a second S0/stop engine and without opening 2026.

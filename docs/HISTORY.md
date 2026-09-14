@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## BRAIN3-FOUNDATION-1 — isolated learner socket (Sep 2026) ✅
+
+- `brain3` consumes SETUP-DATASET-1 (6644×66) + SETUP-VALIDATION-1 compiled folds. Schema TP/STOP/TIMEOUT. OOF val 1083/1084/1042/1018; train-only 2417; holdout 0.
+- Portable CatBoost eval moved to `ml` (width-generic). Feature-65 fixture. No archive fit.
+- HARD STOP. Next: BRAIN3-METALABEL-1.
+
 ## SETUP-DATASET-1 — DEV join matrix (Sep 2026) ✅
 
 - Exact At join: FeatureTape2[64] + copied STOP-2 `ROverATR15` + `AnchorAgeBars`. Width 66. Wall and validation digests embedded. `MaxCandidateAt < 2026-01-01` hard fail.
