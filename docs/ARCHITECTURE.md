@@ -610,7 +610,11 @@ Isolated `brain3` package: certified dataset + compiled validation only. Explici
 
 ### BRAIN3-METALABEL-1 ✅
 
-One disposable hypothesis (`MetaLabelCatBoostSpec1`) on frozen SETUP-DATASET-1 / SETUP-VALIDATION-1. Causal inner tails via harvested `ml.SplitCausalTail` (span 35040, min inner train 1000, H=72). Tiny `research/brain3/fit.py` fits only. Official OOF is portable Go logits (`brain3-oof-logits-v1`, 4227 rows). Tree count N* from inner validation only. One causal-prior logloss benchmark. No coverage curves, no 2026, no final model. Next: `SETUP-QUALITY-CURVE-1` (read-only OOF).
+One disposable hypothesis (`MetaLabelCatBoostSpec1`) on frozen SETUP-DATASET-1 / SETUP-VALIDATION-1. Causal inner tails via harvested `ml.SplitCausalTail` (span 35040, min inner train 1000, H=72). Tiny `research/brain3/fit.py` fits only. Official OOF is portable Go logits (`brain3-oof-logits-v1`, 4227 rows). Tree count N* from inner validation only. One causal-prior logloss benchmark. No coverage curves, no 2026, no final model.
+
+### SETUP-QUALITY-CURVE-1 ✅
+
+Read-only ranking of frozen `brain3-oof-logits-v1` by fold-local `P(TP_FIRST)`. Coverage grid 100/75/50/30/20/10/5. Per-fold tables own the claim; pooled is concatenated selected rows. Verdict **TIMEOUT_FILTER_RANKING**: TP% rises 4/4 in the 50–20% band, STOP% does not fall, TIMEOUT is stripped. Not a strategy. No 2026. Next: inspect facts / TP-vs-STOP information — do not add a second ignition as if this were a STOP-reducing scorer.
 
 ### SETUP-DATASET-1 (DEV join only) ✅
 

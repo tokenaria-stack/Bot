@@ -334,6 +334,12 @@ func MulticlassLogLoss(z [3]float64, y int) (float64, error) {
 	return v, nil
 }
 
+// Softmax3 is a numerically stable 3-class softmax.
+func Softmax3(z [3]float64) [3]float64 {
+	lse := logSumExp3(z)
+	return [3]float64{math.Exp(z[0] - lse), math.Exp(z[1] - lse), math.Exp(z[2] - lse)}
+}
+
 func PrefixMeanLogLoss(m Model, xs [][]float64, ys []int) ([]float64, error) {
 	t := len(m.Trees)
 	if t == 0 {

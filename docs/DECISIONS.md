@@ -31,6 +31,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SETUP-QUALITY-CURVE-1 (Sep 2026)
+
+**Context:** METALABEL-1 beat a causal prior on 3-class logloss. That does not prove P(TP_FIRST) orders tickets toward +2R and away from STOP.
+
+**Decision:** Read-only analysis of the frozen OOF digest. Score = stable softmax P(TP_FIRST). Rank inside each fold (score desc, At asc). Coverage = ceil(c×N), 100% = N. Per-fold census is the claim; pooled concatenates selected rows. Report TIMEOUT in the main table. Global raw-P sort omitted. Descriptive verdict, including TIMEOUT_FILTER_RANKING when TP rises because TIMEOUT is filtered and STOP does not fall.
+
+**Rejected:** Score shopping / calibration / PnL / coverage search / 2026 — **Reason:** this chapter only maps ranking. Force one of GPT’s four labels — **Reason:** they assumed STOP would fall with TP; that did not happen.
+
+**Consequences:** HARD STOP. Result digest `beb5d25e1a83baa65fac2ab57ea793f11a2dd023ff231a6a8b1025358e45290d`. Verdict TIMEOUT_FILTER_RANKING. Do not reopen stop/H/+2R/wall. Do not treat this as a strategy scorer. Do not start CandidateSpec / second ignition on the assumption of BROAD_STABLE_RANKING.
+
+---
+
 ## SETUP-DATASET-1 (Sep 2026)
 
 **Context:** Model-eligible LONG 50-cross rows need FeatureSpec2 context plus two setup-local facts, without a second S0/stop engine and without opening 2026.

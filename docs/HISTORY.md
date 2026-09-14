@@ -8,12 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SETUP-QUALITY-CURVE-1 — fold-local P(TP) ranking (Sep 2026) ✅
+
+- Frozen OOF `72bb757e…` (4227). Score P(TP_FIRST); fold-local top-X%; ceil coverage.
+- Product region: TP better 4/4 at 50/30/20; STOP lower 0/4 at 50/30; TIMEOUT lower 4/4. Pooled 100% TP/STOP/TO = 27.5/57.1/15.4%; 50% = 32.0/62.2/5.9%.
+- Verdict **TIMEOUT_FILTER_RANKING**. Result digest `beb5d25e…`. HARD STOP. Not a strategy. Do not reopen geometry.
+
 ## BRAIN3-METALABEL-1 — Spec1 causal OOF (Sep 2026) ✅
 
 - Hypothesis `MetaLabelCatBoostSpec1` on SETUP-DATASET-1 (66) + SETUP-VALIDATION-1. Inner tails compiled (min inner train 1355). N* = 258/231/328/259 (not the 1000 cap).
 - Official `brain3-oof-logits-v1` 4227 rows. Dataset digest `a87f4d1a…`. Spec digest `df6b9856…`. OOF digest `72bb757e…`.
 - Pooled OOF logloss 0.882 vs causal prior 0.963 (Δ 0.081). Fold-0 train n=2413 (compiled), not the 2417 never-val prefix.
-- HARD STOP. Next: SETUP-QUALITY-CURVE-1 (read-only). Do not retune CatBoost.
+- HARD STOP. Consumed by SETUP-QUALITY-CURVE-1. Do not retune CatBoost.
 
 ## BRAIN3-FOUNDATION-1 — isolated learner socket (Sep 2026) ✅
 
