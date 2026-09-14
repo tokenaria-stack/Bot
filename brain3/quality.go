@@ -115,14 +115,38 @@ func ScorePTP(z [3]float64) float64 {
 }
 
 func rankFold(rows []OOFRow) []OOFRow {
-	out := append([]OOFRow(nil), rows...)
-	sort.SliceStable(out, func(i, j int) bool {
-		si, sj := ScorePTP(out[i].Logit), ScorePTP(out[j].Logit)
-		if si != sj {
-			return si > sj
-		}
-		return out[i].At < out[j].At
+	return rankFoldBy(rows, func(r OOFRow) (float64, bool) {
+		return ScorePTP(r.Logit), true
 	})
+}
+
+func rankFoldBy(rows []OOFRow, score func(OOFRow) (float64, bool)) []OOFRow {
+	type keyed struct {
+		r       OOFRow
+		s       float64
+		defined bool
+	}
+	ks := make([]keyed, len(rows))
+	for i, r := range rows {
+		s, ok := score(r)
+		ks[i] = keyed{r: r, s: s, defined: ok}
+	}
+	sort.SliceStable(ks, func(i, j int) bool {
+		if ks[i].defined != ks[j].defined {
+			return ks[i].defined
+		}
+		if !ks[i].defined {
+			return ks[i].r.At < ks[j].r.At
+		}
+		if ks[i].s != ks[j].s {
+			return ks[i].s > ks[j].s
+		}
+		return ks[i].r.At < ks[j].r.At
+	})
+	out := make([]OOFRow, len(ks))
+	for i := range ks {
+		out[i] = ks[i].r
+	}
 	return out
 }
 

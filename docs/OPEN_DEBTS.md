@@ -138,7 +138,9 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **BRAIN3-METALABEL-1 ✅.** Spec1 one archive OOF (4227).
 
-**SETUP-QUALITY-CURVE-1 ✅.** Fold-local P(TP) curves. Verdict **TIMEOUT_FILTER_RANKING**. HARD STOP. Next: inspect facts / TP-vs-STOP information. Do not reopen stop/H/+2R/wall. Do not add a second ignition as if ranking were STOP-reducing.
+**SETUP-QUALITY-CURVE-1 ✅.** Fold-local P(TP) curves. TIMEOUT_FILTER_RANKING.
+
+**SETUP-PROBABILITY-DECOMPOSITION-1 ✅.** a strong / q FLAT vs causal resolved prior. HARD STOP. Next **TP-vs-STOP FACT-GAP-1**. Do not reopen stop/H/+2R/wall. Do not second-ignition yet. Do not collapse a*q.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -161,6 +163,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 7i | **BRAIN3-FOUNDATION-1** ✅ | Isolated learner package; outer-fold join; width-generic portable. | Archive CatBoost, Python fitter, inner tails |
 | 7j | **BRAIN3-METALABEL-1** ✅ | Spec1 causal CatBoost OOF + prior logloss. | Quality curves, 2026, final model, CatBoost grid |
 | 7k | **SETUP-QUALITY-CURVE-1** ✅ | Fold-local P(TP) coverage tables. TIMEOUT_FILTER_RANKING. | Strategy, 2026, second ignition, CandidateSpec |
+| 7l | **SETUP-PROBABILITY-DECOMPOSITION-1** ✅ | a vs q on frozen OOF. a strong, q FLAT. | Features, CatBoost, TV-div ignition |
 | 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
@@ -250,7 +253,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain 3** | **QUALITY-CURVE-1 done (TIMEOUT_FILTER).** HARD STOP. Inspect facts/TP-vs-STOP; do not reopen geometry. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain 3** | **DECOMP-1 done (a strong, q FLAT).** HARD STOP. Next TP-vs-STOP FACT-GAP-1. Do not reopen geometry. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

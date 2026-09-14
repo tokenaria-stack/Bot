@@ -614,7 +614,11 @@ One disposable hypothesis (`MetaLabelCatBoostSpec1`) on frozen SETUP-DATASET-1 /
 
 ### SETUP-QUALITY-CURVE-1 ✅
 
-Read-only ranking of frozen `brain3-oof-logits-v1` by fold-local `P(TP_FIRST)`. Coverage grid 100/75/50/30/20/10/5. Per-fold tables own the claim; pooled is concatenated selected rows. Verdict **TIMEOUT_FILTER_RANKING**: TP% rises 4/4 in the 50–20% band, STOP% does not fall, TIMEOUT is stripped. Not a strategy. No 2026. Next: inspect facts / TP-vs-STOP information — do not add a second ignition as if this were a STOP-reducing scorer.
+Read-only ranking of frozen `brain3-oof-logits-v1` by fold-local `P(TP_FIRST)`. Coverage grid 100/75/50/30/20/10/5. Per-fold tables own the claim; pooled is concatenated selected rows. Verdict **TIMEOUT_FILTER_RANKING**: TP% rises 4/4 in the 50–20% band, STOP% does not fall, TIMEOUT is stripped. Not a strategy. No 2026.
+
+### SETUP-PROBABILITY-DECOMPOSITION-1 ✅
+
+Read-only `a=1-P(TIMEOUT)`, `q=P(TP)/a` on frozen OOF. `a` is a strong resolution ranker (TIMEOUT down 4/4). `q` does not beat a causal resolved-class prior in binary logloss (**FLAT_Q**). Spearman ρ(a,q)≈0.41 (not collinear). Next: **TP-vs-STOP FACT-GAP-1**. Do not collapse `a*q`. Do not add a second ignition yet.
 
 ### SETUP-DATASET-1 (DEV join only) ✅
 

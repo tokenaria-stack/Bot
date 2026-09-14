@@ -8,11 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SETUP-PROBABILITY-DECOMPOSITION-1 — a vs q (Sep 2026) ✅
+
+- Frozen OOF `72bb757e…`. a ranks TIMEOUT out 4/4 (STRONG_RESOLUTION). q resolved-only 50% TP rate 32.5%→34.0%; pooled binary logloss **loses** to causal resolved prior (−0.004).
+- Spearman ρ(a,q)≈0.41. q_undefined=0. Verdict **FLAT_Q**. Result `9c068648…`. HARD STOP. Next: TP-vs-STOP FACT-GAP-1.
+
 ## SETUP-QUALITY-CURVE-1 — fold-local P(TP) ranking (Sep 2026) ✅
 
 - Frozen OOF `72bb757e…` (4227). Score P(TP_FIRST); fold-local top-X%; ceil coverage.
 - Product region: TP better 4/4 at 50/30/20; STOP lower 0/4 at 50/30; TIMEOUT lower 4/4. Pooled 100% TP/STOP/TO = 27.5/57.1/15.4%; 50% = 32.0/62.2/5.9%.
-- Verdict **TIMEOUT_FILTER_RANKING**. Result digest `beb5d25e…`. HARD STOP. Not a strategy. Do not reopen geometry.
+- Verdict **TIMEOUT_FILTER_RANKING**. Result digest `beb5d25e…`. HARD STOP. Consumed by SETUP-PROBABILITY-DECOMPOSITION-1.
 
 ## BRAIN3-METALABEL-1 — Spec1 causal OOF (Sep 2026) ✅
 

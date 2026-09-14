@@ -43,6 +43,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SETUP-PROBABILITY-DECOMPOSITION-1 (Sep 2026)
+
+**Context:** P(TP) mixed resolution vs winner. Need to know if q already lives in the frozen logits.
+
+**Decision:** Read-only factorization a=1−P(TIMEOUT), q=P(TP)/a. Fold-local coverage for a (all rows) and q (resolved-only primary). Binary logloss of q vs outer-train TP/(TP+STOP) prior on resolved val. Spearman ρ(a,q). No scalar collapse.
+
+**Rejected:** Score shopping / binary CatBoost / TV-div ignition / opening 2026 — **Reason:** this chapter diagnoses the existing simplex. Treat tiny resolved-TP ticks as BROAD_Q — **Reason:** pooled q logloss loses to the causal resolved prior.
+
+**Consequences:** a = STRONG_RESOLUTION_RANKING. q = FLAT_Q. Result digest `9c068648164d78e4b9fdbb26dbf84c469e0dadc7bde2ec7e4971880a7fd46c04`. Next is TP-vs-STOP FACT-GAP-1. HARD STOP.
+
+---
+
 ## SETUP-DATASET-1 (Sep 2026)
 
 **Context:** Model-eligible LONG 50-cross rows need FeatureSpec2 context plus two setup-local facts, without a second S0/stop engine and without opening 2026.
