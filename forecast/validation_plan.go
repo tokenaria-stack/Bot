@@ -205,7 +205,7 @@ func CompileValidationPlan(at []int64, tf string, plan ValidationPlan) (Compiled
 	}
 	holdoutIdx := lb(plan.HoldoutStartAt)
 	if holdoutIdx == len(at) {
-		if plan.Logic != DecisionValidationLogicWalkForwardV1 {
+		if !allowsEmptyHoldout(plan.Logic) {
 			return z, fmt.Errorf("forecast: empty final holdout")
 		}
 	}
@@ -320,4 +320,8 @@ func hopPrevOpen(at int64, tf string, n int) (int64, error) {
 		t = p
 	}
 	return t, nil
+}
+
+func allowsEmptyHoldout(logic LogicVersion) bool {
+	return logic == DecisionValidationLogicWalkForwardV1 || logic == SetupValidationLogicWalkForwardV1
 }

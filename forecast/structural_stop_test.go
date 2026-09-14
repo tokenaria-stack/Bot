@@ -312,10 +312,16 @@ func TestStructuralStop_PriceK2S0NoLookahead(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := rep.Assignments[0]
-	if got.Status != StructuralStopStatusValid || got.Stop != 90 || got.PivotAnchorAt != primary[30].OpenTime {
+	if got.Status != StructuralStopStatusValid || got.Wick != 90 || got.PivotAnchorAt != primary[30].OpenTime {
 		t.Fatalf("S0 k=2 after confirm: %+v", got)
 	}
-	if !strings.Contains(rep.Text, "price k=2") {
+	if got.BufferATR != StructuralStopBufferATR15 || !(got.Stop < got.Wick) {
+		t.Fatalf("LONG buffer must sit beyond wick: %+v", got)
+	}
+	if math.Abs(got.R-math.Abs(got.Entry-got.Stop)) > 1e-9 {
+		t.Fatalf("R must use buffered stop")
+	}
+	if !strings.Contains(rep.Text, "0.15") {
 		t.Fatal(rep.Text)
 	}
 }

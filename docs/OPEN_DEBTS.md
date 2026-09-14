@@ -134,7 +134,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**STRUCTURAL-STOP-2 S0 ✅** (latest causal price k=2 wick; RSX timing only). Rare S1 deferred. **No 0.25 ATR / CatBoost / SETUP-TARGET-1.**
+**SETUP-VALIDATION-1 ✅ frozen.** Next **SETUP-DATASET-1** (DEV only, 64+R/ATR+S0 age). HARD STOP before CatBoost.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -150,6 +150,9 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 7b | **SIGNAL-DIAGNOSTICS-C** ✅ MIXED | Read-only D-tail / baseline / du=1 autopsy on paid OOF. | Ticket geometry, SHAP, new CatBoost |
 | 7c | **CANDIDATE-GEOMETRY-1** ✅ | Event path geometry; no TargetSpec. **NO TARGET SELECTED.** | SETUP-TARGET-1, CatBoost, combinations |
 | 7d | **STRUCTURAL-STOP-1** ✅ | Fractal-pivot stop v0 + overlay. **NO TARGET SELECTED.** | CatBoost, +2R freeze, pivot alternatives |
+| 7e | **MOVE-POTENTIAL-1** ✅ | R-space path on frozen STOP-2. **+2R earned as first mature-move hypothesis.** | H change, EV, CatBoost |
+| 7f | **SETUP-TARGET-1 / SETUP-LABELSET-1** ✅ | LONG +2R labels; MOVE-POTENTIAL +2R MATCH. | CatBoost, FeatureSpec3, SHORT |
+| 7g | **SETUP-VALIDATION-1** ✅ | Event-scale year folds; **2026 HOLDOUT**; H72 embargo. Identity includes wall digest. | Dataset, CatBoost, 2026 as OOF |
 | 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
@@ -239,7 +242,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **STOP-2 S0** price k=2 wick frozen. No 0.25 ATR / CatBoost / SETUP-TARGET-1. Holdout sealed. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain V2** | **SETUP-VALIDATION-1 frozen.** Next DATASET-1 DEV-only. No CatBoost. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

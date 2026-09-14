@@ -102,7 +102,7 @@ func ResearchFeatureSpec2() (forecast.FeatureSpec2, error) {
 // ResearchHoldoutStartAt is the sealed experiment wall (2026-01-01 00:00:00 UTC).
 // Shared by model VALIDATION-PLAN-1 and DECISION-VALIDATION-PLAN-1.
 func ResearchHoldoutStartAt() int64 {
-	return 1767225600000
+	return forecast.DefaultResearchHoldoutStartAt
 }
 
 // ResearchValidationPlan is the pinned BTCUSDT 15m walk-forward experiment.

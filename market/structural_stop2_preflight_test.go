@@ -81,6 +81,12 @@ func TestStructuralStop2_PriceK2S0_ResearchArchive(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "snapshot_s0.json"), raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	mp := forecast.FormatMovePotential1(a)
+	if err := os.WriteFile(filepath.Join(dir, "move_potential.txt"), []byte(mp), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	fmt.Fprint(os.Stderr, a.Text)
-	fmt.Fprintf(os.Stderr, "STRUCTURAL-STOP-2 S0 GREEN assignments=%d NO TARGET NO 0.25ATR\n", len(a.Assignments))
+	fmt.Fprint(os.Stderr, mp)
+	fmt.Fprintf(os.Stderr, "STRUCTURAL-STOP-2 S0+0.15ATR GREEN assignments=%d NO TARGET\n", len(a.Assignments))
+	fmt.Fprint(os.Stderr, "MOVE-POTENTIAL-1 GREEN NO TARGET NO EV\n")
 }

@@ -81,7 +81,47 @@
         }
         const xRight = xH != null ? xH : x0;
         stroke(x0, yStop, xRight, yStop, '#f23645', []);
-        label(xRight, yStop, src._wickOwner === 'price_k2' ? 'STOP S0' : 'STOP', '#f23645', -52, -8);
+        label(xRight, yStop, src._wickOwner === 'price_k2' ? 'STOP +0.15 ATR' : 'STOP', '#f23645', -92, -8);
+        if (src._wickOwner === 'price_k2' && Number.isFinite(a.wick) && a.wick !== a.stop) {
+          const yW = yAt(a.wick);
+          stroke(x0, yW, xRight, yW, '#787b86', [3, 3]);
+          label(xRight, yW, 'S0 wick', '#787b86', -52, 12);
+        }
+        if (xH != null) {
+          stroke(xH, 0, xH, canvasH, '#787b86', [4, 4]);
+          label(xH, 28, 'H=72', '#787b86', 6, 0);
+        }
+        if (src._wickOwner === 'price_k2') {
+          const levels = [
+            [a.plus_1r, '+1R', '#089981'],
+            [a.plus_2r, '+2R', '#26a69a'],
+            [a.plus_3r, '+3R', '#80cbc4'],
+          ];
+          for (const [px, name, col] of levels) {
+            const y = yAt(px);
+            stroke(x0, y, xRight, y, col, [2, 2]);
+            label(xRight, y, name, col, -52, -8);
+          }
+          const xMb = xAt(a.mfe_before_at);
+          const yMb = yAt(a.mfe_before_price);
+          const xMf = xAt(a.mfe_full_at);
+          const yMf = yAt(a.mfe_full_price);
+          const mfeSame = a.mfe_before_at && a.mfe_before_at === a.mfe_full_at
+            && Number(a.mfe_before_price) === Number(a.mfe_full_price);
+          const mfeClose = xMb != null && xMf != null && yMb != null && yMf != null
+            && Math.hypot(xMb - xMf, yMb - yMf) < 16;
+          if (mfeSame || mfeClose) {
+            mark(xMb, yMb, '#aeea00', 5);
+            label(xMb, yMb, 'MFE before = full H', '#aeea00', 8, -10);
+          } else {
+            mark(xMb, yMb, '#00e676', 4);
+            label(xMb, yMb, 'MFE before stop', '#00e676', 8, -10);
+            mark(xMf, yMf, '#c6ff00', 3);
+            label(xMf, yMf, 'MFE full H', '#c6ff00', 8, 14);
+          }
+          if (a.stop_hit) mark(xAt(a.stop_hit_at), yStop, '#ff1744', 6);
+          return;
+        }
         if (xH != null) {
           stroke(xH, 0, xH, canvasH, '#787b86', [4, 4]);
           label(xH, 28, 'H=72', '#787b86', 6, 0);
@@ -254,10 +294,10 @@
       this.setAssignment(a, body.price_swing, body.significance, body.wick_owner);
       if (el && a) {
         if (body.wick_owner === 'price_k2') {
-          el.textContent = 'STOP-2 S0  LONG ' + (this.i + 1) + '/' + this.n
-            + '  ' + (a.status || '')
-            + '  R/ATR15=' + (a.r_over_atr15 != null ? Number(a.r_over_atr15).toFixed(2) : 'n/a')
-            + '  (red = latest causal price k=2; no 0.25 ATR yet)';
+            el.textContent = 'STOP-2  LONG ' + (this.i + 1) + '/' + this.n
+              + '  ' + (a.status || '')
+              + '  red = S0 + 0.15 ATR15(entry)  grey = S0 wick'
+              + '  R/ATR15=' + (a.r_over_atr15 != null ? Number(a.r_over_atr15).toFixed(2) : 'n/a');
         } else {
           const sig = body.significance;
           const parts = (sig && Array.isArray(sig.swings) ? sig.swings : []).map((sw) => {
@@ -280,7 +320,7 @@
       ensurePanel();
       const el = document.getElementById('ss1-body');
       if (el) {
-        el.textContent = 'STOP-2 S0 price k=2: 15m then Next / ]. Red STOP is latest causal P2. No 0.25 ATR yet.';
+        el.textContent = 'STOP-2 frozen: S0 wick + 0.15 ATR15(entry). 15m Next / ].';
       }
       document.getElementById('ss1-prev').onclick = () => this.step(-1);
       document.getElementById('ss1-next').onclick = () => this.step(1);

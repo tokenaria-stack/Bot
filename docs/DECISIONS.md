@@ -7,15 +7,51 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SETUP-VALIDATION-1 (Sep 2026)
+
+**Context:** 50-cross is the first laboratory ignition. 2026 must stay a protected **model/strategy holdout** so the later book can be tested on history, not only live. The wall must be one adjustable policy, not a hardcoded forever year and not a 2027 sentinel.
+
+**Decision:** `DataSplitPolicy` (`DefaultResearchHoldoutStartAt` = 2026-01-01 00:00 UTC, 15m grid). Same `CompileValidationPlan` seam. Span = 35040 bars (365d). **4 OOF folds (~2022–2025).** MinTrainRows = 1000 events. Holdout rows exist in the label file but OOF reports no holdout TP rates. Brain V2 `ResearchHoldoutStartAt()` aliases this constant.
+
+**Rejected:** 2026 as OOF — **Reason:** would spend the only historical exam for the combined strategy. 2027 empty wall — **Reason:** not a real year in the archive. Per-signal research factories — **Reason:** shared risk/outcome; only ignition changes later. Candidate-union CatBoost this chapter — **Reason:** one consumer (50-cross) first.
+
+**Consequences:** Frozen. Changing `DefaultResearchHoldoutStartAt` mints a **new** split/plan digest; old artifacts keep their embedded wall. SETUP-DATASET-1 next (DEV only). Holdout opens once for a frozen book.
+
+---
+
+## SETUP-TARGET-1 (Sep 2026)
+
+**Context:** MOVE-POTENTIAL-1 showed +2R as the selective mature move (~27% LEVEL_FIRST LONG); +1R is the early push; +3R is tail. Unfiltered population is a hard meta-label question, not an obvious signal.
+
+**Decision:** First durable setup identity is **LONG only**, success = **+2R before structural stop**, H=72, frozen STOP-2 geometry. SETUP-LABELSET-1 maps STOP-2 assignments (no second barrier walker) and MUST integer-match MOVE-POTENTIAL LONG +2R. FeatureSpec2 later; CatBoost later.
+
+**Rejected:** +1R first — **Reason:** initial push, not “good setup.” +3R first — **Reason:** thinner positives. SHORT in v1 — **Reason:** visual review was LONG. New TargetSpec ATR family — **Reason:** barriers are explicit stop/+2R, not ±k ATR. FeatureSpec3 / CatBoost in this chapter — **Reason:** labels must MATCH first. Drop overlapping H=72 events — **Reason:** would smuggle execution concurrency into signal research.
+
+**Consequences:** HARD STOP after MATCH + year table. SETUP-VALIDATION-1 uses market-time embargo, not MinTrainRows=35040.
+
+---
+
+## MOVE-POTENTIAL-1 (Sep 2026)
+
+**Context:** STOP-2 is the working structural law. Need the natural R-space move of 50-cross before invalidation, without choosing a MetaLabel.
+
+**Decision:** Report only: two MFE clocks, per-level LEVEL_FIRST / STOP_FIRST / TIMEOUT_NEITHER, time-to-MFE CDFs, optional P(2R|1R) / P(3R|2R). MFE_before_stop follows EvaluateBarriers stop time and 1m until stop-first. LONG/SHORT separate. No EV.
+
+**Rejected:** Immediate +2R freeze — **Reason:** the ladder must earn the success definition. Strategy EV — **Reason:** no fees/timeout exit/partials. H change — **Reason:** this chapter is evidence, not a resize.
+
+**Consequences:** HARD STOP after the report. SETUP-TARGET-1 only after review.
+
+---
+
 ## STRUCTURAL-STOP-2 S0 (Sep 2026)
 
 **Context:** STOP-1 RSX fractal was the wrong stop owner. Significance audit: trader chooses latest causal price k=2 (S0) almost everywhere; S1 only on rare washouts (25/26).
 
-**Decision:** Invalidation wick = **latest causal OHLC Williams k=2** with `ConfirmedAt ≤` 50-cross. RSX owns timing only. S1/prominence walk is deferred until statistics force a revisit. No 0.25 ATR buffer in this freeze.
+**Decision:** Invalidation wick = **latest causal OHLC Williams k=2** with `ConfirmedAt ≤` 50-cross. Execution stop = wick ± **0.15 × ATR14 15m at entry** (LONG subtract, SHORT add). RSX owns timing only. S1/prominence walk is deferred until statistics force a revisit.
 
-**Rejected:** Always S1 / min-R-from-entry walk-back — **Reason:** distance-from-entry is not significance; rare misses accepted. Last opposite 50-cross episode — **Reason:** often too short. Prominence τ scan — **Reason:** optimization.
+**Rejected:** Always S1 / min-R-from-entry walk-back — **Reason:** distance-from-entry is not significance; rare misses accepted. Last opposite 50-cross episode — **Reason:** often too short. Prominence τ scan — **Reason:** optimization. Buffer 0.10 / 0.20 / 0.25 scan — **Reason:** visual pick of 0.15 on the same 30 charts, not hit-rate.
 
-**Consequences:** Overlay `snapshot_s0.json`. Buffer and SETUP-TARGET-1 still later.
+**Consequences:** Overlay `snapshot_s0.json`. SETUP-TARGET-1 / CatBoost still later. Next descriptive study is move potential in R-space.
 
 ---
 

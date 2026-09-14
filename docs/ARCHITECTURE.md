@@ -590,9 +590,19 @@ Path truth is exported `EvaluateBarriers` (LABEL-SET-1A `firstPassage` + 1B 1m d
 
 v0 stop for RSX 50-cross ignition (`age==0`): last `rsx_fractal_pivot` LOW/HIGH with `ConfirmedAt <= At`; stop = **AnchorAt bar Low/High** (not fact `AnchorPrice` / hlc3). No buffer, no max age, no ATR fallback. `NO_STRUCTURE` / `INVALID_GEOMETRY` keep the event. H=72. Path uses `EvaluateBarriers`. Overlay paints the assignment JSON (`GET /api/research/structural-stop-1?sample=i`); it does not recompute fractals or read `rsx_settings.json`. Sample review reuses boot `seekHistoryIsland` (existing HISTORY hydrate), not a ResearchWindow. Fractal scan for the study is analysis:v2 Jurik RSX + default pivot radius 2.
 
-Human review: family accepted; TOO_TIGHT / WRONG_PIVOT. **PIVOT-DISAGREEMENT-AUDIT** B+D. **PRICE-SWING-LAW** k=2 closer than k=1. **STRUCTURAL-SIGNIFICANCE-AUDIT:** trader freezes **S0** (latest causal price k=2) as wick owner; rare S1 (e.g. 25/26) deferred. **STRUCTURAL-STOP-2:** RSX = timing; stop = S0 wick; **no 0.25 ATR yet**; no CatBoost.
+**STRUCTURAL-STOP-2:** RSX = timing; S0 wick = structure; **execution stop = S0 ± 0.15 ATR15(entry)** (visual freeze, not scanned). Rare S1 deferred. No CatBoost.
 
-**NO TARGET SELECTED.**
+**MOVE-POTENTIAL-1:** Same frozen stop + H=72. Descriptive R-space. **+2R earned as first mature-move hypothesis** (not EV).
+
+### SETUP-TARGET-1 / SETUP-LABELSET-1 (LONG +2R)
+
+Bound identity, not TargetSpec / Ticket / strategy: LONG RSX 50-cross UP `age==0`; entry = 15m close; stop = S0 k=2 ± 0.15 ATR15(entry); success = entry+2R; H=72; path = `EvaluateBarriers` already stored on STOP-2 assignments. Classes: `TP_FIRST` / `STOP_FIRST` / `TIMEOUT` / `INVALID_STRUCTURE` / `NOT_EVALUABLE`. HARD STOP: integer MATCH to MOVE-POTENTIAL-1 LONG +2R. Calendar-year UTC table in the report. No FeatureSpec3, SHORT, ValidationPlan, Dataset, or CatBoost in this chapter.
+
+**HARD STOP** after label MATCH.
+
+### SETUP-VALIDATION-1 (event-scale walk-forward) ✅
+
+`DataSplitPolicy` + `ValidationPlan` digests are part of identity. DEV `< wall`, HOLDOUT `>= wall`. Current wall = **2026-01-01**. Changing the default mints a new identity; it does not rewrite frozen artifacts. 4 OOF folds (~2022–2025). Holdout usable n=750 vs source 752. No holdout class rates. Next: SETUP-DATASET-1 DEV only (`MaxCandidateAt < wall`).
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 

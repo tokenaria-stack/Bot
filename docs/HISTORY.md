@@ -8,6 +8,26 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SETUP-VALIDATION-1 — event-scale H=72 walk-forward (Sep 2026) ✅
+
+- Same compiler seam; 365d × **4 OOF folds (~2022–2025)**; wall = `DefaultResearchHoldoutStartAt` (2026-01-01), hashed in `DataSplitPolicy` + `ValidationPlan` identity. Defaults mint new identities. 2026 HOLDOUT usable n=750 (source 752). No holdout class rates.
+- HARD STOP. Next: SETUP-DATASET-1 on DEV only. No CatBoost.
+
+## SETUP-TARGET-1 / SETUP-LABELSET-1 — LONG +2R baseline labels (Sep 2026) ✅
+
+- Identity: LONG 50-cross, S0±0.15 ATR15, +2R, H=72. Labels from STOP-2 assignments. **MOVE-POTENTIAL +2R MATCH required.**
+- HARD STOP. No CatBoost / Dataset / ValidationPlan / SHORT. Year UTC table for the next chapter.
+
+## MOVE-POTENTIAL-1 — R-space on frozen STOP-2 (Sep 2026) ✅
+
+- Descriptive: +2ATR/+1R/+2R/+3R buckets, two MFE clocks, time-to-MFE CDF, continuation P(2R|1R)/P(3R|2R). LONG≠SHORT pooled. No EV.
+- Review: H=72 retained; **+2R earned as first mature-move hypothesis.** Stop/buffer not redesigned from MFE_full_H gap.
+
+## STRUCTURAL-STOP-2 — S0 wick + 0.15 ATR15(entry) (Sep 2026) ✅
+
+- Wick = latest causal OHLC Williams k=2 (`ConfirmedAt ≤` 50-cross). RSX is ignition only. Execution stop = S0 ± **0.15 × Canonical ATR14 on 15m at entry** (visual freeze vs 0.10/0.20; not a hit-rate scan). S1 parked. H=72. Overlay paints `stop` (red) and `wick` (grey).
+- **NO TARGET SELECTED.** HARD STOP after overlay sanity. Next: MOVE-POTENTIAL-1 in R-space. No CatBoost / SETUP-TARGET-1.
+
 ## STRUCTURAL-STOP-1 — 50-cross fractal invalidation (Sep 2026) ✅
 
 - v0: last confirmed `rsx_fractal_pivot` (LOW/HIGH), stop = AnchorAt bar Low/High, H=72. No ATR stop, no age cap, no buffer. Overlay consumes assignment JSON. **NO TARGET SELECTED.**

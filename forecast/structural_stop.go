@@ -16,6 +16,8 @@ const (
 	StructuralStopStatusInvalid = "INVALID_GEOMETRY"
 	StopOwnerRSXFractal         = "rsx_fractal"
 	StopOwnerPriceK2            = "price_k2"
+	// StructuralStopBufferATR15 is Kari's frozen execution buffer (not scanned).
+	StructuralStopBufferATR15 = 0.15
 )
 
 // StructuralStopInput is archive truth. Fractal facts must already be the
@@ -45,6 +47,8 @@ type StructuralStopAssignment struct {
 	PivotConfirmedAt   int64   `json:"pivot_confirmed_at,omitempty"`
 	AnchorAgeBars      int     `json:"anchor_age_bars,omitempty"`
 	ConfirmAgeBars     int     `json:"confirm_age_bars,omitempty"`
+	Wick               float64 `json:"wick,omitempty"`
+	BufferATR          float64 `json:"buffer_atr,omitempty"`
 	Stop               float64 `json:"stop,omitempty"`
 	R                  float64 `json:"r,omitempty"`
 	RPct               float64 `json:"r_pct,omitempty"`
@@ -74,8 +78,11 @@ type StructuralStopAssignment struct {
 	MFEFullPrice       float64 `json:"mfe_full_price,omitempty"`
 	MFEBeforeAt        int64   `json:"mfe_before_at,omitempty"`
 	MFEFullAt          int64   `json:"mfe_full_at,omitempty"`
+	TimeToMFEBefore    float64 `json:"time_to_mfe_before_stop,omitempty"`
+	TimeToMFEFullH     float64 `json:"time_to_mfe_full_h,omitempty"`
 	StopHitAt          int64   `json:"stop_hit_at,omitempty"`
 	IncompleteH        bool    `json:"incomplete_h,omitempty"`
+	PathAmbiguous      bool    `json:"path_ambiguous,omitempty"`
 }
 
 // StructuralStopReport is descriptive. No winner / no target freeze.
@@ -165,6 +172,28 @@ func hEndAt(bars []CanonicalClosedBar, t, h int, tf string) int64 {
 }
 
 func excursionUntil(bars []CanonicalClosedBar, t int, tf string, entry float64, long bool, stopAt int64, h int, favorable bool) (ext float64, px float64, at int64, complete bool, err error) {
+	return excursionUntilInvalidation(bars, t, tf, entry, long, stopAt, 0, h, favorable, nil)
+}
+
+func timeToMFEBars(entryAt, mfeAt int64, tf string) (float64, error) {
+	if mfeAt <= 0 || mfeAt <= entryAt {
+		return 0, nil
+	}
+	parent, err := data.CurrentBarOpen(mfeAt, tf)
+	if err != nil {
+		return 0, err
+	}
+	n, err := barAge(entryAt, parent, tf)
+	if err != nil || n < 0 {
+		return 0, err
+	}
+	return float64(n), nil
+}
+
+// excursionUntilInvalidation walks primary bars after entry.
+// Favorable MFE on the stop bar does not take that 15m High/Low; it uses
+// 1m children until the stop prints, excluding the 1m bar that hits stop.
+func excursionUntilInvalidation(bars []CanonicalClosedBar, t int, tf string, entry float64, long bool, stopAt int64, stopPx float64, h int, favorable bool, finer *FinerBarrierResolver) (ext float64, px float64, at int64, complete bool, err error) {
 	if t < 0 || t >= len(bars) {
 		return 0, 0, 0, false, nil
 	}
@@ -184,6 +213,17 @@ func excursionUntil(bars []CanonicalClosedBar, t int, tf string, entry float64, 
 		if b.OpenTime != expected {
 			return ext, px, at, false, nil
 		}
+		atStop := stopAt > 0 && b.OpenTime == stopAt
+		if atStop && favorable {
+			add, apx, aat, used, e := favorableUntilStopInParent(finer, b.OpenTime, entry, stopPx, long)
+			if e != nil {
+				return 0, 0, 0, false, e
+			}
+			if used && add > ext {
+				ext, px, at = add, apx, aat
+			}
+			return ext, px, at, true, nil
+		}
 		var candPx, cand float64
 		switch {
 		case favorable && long:
@@ -201,14 +241,14 @@ func excursionUntil(bars []CanonicalClosedBar, t int, tf string, entry float64, 
 			at = b.OpenTime
 		}
 		prev = b.OpenTime
-		if stopAt > 0 && b.OpenTime == stopAt {
+		if atStop {
 			return ext, px, at, true, nil
 		}
 	}
 	return ext, px, at, true, nil
 }
 
-func evalFavorableVsStop(bars []CanonicalClosedBar, t int, tf string, h int, finer *FinerBarrierResolver, stop, target float64, long bool) (favFirst, stopFirst bool, favTime, stopTime float64, hitAt int64, err error) {
+func evalFavorableVsStop(bars []CanonicalClosedBar, t int, tf string, h int, finer *FinerBarrierResolver, stop, target float64, long bool) (favFirst, stopFirst bool, favTime, stopTime float64, hitAt int64, outcome TargetOutcome, err error) {
 	favTime, stopTime = math.NaN(), math.NaN()
 	var upper, lower float64
 	if long {
@@ -218,7 +258,7 @@ func evalFavorableVsStop(bars []CanonicalClosedBar, t int, tf string, h int, fin
 	}
 	row, err := EvaluateBarriers(bars, t, upper, lower, h, tf, finer)
 	if err != nil {
-		return false, false, favTime, stopTime, 0, err
+		return false, false, favTime, stopTime, 0, "", err
 	}
 	barsTo := func(at int64) float64 {
 		if at <= 0 {
@@ -233,16 +273,16 @@ func evalFavorableVsStop(bars []CanonicalClosedBar, t int, tf string, h int, fin
 	switch row.Outcome {
 	case OutcomeUpFirst:
 		if long {
-			return true, false, barsTo(row.HitAt), math.NaN(), row.HitAt, nil
+			return true, false, barsTo(row.HitAt), math.NaN(), row.HitAt, row.Outcome, nil
 		}
-		return false, true, math.NaN(), barsTo(row.HitAt), row.HitAt, nil
+		return false, true, math.NaN(), barsTo(row.HitAt), row.HitAt, row.Outcome, nil
 	case OutcomeDownFirst:
 		if long {
-			return false, true, math.NaN(), barsTo(row.HitAt), row.HitAt, nil
+			return false, true, math.NaN(), barsTo(row.HitAt), row.HitAt, row.Outcome, nil
 		}
-		return true, false, barsTo(row.HitAt), math.NaN(), row.HitAt, nil
+		return true, false, barsTo(row.HitAt), math.NaN(), row.HitAt, row.Outcome, nil
 	default:
-		return false, false, math.NaN(), math.NaN(), 0, nil
+		return false, false, math.NaN(), math.NaN(), 0, row.Outcome, nil
 	}
 }
 
@@ -432,7 +472,7 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 		}
 		a.PivotAnchorAt = pivAnchor
 		a.PivotConfirmedAt = pivConf
-		a.Stop = stop
+		a.Wick = stop
 		aa, err := barAge(pivAnchor, e.At, in.PrimaryTF)
 		if err != nil {
 			return z, err
@@ -442,6 +482,28 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 			return z, err
 		}
 		a.AnchorAgeBars, a.ConfirmAgeBars = aa, ca
+		if !isFinite(stop) || (long && stop >= a.Entry) || (!long && stop <= a.Entry) {
+			a.Stop = stop
+			a.Status = StructuralStopStatusInvalid
+			z.Assignments = append(z.Assignments, a)
+			continue
+		}
+		if owner == StopOwnerPriceK2 {
+			v15 := atr15[idx]
+			if !isFinite(v15) || v15 <= 0 {
+				a.Stop = stop
+				a.Status = StructuralStopStatusInvalid
+				z.Assignments = append(z.Assignments, a)
+				continue
+			}
+			if long {
+				stop = stop - StructuralStopBufferATR15*v15
+			} else {
+				stop = stop + StructuralStopBufferATR15*v15
+			}
+			a.BufferATR = StructuralStopBufferATR15
+		}
+		a.Stop = stop
 		if !isFinite(stop) || (long && stop >= a.Entry) || (!long && stop <= a.Entry) {
 			a.Status = StructuralStopStatusInvalid
 			z.Assignments = append(z.Assignments, a)
@@ -494,9 +556,12 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 			if !isFinite(lv.px) {
 				continue
 			}
-			fav, st, ft, stt, hitAt, err := evalFavorableVsStop(in.Primary, idx, in.PrimaryTF, StructuralStopHorizon, finer, stop, lv.px, long)
+			fav, st, ft, stt, hitAt, outcome, err := evalFavorableVsStop(in.Primary, idx, in.PrimaryTF, StructuralStopHorizon, finer, stop, lv.px, long)
 			if err != nil {
 				return z, err
+			}
+			if outcome == OutcomeAmbiguous {
+				a.PathAmbiguous = true
 			}
 			lv.setH(fav)
 			if isFinite(ft) {
@@ -510,11 +575,30 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 				}
 			}
 		}
+		far := a.Entry + 1e9
+		if !long {
+			far = a.Entry - 1e9
+		}
+		if isFinite(far) && ((long && far > stop) || (!long && far < stop)) {
+			_, stOnly, _, stt, hitAt, outcome, err := evalFavorableVsStop(in.Primary, idx, in.PrimaryTF, StructuralStopHorizon, finer, stop, far, long)
+			if err != nil {
+				return z, err
+			}
+			if outcome == OutcomeAmbiguous {
+				a.PathAmbiguous = true
+			} else if stOnly {
+				a.StopHit = true
+				if isFinite(stt) {
+					a.TimeToStop = stt
+					a.StopHitAt = hitAt
+				}
+			}
+		}
 		stopCut := int64(0)
 		if a.StopHit {
 			stopCut = a.StopHitAt
 		}
-		mfeB, pxB, atB, okB, err := excursionUntil(in.Primary, idx, in.PrimaryTF, a.Entry, long, stopCut, StructuralStopHorizon, true)
+		mfeB, pxB, atB, okB, err := excursionUntilInvalidation(in.Primary, idx, in.PrimaryTF, a.Entry, long, stopCut, stop, StructuralStopHorizon, true, finer)
 		if err != nil {
 			return z, err
 		}
@@ -538,6 +622,16 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 		if okB || mfeB > 0 {
 			a.MFEBeforeStopOverR = mfeB / r
 			a.MFEBeforePrice, a.MFEBeforeAt = pxB, atB
+		}
+		if tb, e := timeToMFEBars(a.At, a.MFEBeforeAt, in.PrimaryTF); e != nil {
+			return z, e
+		} else {
+			a.TimeToMFEBefore = tb
+		}
+		if tfh, e := timeToMFEBars(a.At, a.MFEFullAt, in.PrimaryTF); e != nil {
+			return z, e
+		} else {
+			a.TimeToMFEFullH = tfh
 		}
 		if okMAE_B || maeB > 0 {
 			a.MAEBeforeStopOverR = maeB / r
@@ -572,7 +666,9 @@ func RunStructuralStop1(in StructuralStopInput) (StructuralStopReport, error) {
 		z.Notes = []string{
 			"NO TARGET SELECTED",
 			"wick owner = latest causal price k=2 (S0); RSX is timing only",
-			"no 0.25 ATR buffer yet; S1 prominence walk deferred",
+			"execution stop = S0 ± 0.15 ATR15(entry); buffer not scanned",
+			"S1 prominence walk deferred",
+			"MFE_before_stop ends at first stop (1m stop-first); excludes that 1m bar's favorable extreme",
 			"NO_STRUCTURE / INVALID_GEOMETRY have no ATR fallback",
 		}
 	}
@@ -691,7 +787,7 @@ func sideStats(rows []StructuralStopAssignment, side string) string {
 func FormatStructuralStop1(r StructuralStopReport) string {
 	s := "STRUCTURAL-STOP-1 (descriptive; NO TARGET SELECTED)\n\n"
 	if r.WickOwner == StopOwnerPriceK2 {
-		s = "STRUCTURAL-STOP-2 S0 price k=2 (descriptive; NO TARGET; NO 0.25 ATR yet)\n\n"
+		s = "STRUCTURAL-STOP-2 S0 + 0.15 ATR15(entry) (descriptive; NO TARGET SELECTED)\n\n"
 	}
 	s += sideStats(r.Assignments, GeomSideLong)
 	s += sideStats(r.Assignments, GeomSideShort)

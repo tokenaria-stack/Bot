@@ -37,6 +37,7 @@ research/forecast_evidence/
 research/decision_validation/
 research/decision_research/
 research/structuralstop1/
+research/setuplabels/
 research/modelfit/.venv/
 *.test
 *.exe
