@@ -1,6 +1,7 @@
 package forecast
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -141,6 +142,26 @@ func countMovePotentialLong2R(as []StructuralStopAssignment) setupClassCounts {
 		}
 	}
 	return c
+}
+
+// ContentDigest is the ordered SETUP-LABELSET-1 row identity (At, class, status).
+func (z SetupLabelSet1) ContentDigest() (Digest, error) {
+	tid, err := z.Target.Identity()
+	if err != nil {
+		return Digest{}, err
+	}
+	h := sha256.New()
+	hashPutString(h, z.Format)
+	hashPutDigest(h, tid.Digest)
+	hashPutU32(h, uint32(len(z.Rows)))
+	for _, r := range z.Rows {
+		hashPutI64(h, r.At)
+		hashPutString(h, r.Class)
+		hashPutString(h, r.Status)
+	}
+	var d Digest
+	copy(d[:], h.Sum(nil))
+	return d, nil
 }
 
 // MatchMovePotentialLong2R is the HARD STOP gate. Label classes must equal the

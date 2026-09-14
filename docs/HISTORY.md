@@ -8,10 +8,16 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SETUP-DATASET-1 — DEV join matrix (Sep 2026) ✅
+
+- Exact At join: FeatureTape2[64] + copied STOP-2 `ROverATR15` + `AnchorAgeBars`. Width 66. Wall and validation digests embedded. `MaxCandidateAt < 2026-01-01` hard fail.
+- Archive: DEV source 6652 / usable labels 6644 / final N=6644 (`FEATURE_NOT_READY=0`). HOLDOUT 752/750 excluded. OOF val n unchanged (1083/1084/1042/1018). ContentDigest `a87f4d1ade50600b7f578afbd9d4025d4cdedd03ef36ae9727121d7981e68da0`.
+- HARD STOP. No CatBoost.
+
 ## SETUP-VALIDATION-1 — event-scale H=72 walk-forward (Sep 2026) ✅
 
 - Same compiler seam; 365d × **4 OOF folds (~2022–2025)**; wall = `DefaultResearchHoldoutStartAt` (2026-01-01), hashed in `DataSplitPolicy` + `ValidationPlan` identity. Defaults mint new identities. 2026 HOLDOUT usable n=750 (source 752). No holdout class rates.
-- HARD STOP. Next: SETUP-DATASET-1 on DEV only. No CatBoost.
+- HARD STOP. SETUP-DATASET-1 consumed this geometry. No CatBoost.
 
 ## SETUP-TARGET-1 / SETUP-LABELSET-1 — LONG +2R baseline labels (Sep 2026) ✅
 

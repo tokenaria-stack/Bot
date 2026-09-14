@@ -55,3 +55,25 @@ func (s SetupTarget1) validate() error {
 	}
 	return nil
 }
+
+type setupTarget1Payload struct {
+	ID        string
+	Side      string
+	SuccessR  float64
+	Horizon   int
+	StopOwner string
+	BufferATR float64
+	PrimaryTF string
+}
+
+const SetupTargetLogicV1 LogicVersion = "setup-target-1"
+
+func (s SetupTarget1) Identity() (Identity, error) {
+	if err := s.validate(); err != nil {
+		return Identity{}, err
+	}
+	return NewIdentity(s.ID, setupTarget1Payload{
+		ID: s.ID, Side: s.Side, SuccessR: s.SuccessR, Horizon: s.Horizon,
+		StopOwner: s.StopOwner, BufferATR: s.BufferATR, PrimaryTF: s.PrimaryTF,
+	}, SetupTargetLogicV1)
+}

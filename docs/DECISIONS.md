@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SETUP-DATASET-1 (Sep 2026)
+
+**Context:** Model-eligible LONG 50-cross rows need FeatureSpec2 context plus two setup-local facts, without a second S0/stop engine and without opening 2026.
+
+**Decision:** Dataset is an **exact join**. Copy STOP-2 `ROverATR15` and `AnchorAgeBars`. Exact FeatureTape2 `At` (sparse event lookup, not Brain-V2 tape/label lockstep). Bind frozen SETUP-VALIDATION-1 / DataSplitPolicy digests; `MaxCandidateAt < wall` is a hard assertion. Width 66. Outcome-blind DEV p10/p50/p90 for the two setup facts only. Integrity: owned `AnchorAgeBars` must equal `barAge(PivotAnchorAt, At, 15m)`.
+
+**Rejected:** Recompute S0/stop/ATR in the dataset layer — **Reason:** second geometry owner. FeatureSpec3 — **Reason:** the 64 stay Spec2. Nearest/stale tape row — **Reason:** look-ahead / causality leak. Class-conditional setup-fact curves — **Reason:** informal feature selection. CandidateSpec / event union — **Reason:** one ignition. CatBoost this chapter — **Reason:** certify the matrix first.
+
+**Consequences:** HARD STOP. Changing the global holdout default cannot mutate this artifact (wall+digests are embedded). Next chapter after review: METALABEL-CATBOOST-1 on these 66 columns, OOF 2022–2025 only.
+
+---
+
 ## SETUP-VALIDATION-1 (Sep 2026)
 
 **Context:** 50-cross is the first laboratory ignition. 2026 must stay a protected **model/strategy holdout** so the later book can be tested on history, not only live. The wall must be one adjustable policy, not a hardcoded forever year and not a 2027 sentinel.

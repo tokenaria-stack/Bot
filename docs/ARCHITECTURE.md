@@ -602,7 +602,11 @@ Bound identity, not TargetSpec / Ticket / strategy: LONG RSX 50-cross UP `age==0
 
 ### SETUP-VALIDATION-1 (event-scale walk-forward) ✅
 
-`DataSplitPolicy` + `ValidationPlan` digests are part of identity. DEV `< wall`, HOLDOUT `>= wall`. Current wall = **2026-01-01**. Changing the default mints a new identity; it does not rewrite frozen artifacts. 4 OOF folds (~2022–2025). Holdout usable n=750 vs source 752. No holdout class rates. Next: SETUP-DATASET-1 DEV only (`MaxCandidateAt < wall`).
+`DataSplitPolicy` + `ValidationPlan` digests are part of identity. DEV `< wall`, HOLDOUT `>= wall`. Current wall = **2026-01-01**. Changing the default mints a new identity; it does not rewrite frozen artifacts. 4 OOF folds (~2022–2025). Holdout usable n=750 vs source 752. No holdout class rates.
+
+### SETUP-DATASET-1 (DEV join only) ✅
+
+Join-only matrix. **FeatureTape2** owns the 64 market-context columns (exact `At`, no nearest/fill). **STOP-2** owns ticket geometry: `setup_risk_atr` is copied `ROverATR15` (buffered R / ATR14-on-15m), `s0_anchor_age_bars` is copied `AnchorAgeBars` (timestamp `barAge`, not RAM index). **LabelSet** owns Y. **ValidationPlan** owns OOF spans. Width **66**. DEV only: `MaxCandidateAt < wall` is a hard fail. `FEATURE_NOT_READY` is an explicit exclusion; missing/duplicate tape `At` is a hard fail. Not FeatureSpec3. No CatBoost. No 2026 class rates. Canonical ContentDigest `a87f4d1ade50600b7f578afbd9d4025d4cdedd03ef36ae9727121d7981e68da0` (N=6644, FEATURE_NOT_READY=0).
 
 ### OOF-MATRIX-1 (development-only statistical interchange)
 
