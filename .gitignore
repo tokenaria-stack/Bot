@@ -39,7 +39,11 @@ research/decision_research/
 research/structuralstop1/
 research/setuplabels/
 research/setupdataset/
-research/brain3/
+research/brain3/work/
+research/brain3/.venv/
+research/brain3/*.txt
+research/brain3/*.jsonl
+research/brain3/*.json
 research/modelfit/.venv/
 *.test
 *.exe

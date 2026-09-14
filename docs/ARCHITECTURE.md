@@ -606,7 +606,11 @@ Bound identity, not TargetSpec / Ticket / strategy: LONG RSX 50-cross UP `age==0
 
 ### BRAIN3-FOUNDATION-1 ✅
 
-Isolated `brain3` package: certified dataset + compiled validation only. Explicit class schema `[TP_FIRST, STOP_FIRST, TIMEOUT]` as metadata; kernels see `0..2`. Outer fold membership is compiled index ranges joined by exact `At` (not `At < val start`). Holdout is physically absent. Portable CatBoost conversion/eval lives in `ml` (width = `len(names)`, splits `0 <= i < width`; execution cap 4096). Brain V2 calls the same `ml` implementation. No Python fitter, no archive CatBoost, no OOF. Next: `BRAIN3-METALABEL-1` (hypothesis, not a new brain).
+Isolated `brain3` package: certified dataset + compiled validation only. Explicit class schema `[TP_FIRST, STOP_FIRST, TIMEOUT]` as metadata; kernels see `0..2`. Outer fold membership is compiled index ranges joined by exact `At` (not `At < val start`). Holdout is physically absent. Portable CatBoost conversion/eval lives in `ml` (width = `len(names)`, splits `0 <= i < width`; execution cap 4096). Brain V2 calls the same `ml` implementation.
+
+### BRAIN3-METALABEL-1 ✅
+
+One disposable hypothesis (`MetaLabelCatBoostSpec1`) on frozen SETUP-DATASET-1 / SETUP-VALIDATION-1. Causal inner tails via harvested `ml.SplitCausalTail` (span 35040, min inner train 1000, H=72). Tiny `research/brain3/fit.py` fits only. Official OOF is portable Go logits (`brain3-oof-logits-v1`, 4227 rows). Tree count N* from inner validation only. One causal-prior logloss benchmark. No coverage curves, no 2026, no final model. Next: `SETUP-QUALITY-CURVE-1` (read-only OOF).
 
 ### SETUP-DATASET-1 (DEV join only) ✅
 

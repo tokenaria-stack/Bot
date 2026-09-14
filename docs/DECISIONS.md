@@ -19,6 +19,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## BRAIN3-METALABEL-1 (Sep 2026)
+
+**Context:** FOUNDATION-1 is frozen. The first scientific question is whether the 66 certified facts carry information about TP/STOP/TIMEOUT beyond outer-train class frequencies.
+
+**Decision:** Bind `MetaLabelCatBoostSpec1` as hypothesis identity (depth 6, lr 0.03, L2 3, max 1000, inner span 35040, min inner 1000, H=72, smallest-N at min inner logloss, cap = HARD STOP). Harvest one `SplitCausalTail` into `ml`; V2 wraps. Outer membership is compiled validation At, never `At < val start`. Python fitter is numeric only. Official scores are portable Go logits. One 4-fold archive run. Causal prior is per-fold outer-train frequencies.
+
+**Rejected:** Patch Brain 3 if Spec1 cannot compile — **Reason:** that would be Spec2. Shrink inner span / minTrain — **Reason:** hidden fallback. Hash `get_all_params()` into spec digest — **Reason:** vendor witness ≠ science. Quality/coverage curves, 2026, final model, SHAP, CatBoost grid — **Reason:** later chapters / other hypotheses. Second bit-identical archive run — **Reason:** Brain 2 overpaid before value was shown.
+
+**Consequences:** GREEN. OOF content digest `72bb757ec8802e18f67c4bfaa24b89344766de7e4f9f80f2cfd6084b9b918d59`. HARD STOP. Next is SETUP-QUALITY-CURVE-1 read-only. Weak OOF would not reopen stop/H/+2R/wall.
+
+---
+
 ## SETUP-DATASET-1 (Sep 2026)
 
 **Context:** Model-eligible LONG 50-cross rows need FeatureSpec2 context plus two setup-local facts, without a second S0/stop engine and without opening 2026.

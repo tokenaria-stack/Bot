@@ -8,11 +8,18 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## BRAIN3-METALABEL-1 — Spec1 causal OOF (Sep 2026) ✅
+
+- Hypothesis `MetaLabelCatBoostSpec1` on SETUP-DATASET-1 (66) + SETUP-VALIDATION-1. Inner tails compiled (min inner train 1355). N* = 258/231/328/259 (not the 1000 cap).
+- Official `brain3-oof-logits-v1` 4227 rows. Dataset digest `a87f4d1a…`. Spec digest `df6b9856…`. OOF digest `72bb757e…`.
+- Pooled OOF logloss 0.882 vs causal prior 0.963 (Δ 0.081). Fold-0 train n=2413 (compiled), not the 2417 never-val prefix.
+- HARD STOP. Next: SETUP-QUALITY-CURVE-1 (read-only). Do not retune CatBoost.
+
 ## BRAIN3-FOUNDATION-1 — isolated learner socket (Sep 2026) ✅
 
 - `brain3` consumes SETUP-DATASET-1 (6644×66) + SETUP-VALIDATION-1 compiled folds. Schema TP/STOP/TIMEOUT. OOF val 1083/1084/1042/1018; train-only 2417; holdout 0.
 - Portable CatBoost eval moved to `ml` (width-generic). Feature-65 fixture. No archive fit.
-- HARD STOP. Next: BRAIN3-METALABEL-1.
+- HARD STOP. Consumed by BRAIN3-METALABEL-1.
 
 ## SETUP-DATASET-1 — DEV join matrix (Sep 2026) ✅
 

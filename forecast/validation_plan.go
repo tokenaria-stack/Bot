@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"trading_bot/data"
+	"trading_bot/ml"
 )
 
 const ValidationLogicWalkForwardV1 LogicVersion = "validation:walk-forward-v1"
@@ -305,19 +306,9 @@ func requireStrictlyIncreasingAt(at []int64) error {
 }
 
 func hopPrevOpen(at int64, tf string, n int) (int64, error) {
-	if n < 0 {
-		return 0, fmt.Errorf("forecast: hop count must be >= 0")
-	}
-	t := at
-	for i := 0; i < n; i++ {
-		p, err := data.PreviousBarOpen(t, tf)
-		if err != nil {
-			return 0, err
-		}
-		if p >= t {
-			return 0, fmt.Errorf("forecast: PreviousBarOpen did not go backward from %d", t)
-		}
-		t = p
+	t, err := ml.HopPrevOpen(at, tf, n)
+	if err != nil {
+		return 0, fmt.Errorf("forecast: %v", err)
 	}
 	return t, nil
 }

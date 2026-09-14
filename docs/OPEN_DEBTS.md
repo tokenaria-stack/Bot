@@ -134,7 +134,9 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 
 **FEATURE-SPEC-2 ✅ frozen** `0c54848` (docs `efc3408`). Do not reopen.
 
-**BRAIN3-FOUNDATION-1 ✅.** Isolated `brain3` + `ml` portable eval. HARD STOP. Next **BRAIN3-METALABEL-1** after review.
+**BRAIN3-FOUNDATION-1 ✅.** Isolated `brain3` + `ml` portable eval.
+
+**BRAIN3-METALABEL-1 ✅.** Spec1 one archive OOF (4227). HARD STOP. Next **SETUP-QUALITY-CURVE-1** (read-only `brain3-oof-logits-v1`). Do not reopen stop/H/+2R/wall. Do not retune CatBoost.
 
 ### Chapter sequence (do not skip causal prerequisites)
 
@@ -155,6 +157,7 @@ May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetS
 | 7g | **SETUP-VALIDATION-1** ✅ | Event-scale year folds; **2026 HOLDOUT**; H72 embargo. Identity includes wall digest. | Dataset, CatBoost, 2026 as OOF |
 | 7h | **SETUP-DATASET-1** ✅ | DEV join 66; copy STOP-2 geometry; exact Tape2 At. N=6644. | CatBoost, FeatureSpec3, 2026 rows |
 | 7i | **BRAIN3-FOUNDATION-1** ✅ | Isolated learner package; outer-fold join; width-generic portable. | Archive CatBoost, Python fitter, inner tails |
+| 7j | **BRAIN3-METALABEL-1** ✅ | Spec1 causal CatBoost OOF + prior logloss. | Quality curves, 2026, final model, CatBoost grid |
 | 8 | **FINALIZATION-C** | Only if ELIGIBLE (this path is closed until a new eligible hypothesis). | Premature global recipe or final fit |
 | 9 | Holdout / live | Sealed holdout after finalization. Live host later. | Holdout because CatBoost exists |
 
@@ -244,7 +247,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
-| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain 3** | **FOUNDATION-1 done.** HARD STOP. Next BRAIN3-METALABEL-1 after review. |
+| **76** | **ScoreNodes → Forecast engine** | 🟡 **Brain 3** | **METALABEL-1 done.** HARD STOP. Next SETUP-QUALITY-CURVE-1 after review. |
 | **93** | **DAG-DEMAND-1** — unused TF analytical CPU (RSX/facts/ZZ) | ✅ frozen `0837c77` | ChartOnly unused 1s–45s: 0 Jurik/ZZ/TV/Fractal/ZZ-col Updates. |
 | **94** | **MICRO-IDLE-1** — unused 5s–45s reducer/forming fanout | ✅ closed | Measured ~6µs/1s parent for five unused children. Not worth implementing. |
 | **67** | **Closed-bar Boundary + Viewport Tip** | ✅ | ADR-009 Cap + ADR-010 viewport forming tip (TV Model 2). Engine identity proven. F5 handoff = OVERWRITE same open |

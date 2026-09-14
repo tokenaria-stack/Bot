@@ -1,6 +1,7 @@
-// Package brain3 is the isolated learner: certified matrices in, future OOF out.
+// Package brain3 is the isolated learner: certified matrices in, OOF logits out.
 //
 // It must not import market, Brain V2 CatBoost orchestration, or trading semantics.
+// MetaLabelCatBoostSpec1 is one disposable hypothesis, not a Brain 3 law.
 package brain3
 
 const (
