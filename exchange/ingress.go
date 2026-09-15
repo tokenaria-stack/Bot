@@ -160,8 +160,10 @@ func (p *IngressPipeline) reject(reason RejectReason, k Kline) error {
 // MergeCandle is the sole decision point for "whose bar wins".
 //   - higher authority: incoming replaces existing entirely (no field heuristics);
 //   - lower authority: existing is kept, incoming discarded (AuthConflicts++);
-//   - equal authority: deterministic union — High=MAX, Low=MIN, Volume=MAX
-//     (exchange totals only grow on honest re-reads), Open/Close from incoming.
+//   - equal authority: High=MAX, Low=MIN (range envelope). Volume is ASSIGNED
+//     from incoming (VOLUME-TRUTH-RECOVERY-1). Both values are already BaseVolume
+//     on native closed bars. MAX cannot restore a stale oversized volume.
+//     Forming ticks never enter this function (Bar Source Seam).
 func (p *IngressPipeline) MergeCandle(existing, incoming Kline, existAuth, incAuth Authority) Kline {
 	switch {
 	case incAuth > existAuth:
@@ -178,9 +180,6 @@ func (p *IngressPipeline) MergeCandle(existing, incoming Kline, existAuth, incAu
 		}
 		if existing.Low < merged.Low {
 			merged.Low = existing.Low
-		}
-		if existing.Volume > merged.Volume {
-			merged.Volume = existing.Volume
 		}
 		if merged.CloseTime <= 0 {
 			merged.CloseTime = existing.CloseTime

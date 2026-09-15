@@ -2,8 +2,10 @@
 //
 // Before Phase B the archive could store under-indexed REST snapshots (e.g. volume
 // 21.257 instead of the final 48.470). This tool re-feeds clean, long-settled bars
-// from Binance REST into SaveKlines; the monotonic UPSERT (volume=MAX, high=MAX,
-// low=MIN) lifts stuck values and can never make a row worse. No diff logic needed.
+// Before Phase B the archive could store under-indexed REST snapshots (e.g. volume
+// 21.257 instead of the final 48.470). This tool re-feeds long-settled REST bars.
+// VOLUME-TRUTH-RECOVERY-1: SaveKlines now ASSIGNS volume (not MAX). Prefer
+// cmd/volume_recovery for classified canonical repairs.
 //
 // Usage: go run ./cmd/repair_volumes [-symbol BTCUSDT] [-days 7]
 package main

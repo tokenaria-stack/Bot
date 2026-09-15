@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"trading_bot/data"
+	"trading_bot/exchange"
 )
 
 const (
@@ -256,11 +257,14 @@ func importCSV(symbol, interval, csvPath string) (int, error) {
 			}
 		}
 
-		candle, err := parseVisionCandle(record)
+		candle, err := exchange.CandleFromVisionCSV(record)
 		if err != nil {
 			return total, err
 		}
-		batch = append(batch, candle)
+		batch = append(batch, data.Candle{
+			OpenTime: candle.OpenTime, Open: candle.Open, High: candle.High, Low: candle.Low,
+			Close: candle.Close, Volume: candle.Volume, CloseTime: candle.CloseTime,
+		})
 		if len(batch) >= batchSize {
 			if err := flush(); err != nil {
 				return total, fmt.Errorf("batch insert: %w", err)
@@ -272,45 +276,4 @@ func importCSV(symbol, interval, csvPath string) (int, error) {
 		return total, fmt.Errorf("final batch insert: %w", err)
 	}
 	return total, nil
-}
-
-func parseVisionCandle(record []string) (data.Candle, error) {
-	openTime, err := strconv.ParseInt(strings.TrimSpace(record[0]), 10, 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse open time %q: %w", record[0], err)
-	}
-	open, err := strconv.ParseFloat(strings.TrimSpace(record[1]), 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse open: %w", err)
-	}
-	high, err := strconv.ParseFloat(strings.TrimSpace(record[2]), 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse high: %w", err)
-	}
-	low, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse low: %w", err)
-	}
-	closePrice, err := strconv.ParseFloat(strings.TrimSpace(record[4]), 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse close: %w", err)
-	}
-	volume, err := strconv.ParseFloat(strings.TrimSpace(record[5]), 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse volume: %w", err)
-	}
-	closeTime, err := strconv.ParseInt(strings.TrimSpace(record[6]), 10, 64)
-	if err != nil {
-		return data.Candle{}, fmt.Errorf("parse close time: %w", err)
-	}
-
-	return data.Candle{
-		OpenTime:  openTime,
-		Open:      open,
-		High:      high,
-		Low:       low,
-		Close:     closePrice,
-		Volume:    volume,
-		CloseTime: closeTime,
-	}, nil
 }

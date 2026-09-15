@@ -244,3 +244,14 @@ func TestWozduhMasked_Measure3000(t *testing.T) {
 	t.Logf("3000-bar Wozduh stream Updates: FULL=%d default-visible=%d RSX-only=%d (%.0f%% of full at default)",
 		full, def, zero, 100*float64(def)/float64(full))
 }
+
+func TestWozduhBitVolBase_IsComputeMaskNotBinanceTakerBuyV(t *testing.T) {
+	t.Parallel()
+	// WozduhBitVolBase gates volume-RSI work. It is not Binance kline "V".
+	if nodes.WozduhBitVolBase == 0 {
+		t.Fatal("mask bit")
+	}
+	if nodes.WozduhMaskForPlots([]string{"woz_slow"})&nodes.WozduhBitVolBase == 0 {
+		t.Fatal("woz_slow needs VolBase compute")
+	}
+}

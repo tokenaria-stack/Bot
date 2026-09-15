@@ -204,6 +204,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `Tip Ownership` | Native/1s: Cap-closed History + ADR-010 overlay (WS OVERWRITE same forming open). 5s–45s HTTP: SPARSE-ADR010-TIP-1 append-only forming row (no Replay overwrite). Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
 | `Live chart TF` | Native USD-M set (`1m`…`1d`, `1w`, `1M`) plus derived `2m/10m/45m/3h` plus live `1s` from aggTrade (`exchange/timeframe_catalog.go`, ADR-031). Durable 1s lives in `micro_klines` (24h, sparse), not `historical_klines`. `3d` unsupported. Other seconds/ticks remain placeholders |
+| `Kline.Volume` | Native: **BaseVolume** = Binance total base `v` (REST idx 5 / WS `"v"` / Vision col 5). Futures research SSOT **volume-truth:futures-base-v1** = REST family + 1m additive integrity (`research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`). Vision is provenance, not canonical. 1s: **MicroTradeBaseVolume**. `WozduhBitVolBase` is a DAG mask, not Binance `V`. |
 | `windowMode` | FE display window: `live` \| `history` (Debt #69A) |
 | `STORE_BUDGET_*` | ColumnarStore TARGET 12000 / HARD_CAP 16000 bars |
 | `pruneDirectionFromFocal` | Debt #69C: drop side farthest from viewport center time |
@@ -234,7 +235,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 1. **Source trust beats field heuristics.** Merge by Authority. WS Final never loses to REST. Field MAX/MIN only when Authority is equal.
 2. **Bar Source Seam.** Closed canonical bars only in Ingress. Forming ticks (`x=false`) bypass Ingress (Frame telemetry / Core 4.8 path). Time bars = exchange klines (TradingView canon) — no trade-synthesized time bars in ledger.
 3. **Boot: WS first.** REST recovery must not overwrite missed WS bars. One tick path: `Runtime.routeTick` (live + boot replay).
-4. **SQLite firewall ≠ cure.** Monotonic UPSERT (`high=MAX`, `low=MIN`, `volume=MAX`) is last line of defense; root fix is REST Grace (`KlineSettleGraceMs=5000`).
+4. **SQLite closed volume.** UPSERT `high=MAX`, `low=MIN`, **volume ASSIGN** (`excluded.volume`) for closed native bars (VOLUME-TRUTH-RECOVERY-1). Forming never uses `SaveKlines`. REST Grace (`KlineSettleGraceMs=5000`) still avoids under-indexed first writes. Dedicated `AssignCanonicalVolume` repairs exact PK volume only.
 5. **Time Model Rule (ADR-011).** Fixed intervals (`1m`…`1d`) use duration arithmetic. Calendar intervals (`1w`, `1M`) use bar boundaries (Monday / month-start UTC) via `CurrentBarOpen` / `PreviousBarOpen` / `NextBarOpen`. Never use `IntervalDurationMs` for Cap, REST align, next tip, or month gap checks.
 6. **Indicator Configuration Rule (ADR-012).** Indicator parameters are engine state. Browser menus POST to `/api/settings/indicators`; never own live math config. Autosave on disk. Future: Registry → Config → DAG membership → Runtime → Projection (implement when 2+ indicators need enable/disable).
 7. **Indicator Change Impact (ADR-013).** Classify settings via `ChangeImpact` before mutating runtime. Never `Set*` outside the IndicatorReplay transaction. AnnotationOnly must not touch Falcon/Jurik.
@@ -851,4 +852,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **STRUCTURAL-STOP-1** complete. **NO TARGET SELECTED.** Human overlay review next. TARGET-RESOLUTION-2 deferred.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **VOLUME-TRUTH-RECOVERY-1 FROZEN.** **VOLUME-SOURCE-ARBITRATION-1** step 1 (1m reconstruction). No Wozduh yet.

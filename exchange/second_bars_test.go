@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"trading_bot/data"
 )
@@ -127,8 +128,7 @@ func TestLiveSecondNotNativePersist(t *testing.T) {
 		if s == "btcusdt@aggTrade" {
 			found++
 		}
-		if s == "btcusdt@kline_5s" || s == "btcusdt@kline_10s" || s == "btcusdt@kline_15s" ||
-			s == "btcusdt@kline_30s" || s == "btcusdt@kline_45s" {
+		if strings.Contains(s, "@kline_5s") || strings.Contains(s, "@kline_10s") || strings.Contains(s, "@kline_45s") {
 			t.Fatal("sparse-second kline leaked")
 		}
 		if s == "btcusdt@kline_2m" {

@@ -9,6 +9,8 @@ const (
 	WozduhBitGreenEMA
 	WozduhBitRsiOfRsi
 	WozduhBitPriceChannel
+	// WozduhBitVolBase is a DAG compute-mask bit: volume-RSI / Wozduh volume
+	// streams must run. It is NOT Binance kline field "V" (taker-buy base).
 	WozduhBitVolBase
 	WozduhBitWt11
 	WozduhBitWt22

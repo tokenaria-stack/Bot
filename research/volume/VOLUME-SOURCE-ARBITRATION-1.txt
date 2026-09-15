@@ -1,0 +1,205 @@
+VOLUME-SOURCE-ARBITRATION-1 — STEP 1 (1m reconstruction)
+=======================================================
+
+VOLUME-TRUTH-RECOVERY-1 is FROZEN. No general volume repair. No Wozduh.
+No TradingView this step. No SSOT policy freeze this step. No DB mutation.
+
+Question: for futures 15m SOURCE_CONFLICT bars, do 1m children internally
+support REST 15m v and/or Vision 15m v?
+
+----------------------------------------------------------------------
+Inventory correction
+----------------------------------------------------------------------
+
+The recovery ClassCounts map keyed only by TF, so 15m SOURCE_CONFLICT=27
+was 20 futures + 7 spot. Wozduh is futures 15m. This step is N=20.
+
+Months: 2023-11, 2024-03, 2024-10, 2025-01.
+
+----------------------------------------------------------------------
+Support tallies
+----------------------------------------------------------------------
+
+  BOTH_INTERNALLY_CONSISTENT          16
+  REST_1M_SUPPORTS_REST_15M            2
+  VISION_1M_SUPPORTS_VISION_15M        2
+
+Dominant outcome is GPT’s interesting case:
+
+  REST 1m sum == REST 15m v
+  Vision 1m sum == Vision 15m v
+  and those two 15m values differ.
+
+Binance published two internally consistent histories of the same candle.
+Further archaeology will not produce a unique “true” BaseVolume. A written
+SSOT policy (or TradingView as a third arbiter) is required next — not more
+repair tooling.
+
+----------------------------------------------------------------------
+Per bar
+----------------------------------------------------------------------
+
+2023-11-10 15:15–16:15 UTC (5 bars): stored=0, Vision 15m=0, Vision 1m sum=0,
+REST 15m = REST 1m sum (thousands). BOTH. SQLite followed the Vision-zero
+family. REST family is a complete alternative history, not a hole.
+
+2024-03-27/28 (6 bars): stored == Vision 15m == Vision 1m sum;
+REST 15m == REST 1m sum; the two families differ (sometimes only in the
+4th decimal, sometimes by hundreds of BTC). BOTH.
+
+2024-10-28 20:00, 20:30, 21:00: BOTH (Vision family 0 or 32.637 vs REST
+thousands).
+
+2024-10-28 20:15: REST 15m=233.266 but REST 1m sum=1752.859 (REST parent
+does not match REST children). Vision 15m=0 = Vision 1m sum. VISION_ONLY.
+REST 15m is not a consistent aggregate.
+
+2024-10-28 20:45: REST 15m=9.646 vs REST 1m sum=834.736. Vision 0=0.
+VISION_ONLY. Same pattern.
+
+2025-01-14 13:30: REST 15m=14066.114 = REST 1m sum. Vision 15m=12092.983
+but Vision 1m sum=10589.807. REST_ONLY. Vision 15m is not a 1m aggregate.
+
+2025-01-14 15:00: REST 15m=3324.817 = REST 1m sum = Vision 1m sum.
+Vision 15m=2701.452 does not match its own 1m children. REST_ONLY.
+Vision 1m actually agrees with REST; the Vision 15m print is the outlier.
+
+2025-01-29 01:15 and 02:30: BOTH (stored=Vision family; REST family larger
+and 1m-consistent).
+
+----------------------------------------------------------------------
+What this is not
+----------------------------------------------------------------------
+
+Not a live WS v/V bug (those 1265 rows are already assigned).
+Not a reason to invent a Wozduh IIR gap/reset for 20 bars.
+Not a mandate to pick REST “because it is newer” in this step.
+
+----------------------------------------------------------------------
+Next (not this step)
+----------------------------------------------------------------------
+
+  TradingView volume at these 20 timestamps, if obtainable cleanly
+    or
+  a written SSOT policy (product: emulate the volume series the live
+  system recertifies — current preference REST, undecided until TV)
+
+Then repair only the bars that policy justifies.
+Then WOZDUH-TRUTH-1.
+
+Machine: research/volume/volume-source-arbitration-1.json
+
+VOLUME-SOURCE-ARBITRATION-1 — STEP 2
+====================================
+
+HARD STOP after this chapter. VOLUME-TRUTH-RECOVERY-1 remains frozen.
+No TradingView. No Wozduh. No RSX / FeatureTape2 / Brain3.
+
+A. FROZEN SSOT POLICY
+---------------------
+Canonical futures BaseVolume = BINANCE REST family,
+subject to lower-timeframe additive integrity.
+  CASE A: REST 15m v == complete REST 1m sum AND OHLC identity → REST_15M_PARENT
+  CASE B: REST 15m v != that sum, 15 children + OHLC identity → REST_1M_RECONSTRUCTION
+  CASE C: otherwise → REST_FAMILY_UNRESOLVED (quarantine; do not invent; do not use Vision)
+Vision = provenance. TradingView = not market-ledger authority.
+Training uses the same family as live: WS lowercase v recertified to REST v.
+
+Correction vs the STEP 2 prompt’s full parent-OHLC gate: a volume-broken REST 15m
+parent also has broken High/Low/Close. Requiring parent OHLC == 1m envelope would
+quarantine the reconstruction the policy exists to allow. Interval identity is:
+  additive parent → Close/High/Low match (Open mismatch recorded, not fatal)
+  broken parent  → first 1m Open matches parent Open; High/Low/Close of parent ignored
+No extra float tolerance. Vision still unused.
+Also: certified rows are assigned even if some other rows remain unresolved.
+Live 1m recert is reported but not a v1 blocker while the bot is stopped for mutation.
+
+B. 20-BAR INVENTORY
+-------------------
+Loaded 20 futures BTCUSDT 15m rows from volume-source-arbitration-1.json (open_time asc).
+Spot / 1m / 3m conflicts are out of scope.
+
+C. PER-BAR SUPPORT
+------------------
+  2023-11-10T15:15:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=2531.089000 rest15=2531.089000 rest1m=2531.089000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=2531.089000 mut=false assigned=false
+  2023-11-10T15:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=3517.925000 rest15=3517.925000 rest1m=3517.925000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=3517.925000 mut=false assigned=false
+  2023-11-10T15:45:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=3982.465000 rest15=3982.465000 rest1m=3982.465000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=3982.465000 mut=false assigned=false
+  2023-11-10T16:00:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=11704.938000 rest15=11704.938000 rest1m=11704.938000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=11704.938000 mut=false assigned=false
+  2023-11-10T16:15:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=7017.955000 rest15=7017.955000 rest1m=7017.955000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=7017.955000 mut=false assigned=false
+  2024-03-27T12:15:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1392.806000 rest15=1392.806000 rest1m=1392.806000 vis15=1663.097000 vis1m=1663.097000 kids=15 ohlc=true interval=true openMis=false canon=1392.806000 mut=false assigned=false
+  2024-03-27T12:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1749.455000 rest15=1749.455000 rest1m=1749.455000 vis15=1950.378000 vis1m=1950.378000 kids=15 ohlc=false interval=true openMis=true canon=1749.455000 mut=false assigned=false
+  2024-03-28T10:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1613.834000 rest15=1613.834000 rest1m=1613.834000 vis15=1613.971000 vis1m=1613.971000 kids=15 ohlc=true interval=true openMis=false canon=1613.834000 mut=false assigned=false
+  2024-03-28T11:00:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=4300.833000 rest15=4300.833000 rest1m=4300.833000 vis15=4300.854000 vis1m=4300.854000 kids=15 ohlc=true interval=true openMis=false canon=4300.833000 mut=false assigned=false
+  2024-03-28T11:45:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1496.302000 rest15=1496.302000 rest1m=1496.302000 vis15=1724.464000 vis1m=1724.464000 kids=15 ohlc=true interval=true openMis=false canon=1496.302000 mut=false assigned=false
+  2024-03-28T12:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=2231.935000 rest15=2231.935000 rest1m=2231.935000 vis15=2232.018000 vis1m=2232.018000 kids=15 ohlc=true interval=true openMis=false canon=2231.935000 mut=false assigned=false
+  2024-10-28T20:00:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=2554.775000 rest15=2554.775000 rest1m=2554.775000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=2554.775000 mut=false assigned=false
+  2024-10-28T20:15:00Z step1=VISION_1M_SUPPORTS_VISION_15M step2=REST_PARENT_INVALID_CHILDREN_CERTIFIED src=REST_1M_RECONSTRUCTION stored=1752.859000 rest15=233.266000 rest1m=1752.859000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=false interval=true openMis=false canon=1752.859000 mut=false assigned=false
+  2024-10-28T20:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1130.060000 rest15=1130.060000 rest1m=1130.060000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=true interval=true openMis=false canon=1130.060000 mut=false assigned=false
+  2024-10-28T20:45:00Z step1=VISION_1M_SUPPORTS_VISION_15M step2=REST_PARENT_INVALID_CHILDREN_CERTIFIED src=REST_1M_RECONSTRUCTION stored=834.736000 rest15=9.646000 rest1m=834.736000 vis15=0.000000 vis1m=0.000000 kids=15 ohlc=false interval=true openMis=false canon=834.736000 mut=false assigned=false
+  2024-10-28T21:00:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=1395.290000 rest15=1395.290000 rest1m=1395.290000 vis15=32.637000 vis1m=32.637000 kids=15 ohlc=true interval=true openMis=false canon=1395.290000 mut=false assigned=false
+  2025-01-14T13:30:00Z step1=REST_1M_SUPPORTS_REST_15M step2=REST_PARENT_VALID src=REST_15M_PARENT stored=14066.114000 rest15=14066.114000 rest1m=14066.114000 vis15=12092.983000 vis1m=10589.807000 kids=15 ohlc=true interval=true openMis=false canon=14066.114000 mut=false assigned=false
+  2025-01-14T15:00:00Z step1=REST_1M_SUPPORTS_REST_15M step2=REST_PARENT_VALID src=REST_15M_PARENT stored=3324.817000 rest15=3324.817000 rest1m=3324.817000 vis15=2701.452000 vis1m=3324.817000 kids=15 ohlc=true interval=true openMis=false canon=3324.817000 mut=false assigned=false
+  2025-01-29T01:15:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=702.693000 rest15=702.693000 rest1m=702.693000 vis15=251.163000 vis1m=251.163000 kids=15 ohlc=true interval=true openMis=false canon=702.693000 mut=false assigned=false
+  2025-01-29T02:30:00Z step1=BOTH_INTERNALLY_CONSISTENT step2=REST_PARENT_VALID src=REST_15M_PARENT stored=440.499000 rest15=440.499000 rest1m=440.499000 vis15=295.134000 vis1m=295.134000 kids=15 ohlc=true interval=true openMis=false canon=440.499000 mut=false assigned=false
+
+D. TWO BROKEN REST-PARENT VALIDATIONS
+-------------------------------------
+  2024-10-28T20:15:00Z REST15=233.266000 REST1mSum=1752.859000 VIS15=0.000000 VIS1m=0.000000 kids=15 ohlc=false → REST_PARENT_INVALID_CHILDREN_CERTIFIED REST_1M_RECONSTRUCTION canon=1752.859000
+  2024-10-28T20:45:00Z REST15=9.646000 REST1mSum=834.736000 VIS15=0.000000 VIS1m=0.000000 kids=15 ohlc=false → REST_PARENT_INVALID_CHILDREN_CERTIFIED REST_1M_RECONSTRUCTION canon=834.736000
+Broken-parent rows processed: 2 (expected 2).
+
+E. CANONICALIZATION MANIFEST
+----------------------------
+research/volume/volume-source-arbitration-1-step2-manifest.json
+
+F. DB CHANGES
+-------------
+Writers snapshot (final recert): PID 5683 `main` holds history.db (bot restarted after APPLY).
+First APPLY (bot stopped): 20 exact-PK AssignCanonicalVolume writes; every reread matched canonical.
+This recert pass: Assigned rows: 0 (already canonical; mutation not required).
+
+Note: STEP 1 `stored` in the JSON artifact is pre-repair provenance. sqlite `stored_volume` is post-repair.
+
+G. POST-REPAIR 15m / 1h / 4h CERTIFICATION
+-----------------------------------------
+  15m N=246133 range=[1567964700000,1789483500000]
+  1h N=61534 range=[1567962000000,1789480800000]
+  4h N=15383 range=[1567958400000,1789459200000]
+Live closed samples (stored == REST v):
+  15m ot=1789483500000 stored=7509.507000 rest_v=7509.507000 match=true
+  1h ot=1789480800000 stored=24643.194000 rest_v=24643.194000 match=true
+  4h ot=1789459200000 stored=24406.823000 rest_v=24406.823000 match=true
+  1m ot=1789485420000 stored=109.108000 rest_v=109.108000 match=true
+
+Correction: after REST-family assignment, stored still disagrees with Vision on these
+20 bars. That is expected provenance, not an unresolved SOURCE_CONFLICT for v1.
+Census SOURCE_CONFLICT meant REST≠Vision. v1 certification is stored==REST-family canonical.
+
+H. VOLUME TRUTH VERSION
+-----------------------
+TruthVersion: volume-truth:futures-base-v1
+Market: Binance USD-M futures  Symbol: BTCUSDT  Semantic: BaseVolume
+PolicyDigest: 0590b4b00f10b4c662c431ec8e2e2454a196453aa7687242a0916d4a8e6b7a44
+CertifiedAtUTC (witness, not in content digest): 2026-09-15T15:18:40Z
+
+Future Binance REST revisions must mint volume-truth:futures-base-v2.
+They must not silently rewrite v1 experiments.
+
+I. CONTENT DIGESTS
+------------------
+  15m ContentDigest b8618361fa56f627c49aea0ba11e34cae0e86df03474416f15f025acdd5d42c0
+  1h ContentDigest 71a24e61611036aa977026588dbd8f2453a3ec2fa41f9d0e1929bad550412d5b
+  4h ContentDigest 7f5ed7c20cf5c6cbf710ce2e32b3c92b9304493e57a48f8b6ab35a1fadbeadb8
+  bundle 1c5e6b726c92cc2783730baa78543b7f2dd6dbe99accf39ab4f5c9b61299d0de
+  arbitration-set 2e709ce307a653809ba2642794ae5308e9e1d175997c87b92b25acfe338434a9
+
+J. REMAINING OUT-OF-SCOPE QUARANTINES
+-------------------------------------
+Unchanged: futures 1m SOURCE_CONFLICT, futures 3m SOURCE_CONFLICT, spot 15m SOURCE_CONFLICT.
+They do not block futures 15m/1h/4h Wozduh after this chapter.
+
+K. FINAL VERDICT
+----------------
+VOLUME_SSOT_GREEN_V1
+
+WOZDUH-TRUTH-1 is next and is NOT implemented here.

@@ -44,6 +44,8 @@ research/brain3/.venv/
 research/brain3/*.txt
 research/brain3/*.jsonl
 research/brain3/*.json
+research/volume/*.json
+research/volume/*.jsonl
 research/modelfit/.venv/
 *.test
 *.exe

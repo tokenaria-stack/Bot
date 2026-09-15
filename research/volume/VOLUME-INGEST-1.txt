@@ -1,0 +1,270 @@
+VOLUME-INGEST-1
+================
+
+Verdict: VOLUME_TRUTH_BLOCKED_UNKNOWN_CORRUPTION
+Repair: NONE (CASE C gate). Do not rewrite history.db.
+
+This chapter certified semantic law + fixtures + a full native-archive census.
+It did NOT assume 2026-09-06 poison. A clean census would have been GREEN.
+The census is mostly TOTAL_BASE historically, but it is not CASE A, and MATCH_NONE
+is not a legal CASE B repair.
+
+----------------------------------------------------------------------
+A. SEMANTIC LAW (frozen)
+----------------------------------------------------------------------
+
+Native / exchange candles (futures REST, futures WS, Vision, spot REST/Vision):
+
+    Kline.Volume ≡ BaseVolume
+                 ≡ Binance total BASE asset volume
+                 ≡ REST array index 5 ≡ WS JSON "v" ≡ Vision CSV column 5
+
+    BTCUSDT units = BTC
+
+    NEVER: taker-buy base "V", quote "q", taker-buy quote "Q"
+
+Reserved, not implemented (no consumer this chapter):
+
+    TakerBuyBaseVolume ≡ Binance "V"
+    Future sources: native kline V, or aggTrade side+Qty
+    Do not add the field to Kline / SQLite / q/Q / buy_fraction / imbalance.
+
+Micro / 1s (SecondBarBuilder → micro_klines):
+
+    Kline.Volume ≡ MicroTradeBaseVolume
+                 ≡ sum of Qty for ALL observed aggTrades in that second
+
+    Side (IsBuyerMaker / "m") is parsed then dropped. Changing m does not
+    change Volume. This is NOT Binance "V" and is NOT claimed equal to
+    native kline "v" without a separate source-parity test.
+
+Sparse seconds (5s–45s) and derived minute/hour views:
+
+    parent.Volume = sum(child.Volume) inside ONE semantic stream only.
+    Never mix BaseVolume with TakerBuyBaseVolume.
+
+WozduhBitVolBase:
+
+    DAG compute-mask bit: volume-based Wozduh work is required.
+    NOT Binance field "V".
+
+MAX (Ingress equal-authority + SQLite UPSERT):
+
+    Legal only when both old and incoming are the SAME semantic
+    (BaseVolume on native; MicroTradeBaseVolume on micro).
+    MAX is not v/V coercion, not quote/base coercion, not repair.
+
+Wozduh next chapter (not this one):
+
+    WozduhVolumeSource = certified BaseVolume on native closed candles.
+    Do not substitute V, quote, or 1s micro proxy unless a future spec says so.
+    BLOCKED until this ledger is GREEN.
+
+RSX / FeatureTape2 / Brain3: untouched.
+
+----------------------------------------------------------------------
+B. PRODUCER TABLE
+----------------------------------------------------------------------
+
+producer                         source              semantic                    forming/final     class                      tests
+futures REST klines              index 5 / Volume    BaseVolume                  closed pages      NATIVE_BASE_VOLUME        TestCandleFromFuturesRESTKline_VolumeIsVNotTaker
+futures WS kline                 JSON "v" only       BaseVolume                  forming+closed    NATIVE_BASE_VOLUME        TestParseFuturesWsKlineJSON_VolumeIsLowercaseV
+                                 (case-sensitive)
+Vision history_sync              CSV column 5        BaseVolume                  closed            NATIVE_BASE_VOLUME        TestCandleFromVisionCSV_Column5
+spot REST / Vision               Volume / col 5      BaseVolume                  closed            NATIVE_BASE_VOLUME        TestCandleFromSpotRESTKline_VolumeIsTotalBase
+ws aggTrade → AggTrade           p,q,T; drop m       qty only                    event             MICRO_TRADE_BASE_VOLUME   TestParseAggTradeJSON_DropsMakerFlag
+SecondBarBuilder                 sum Qty             MicroTradeBaseVolume        forming 1s        MICRO_TRADE_BASE_VOLUME   TestSecondBarBuilder_SumsAllQtyRegardlessOfWouldBeSide
+sparse seconds / derived TF      sum child Volume    DERIVED_SAME_SEMANTIC       live views        DERIVED_SAME_SEMANTIC     TestAssembleChildOHLCV_SumsSameSemanticVolume
+Ingress MergeCandle              Volume=MAX          same semantic only          closed merge      NATIVE or MICRO           documented; not a type converter
+SQLite UPSERT                    volume=MAX          same semantic only          persist           NATIVE_BASE_VOLUME        history_db comment
+repair_volumes (existing)        REST v via Save     MAX lift                    limited TF/days   not used this chapter     would not LOWER a wrong V if V were larger than v (it isn't)
+gap/history recovery             same REST/Vision    BaseVolume                  closed            NATIVE_BASE_VOLUME        uses CandleFrom* / REST Volume
+
+WS BUG (fixed in this chapter, production parse):
+
+    encoding/json matches struct tags case-insensitively.
+    json:"v" binds both "v" and "V"; the later key in the object wins.
+    Binance kline payloads include both. A struct unmarshal can store taker-buy V
+    in Kline.Volume. Production now uses a case-sensitive map and reads "v" only.
+    Fixture TestEncodingJSON_StructTagVIsCaseInsensitive documents the language trap.
+
+    Live SQLite tip still shows V because the running bot / already-written rows
+    were produced by the old parser (and REST has not overwritten those tips).
+    Archive history before the WS-only tip is overwhelmingly TOTAL_BASE.
+
+No producer writes q or Q into Kline.Volume.
+
+----------------------------------------------------------------------
+C. CONSUMER TABLE (formulas unchanged)
+----------------------------------------------------------------------
+
+consumer                         assumed semantic     status
+Wozduh SlotVolume ← k.Volume     BaseVolume           next chapter must bind BaseVolume; not implemented here
+Falcon Evaluate(..., Volume)     BaseVolume           uses candle volume as traded base qty
+geometry CheckBreakout           BaseVolume           breakout volume
+VolumeWeightedEMA / VW-EMA       BaseVolume           VWAP-style weights
+chart columnar Volume            BaseVolume           paint only
+FeatureTape / bar copies         BaseVolume           copies Kline.Volume; no V interpretation
+micro/sparse chart               MicroTradeBaseVolume 1s path only; do not use as native 15m Wozduh truth
+
+No consumer intentionally expects Kline.Volume to mean Binance V.
+
+----------------------------------------------------------------------
+D. ARCHIVE CENSUS (read-only, REST pages of 1000)
+----------------------------------------------------------------------
+
+Machine: research/volume/volume-ingest-1-census.json
+15m mismatch samples: research/volume/forensic15/
+
+Equality: VolumeFloatEqual (exact or 1e-9 relative / 1e-10 abs). Not a 0.1% hide.
+
+Native TFs actually stored (futures BTCUSDT) and compared:
+
+TF   stored    compared  TOTAL_BASE  TAKER_BUY  QUOTE  Q  ZERO  MATCH_NONE
+12h  3047      3047      3047        0          0      0  0     0
+15m  246110    246110    246052      38         0      0  9     11
+1M   84        84        84          0          0      0  0     0
+1d   2563      2563      2563        0          0      0  0     0
+1h   61528     61528     61518       10         0      0  0     0
+1m   3673875   3673875   3672698     772        0      0  0     405
+1w   367       367       367         0          0      0  0     0
+2h   3291      3291      3287        4          0      0  0     0
+30m  8707      8707      8688        19         0      0  0     0
+3m   1226244   1226244   1225861     246        0      0  0     137
+4h   15382     15382     15380       2          0      0  0     0
+5m   27246     27246     27098       148        0      0  0     0
+6h   3098      3098      3097        1          0      0  0     0
+8h   3074      3074      3073        1          0      0  0     0
+
+SKIP: BTCUSDT 3d (846 rows) — not IsNativeBinance in the live catalog.
+
+Spot BTCUSDT_SPOT (Vision-era, REST compared):
+
+TF   stored  compared  no_auth  TOTAL_BASE  TAKER_BUY  MATCH_NONE
+15m  67886   67805     81       67798       0          7
+1M   25      25        0        25          0          0
+1d   752     752       0        752         0          0
+1h   17952   17952     0        17952       0          0
+1w   107     107       0        107         0          0
+4h   4496    4496      0        4496        0          0
+
+Spot has ZERO taker-buy mis-tags. Authority extras are REST history beyond the
+spot Vision window (expected).
+
+Year split (material dirt only):
+
+  futures 15m: TOTAL_BASE through 2025 except ZERO (2023:5, 2024:4) and
+               MATCH_NONE (2024:7, 2025:4). All 38 TAKER_BUY_BASE are 2026.
+  futures 1m/3m MATCH_NONE and TAKER_BUY_BASE are 2026-only.
+  12h/1d/1w/1M: clean TOTAL_BASE all years compared.
+
+2026-09-06 00:45 UTC 15m (open_time 1788655500000) is NOT a poison marker.
+Prior targeted audit: stored = REST v = 389.735; REST V = 177.127.
+
+----------------------------------------------------------------------
+E. MICRO / DERIVED
+----------------------------------------------------------------------
+
+micro_klines n=30817  minOT=1789376080000  maxOT=1789463788000
+(about 24h of 1s). No archived aggTrade tape. REST 1s was not invented as
+a workaround. Builder fixture locks "sum all Qty". Do not classify 1s as
+corrupt vs native 15m/1m v.
+
+Derived TFs are catalog Persist=false (2m/10m/45m/3h, sparse seconds).
+Certified by AssembleChildOHLCV unit tests (same-semantic sum), not SQLite.
+
+----------------------------------------------------------------------
+F. REPAIR
+----------------------------------------------------------------------
+
+NONE.
+
+CASE B (TAKER_BUY_BASE → replace with REST v, not MAX) is IDENTIFIED at the
+2026 WS tip, but CASE C MATCH_NONE / ZERO forbids mutation.
+
+TAKER_BUY_BASE is explained: WS json v/V collision. First sampled 15m hit:
+  ot=1789373700000  2026-09-14 08:15 UTC
+  stored=865.765 = V, REST v=1494.822
+Live recert of newest *closed* native bars (last stored bar dropped as forming):
+  1m/5m/15m: 12/12 TAKER_BUY_BASE
+  1h: 8/12 TAKER_BUY_BASE (older of the 12 already lifted to v)
+  4h: 1/12 TAKER_BUY_BASE
+
+MATCH_NONE is NOT V. Samples (futures 15m):
+
+  ZERO_OR_MISSING 2023-11-10 15:15 UTC  stored=0  v=2531.089  V=1058.095
+  MATCH_NONE 2024-03-27 12:15 UTC  stored=1663.097  v=1392.806  V=563.648
+      stored > v > V  (MAX cannot explain this vs later REST v; unknown extra)
+  MATCH_NONE 2024-03-27 12:30 UTC  stored=1950.378  v=1749.455  V=786.900  (same pattern)
+  MATCH_NONE 2024-03-28 10:30 UTC  stored=1613.971  v=1613.834  V=960.448  (tiny excess vs v)
+  MATCH_NONE 2024-10-28 21:00 UTC  stored=32.637  v=1395.290  V=748.539  (under-index, not V)
+  MATCH_NONE 2025-01-14 13:30 UTC  stored=12092.983 v=14066.114 V=7592.337 (under v, not V)
+
+Spot 15m MATCH_NONE are small disagreements with REST v, not V
+(e.g. stored=396.187958 v=396.964369).
+
+Guessing a repair for MATCH_NONE would destroy forensic evidence. Stop.
+
+----------------------------------------------------------------------
+G. LIVE RECERTIFICATION
+----------------------------------------------------------------------
+
+Newest closed native futures bars vs REST v: WS-era tip is V, not v.
+After deploying the case-sensitive WS parser, NEW closed bars must be
+re-checked (WS stored Volume == REST v, != V). This process did not restart
+the live bot; recert used the existing ledger.
+
+Spot native ingestion is Vision-era historical, not an active live durable path.
+
+----------------------------------------------------------------------
+H. FINAL VERDICT
+----------------------------------------------------------------------
+
+VOLUME_TRUTH_BLOCKED_UNKNOWN_CORRUPTION
+
+Not GREEN. Wozduh must not bind BaseVolume as certified ledger-wide until:
+
+  1. MATCH_NONE / ZERO 15m (and 1m/3m 2026 MATCH_NONE) are explained without guessing
+     or isolated as a documented non-semantic hole class with an explicit law, AND
+  2. TAKER_BUY_BASE 2026 tip is replaced from REST v with authoritative assignment
+     (not MAX), AND
+  3. live closed native bars recertify as TOTAL_BASE after the WS parse fix.
+
+What IS frozen and safe to keep:
+
+  Semantic names: BaseVolume vs MicroTradeBaseVolume vs reserved TakerBuyBaseVolume
+  Producer fixtures (REST/WS/Vision/spot/1s/derived)
+  WS parse: case-sensitive "v"
+  Census artifact for this run
+  Finding that the old 2026-09-06 Stage-1 V story was not a history-wide poison date
+
+----------------------------------------------------------------------
+Corrections vs the prompt
+----------------------------------------------------------------------
+
+1. 1s Volume is not Binance V. It is sum of all aggTrade Qty. The parked
+   "seconds used V" observation matches the WS *kline* v/V JSON bug, not
+   SecondBarBuilder.
+
+2. Census used REST pages of 1000 (same v as Vision col5), not Vision zip
+   download. Same field, less moving parts.
+
+3. 3d exists in SQLite but is not a live native catalog TF. Skipped.
+
+4. Derived TFs are not persisted. Aggregation certified by fixtures only.
+
+5. Go encoding/json case-insensitivity is the live V leak. The prompt's
+   producer inventory would have missed it if we only read REST mappers.
+   Archive MAX(V, later REST v) can hide WS V historically because V<=v.
+   That is coincidence, not a conversion law.
+
+6. MATCH_NONE is mixed (holes, under-index, stored>v). Treating all dirty
+   rows as TAKER_BUY would be the theory-repair the prompt forbade.
+
+7. Live recert of 2026 bars is allowed for market-data truth. Used.
+
+8. repair_volumes remains MAX-based and was not used.
+
+9. FetchVolumeAuthorityPage still aligns StartTime to bar open. Pagination
+   with last+1 still completes because Binance returns forward pages; noted
+   as ugly, not rewritten (no merge-policy framework).

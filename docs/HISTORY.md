@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## VOLUME-SOURCE-ARBITRATION-1 STEP 2 — futures BaseVolume v1 (Sep 2026) ✅
+
+- REST-family SSOT with 1m additive integrity. 18 REST_15M_PARENT, 2 REST_1M_RECONSTRUCTION (2024-10-28 20:15/20:45).
+- Identity `volume-truth:futures-base-v1`. Digests in `research/volume/volume-truth-futures-base-v1.json`.
+- Verdict **VOLUME_SSOT_GREEN_V1**. Next (not started): WOZDUH-TRUTH-1.
+
 ## TP-STOP-INFORMATION-FORK-1 — locked binary probe (Sep 2026) ✅
 
 - Spec `888c103b…` frozen before audit. Inner resolved train ≥1145. N*=65/78/155/83. Python≈Go binary parity passed.

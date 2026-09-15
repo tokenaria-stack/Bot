@@ -27,20 +27,6 @@ type wsStreamEnvelope struct {
 	Data   json.RawMessage `json:"data"`
 }
 
-type wsKlinePayload struct {
-	Kline struct {
-		StartTime int64      `json:"t"`
-		CloseTime int64      `json:"T"`
-		Interval  string     `json:"i"`
-		Open      flexString `json:"o"`
-		Close     flexString `json:"c"`
-		High      flexString `json:"h"`
-		Low       flexString `json:"l"`
-		Volume    flexString `json:"v"`
-		IsClosed  bool       `json:"x"`
-	} `json:"k"`
-}
-
 type wsAggTradeEvent struct {
 	Price        string `json:"p"`
 	Quantity     string `json:"q"`
@@ -211,27 +197,10 @@ func (c *WsClient) connectAndListen(ctx context.Context) error {
 }
 
 func (c *WsClient) handleKline(ctx context.Context, raw json.RawMessage) {
-	var event wsKlinePayload
-	if err := json.Unmarshal(raw, &event); err != nil {
+	tick, err := ParseFuturesWsKlineJSON(raw)
+	if err != nil {
 		log.Printf("[WS ERROR] kline parse: %v", err)
 		return
-	}
-	if event.Kline.Interval == "" {
-		return
-	}
-
-	kdata := event.Kline
-	open, _ := kdata.Open.Float64()
-	high, _ := kdata.High.Float64()
-	low, _ := kdata.Low.Float64()
-	closePrice, _ := kdata.Close.Float64()
-	volume, _ := kdata.Volume.Float64()
-
-	tick := WsTick{
-		Timeframe: kdata.Interval,
-		IsClosed:  kdata.IsClosed,
-		// Binance WS k.t / k.T are Unix ms by API contract (#83 C1).
-		Kline: klineFromBinanceMs(kdata.StartTime, kdata.CloseTime, open, high, low, closePrice, volume),
 	}
 
 	select {
@@ -241,25 +210,11 @@ func (c *WsClient) handleKline(ctx context.Context, raw json.RawMessage) {
 }
 
 func (c *WsClient) handleAggTrade(raw json.RawMessage) {
-	var event wsAggTradeEvent
-	if err := json.Unmarshal(raw, &event); err != nil {
+	ev, err := ParseAggTradeJSON(raw)
+	if err != nil {
 		log.Printf("[WS ERROR] aggTrade parse: %v", err)
 		return
 	}
-
-	price, err := strconv.ParseFloat(event.Price, 64)
-	if err != nil || price <= 0 {
-		return
-	}
-	qty, err := strconv.ParseFloat(event.Quantity, 64)
-	if err != nil || qty <= 0 {
-		return
-	}
-	if event.TradeTime < 0 {
-		return
-	}
-
-	ev := AggTrade{TimeMs: event.TradeTime, Price: price, Qty: qty}
 	if c.AggCh != nil {
 		select {
 		case c.AggCh <- ev:

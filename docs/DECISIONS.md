@@ -7,6 +7,54 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## VOLUME-SOURCE-ARBITRATION-1 step 2 (Sep 2026)
+
+**Context:** Step 1 showed two coherent Binance tapes on 16/20 futures 15m bars, plus 2 REST-only and 2 Vision-only (broken REST 15m parents). Live producer is REST `v`.
+
+**Decision:** Canonical futures BaseVolume v1 = REST family, not REST-parent-always. Valid REST parent (v == complete REST 1m sum) owns. Invalid REST parent + 15 identity-valid REST 1m children → child sum owns. Vision is provenance. TradingView is not market ledger. Freeze `volume-truth:futures-base-v1` with content digests of BTCUSDT 15m/1h/4h. Future vendor revisions mint v2.
+
+**Rejected:** Full parent OHLC vs 1m envelope on broken parents — **Reason:** those parents also have broken High/Low/Close; that gate quarantines the reconstruction the policy exists to allow. Interval identity: additive parent Close/High/Low; broken parent Open. Vision because internally consistent — **Reason:** different source family than live. TradingView as SSOT — **Reason:** product parity belongs in WOZDUH-TRUTH-1.
+
+**Consequences:** VOLUME_SSOT_GREEN_V1. 20 assigned. 1m/3m/spot still quarantined. WOZDUH-TRUTH-1 may consume v1. Artifact `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`.
+
+---
+
+## VOLUME-SOURCE-ARBITRATION-1 step 1 (Sep 2026)
+
+**Context:** Recovery restored known V/authority mismatches. Wozduh 15m was blocked on REST vs Vision. ClassCounts “27” mixed 7 spot; futures N=20.
+
+**Decision (this step only):** Reconstruct those 20 bars from REST 1m and Vision 1m children. Do not pick SSOT, do not fetch TradingView, do not repair, do not start Wozduh.
+
+**Rejected:** IIR gap around the 20 bars — **Reason:** small enough to investigate. REST-wins because live uses REST — **Reason:** premature before child reconstruction. Extending RECOVERY-1 — **Reason:** surgical chapter.
+
+**Consequences:** 16/20 BOTH_INTERNALLY_CONSISTENT (two Binance histories). 2 REST-only, 2 Vision-only. Policy/TV is the next step. Artifact `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`.
+
+---
+
+## VOLUME-TRUTH-RECOVERY-1 (Sep 2026)
+
+**Context:** VOLUME-INGEST-1 froze BaseVolume vs MicroTradeBaseVolume vs reserved V, found the WS `encoding/json` v/V trap, and blocked on unnamed MATCH_NONE. Recovery must restore known truth without guessing and without a merge-policy framework.
+
+**Decision:** Canonical value over courtroom reconstruction. LIVE_V_COLLISION → final REST v. Deep rows → REST v and Vision v must agree and Open/Close identity must match, else SOURCE_CONFLICT. Closed native Volume ASSIGNS (Ingress equal-authority incoming; SQLite `excluded.volume`; `AssignCanonicalVolume` for exact PK). Forming 1s still sums Qty. No VolumeStatus column. No bot start/stop without the user.
+
+**Rejected:** Repair 1663.097 from REST while Vision equals stored — **Reason:** SOURCE_CONFLICT. MAX as final converter — **Reason:** cannot lower. Generic authority framework / schema flags — **Reason:** no consumer. Mutate while producer unverified or bot holds the DB — **Reason:** operational law.
+
+**Consequences:** Manifest ready; ledger unchanged. Verdict **VOLUME_TRUTH_BLOCKED_SOURCE_CONFLICT**. Wozduh 15m waits on 27 dual-source rows plus live recert. Artifact `research/volume/VOLUME-TRUTH-RECOVERY-1.txt`.
+
+---
+
+## VOLUME-INGEST-1 (Sep 2026)
+
+**Context:** Stage 1 RSX audit once showed a 15m bar whose stored volume matched Binance taker-buy `V`. 1s builders were also suspected of storing `V`. Census was required before any ledger rewrite.
+
+**Decision:** Freeze `Kline.Volume` as BaseVolume (Binance `v` / REST index 5 / Vision col 5) on native candles, and MicroTradeBaseVolume (sum of all aggTrade Qty) on 1s. Parse futures WS klines with a case-sensitive JSON map so `"v"` cannot bind `"V"`. Census the archive against REST `v/V/q/Q` before mutation. Repair only CASE B (contiguous TAKER_BUY_BASE with authoritative `v`). MATCH_NONE / quote / unexplained scale = HARD STOP, no MAX conversion.
+
+**Rejected:** Treat 2026-09-06 as a poison start date — **Reason:** recheck stored=`v`. Repair MATCH_NONE by guessing or MAX — **Reason:** destroys forensics; MAX is not a type converter. Persist `V`/`q`/`Q` or order-flow features this chapter — **Reason:** no consumer. Use Vision zip instead of REST pages of 1000 — **Reason:** same `v` field. Classify 1s vs native 15m `v` as corruption — **Reason:** different contract.
+
+**Consequences:** Verdict **VOLUME_TRUTH_BLOCKED_UNKNOWN_CORRUPTION**. Fixtures and WS parse shipped. `history.db` unchanged. Wozduh may not bind BaseVolume until GREEN. Artifact `research/volume/VOLUME-INGEST-1.txt`.
+
+---
+
 ## BRAIN3-FOUNDATION-1 (Sep 2026)
 
 **Context:** Brain V1/V2 are frozen prototypes. A MetaLabel CatBoost on SETUP-DATASET-1 must not become a Frankenstein (`setupMode`, UP=TP, width=64). Research must not re-certify CatBoost vendor internals before the hypothesis flies.

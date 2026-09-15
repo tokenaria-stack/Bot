@@ -13,6 +13,9 @@ type AggTrade struct {
 
 // SecondBarBuilder folds aggTrade events into 1s OHLCV. State is the current
 // forming bar only — no raw-event list.
+//
+// Volume is MicroTradeBaseVolume: sum of Qty for every aggTrade in the second.
+// Trade side is not on AggTrade; this is not Binance taker-buy "V".
 type SecondBarBuilder struct {
 	cur   Kline
 	has   bool

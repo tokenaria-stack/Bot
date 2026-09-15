@@ -95,6 +95,46 @@ func TestSaveKlines_UpsertOverwritesOHLCV(t *testing.T) {
 	if got[0].Close != 108 || got[0].High != 110 || got[0].Volume != 99 {
 		t.Fatalf("UPSERT did not apply fresher OHLCV: %+v", got[0])
 	}
+	third := []Candle{{
+		OpenTime: open, Open: 100, High: 110, Low: 95, Close: 108, Volume: 150, CloseTime: open + 59_999,
+	}}
+	if err := SaveKlines("BTCUSDT", "1m", third); err != nil {
+		t.Fatal(err)
+	}
+	got, err = LoadKlines("BTCUSDT", "1m", open, open+60_000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Volume != 150 {
+		t.Fatalf("final Volume must ASSIGN raise, got %v", got[0].Volume)
+	}
+}
+
+func TestSaveKlines_FinalVolumeAssignmentCanLower(t *testing.T) {
+	resetDBConnection(filepath.Join(t.TempDir(), "test_vol_assign.db"))
+	if err := InitDB(); err != nil {
+		t.Fatal(err)
+	}
+	open := int64(1_700_000_000_000)
+	first := []Candle{{
+		OpenTime: open, Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 1663, CloseTime: open + 59_999,
+	}}
+	if err := SaveKlines("BTCUSDT", "1m", first); err != nil {
+		t.Fatal(err)
+	}
+	second := []Candle{{
+		OpenTime: open, Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 1392, CloseTime: open + 59_999,
+	}}
+	if err := SaveKlines("BTCUSDT", "1m", second); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadKlines("BTCUSDT", "1m", open, open+60_000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Volume != 1392 {
+		t.Fatalf("final Volume must ASSIGN lower canonical v, got %+v", got)
+	}
 }
 
 func TestPersistenceQueue_EnqueuePersistsAll(t *testing.T) {

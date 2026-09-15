@@ -323,3 +323,37 @@ func candleFromFuturesKline(k *futures.Kline) (Candle, error) {
 		CloseTime: k.CloseTime,
 	}, nil
 }
+
+// FetchVolumeAuthorityPage returns up to `limit` futures kline volume fields from startOpenMs.
+// Sterile: no SQLite. Limit 1..1000. Used by VOLUME-INGEST-1 census (pages of 1000, not 1).
+func (b *BinanceExchange) FetchVolumeAuthorityPage(symbol, interval string, startOpenMs int64, limit int) ([]VolumeAuthority, error) {
+	if b == nil || b.client == nil {
+		return nil, fmt.Errorf("futures client is not configured")
+	}
+	if limit <= 0 || limit > maxKlinesLimit {
+		return nil, fmt.Errorf("limit must be 1..%d", maxKlinesLimit)
+	}
+	symbol = NormalizeFuturesSymbol(symbol)
+	startOpenMs = alignOpenTimeMs(startOpenMs, interval)
+	klines, err := b.client.NewKlinesService().
+		Symbol(symbol).
+		Interval(interval).
+		StartTime(startOpenMs).
+		Limit(limit).
+		Do(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("volume authority %s %s: %w", symbol, interval, err)
+	}
+	out := make([]VolumeAuthority, 0, len(klines))
+	for i, k := range klines {
+		if k == nil {
+			return nil, fmt.Errorf("nil kline at %d", i)
+		}
+		row, err := VolumeAuthorityFromFuturesRESTKline(k)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}

@@ -222,10 +222,10 @@ func SaveKlines(symbol, interval string, klines []Candle) error {
 		return err
 	}
 
-	// Monotonic firewall (Core 5.0 Phase B): exchange totals for a closed bar only
-	// grow on honest re-reads. A stale/under-indexed REST snapshot can never shrink
-	// volume or narrow the high/low range already archived. Open/Close stay
-	// last-write (fresher read wins) — source priority is enforced upstream (Ingress).
+	// Closed native UPSERT (VOLUME-TRUTH-RECOVERY-1): High=MAX / Low=MIN stay
+	// range envelopes. Volume ASSIGNS excluded.volume (final BaseVolume).
+	// MAX(volume) cannot lower a stale oversized value to canonical v.
+	// Forming ticks never use SaveKlines. Open/Close are last-write.
 	stmt, err := tx.Prepare(`
 INSERT INTO historical_klines
     (symbol, interval, open_time, open, high, low, close, volume, close_time)
@@ -235,7 +235,7 @@ ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
     high=MAX(historical_klines.high, excluded.high),
     low=MIN(historical_klines.low, excluded.low),
     close=excluded.close,
-    volume=MAX(historical_klines.volume, excluded.volume),
+    volume=excluded.volume,
     close_time=excluded.close_time`)
 	if err != nil {
 		return fmt.Errorf("prepare upsert: %w", err)

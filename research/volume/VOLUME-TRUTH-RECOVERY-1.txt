@@ -1,0 +1,133 @@
+VOLUME-TRUTH-RECOVERY-1
+========================
+
+Verdict: VOLUME_TRUTH_BLOCKED_SOURCE_CONFLICT
+
+Producer is certified. 1265 eligible rows restored by assignment.
+27 futures 15m SOURCE_CONFLICT remain (REST v ≠ Vision v). Those intersect
+the intended Wozduh 15m source, so Wozduh is not authorized.
+
+----------------------------------------------------------------------
+A. FIXED PRODUCER STATUS
+----------------------------------------------------------------------
+
+Binary: go-build cache main containing ParseFuturesWsKlineJSON
+        and error "ws kline v: %w" (case-sensitive lowercase v).
+Started: 2026-09-15 21:55:21 local (PID 3377, later stopped for APPLY).
+
+Phase A — newest closed bars vs REST (after restart, v ≠ V on every sample):
+
+  1m  ot=1789481640000..1789481820000  stored==v  (e.g. 64.516 vs V=22.823)  PASS
+  5m  four closed bars  stored==v  PASS
+  15m four closed bars stored==v  (3751.877 vs V=1628.681)  PASS
+  1h  four closed bars stored==v  PASS
+
+live_ok=true. No new TAKER_BUY_BASE on the fixed producer.
+
+For APPLY the dashboard was SIGTERM'd so it would not write history.db.
+It was started again with `go run .` after mutation.
+
+----------------------------------------------------------------------
+B. DIRTY ROW RECLASSIFICATION (pre-apply)
+----------------------------------------------------------------------
+
+TF    LIVE_V  AUTH_MISMATCH  SOURCE_CONFLICT
+15m   38      0              27
+1h    10      0              0
+1m    772     19             386
+2h    4       0              0
+30m   19      0              0
+3m    246     5              132
+4h    2       0              0
+5m    148     0              0
+6h    1       0              0
+8h    1       0              0
+SPOT 15m      0              7
+
+----------------------------------------------------------------------
+C. AUTHORITY
+----------------------------------------------------------------------
+
+LIVE_V: REST v only.
+AUTH_MISMATCH: REST v == Vision v, Open/Close identity.
+SOURCE_CONFLICT: REST v ≠ Vision v, or Open/Close identity failed.
+
+15m ot=1711541700000 stored=1663.097 remains Vision v; REST v=1392.806.
+Not repaired.
+
+----------------------------------------------------------------------
+D. REPAIR
+----------------------------------------------------------------------
+
+applied=1265 / manifest=1265
+AssignCanonicalVolume exact PK, assignment not MAX.
+
+Spot-check after APPLY:
+  15m 1789373700000 stored=1494.822 == REST v (was V=865.765)
+  15m 1789374600000 stored=697.96 == REST v
+  quarantined 1711541700000 stored=1663.097 unchanged
+
+Machine: research/volume/volume-repair-manifest.jsonl
+         research/volume/dirty-row-reclassification.json
+
+----------------------------------------------------------------------
+E. WRITE LAW
+----------------------------------------------------------------------
+
+Ingress equal-authority Volume ASSIGN incoming.
+SaveKlines volume=excluded.volume.
+AssignCanonicalVolume SET volume WHERE symbol+interval+open_time.
+Forming 1s still sums all aggTrade Qty.
+
+----------------------------------------------------------------------
+F. POST-REPAIR
+----------------------------------------------------------------------
+
+Exact repair set: runner reread every assigned row; stored == canonical v.
+Live closed recert (this session): TOTAL_BASE on 1m/5m/15m/1h.
+Full 7-year REST recrawl of all native TFs was not repeated (clean TFs were
+already TOTAL_BASE; remaining dirt is the quarantined SOURCE_CONFLICT set).
+
+----------------------------------------------------------------------
+G. UNRESOLVED
+----------------------------------------------------------------------
+
+SOURCE_CONFLICT: 545 rows
+  futures 15m: 27  (Wozduh TF)
+  futures 1m: 386
+  futures 3m: 132
+  spot 15m: 7
+
+No UNKNOWN.
+
+----------------------------------------------------------------------
+H. WOZDUH
+----------------------------------------------------------------------
+
+WOZDUH_VOLUME_NOT_READY
+
+1h and 4h LIVE_V rows were restored; no remaining V/AUTH on those TFs.
+15m still has 27 SOURCE_CONFLICT in 2023–2025. Do not run Wozduh IIR
+across them. Gap policy is WOZDUH-TRUTH-1.
+
+----------------------------------------------------------------------
+I. VERDICT
+----------------------------------------------------------------------
+
+VOLUME_TRUTH_BLOCKED_SOURCE_CONFLICT
+
+Not GREEN_WITH_QUARANTINED_OUT_OF_SCOPE_GAPS because the remaining
+conflicts sit on native 15m, the first Wozduh research TF.
+
+HARD STOP. No Wozduh implementation in this chapter.
+RSX / FeatureTape2 / Brain3 untouched.
+
+----------------------------------------------------------------------
+Corrections
+----------------------------------------------------------------------
+
+1. Producer recert used the user's restarted process, then a temporary
+   stop for APPLY, then `go run .` again.
+2. 1663.097 is Vision, not REST — still quarantined.
+3. Did not hammer a full 1m 2019–2026 REST census after repair; the
+   repair set was reread exactly and live tip recertified.

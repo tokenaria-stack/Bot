@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"encoding/json"
 	"testing"
 )
 
@@ -50,17 +49,11 @@ func TestWSKlinePayload_ToKlinePreservesMillis(t *testing.T) {
 		"k":{"t":730944000000,"T":730944059999,"s":"BTCUSDT","i":"1M",
 		"o":"100","c":"101","h":"102","l":"99","v":"1","x":true}
 	}`)
-	var event wsKlinePayload
-	if err := json.Unmarshal(raw, &event); err != nil {
+	tick, err := ParseFuturesWsKlineJSON(raw)
+	if err != nil {
 		t.Fatal(err)
 	}
-	kd := event.Kline
-	open, _ := kd.Open.Float64()
-	high, _ := kd.High.Float64()
-	low, _ := kd.Low.Float64()
-	closePrice, _ := kd.Close.Float64()
-	volume, _ := kd.Volume.Float64()
-	k := klineFromBinanceMs(kd.StartTime, kd.CloseTime, open, high, low, closePrice, volume)
+	k := tick.Kline
 	if k.OpenTime != 730_944_000_000 || k.CloseTime != 730_944_059_999 {
 		t.Fatalf("WS→kline times open=%d close=%d (must not ×1000)", k.OpenTime, k.CloseTime)
 	}

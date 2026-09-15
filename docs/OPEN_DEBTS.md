@@ -63,7 +63,9 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 | ID | What | Why later |
 |----|------|-----------|
-| **VOLUME-INGEST-1** | From 2026-09-06 00:45 UTC in Stage 1 sample, stored `Kline.Volume` matched Binance **taker-buy base**, not total `v`. OHLC exact. | All volume-derived facts uncertified. Not RSX. |
+| **VOLUME-INGEST-1** | Semantic fixtures + census. Not broadly V-poisoned. | Consumed by VOLUME-TRUTH-RECOVERY-1. |
+| **VOLUME-TRUTH-RECOVERY-1** | **FROZEN.** Producer green. 1265 assigned. | Do not extend. |
+| **VOLUME-SOURCE-ARBITRATION-1** | **FROZEN STEP 2. Verdict VOLUME_SSOT_GREEN_V1.** REST-family SSOT + 1m additive integrity. 18 REST_15M_PARENT + 2 REST_1M_RECONSTRUCTION. Identity `volume-truth:futures-base-v1`. 1m/3m/spot SOURCE_CONFLICT still quarantined. Report `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`. | Next: **WOZDUH-TRUTH-1** (not started). Do not silently refresh v1 from future Binance history. |
 | **FRACTAL-MARKER-SSOT-1** | `rsxFractalHitAtDisplayBar` / `scanRSXFractalHits` vs `FractalFacts` / `FractalFactsAt`. | Local-radius math, not Everget carry. Inventory consumers, then delete leftover marker path if unused. Do not reopen RSX-SIGNAL-3 detector math. |
 | **ATR-VALUES-FRAME-1** | `market/frame.go` still hydrates via `indicators.ATRValues` (legacy batch). ATR-TRUTH-1 left `ATRSeries` as canonical. | ATR leftover, not TV facts. |
 | **FEATURE-TAPE-RSX-REGEN-1 ✅ closed** | analysis:v2 four-column tape regenerated with `DumpFeatureTape`. | Consumed by RESEARCH-DATASET-1. Do not reuse analysis:v1 tapes. |
@@ -206,7 +208,7 @@ KEEP frozen evidence (tapes, OOF, logistic, Decision-Research-1). Do not moderni
 
 ### Parked (not Brain V2 now)
 
-VOLUME-INGEST-1; LightGBM challenger; learned pattern mining; V1 vs V2 comparison study; feature-importance theater; generic multi-brain / feature plugin / snapshot frameworks.
+VOLUME-INGEST-1 is **open CASE C** (see parked RSX-audit table above), not a Brain-V2 item. LightGBM challenger; learned pattern mining; V1 vs V2 comparison study; feature-importance theater; generic multi-brain / feature plugin / snapshot frameworks.
 
 **Later optimization — do not build in DATASET-C / VALIDATION-PLAN-C / OOF-MATRIX-C / CATBOOST-BRAIN-1.** Two real consumers first; extract the stable abstraction second.
 
