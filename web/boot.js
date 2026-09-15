@@ -1903,9 +1903,6 @@
       initLiveWebSocket();
       await loadDashboard();
       window.isAppInitialized = true;
-      if (typeof StructuralStopOverlay !== 'undefined' && StructuralStopOverlay.start) {
-        StructuralStopOverlay.start().catch(() => {});
-      }
     })().catch((err) => console.error('[Renaissance] boot async failed:', err));
   }
 

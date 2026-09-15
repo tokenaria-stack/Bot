@@ -1397,9 +1397,6 @@
       if (typeof LightweightCharts === 'undefined') return false;
       if (_live?.charts?.price) return true;
       _live = buildLiveState(selectors);
-      if (typeof StructuralStopOverlay !== 'undefined' && _live?.charts?.price && _live?.candleSeries) {
-        StructuralStopOverlay.attach(_live.charts.price, _live.candleSeries);
-      }
       // ADR-023: LayoutController often attaches before charts exist — re-mirror owner now.
       if (typeof LayoutController !== 'undefined' && typeof LayoutController.apply === 'function') {
         LayoutController.apply();
