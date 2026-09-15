@@ -3,6 +3,9 @@
  * Prefs per hostId (shared across live/backtest UI). Bindings per context+hostId.
  * scaleGroup is a dormant socket (default = hostId); no group apply yet.
  * Log only when allowLog=true (price). Visibility must never reset prefs.
+ *
+ * Command: UI / prefs → applyBinding → LWC (buttons, register, dblclick reset).
+ * Observation: LWC native axis gesture → prefs + UI only (never echo applyOptions).
  */
 (function (global) {
   'use strict';
@@ -293,6 +296,24 @@
     return true;
   }
 
+  /**
+   * Observation: LWC already changed Auto/Manual. Copy into prefs + UI.
+   * Must not applyBinding — echoing autoScale into LWC resets the native range.
+   */
+  function syncPanePrefsFromChart(hostId, chart) {
+    const id = String(hostId || '').trim();
+    if (!id || !chart) return false;
+    const cur = ensurePrefs(id);
+    const autoOn = readChartAutoScale(chart, cur.isAuto);
+    if (cur.isAuto === autoOn) return false;
+    const next = clonePane(cur);
+    next.isAuto = autoOn;
+    prefsByHost.set(id, next);
+    persist();
+    syncUI();
+    return true;
+  }
+
   function toggleAuto(context, hostId) {
     const resolved = resolveHostId(context, hostId);
     const pane = ensurePrefs(resolved);
@@ -366,10 +387,7 @@
       const key = bindingKey(context, hostId);
       const active = bindings.get(key)?.chart || chart;
       if (!active) return;
-      const pane = ensurePrefs(hostId);
-      const autoOn = readChartAutoScale(active, pane.isAuto);
-      if (pane.isAuto === autoOn) return;
-      setPanePrefs(hostId, { isAuto: autoOn });
+      syncPanePrefsFromChart(hostId, active);
     };
 
     const onMouseDown = (e) => {
@@ -531,6 +549,7 @@
     getState,
     setState,
     setPanePrefs,
+    syncPanePrefsFromChart,
     toggleAuto,
     toggleLog,
     syncUI,

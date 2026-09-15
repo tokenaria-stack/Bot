@@ -5,6 +5,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const ScaleController = require('./ui/scale-controller.js');
 
 function test(name, fn) {
@@ -36,17 +38,21 @@ function countingStorage(seed) {
 function fakeChart(initialAuto = true) {
   let auto = initialAuto;
   let mode = 0;
+  let applies = 0;
   return {
     priceScale() {
       return {
         options: () => ({ autoScale: auto }),
         applyOptions: (opts) => {
+          applies += 1;
           if (Object.prototype.hasOwnProperty.call(opts, 'autoScale')) auto = !!opts.autoScale;
           if (Object.prototype.hasOwnProperty.call(opts, 'mode')) mode = opts.mode;
         },
         width: () => 64,
         _mode: () => mode,
         _auto: () => auto,
+        _applies: () => applies,
+        _setAutoSilent: (v) => { auto = !!v; },
       };
     },
   };
@@ -274,6 +280,53 @@ test('legacy register(context, chart, host) maps to price', () => {
   ScaleController.register('live', chart, null);
   ScaleController.toggleLog('live', 'price');
   assert.strictEqual(ScaleController.getState('live', 'price').isLog, true);
+});
+
+test('observation sync copies LWC Auto off without applyBinding', () => {
+  const store = memoryStorage();
+  ScaleController._resetForTests({ storage: store });
+  ScaleController.init({ storage: store });
+  const chart = fakeChart(true);
+  ScaleController.register({
+    context: 'live', hostId: 'price', chart, allowLog: true,
+  });
+  assert.strictEqual(ScaleController.getState('live', 'price').isAuto, true);
+  const afterRegister = chart.priceScale()._applies();
+  chart.priceScale()._setAutoSilent(false);
+  const changed = ScaleController.syncPanePrefsFromChart('price', chart);
+  assert.strictEqual(changed, true);
+  assert.strictEqual(ScaleController.getState('live', 'price').isAuto, false);
+  assert.strictEqual(chart.priceScale()._auto(), false);
+  assert.strictEqual(chart.priceScale()._applies(), afterRegister, 'must not echo applyOptions');
+});
+
+test('toggleAuto still commands the chart', () => {
+  const store = memoryStorage();
+  ScaleController._resetForTests({ storage: store });
+  ScaleController.init({ storage: store });
+  const chart = fakeChart(true);
+  ScaleController.register({
+    context: 'live', hostId: 'rsx', chart, allowLog: false,
+  });
+  const n = chart.priceScale()._applies();
+  ScaleController.toggleAuto('live', 'rsx');
+  assert.strictEqual(ScaleController.getState('live', 'rsx').isAuto, false);
+  assert.ok(chart.priceScale()._applies() > n);
+});
+
+test('watcher observation uses syncPanePrefsFromChart; dblclick still commands', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'ui/scale-controller.js'), 'utf8');
+  const watch = src.match(/function attachManualScaleWatch\([\s\S]*?\n  function bindButtons/);
+  assert.ok(watch, 'attachManualScaleWatch found');
+  const body = watch[0];
+  assert.ok(body.includes('syncPanePrefsFromChart'), 'mouseup/wheel observe via syncPanePrefsFromChart');
+  assert.ok(!/syncAutoFromChart[\s\S]*setPanePrefs\(hostId, \{ isAuto: autoOn \}\)/.test(body),
+    'observation must not setPanePrefs/applyBinding');
+  assert.ok(body.includes('setPanePrefs(hostId, { isAuto: true })'), 'dblclick reset is a command');
+  const paint = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  const paintFn = paint.match(/function paintCandles\([\s\S]*?\n  \}/);
+  assert.ok(paintFn && !paintFn[0].includes('ScaleController.applyAll'),
+    'paintCandles stays free of applyAll');
 });
 
 console.log('scale_controller_test: ALL PASS');

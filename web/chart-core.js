@@ -1323,7 +1323,9 @@
    * Future strip via TimelineDecoration, never concatenated onto candles.
    *
    * Paint order (no mid-paint camera):
-   *   setData → volume → Y-scale prefs → (optional decoration) → done
+   *   setData → volume → (optional decoration) → done
+   * Y-scale Auto/Manual/Log is event-driven (create/register/toggles/watcher).
+   * Data paint must not write ScaleController scale mode.
    * Camera restore belongs to ChartCompositor AFTER this returns.
    *
    * @param {object} state
@@ -1337,10 +1339,6 @@
     state.candleSeries.setData(candles);
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.setData(toVolumeBars(candles));
-    }
-    // Y-scale only (autoScale/log). Does NOT write visibleLogicalRange.
-    if (typeof ScaleController !== 'undefined' && typeof ScaleController.applyAll === 'function') {
-      ScaleController.applyAll();
     }
     if (typeof ToolbarController !== 'undefined') {
       ToolbarController.updateVolume(candles);

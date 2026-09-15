@@ -7,7 +7,17 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
-## VOLUME-SOURCE-ARBITRATION-1 step 2 (Sep 2026)
+## SCALE-GESTURE-OWNERSHIP-1 (Sep 2026)
+
+**Context:** First Y-axis stretch snapped on mouseup; Auto icon stayed lit during the drag; second stretch stuck. `paintCandles → applyAll()` was a competing writer and was removed, but the snap survived.
+
+**Decision:** Command vs observation. Buttons / register / dblclick reset: prefs → `applyBinding` → LWC. Native axis drag/wheel: LWC → `syncPanePrefsFromChart` (prefs + UI only). Never echo `autoScale` back into LWC. Same law for price, RSX, Wozduh. Data paint must not write Y-scale mode.
+
+**Rejected:** Drag-flag / pause `setData` — **Reason:** timing patch. Force Manual on mousedown/first-move — **Reason:** LWC already `autoScale=false` by mouseup; click-axis must not drop Auto. `manualRange` persistence — **Reason:** different product. Revert `applyAll` removal — **Reason:** paint still must not own scale.
+
+**Consequences:** First-drag snap was `setPanePrefs` → `applyBinding` on first mouseup. Chapter frozen. Do not reopen ScaleController except a real regression.
+
+---
 
 **Context:** Step 1 showed two coherent Binance tapes on 16/20 futures 15m bars, plus 2 REST-only and 2 Vision-only (broken REST 15m parents). Live producer is REST `v`.
 

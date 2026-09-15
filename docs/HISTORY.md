@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SCALE-GESTURE-OWNERSHIP-1 — Y-axis first-drag snap (Sep 2026) ✅
+
+- Command: UI/prefs → `applyBinding` → LWC. Observation: native axis gesture → prefs/UI only (`syncPanePrefsFromChart`).
+- `paintCandles` does not `ScaleController.applyAll()`. No drag flags, no `manualRange` persistence, TimeCamera untouched.
+- Frozen. Do not reopen ScaleController except a real regression.
+
 ## VOLUME-SOURCE-ARBITRATION-1 STEP 2 — futures BaseVolume v1 (Sep 2026) ✅
 
 - REST-family SSOT with 1m additive integrity. 18 REST_15M_PARENT, 2 REST_1M_RECONSTRUCTION (2024-10-28 20:15/20:45).

@@ -19,6 +19,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **SPARSE-ADR010-TIP-1 ✅ frozen** (`a452cb5`). Do not reopen `projectSparseSecondFormingTip`, sparse OVERWRITE, or calendar `isFormingKline` on 5s–45s. Native `projectViewportFormingTip` stays isolated.
 
+**SCALE-GESTURE-OWNERSHIP-1 ✅ frozen.** Command: prefs → LWC. Observation: native Y-axis gesture → prefs/UI only. Do not reopen ScaleController except a real regression. No drag flags, no `manualRange` persistence.
+
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
 
 **NEXT order (do not start inside this freeze):**
