@@ -2355,6 +2355,10 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Dashboard] ws welcome: %v", err)
 		return
 	}
+	if err := d.writeTimelineState(client); err != nil {
+		log.Printf("[Dashboard] ws timeline_state: %v", err)
+		return
+	}
 
 	for {
 		_, message, err := conn.ReadMessage()
@@ -2372,6 +2376,36 @@ func (d *DashboardServer) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Type == "subscribe" && msg.TF != "" {
 			d.setClientSubscribe(client, msg.TF, msg.Slots, msg.Facts)
+			continue
+		}
+		if msg.Type == "timeline_state_request" {
+			if err := d.writeTimelineState(client); err != nil {
+				log.Printf("[Dashboard] ws timeline_state reply: %v", err)
+				return
+			}
 		}
 	}
+}
+
+// timelinePublishableNow reads Master.IsTimelinePublishable().
+// Nil Master (no heal gate) is treated as publishable.
+func (d *DashboardServer) timelinePublishableNow() bool {
+	if d == nil || d.master == nil {
+		return true
+	}
+	return d.master.IsTimelinePublishable()
+}
+
+func timelineStatePayload(publishable bool) map[string]any {
+	return map[string]any{
+		"type":        "timeline_state",
+		"publishable": publishable,
+	}
+}
+
+func (d *DashboardServer) writeTimelineState(client *WSClient) error {
+	if client == nil {
+		return nil
+	}
+	return client.WriteJSON(timelineStatePayload(d.timelinePublishableNow()))
 }

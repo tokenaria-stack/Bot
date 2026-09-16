@@ -8,6 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SCALE/TIMELINE test-forest cleanup (Sep 2026) ✅
+
+- Deleted diagnostic `scale_blank_price_diag_test.js`. Kept ownership-law scale + timeline tests. Kept `[FEGap]` / `[HealProbe]`. Deleted volume-ingest canvas.
+
+## TIMELINE-RECOVERY-STATE-1 — FE recovery current-state handshake (Sep 2026) ✅
+
+- Local distrust starts recovery; Master bool decides wait vs replace; recovery ends in `replaceMonolith`.
+- Wire: welcome `timeline_state` once; `timeline_state_request` on an open socket; no echo on TF subscribe.
+- Live 2026-09-16 16:26 +08: Binance WS drop → Master heal → FE `[FEGapRecovered]` generation=2, tip `deltaSec: 0`, no stalled badge.
+- Frozen. Do not reopen FE recovery / native gap repair except a real regression.
+
 ## SCALE-GESTURE-OWNERSHIP-1 — Y-axis first-drag snap (Sep 2026) ✅
 
 - Command: UI/prefs → `applyBinding` → LWC. Observation: native axis gesture → prefs/UI only (`syncPanePrefsFromChart`).

@@ -379,7 +379,9 @@
     const rest = pending.rest || {};
     const elapsedMs = Date.now() - pending.armedAt;
     const ADR015_MAX_MS = 2000;
-    const healing = !!(timelineRecovery?.isHealing?.()) || !!window.__isDashboardLoading;
+    const healing = !!(timelineRecovery?.isHealing?.())
+      || !!(timelineRecovery?.isSnapshotRequired?.())
+      || !!window.__isDashboardLoading;
     const sameOpen = Number(rest.lastOpenSec) === wsOpen;
 
     if (healing || pending.healingAtArm) {
@@ -572,9 +574,9 @@
       isOrderFlowTf: () => false,
       pollOrderFlowState: noopAsync,
       updateBufferingOverlay,
+      abortLiveStateFetch: noop,
       handleBacktestIntervalChange: noop,
       getBacktestInterval: () => window.backtestTf,
-      abortLiveStateFetch: noop,
       disarmLiveHistoryScroll,
       openFloatingMenu: (menu, anchor) => {
         if (window.FloatingMenu?.open) return window.FloatingMenu.open(menu, anchor);
@@ -582,8 +584,8 @@
       initFloatingMenuDrag: (menu) => {
         if (window.FloatingMenu?.initDrag) return window.FloatingMenu.initDrag(menu);
       },
-      buildFinalBacktestPayload: () => window.currentBacktestPayload || {},
       getActiveUiContext: () => 'live',
+      buildFinalBacktestPayload: () => window.currentBacktestPayload || {},
       shouldPaintLiveChart: () => TabsController?.isLiveTabActive?.() !== false,
       runBacktest: noopAsync,
       stopBacktest: noop,
@@ -596,10 +598,8 @@
       scheduleRsxSettingsSync,
       flushRsxSettingsSync,
       triggerNavigatorAutoUpdate: noop,
-      refreshStatsForMode: noop,
       initPanelSettingsOutsideClose: noop,
       initPanelSettingsEnterNavigation: noop,
-      initEquityChart: noop,
       toggleRuler: () => (typeof ChartAdapter !== 'undefined' && ChartAdapter.toggleRuler
         ? ChartAdapter.toggleRuler()
         : undefined),
@@ -654,12 +654,11 @@
       setNavigatorOverlay: noop,
       hideLegacyOscillatorSeries: noop,
       enableDDROscCutover: noop,
+      ensureBacktestChart: () => false,
+      applyBacktestMarkers: noop,
       destroyLiveCharts: noop,
       syncVisibleLogicalRange: noop,
-      ensureBacktestChart: () => false,
       activateSurface: () => false,
-      applySimOverlay: noop,
-      applyBacktestMarkers: noop,
       initRuler: noop,
       attachRuler: noop,
       updateRulerOverlay: noop,
@@ -711,37 +710,118 @@
     ToolbarController.setBuffering(!!window.__isDashboardLoading);
   }
 
+  function denseRecoveryApplies() {
+    return typeof isSparseLiveChart !== 'function' || !isSparseLiveChart(window.currentTf);
+  }
+
+  function logFEGap(extra) {
+    const store = liveColumnarStore;
+    const times = store?.timesSec?.() || [];
+    console.warn('[FEGap]', {
+      tf: window.currentTf,
+      reason: timelineRecovery?.lastRecoveryReason?.() || extra?.reason,
+      expectedOpen: extra?.expectedOpen,
+      receivedOpen: extra?.receivedOpen,
+      storeTip: times.length ? times[times.length - 1] : null,
+      masterState: extra?.masterState ?? 'unknown',
+      generation: timelineRecovery?.currentGeneration?.() ?? null,
+    });
+  }
+
+  function logFEGapRecovered(extra) {
+    const times = extra?.times || liveColumnarStore?.timesSec?.() || [];
+    console.log('[FEGapRecovered]', {
+      tf: window.currentTf,
+      reason: extra?.reason || timelineRecovery?.lastRecoveryReason?.(),
+      historyTip: times.length ? times[times.length - 1] : extra?.historyTip ?? null,
+      rows: times.length || extra?.rows || 0,
+      generation: extra?.generation ?? timelineRecovery?.currentGeneration?.(),
+    });
+  }
+
+  function beginAuthoritativeSnapshot(generation, reason) {
+    if (!denseRecoveryApplies()) return;
+    const viewportAnchor = captureReconnectViewportAnchor();
+    loadDashboard({
+      viewportAnchor,
+      quiet: true,
+      recoveryGeneration: generation,
+      recoveryReason: reason || timelineRecovery?.lastRecoveryReason?.(),
+    });
+  }
+
+  function applyMasterTimelineState(publishable, masterStateKnown) {
+    if (!denseRecoveryApplies()) {
+      if (publishable && timelineRecovery?.isHealing?.()) {
+        timelineRecovery.snapshotCommitted?.(timelineRecovery.currentGeneration?.());
+      }
+      return;
+    }
+    if (!timelineRecovery) {
+      if (publishable) beginAuthoritativeSnapshot(0, 'no_module');
+      return;
+    }
+    const result = timelineRecovery.onTimelineState(publishable === true);
+    if (result.action === 'observe') return;
+    if (result.action === 'heal') return;
+    if (result.action === 'replace') {
+      if (masterStateKnown) {
+        /* FEGap may already have logged unknown; recovered after replace */
+      }
+      beginAuthoritativeSnapshot(result.generation, result.reason);
+    }
+  }
+
+  function requestDenseRecovery(reason) {
+    if (!denseRecoveryApplies()) return;
+    const why = String(reason || 'unknown');
+    if (timelineRecovery) {
+      timelineRecovery.markSnapshotRequired(why);
+    }
+    beginLiveTickBuffer();
+    if (why === 'browser_transport_loss' || why === 'manual_retry') {
+      logFEGap({ reason: why, masterState: 'unknown' });
+    }
+    if (typeof WS !== 'undefined' && typeof WS.isOpen === 'function' && WS.isOpen()
+      && typeof WS.requestTimelineState === 'function') {
+      WS.requestTimelineState();
+    }
+  }
+
   function enterTimelineHealing(reason) {
-    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
+    if (!denseRecoveryApplies()) {
       return;
     }
     if (timelineRecovery) {
       timelineRecovery.enter(reason);
       return;
     }
-    // Fallback if script failed to load: buffer ticks only.
     beginLiveTickBuffer();
   }
 
   function onTimelineHealingFromServer() {
-    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
-      return;
-    }
-    enterTimelineHealing('server_timeline_healing');
-  }
-
-  function onTimelinePublishableFromServer() {
-    if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
-      // Clear leftover dense HEALING if the user switched TF; never hydrate 1s from Master.
-      timelineRecovery?.publishable?.();
+    if (!denseRecoveryApplies()) {
       return;
     }
     if (timelineRecovery) {
-      timelineRecovery.publishable();
+      timelineRecovery.markSnapshotRequired('master_timeline_healing');
+    }
+    bumpProjectionEpoch();
+    enterTimelineHealing('server_timeline_healing');
+    beginLiveTickBuffer();
+  }
+
+  function onTimelinePublishableFromServer() {
+    if (!denseRecoveryApplies()) {
+      timelineRecovery?.snapshotCommitted?.(timelineRecovery.currentGeneration?.());
       return;
     }
-    if (window.__isDashboardLoading) return;
-    loadDashboard();
+    applyMasterTimelineState(true, true);
+  }
+
+  function onTimelineStateFromServer(msg) {
+    const publishable = msg?.publishable === true;
+    applyMasterTimelineState(publishable, true);
   }
 
   function captureReconnectViewportAnchor() {
@@ -763,8 +843,7 @@
       loadDashboard({ viewportAnchor, quiet: true });
       return;
     }
-    console.warn('[Self-Healing] browser WS reconnected — entering timeline recovery');
-    enterTimelineHealing('browser_ws_reconnect');
+    requestDenseRecovery('browser_transport_loss');
   }
 
   function initTimelineRecovery() {
@@ -780,12 +859,11 @@
         }
         beginLiveTickBuffer();
       },
-      onRecovered() {
-        if (window.__isDashboardLoading) return;
-        if (typeof isSparseLiveChart === 'function' && isSparseLiveChart(window.currentTf)) {
-          return;
-        }
-        loadDashboard();
+      onReplaceSnapshot({ generation, reason }) {
+        beginAuthoritativeSnapshot(generation, reason);
+      },
+      onRetry() {
+        requestDenseRecovery('manual_retry');
       },
     });
   }
@@ -1420,6 +1498,12 @@
   function pushLiveTickDelta(tick, options = {}) {
     if (!liveColumnarStore || !liveRenderScheduler || liveColumnarStore.isSealed()) return false;
     const tickTf = tick?.timeframe || window.currentTf;
+    const denseTick = typeof requiresDenseTimeContinuity === 'function'
+      ? requiresDenseTimeContinuity(tickTf)
+      : true;
+    if (denseTick && timelineRecovery?.isSnapshotRequired?.()) {
+      return false;
+    }
     // Dense HISTORY island must not ingest live ticks (Debt #69A gap-heal yank).
     // Sparse 1s: MICRO-2C still ingests; paint is gated by TimeCamera VIEW.
     // Blocking ingest here deadlocks 1s: quiet seconds never promote windowMode.
@@ -1447,16 +1531,23 @@
         return false;
       }
       if (liveColumnarStore.windowMode === 'history') return false;
-      console.warn('[Self-Healing] Time gap detected — waiting for server heal', {
-        lastTime: appendResult.lastTime,
-        tickTime: appendResult.tickTime,
-        timeframe: tick?.timeframe || window.currentTf,
-      });
       const now = Date.now();
-      // Throttle: do not storm beginAwait; backend ingest gap / reconnect drives heal.
-      if (!window.__isDashboardLoading && now - lastGapHealAt > GAP_HEAL_COOLDOWN_MS) {
+      if (now - lastGapHealAt > GAP_HEAL_COOLDOWN_MS) {
         lastGapHealAt = now;
-        enterTimelineHealing('fe_gapDetected');
+        const intervalFn = typeof getIntervalMs === 'function'
+          ? getIntervalMs
+          : (typeof TimeNormalizer !== 'undefined' ? TimeNormalizer.getIntervalMs : null);
+        const intervalSec = intervalFn
+          ? Math.floor(Number(intervalFn(window.currentTf || tickTf)) / 1000)
+          : 0;
+        const last = Number(appendResult.lastTime);
+        logFEGap({
+          reason: 'fe_gapDetected',
+          expectedOpen: Number.isFinite(last) && intervalSec > 0 ? last + intervalSec : undefined,
+          receivedOpen: appendResult.tickTime,
+          masterState: 'unknown',
+        });
+        requestDenseRecovery('fe_gapDetected');
       }
       return false;
     }
@@ -1598,7 +1689,8 @@
       onOpen: () => wsSubscribeTf(window.currentTf),
       onTimelineHealing: onTimelineHealingFromServer,
       onTimelinePublishable: onTimelinePublishableFromServer,
-      // Browser↔bot reconnect ≠ Binance heal. Sparse: quiet Shot 10B. Dense: TimelineRecovery.
+      onTimelineState: onTimelineStateFromServer,
+      // Browser↔bot reconnect ≠ Binance heal. Sparse: Shot 10B. Dense: requestDenseRecovery.
       onReconnect: onBrowserReconnect,
     });
   }
@@ -1654,6 +1746,8 @@
 
   async function loadDashboard(options = {}) {
     const viewportAnchor = options.viewportAnchor ?? null;
+    const recoveryGeneration = options.recoveryGeneration;
+    const recoveryReason = options.recoveryReason;
     const epoch = bumpProjectionEpoch();
     if (!ChartAdapter.isInitialized('live') && !ChartAdapter.initLiveCharts()) {
       setTimeout(() => loadDashboard(options), 500);
@@ -1790,6 +1884,16 @@
         window.historyHasNewer = columnar.hasNewer === true;
       }
       sparseParentResumeAfterSec = 0;
+      if (recoveryGeneration != null && timelineRecovery) {
+        if (!timelineRecovery.snapshotCommitted(recoveryGeneration)) {
+          return;
+        }
+        logFEGapRecovered({
+          reason: recoveryReason,
+          times: histTimes,
+          generation: recoveryGeneration,
+        });
+      }
       flushLiveTickBuffer();
       if (!liveColumnarStore.invariantOk()) {
         console.error('[Renaissance] ColumnarStore invariant failed', liveColumnarStore.invariantMeta());
@@ -1815,10 +1919,7 @@
     } finally {
       liveColumnarStore?.unseal?.();
       if (!isCurrentEpoch(epoch)) {
-        abortLiveTickBuffer();
-        window.__isDashboardLoading = false;
-        updateBufferingOverlay();
-        liveHydrationOrchestrator?.tryConsumePending?.();
+        if (tickBufferEpoch === epoch) abortLiveTickBuffer();
       } else if (retrying) {
         // Keep buffer + loading flag across warmingUp retry.
         window.__isDashboardLoading = true;
@@ -1865,14 +1966,13 @@
         });
       }
     });
+    safeInit('UI backtest', () => BacktestController.init());
     safeInit('UI tabs', () => TabsController.init());
     safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: false }));
     safeInit('UI toolbar', () => ToolbarController.init());
     safeInit('UI scale', () => ScaleController.init());
     safeInit('UI layout', () => LayoutController.init());
     safeInit('UI navigator', () => NavigatorController.init());
-    safeInit('UI backtest', () => BacktestController.init());
-
     (async () => {
       if (typeof LightweightCharts === 'undefined' || typeof ChartAdapter === 'undefined') {
         setTimeout(boot, 500);

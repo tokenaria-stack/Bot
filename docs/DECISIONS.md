@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+---
+
+## TIMELINE-RECOVERY-STATE-1 (Sep 2026)
+
+**Context:** NATIVE-GAP-RECONNECT-AUDIT-1: reported 3m/5m holes were present in SQLite/API/REST at audit time. Proven bug: FE waited for a `timeline_publishable` **edge** while Master already held publishable **state**. Browser reconnect entered HEALING; dense `gapDetected` did the same on an open socket. Watchdog showed `Reconnect stalled — Retry`.
+
+**Decision:** Local distrust (`snapshotRequired`) starts recovery. Dashboard **reads** `IsTimelinePublishable()` as `timeline_state` (welcome once + `timeline_state_request`). Master false → HEALING; Master true + distrust → authoritative `loadDashboard`/`replaceMonolith` then LIVE. Browser reconnect is not timeline HEALING. TF subscribe does not echo state. Events never substitute for current state. Recovery is complete only after snapshot commit (`[FEGapRecovered]`). Master native heal stays closed.
+
+**Rejected:** State-on-every-subscribe — **Reason:** TF change is not recovery (Y-scale observation trap). JS REST/gap fill — **Reason:** wrong owner. Reopen Master heal — **Reason:** no T0 proof of missing backend PK. New FE FSM states — **Reason:** `snapshotRequired` is a bit, not a third state.
+
+**Consequences:** Live-certified 2026-09-16 16:26 +08 (Binance disconnect → Master reconcile → FE snapshot replace, `deltaSec: 0`, no stalled badge). Frozen. Do not reopen reconnect/timeline-recovery/native-gap repair except a real regression. Next research: WOZDUH-TRUTH-1. Artifact `research/history/TIMELINE-RECOVERY-STATE-1.txt`.
+
 ## SCALE-GESTURE-OWNERSHIP-1 (Sep 2026)
 
 **Context:** First Y-axis stretch snapped on mouseup; Auto icon stayed lit during the drag; second stretch stuck. `paintCandles → applyAll()` was a competing writer and was removed, but the snap survived.

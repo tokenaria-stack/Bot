@@ -1,0 +1,500 @@
+NATIVE-GAP-RECONNECT-AUDIT-1
+READ-ONLY forensic ownership audit. No code changes. No DB writes. No REST repair.
+
+Audit clock: 2026-09-16 ~10:20 +08 (after user screenshots 09:52 and console paste ~09:58).
+Symbol: BTCUSDT USD-M. history.db open_time = Unix ms (tip 1m open_time=1789525260000).
+SQLite access: file:?mode=ro + PRAGMA query_only (did not start MCP sqlite-history).
+Bot/dashboard: GET /api/history on 127.0.0.1:8080 returned status=ready (live process was serving).
+
+======================================================================
+VERDICTS (two independent bugs)
+======================================================================
+
+A. DATA GAP VERDICT
+
+    GAP_NOT_ACTUALLY_MISSING
+
+    at the durable + HTTP layers as of this audit.
+
+    Exact reported windows (±20 minutes, +08):
+      5m  2026-09-16 02:40  open_sec=1789497600  sqlite=Y  /api/history=Y  Binance REST=Y  OHLC+volume MATCH
+      5m  2026-09-16 06:45  open_sec=1789512300  sqlite=Y  /api/history=Y  Binance REST=Y  OHLC+volume MATCH
+      3m  02:39 / 02:42 / 02:45 … all on-grid bars in the window: sqlite=Y API=Y REST=Y
+      3m  06:45 is on the 3m grid (open_sec % 180 == 0): sqlite=Y API=Y REST=Y
+      1m, 2m, 15m: no internal missing opens 00:00–10:30 +08
+      10m buckets 02:40 and 06:40: present in /api/history
+
+    Full-morning internal-gap scan (sqlite PK grid, 00:00–10:30 +08):
+      1m n=623 missing=0
+      3m n=207 missing=0
+      5m n=124 missing=0
+      15m n=41 missing=0
+    Same morning span on live /api/history (limit=3000, endTime=now): 3m/5m/2m missing_in_span=0.
+
+    This verdict is for CURRENT sqlite ∪ HTTP. It does NOT rewind 09:52.
+    Screenshot 09:52 still shows painted empty slots. Those slots are not missing
+    PKs in sqlite/API now. See §10m discriminator and §unproven 09:52.
+
+B. FRONTEND RECOVERY VERDICT
+
+    FE_RECOVERY_MISSES_PUBLISHABLE_STATE
+
+C. PROCESS TIMER OBSERVATION
+
+    PROCESS_TIMER_DELAY observed (06:33:05 "reconnecting in 8s" → 06:45:04 next Connecting).
+    Impossible under a running `time.After(8s)` with a scheduled goroutine.
+    Cause (OS sleep vs process freeze vs clock jump) NOT independently proven.
+    Not a logging gap: connectAndListen logs "Connecting" at every attempt.
+
+======================================================================
+CORRECTIONS TO PRIOR REASONING (Grok / this thread)
+======================================================================
+
+1. Do not treat a chart screenshot as a missing sqlite/Frame PK.
+   Grok's forming-bar / native-heal-missed story is a PLAUSIBLE reconnect path,
+   not current archive truth. 06:45 5m NOW exists and equals Binance REST
+   (75578.4 / 75666.6 / 75560.0 / 75664.9 vol 299.019).
+
+2. GPT was right: "10m was probably easy to miss" is not an answer.
+   Exact 10m buckets were checked. They are present in /api/history.
+   10m is derived from 5m in CURRENT catalog/code (not stale docs).
+
+3. 5m-hole + 10m-good is NOT a contradiction if the 5m hole is in the FE
+   ColumnarStore after history load, while 10m HTTP is FoldClosedChildren of
+   GetWindow(5m). Those are different series. See §3.
+
+4. HealProbe tf=1m is TELEMETRY (work TF / DefaultTradingTimeframe=1m),
+   not proof that only 1m was REST-healed. reconcileAllKlineGaps walks every
+   native Frame. framesTimelineHealthy / framesSeriesContiguous also walk every
+   native Frame.
+
+5. Console "Receiving end does not exist" is not application code
+   (no chrome.runtime / browser.runtime / chrome.tabs in this repo).
+
+======================================================================
+0. INCIDENT CLOCK
+======================================================================
+
+HealProbe nowMs=1789512335108 at terminal 06:45:35
+  = 2026-09-16 06:45:35 +08
+  = 2026-09-15 22:45:35 UTC
+Terminal timestamps are local +08.
+
+User "02:40–02:45" and "06:45–06:50" are visual, not proven missing opens.
+Resolved grids (fixed TF: floor(unix_ms / step)*step):
+
+  5m step=300s. 02:40 and 06:45 ARE 5m opens.
+  3m step=180s. 02:40 is NOT a 3m open (remainder 60s). Neighbours: 02:39, 02:42, 02:45.
+               06:45 IS a 3m open (remainder 0).
+  10m step=600s. 02:40 IS a 10m open (children 02:40 + 02:45 5m).
+                06:45 is NOT a 10m open. Containing bucket = 06:40 (children 06:40 + 06:45 5m).
+  15m: 02:40 sits inside 02:30; 06:45 sits inside 06:45 15m (06:45 IS a 15m open).
+
+06:33:05 Connecting then "disconnected, reconnecting in 8s"
+06:45:04 Connecting (then fail, backoff 16s)
+06:45:20 Connecting; 06:45:21 Reconcile; 06:45:22 first combined message
+06:45:35 HealProbe 1m CONTIGUOUS; Timeline publishable
+08:51:47 disconnect, reconnecting in 32s; 08:52:19 Connecting (timer respected)
+
+~12 min between "retry in 8s" and next Connecting: see §13.
+
+======================================================================
+1. SEPARATION
+======================================================================
+
+QUESTION A (holes) and QUESTION B (badge) share the same morning of WS
+flaps, but they do not share a proven causal chain.
+
+Browser tab WS ≠ Binance WS. Tab reconnect cannot be presumed to delete
+native sqlite/Frame bars.
+
+======================================================================
+2. DATA CENSUS (done BEFORE heal-code conclusions)
+======================================================================
+
+Method:
+  sqlite historical_klines PK lookup (ms)
+  GET /api/history?tf=&endTime=now&limit=3000&format=columnar  (times[] = ChartTimeSec)
+  Binance fapi/v1/klines for native TFs only (10m REST = HTTP 400, not a venue interval)
+  RAM: no dump without DEBUG_TIP_SSOT=1 (disabled). Infer via GetWindow law below.
+
+Classification for every on-grid native open in ±20m of both windows:
+  PRESENT_EVERYWHERE  (Binance + sqlite + API)
+
+No row in those windows is:
+  BINANCE_PRESENT_SQLITE_MISSING_API_MISSING
+  BINANCE_PRESENT_SQLITE_PRESENT_API_MISSING
+  BINANCE_PRESENT_SQLITE_MISSING_API_PRESENT
+
+Sample OHLC (sqlite == REST v):
+
+  5m 02:40  76322.4 76322.4 75661.6 75745.0  vol 6443.199
+  5m 06:40  75597.6 75598.4 75531.3 75578.4  vol 200.972
+  5m 06:45  75578.4 75666.6 75560.0 75664.9  vol 299.019
+  3m 02:39  76320.3 76411.9 75842.8 76119.2  vol 3248.782
+  3m 02:42  76119.3 76143.5 75661.6 75745.0  vol 3832.253
+
+RAM known?: NOT DIRECTLY. Law: GetWindow native = MergeKlineSeries(sqlite, RAM-tail,
+AuthoritySettled, AuthorityFinal). Overlay Final wins on duplicate OpenTime.
+Union on missing OpenTime: a sqlite row appears in API even if RAM lacks it.
+Therefore API missing ⇒ sqlite missing (for that open in the returned window).
+API present + sqlite present ⇒ bar is in the history payload regardless of RAM.
+
+Unproven 09:52: screenshot filename 09:52:26 still shows empty slots.
+This audit cannot read sqlite as of 09:52. Periodic RAM gap-fill (5 min) and
+archive enqueue could have inserted rows between 09:52 and 10:20. If that
+happened, refresh at 09:58 honestly could not show bars that were not in
+sqlite∪RAM yet. That is a TIME-OF-OBSERVATION limit, not a proven current hole.
+
+======================================================================
+3. CRITICAL 10m INVARIANT  (high-value discriminator)
+======================================================================
+
+CURRENT catalog (exchange/timeframe_catalog.go, not docs):
+
+  10m  Class=derived  LiveSource=parent_closed  Persist=false  Parent=5m
+  2m   Class=derived  LiveSource=parent_closed  Persist=false  Parent=1m
+
+sqlite rows interval='10m' or '2m': COUNT=0. Derived is not archived.
+
+HTTP 10m path (server/history_ensure.go deliverDerivedHistoryWindow +
+history_provider.go getDerivedWindow):
+  deliverHistoryWindow(parent=5m) → FoldClosedChildren(parent klines, "10m", forming=false)
+  Incomplete buckets are DROPPED (exchange/derived_bars.go: "holes are dropped").
+  No partial 10m candle. No alternate parent. No 10m REST.
+
+Live 10m Frame: HydrateDerivedFrames / rebuildDerivedFromParent / fanoutDerived
+from parent 5m RAM, same FoldClosedChildren / accumulator.
+
+Exact buckets:
+  missing-5m candidate 02:40 → 10m open 02:40. Both 5m children 02:40 and 02:45
+    exist in sqlite. API 10m contains 02:40.
+  missing-5m candidate 06:45 → 10m open 06:40. Both 5m children 06:40 and 06:45
+    exist in sqlite. API 10m contains 06:40.
+
+So at audit time: 10m is clean BECAUSE the required 5m children exist in the
+5m GetWindow series. There is no "10m reconstructed from 1m" back door.
+
+The only concrete way 5m can LOOK holed while 10m LOOKS good, with both 5m
+children present in GetWindow:
+
+  5m chart  = HTTP 5m + live ColumnarStore.appendTick
+  10m chart = HTTP fold of GetWindow(5m), not the 5m FE store
+
+  appendTick (columnar-store.js): dense forward jump > 1.5×interval returns
+  {gapDetected:true} and DOES NOT APPEND. boot.js pushLiveTickDelta then
+  enterTimelineHealing('fe_gapDetected') and returns false.
+
+  Switching to 10m reloads folded HTTP 5m (complete) → 10m looks full.
+  Staying on 5m with a refused append leaves an empty slot in the FE store
+  until a successful replaceMonolith.
+
+That is layer split, not "10m easy to miss."
+
+If sqlite 5m had actually lacked a child, FoldClosedChildren would omit that
+10m bucket and 10m HTTP would also hole. User report "10m good" therefore
+argues AGAINST a durable missing 5m child at the moment they viewed 10m.
+
+======================================================================
+4. SQLITE vs RAM vs API
+======================================================================
+
+Native live /api/history:
+  GetWindow: sqlite LoadContinuousContractBeforeEnd (count-based, can skip
+  missing PKs) ∪ RAM tail. MergeKlineSeries sqlite Settled + RAM Final.
+  deliverHistoryWindow: if NOT isHistoricalKlineEnd → return GetWindow,
+  do NOT EnsureHistoryWindow.
+
+isLiveKlineEnd: endTimeMs >= now - 3*interval. FE loadDashboard uses
+endTimeSec=nowSec (live tip). Live refresh skips Ensure.
+
+Retry / hard refresh = loadDashboard = that live GetWindow. Not Master REST heal.
+
+======================================================================
+5. TF SOURCE TABLE (current code)
+======================================================================
+
+TF   Native?  WS                         REST              Parent  Persist  Frame
+1m   yes      btcusdt@kline_1m           FetchClosedRange  —       yes      native Frame
+3m   yes      btcusdt@kline_3m           FetchClosedRange  —       yes      native Frame
+5m   yes      btcusdt@kline_5m           FetchClosedRange  —       yes      native Frame
+15m  yes      btcusdt@kline_15m          FetchClosedRange  —       yes      native Frame
+2m   no       none (not in combined URL) none              1m      no       derived Frame
+10m  no       none                       none              5m      no       derived Frame
+
+CombinedLiveStreamNames = CombinedKlineStreamNames(all native) + aggTrade.
+Matches the terminal WS URL. 2m/10m are not on the socket.
+
+======================================================================
+6. WHAT "Timeline publishable" CERTIFIES
+======================================================================
+
+ReconcileTimeline:
+  unpublishable → notify healing → loop reconcileAllKlineGaps(force=true)
+  until framesTimelineHealthy OR max tries → finalizeTimelineHealFlush.
+
+framesTimelineHealthy: EVERY native Frame, KlineSeriesNeedsGapFill through
+Cap last CLOSED open (not the forming bar).
+
+healFillClosedGapsBeforeFlush: native only; Exact REST between Frame tip and
+pending tip if pending skips ≥1 closed open. Forming pending (pending == next
+open after tip) → need=false, no Exact fill of the forming bar.
+
+finalize: drain pending, applyTick each, framesSeriesContiguous (every native,
+consecutive NextBarOpen, NO Cap — still closed series only), pending empty
+→ timelinePublishable=true → notifyTimelinePublishable.
+
+HealProbe logs only m.timeframe (work TF, default 1m), ChartTimeSec of last 10
+opens. Telemetry choice. Not "heal 1m only."
+
+Grok forming-bar hypothesis vs code: CORRECT as a timing statement.
+At 06:45:35, last CLOSED 5m = 06:40; forming 5m = 06:45. Publishable does not
+require the forming 5m to be a closed sqlite row. It requires native closed
+series contiguous through Cap.
+
+At audit time the 06:45 5m IS closed in sqlite and matches REST, so that bar
+was recovered later (WS after publishable, and/or periodic REST). Path not
+logged as "heal closed fill" in the user paste (success REST merge is mostly silent).
+
+======================================================================
+7. 06:45 RECONNECT WALK (1m / 3m / 5m)
+======================================================================
+
+At 06:45:35 +08 (nowMs=1789512335108):
+
+  1m last closed open = 06:44 (1789512240 s)  HealProbe capOpenSec=1789512240
+     forming = 06:45 (1789512300)  pendingOpens=[1789512300]  verdict CONTIGUOUS
+  3m last closed = 06:42; forming = 06:45
+  5m last closed = 06:40; forming = 06:45
+
+The user-visible "06:45–06:50 5m hole" if it was that candle: FORMING at
+reconcile, not last closed.
+
+How a forming native bar is supposed to enter Frame after reconnect:
+  1. pending flush applyTick if a 5m/3m tick for that open was queued after
+     WS first message (06:45:22–06:45:35)
+  2. else first live WS kline update after publishable
+  3. else later periodic force=false REST if the closed series later shows a hole
+
+OnBinanceDisconnect: clearPendingTicks(). Outage ticks are discarded.
+Closed bars during 06:33–06:45 must come from force REST in reconcileAllKlineGaps,
+not from pending. Forming 06:45 5m is NOT in that closed REST Cap window
+(Cap last closed 5m = 06:40).
+
+User paste has no "[Master] heal closed fill" and no ingest-tip-gap line
+between 06:45:35 and 08:51:47. Absence of those logs is not proof REST skipped
+3m/5m (force REST success is silent except errors / empty).
+
+======================================================================
+8. PENDING CLEAR ON DISCONNECT
+======================================================================
+
+OnBinanceDisconnect:
+  timelinePublishable=false
+  clearPendingTicks()
+  notify healing if was publishable
+
+Law:
+  Completed closed native bars during outage → REST (Cap window / Exact fill).
+  Forming native bar at reconnect → WS pending after reconnect, or WS after
+  publishable, not REST Cap.
+  Disconnect does not delete sqlite rows.
+
+======================================================================
+9. UpdateKlineTick / ingestTipGap
+======================================================================
+
+UpdateKlineTick: same OpenTime overwrite; OpenTime > last → APPEND (no insert
+of skipped opens); earlier OpenTime dropped.
+
+routeTick if publishable and ingestTipGap (native, BarStepsBetween(last, tick)>1):
+  unpublish, enqueue this tick, log "Timeline unpublishable (ingest tip gap on %s)",
+  ReconcileTimeline.
+
+No such log in the paste around 06:45 or 08:52. Interpretations that remain
+possible: (A) no 3m/5m jump observed on the live path; (B) jump happened and
+was not in the pasted log; (C) bar never left RAM. Cannot distinguish A vs B
+from the provided terminal excerpt. ingestTipGap IS logged when it fires.
+
+FE gapDetected is a separate refuse-append on the browser store; it waits for
+server heal and does not itself REST-fill.
+
+======================================================================
+10. LATE / INTERNAL GAP HEAL OWNERSHIP
+======================================================================
+
+After publishable, StartKlineGapFillLoop every 5 minutes:
+  if !publishable → ReconcileTimeline
+  else ReconcileAllKlineGaps (force=false)
+
+force=false: REST only if KlineSeriesNeedsGapFill(RAM Frame) — tail staleness
+OR internal NextBarOpen hole. That IS an owner for INTERNAL holes in RAM
+native Frames. It LoadHistoricalKlines + enqueueArchiveCandles.
+
+NOT an owner:
+  live /api/history EnsureHistoryWindow (skipped on live end)
+  Retry button
+  sqlite-only holes while RAM is already contiguous (periodic skips REST;
+  GetWindow would still show sqlite∪RAM, so sqlite-only miss would appear in
+  API only if RAM also lacks that OpenTime)
+
+EnsureHistoryWindow consumers: deliverHistoryWindow historical miss only
+(scroll-left / deep endTime). Tests: "live end must not EnsureHistoryWindow".
+
+Tip gap while live: ingestTipGap → ReconcileTimeline.
+Left/history edge: Ensure on historical endTime.
+Startup: boot reconcile (not re-audited here).
+
+======================================================================
+11. WHY RETRY / REFRESH DOES NOT HEAL (when a durable hole exists)
+======================================================================
+
+Retry (timeline-recovery.js watchdog):
+  exitToLive → onRecovered → loadDashboard()
+  unless window.__isDashboardLoading (then onRecovered returns without reload)
+
+loadDashboard: GET /api/history live tip. No Master ReconcileTimeline.
+No EnsureHistoryWindow.
+
+Therefore: Retry is transport/UI recovery + history reread, not market-data
+repair. If sqlite∪RAM already contain the opens, refresh SHOULD paint them.
+If they did not (09:52), refresh cannot create them.
+
+At 10:20 they do contain them. A refresh NOW would show those 3m/5m bars.
+
+======================================================================
+12. FRONTEND STALLED BADGE
+======================================================================
+
+ws.js onclose: 3s later onReconnect() THEN _openSocket().
+onBrowserReconnect (boot.js, dense TF): enterTimelineHealing('browser_ws_reconnect')
+  BEFORE the new socket is open.
+
+Server WS welcome: {type:welcome, message:"dashboard websocket ready"} only.
+subscribe handler: setClientSubscribe only. Does NOT send current
+timeline_publishable. Does NOT read IsTimelinePublishable.
+
+BroadcastTimelinePublishable is edge-only (after ReconcileTimeline success).
+
+Sequence when Master is already publishable:
+
+  browser WS close
+    → 3s
+    → FE HEALING + 25s watchdog + "Synchronizing live data…"
+    → new socket welcome + subscribe
+    → no publishable edge
+    → 25s "Reconnect stalled — Retry"
+
+publishability is STATE on the backend (atomic.Bool) and EDGE EVENT on the wire.
+FE recovery waits for the edge. Hard refresh: new JS machine in LIVE until a
+healing enter; does not query publishable state.
+
+Duplicate enter is ignored (watchdog not reset). Badge can remain stalled
+across extra reconnects.
+
+Sparse TFs skip TimelineRecovery (ADR-018 MICRO-2B). User was on dense 3m/5m.
+
+======================================================================
+13. SERVER vs BROWSER vs PROCESS DELAY
+======================================================================
+
+A. Binance backend WS loss: can miss native ticks; heal is REST+pending.
+   Proven in logs: 06:33, 06:45, 08:51.
+
+B. Browser ↔ dashboard WS: presentation only. Must not delete sqlite.
+
+C. 06:33 "8s" → 06:45 Connecting:
+   exchange/ws.go run(): after connectAndListen returns, log backoff,
+   select { ctx.Done(); time.After(backoff) }, then backoff*=2, loop.
+   Connecting is logged at the top of every connectAndListen.
+   An 8-second timer cannot produce a 12-minute gap if the goroutine is
+   scheduled and the clock is monotonic-enough.
+   PROCESS_TIMER_DELAY observed. Sleep / freeze / clock jump not separately
+   proven. 08:51 32s retry DID fire on time → loop works when scheduled.
+
+   Backoff=8s at 06:33 implies earlier failed attempts already doubled 1→2→4→8
+   (or those lines were omitted from the paste).
+
+======================================================================
+14. CHROME "RECEIVING END"
+======================================================================
+
+No chrome.runtime / chrome.tabs / browser.runtime in application JS/Go.
+Classify: browser-extension noise. Not a bot defect.
+
+======================================================================
+15–16. HARD QUESTIONS
+======================================================================
+
+1. Exact missing 3m/5m OpenTimes (durable+API now): NONE in 00:00–10:30 +08.
+   Visual windows map to 5m 1789497600 (02:40) and 1789512300 (06:45);
+   3m neighbours 02:39/02:42 and 06:45 (on-grid). All present now.
+
+2. Missing from sqlite now? NO.
+
+3. Missing from /api/history now? NO.
+
+4. Binance REST have them? YES, OHLC+volume match sqlite.
+
+5. RAM? No read-only dump (DEBUG_TIP_SSOT off). API present + sqlite present
+   does not require RAM to own the bar; sqlite alone is enough for API.
+
+6. 1m contiguous? sqlite+API morning scan missing=0. HealProbe 1m CONTIGUOUS
+   at 06:45:35. 1m is native WS+REST and the work TF.
+
+7. 2m contiguous? Derived from 1m. sqlite 2m=0 rows. API 2m morning missing=0.
+   Fold of complete 1m parent.
+
+8. 10m contiguous at exact buckets? YES in /api/history (02:40 and 06:40).
+
+9. 10m source? FoldClosedChildren(GetWindow(5m)) for HTTP; parent 5m Frame
+   for live derived Frame. Not sqlite 10m. Not Binance 10m.
+
+10. Timeline publishable certifies: every native Frame closed series
+    Cap-contiguous then post-flush NextBarOpen-contiguous and pending empty.
+    Not forming-bar closed persistence. Not 1m-only. Not FE store.
+
+11. Missing 5m 06:45 at reconnect: FORMING (closed 06:40). 02:40 was already
+    a closed bar long before 06:45 reconcile.
+
+12. Forming native bar after reconnect: pending flush if queued, else live WS,
+    else later periodic REST if a closed hole appears. REST Cap at 06:45:35
+    does not include 06:45 5m.
+
+13. Later native tick jump: ingestTipGap → unpublish → ReconcileTimeline
+    (logged). FE gapDetected refuses append and waits; does not fill.
+
+14. Internal native RAM holes after publishable: YES owner —
+    ReconcileAllKlineGaps / KlineSeriesNeedsGapFill. Live HTTP Ensure: NO.
+
+15. Refresh/Retry cannot REST-heal internal holes; they reread sqlite∪RAM.
+    If those layers lack the PK, the hole remains. If they have it, refresh
+    should paint it (so a remaining painted hole after a successful 5m
+    replaceMonolith would be FE store/paint, not sqlite).
+
+16. Stalled badge with healthy Master: FE HEALING waits for publishable EDGE;
+    browser reconnect does not receive current STATE.
+
+17. Yes: edge event, not current backend state. Welcome/subscribe ignore it.
+
+18. ~12 min after "8s": PROCESS_TIMER_DELAY. Not explained by the reconnect
+    loop under normal scheduling. Sleep/freeze/clock not proven. Not a missing
+    Connecting log.
+
+======================================================================
+HARD STOP
+======================================================================
+
+No reconnect patch, no REST repair, no catalog change, no Retry change.
+Do not treat the badge and the painted 3m/5m slots as one bug.
+
+If a later chapter repairs anything, split:
+
+  (B) FE must learn publishable STATE on socket open / subscribe
+      (or not enter HEALING on browser reconnect when Master is already live).
+
+  (A) only if a future snapshot proves a missing native PK at T0, or a
+      reproducible FE gapDetected hole that survive replaceMonolith of a
+      complete /api/history payload.
+
+END NATIVE-GAP-RECONNECT-AUDIT-1

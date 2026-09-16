@@ -498,7 +498,7 @@ func (m *Runtime) enqueueArchiveCandles(symbol, interval string, candles []excha
 	}
 }
 
-// logHealContiguityProbe answers GPT's four questions (logs only, no behavior change).
+// logHealContiguityProbe is compact reconnect-flush telemetry (not a second heal path).
 // Verdict classes:
 //
 //	PENDING_JUMP_MISSING_MIDDLE — Cap/Frame tip then pending skips ≥1 closed open

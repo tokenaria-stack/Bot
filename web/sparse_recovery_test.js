@@ -51,25 +51,26 @@ const boot = fs.readFileSync(path.join(__dirname, 'boot.js'), 'utf8');
 const recovery = fs.readFileSync(path.join(__dirname, 'timeline-recovery.js'), 'utf8');
 
 test('A/B. sparse Master heal/publishable do not enter TimelineRecovery or loadDashboard', () => {
+  const dense = extractFn(boot, 'denseRecoveryApplies');
+  assert.ok(dense.includes('isSparseLiveChart'));
   const heal = extractFn(boot, 'onTimelineHealingFromServer');
   const pub = extractFn(boot, 'onTimelinePublishableFromServer');
-  assert.ok(heal.includes('isSparseLiveChart'));
-  const healSparse = heal.slice(heal.indexOf('isSparseLiveChart'), heal.indexOf('enterTimelineHealing'));
-  assert.ok(healSparse.includes('return'));
-  assert.ok(!healSparse.includes('enterTimelineHealing'));
-  assert.ok(pub.includes('isSparseLiveChart'));
-  const pubSparse = pub.slice(pub.indexOf('isSparseLiveChart'), pub.indexOf('if (timelineRecovery)'));
-  assert.ok(pubSparse.includes('return'));
-  assert.ok(!pubSparse.includes('loadDashboard'));
+  assert.ok(heal.includes('denseRecoveryApplies'));
+  assert.ok(heal.includes('return'));
+  assert.ok(!heal.includes('loadDashboard'));
+  assert.ok(pub.includes('denseRecoveryApplies'));
+  assert.ok(pub.includes('return'));
+  assert.ok(!pub.includes('loadDashboard'));
   const recovered = extractFn(boot, 'initTimelineRecovery');
-  assert.ok(recovered.includes('isSparseLiveChart'));
+  assert.ok(recovered.includes('beginAuthoritativeSnapshot'));
 });
 
-test('C. dense 1m still uses TimelineRecovery on reconnect and Master heal', () => {
+test('C. dense 1m still uses TimelineRecovery on Master heal; reconnect is state query', () => {
   const heal = extractFn(boot, 'onTimelineHealingFromServer');
   assert.ok(heal.includes("enterTimelineHealing('server_timeline_healing')"));
   const rec = extractFn(boot, 'onBrowserReconnect');
-  assert.ok(rec.includes("enterTimelineHealing('browser_ws_reconnect')"));
+  assert.ok(rec.includes("requestDenseRecovery('browser_transport_loss')"));
+  assert.ok(!rec.includes("enterTimelineHealing('browser_ws_reconnect')"));
   const enter = extractFn(boot, 'enterTimelineHealing');
   assert.ok(enter.includes('timelineRecovery.enter'));
 });
@@ -80,9 +81,9 @@ test('D. browser reconnect on sparse is Shot 10B snapshot, not TimelineRecovery'
   assert.ok(rec.includes('loadDashboard'));
   assert.ok(rec.includes('viewportAnchor'));
   assert.ok(rec.includes('quiet: true'));
-  const beforeDense = rec.slice(0, rec.indexOf('enterTimelineHealing'));
+  const beforeDense = rec.slice(0, rec.indexOf('requestDenseRecovery'));
   assert.ok(beforeDense.includes('return'));
-  assert.ok(!beforeDense.includes("enterTimelineHealing"));
+  assert.ok(!beforeDense.includes('requestDenseRecovery'));
 });
 
 test('E. reconnect captures viewportAnchor (VIEW preserve, not FreshLive)', () => {
@@ -92,7 +93,7 @@ test('E. reconnect captures viewportAnchor (VIEW preserve, not FreshLive)', () =
   const rec = extractFn(boot, 'onBrowserReconnect');
   assert.ok(rec.includes('captureReconnectViewportAnchor'));
   const load = extractFn(boot, 'loadDashboard');
-  assert.ok(load.includes("viewport: viewportAnchor ? 'restore' : 'fresh'"));
+  assert.ok(load.includes("viewport: restoreLive ? 'restore' : (viewportAnchor ? 'restore' : 'fresh')"));
 });
 
 test('F. same-second buffered 1s updates coalesce', () => {
@@ -113,7 +114,7 @@ test('G. newer-second ticks survive the buffer (handoff survivors)', () => {
 
 test('H. sparse gap does not enter TimelineRecovery; OpenTime coalesce is seconds-only', () => {
   const enter = extractFn(boot, 'enterTimelineHealing');
-  assert.ok(enter.includes('isSparseLiveChart'));
+  assert.ok(enter.includes('denseRecoveryApplies'));
   assert.ok(fns.isSparseLiveChart('1s'));
   assert.ok(fns.isSparseLiveChart('5s'));
   assert.ok(fns.isSparseLiveChart('1tick'));

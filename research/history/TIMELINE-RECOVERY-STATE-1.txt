@@ -1,0 +1,227 @@
+TIMELINE-RECOVERY-STATE-1
+Chapter implemented. Master native healing NOT touched.
+
+Audit clock: 2026-09-16
+GREEN tests: Node recovery + sparse isolation; go test ./server -run TimelineState|TimelinePublishable
+Live :8080 at first write was the PRE-CHAPTER binary.
+Runtime-certified after user restart: **2026-09-16 16:26:14–16:26:28 +08**.
+
+LIVE EVIDENCE (Binance-side, not browser-only):
+  16:26:14 WS disconnected, reconnecting in 1s
+  16:26:16 Timeline Reconcile started
+  16:26:28 Timeline publishable (flushed 15 pending)
+  FE: ENTER healing → duplicate enter ignored → EXIT healing (snapshot replace)
+  [FEGapRecovered] tf=3m reason=server_timeline_healing generation=2 rows=3001
+  tip handoff deltaSec=0
+  no Reconnect stalled — Retry
+
+Verdict: TIMELINE_RECOVERY_STATE_GREEN / LIVE VERIFIED. Frozen.
+Chrome "Receiving end does not exist" remains extension noise.
+
+======================================================================
+A. PREVIOUS FAILURE
+======================================================================
+
+Edge-vs-state:
+  Master.IsTimelinePublishable() is a bool.
+  The dashboard socket only forwarded timeline_healing / timeline_publishable
+  transitions. FE treated those edges as the only wake-up.
+
+Reconnect path:
+  browser WS close → onBrowserReconnect → enterTimelineHealing
+  → 25s watchdog → welcome "dashboard websocket ready" only
+  → Master already true → no new publishable edge
+  → "Reconnect stalled — Retry"
+
+gapDetected path (same wait, no reconnect):
+  dense appendTick refuses a forward jump
+  → enterTimelineHealing('fe_gapDetected')
+  → socket stays open
+  → Master may already be true
+  → no snapshot replace
+  → ColumnarStore can keep a painted hole while 10m HTTP fold of 5m is clean
+
+======================================================================
+B. FROZEN OWNERSHIP
+======================================================================
+
+Master: sole owner of timelinePublishable. Dashboard only READS
+  IsTimelinePublishable(). Nil Master (no heal gate) serializes publishable=true.
+
+FE:
+  LIVE | HEALING          — existing FSM; watchdog only in HEALING
+  snapshotRequired        — local distrust bit, not a third state
+  recovery reason         — metadata (browser_transport_loss, fe_gapDetected,
+                            master_timeline_healing, manual_retry)
+  recoveryGeneration      — invalidates stale HTTP completions
+
+======================================================================
+C. WIRE
+======================================================================
+
+New socket:
+  welcome
+  timeline_state { publishable: bool }   ONCE
+
+Open socket:
+  client  timeline_state_request
+  server  timeline_state
+
+NOT sent on TF subscribe (proven: TestSubscribeDoesNotEmitTimelineState).
+
+Kept:
+  timeline_healing
+  timeline_publishable
+  (FE maps publishable → the same applyMasterTimelineState(true) as timeline_state)
+
+======================================================================
+D. RECOVERY FLOW
+======================================================================
+
+One entry: requestDenseRecovery(reason)
+  snapshotRequired=true
+  beginLiveTickBuffer (dense deltas off the stale store)
+  if socket OPEN: timeline_state_request
+  else: wait for welcome timeline_state after transport reconnect
+
+Browser reconnect (dense):
+  NOT enterTimelineHealing
+  requestDenseRecovery('browser_transport_loss')
+
+gapDetected:
+  [FEGap] then same requestDenseRecovery('fe_gapDetected')
+  ColumnarStore still refuses the jumped append (unchanged)
+
+timeline_state / timeline_publishable:
+  true  + snapshotRequired=false → observe, no reload
+  true  + snapshotRequired=true  → leave HEALING UI (no watchdog) +
+                                   loadDashboard replaceMonolith + tip handoff
+  false → HEALING, wait
+
+timeline_healing:
+  markSnapshotRequired, bumpProjectionEpoch (invalidate in-flight snapshot),
+  enter HEALING, buffer ticks
+
+Retry:
+  tr.retry() → onRetry → requestDenseRecovery('manual_retry')
+  does NOT exitToLive first
+  watchdog fire only paints the button; it does not fake recovery
+
+======================================================================
+E. SNAPSHOT GENERATION / LOAD RACE
+======================================================================
+
+Recovery load: loadDashboard({ recoveryGeneration, viewportAnchor, quiet })
+  always bumpProjectionEpoch (existing abort axis)
+
+Removed:
+  onRecovered: if (__isDashboardLoading) return
+
+Stale load finally:
+  if epoch superseded: abort buffer ONLY if tickBufferEpoch === that epoch
+  do NOT clear __isDashboardLoading (newer load owns it)
+
+After replaceMonolith:
+  snapshotCommitted(generation) must match current generation
+  mismatch → do not flush live ticks / do not clear snapshotRequired
+  match → [FEGapRecovered], then existing flushLiveTickBuffer handoff
+
+timeline_healing during HTTP: gen++ and epoch++ → old body cannot commit LIVE.
+
+======================================================================
+F. DENSE DELTA GATE
+======================================================================
+
+snapshotRequired → pushLiveTickDelta returns false for dense TFs.
+requestDenseRecovery also beginLiveTickBuffer (Shot 10B absorb).
+After snapshotCommitted, gate lifts; flushLiveTickBuffer then normal handoff.
+
+No second JS pending-tick system. Backend pending ticks unchanged.
+
+======================================================================
+G. VIEWPORT PRESERVATION
+======================================================================
+
+beginAuthoritativeSnapshot uses captureReconnectViewportAnchor
+then loadDashboard viewport: restore when an anchor exists.
+TimeCamera / CHART_FROZEN geometry not modified.
+Sparse reconnect still Shot 10B quiet loadDashboard (unchanged).
+
+======================================================================
+H. TESTS
+======================================================================
+
+Go  ./server TimelineState / TimelinePublishable
+  welcome true (nil Master) / false (zero Runtime)
+  request/reply
+  subscribe does not emit timeline_state
+  payload shape
+
+Node  web/timeline_recovery_test.js
+  observe vs replace vs heal
+  generation commit
+  Retry does not fake LIVE
+
+Node  web/timeline_recovery_state_test.js
+  reconnect + gapDetected share requestDenseRecovery
+  no __isDashboardLoading drop
+  dense gate, viewport, FEGap, wire request
+
+Node  web/sparse_recovery_test.js  (updated for denseRecoveryApplies)
+Node  web/history_island_window_mode_test.js PASS
+Node  web/sparse_offscreen_paint_test.js PASS
+
+======================================================================
+I. MANUAL VERIFICATION
+======================================================================
+
+TEST 1 browser reconnect while backend healthy
+  NOT run against the live process: :8080 welcome still lacks timeline_state
+  (pre-chapter binary). After the user restarts the bot and hard-refreshes
+  (boot.js?v=4.39.0-trs1): reconnect must NOT show stalled heal badge;
+  one snapshot replace; chart usable.
+
+TEST 2 gapDetected
+  Covered by unit/source contract + [FEGap] logs. Do not corrupt history.db.
+
+TEST 3 Master healing
+  Code path: timeline_healing → HEALING → publishable → snapshot replace.
+  Needs a real Binance WS drop after restart to see in the UI.
+
+TEST 4 TF change
+  Subscribe does not emit timeline_state (Go test). FE observe-only if
+  snapshotRequired=false.
+
+TEST 5 viewport
+  Unit: captureReconnectViewportAnchor on dense snapshot. Live camera
+  restore after restart.
+
+======================================================================
+J. CORRECTIONS VS THE PROMPT
+======================================================================
+
+1. Welcome snapshot is enough on new sockets; TF subscribe is not a producer.
+   Nil Master is publishable=true so ChartOnly / tests without Runtime do not
+   enter HEALING on every connect.
+
+2. Watchdog timeout is Master-HEALING only. The timer paints Retry; it does
+   not call recovery until click (retry()). Transport query failure does not
+   start that watchdog.
+
+3. Stale loadDashboard finally previously aborted the newer tick buffer and
+   cleared __isDashboardLoading. That race is now closed without a new
+   scheduler.
+
+======================================================================
+FINAL VERDICT
+======================================================================
+
+TIMELINE_RECOVERY_STATE_GREEN / LIVE VERIFIED
+
+Live 2026-09-16 16:26 +08: Binance disconnect → Master heal → FE snapshot replace
+(`[FEGapRecovered]` generation=2, `deltaSec: 0`, no stalled badge).
+
+Do not reopen reconnect, timeline recovery, or native gap repair except a real regression.
+Next research: WOZDUH-TRUTH-1 (not started in this freeze).
+
+HARD STOP.

@@ -21,6 +21,10 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **SCALE-GESTURE-OWNERSHIP-1 ✅ frozen.** Command: prefs → LWC. Observation: native Y-axis gesture → prefs/UI only. Do not reopen ScaleController except a real regression. No drag flags, no `manualRange` persistence.
 
+**TIMELINE-RECOVERY-STATE-1 ✅ frozen** (live 2026-09-16 16:26 +08). Current Master bool + snapshot replace. Do not reopen browser reconnect / dense `gapDetected` recovery / native gap heal except a real regression.
+
+**Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
+
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
 
 **NEXT order (do not start inside this freeze):**
@@ -269,7 +273,7 @@ New certified fact / TF / named pattern ⇒ new FeatureSpec version + native dem
 | **86** | **Projection continuity (ADR-015)** | ✅ **B2.1+B2.2** | Soft `applyProjection`; projector APPEND + **OVERWRITE** same-open tip. ADR-015 probe skips heal/new-bar |
 | **87** | **Replay Lifecycle Ownership (ADR-016)** | ✅ | Frame `replayStreamingLocked`: closed→forming; never commit forming tip. History Cap stays closed-only |
 | **88** | **Timeline Publishability (ADR-017)** | ✅ **B3.0** | Exact closed-gap fill before pending flush; publishable only if Frame contiguous. Buffering UX separate |
-| **89** | **TimelineRecovery UX (ADR-018)** | ✅ | FE LIVE↔HEALING; idempotent enter; sync badge; 25s watchdog; boot wires only |
+| **89** | **TimelineRecovery UX (ADR-018 + TIMELINE-RECOVERY-STATE-1)** | ✅ frozen | Current `timeline_state`; reconnect ≠ HEALING; recovery ends in `replaceMonolith`. Live-certified 16:26 +08. |
 | **90** | **PaneLayout / Ind (ADR-019)** | 🟡 **P5** | P1–P5 layout done. Optional later: `setHostActive` |
 | **91** | **Scale / time axis / Ruler (ADR-020)** | ✅ | Scale + bottom axis + Ruler (ADR-025) + **HH:mm datetime chrome**. Fib/drawings = future product, not blocking |
 | **68** | Osc fixed scale bounds (RSX/Wozduh TV-like `[-5,105]`) | ✅ | ADR-022: per-component `scaleContribution` → `autoscaleInfoProvider` |

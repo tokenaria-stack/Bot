@@ -45,6 +45,12 @@ const WS = {
     WS._sendSubscribe(subTf);
   },
 
+  requestTimelineState() {
+    if (!WS._socket || WS._socket.readyState !== WebSocket.OPEN) return false;
+    WS._socket.send(JSON.stringify({ type: 'timeline_state_request' }));
+    return true;
+  },
+
   _sendSubscribe(tf) {
     const send = () => {
       if (WS._socket && WS._socket.readyState === WebSocket.OPEN) {
@@ -122,6 +128,10 @@ const WS = {
     }
     if (msg.type === 'timeline_publishable') {
       WS._callbacks?.onTimelinePublishable?.(msg.data ?? msg);
+      return;
+    }
+    if (msg.type === 'timeline_state') {
+      WS._callbacks?.onTimelineState?.(msg);
     }
   },
 };

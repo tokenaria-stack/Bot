@@ -1,10 +1,12 @@
 /**
- * TimelineRecovery — ADR-018 FE owner of timeline recovery UI lifecycle.
- * States: LIVE | HEALING. Watchdog is diagnostic only (does not reset on duplicate enter).
+ * TimelineRecovery — ADR-018 + TIMELINE-RECOVERY-STATE-1.
+ * FSM: LIVE | HEALING only. snapshotRequired is a local distrust bit, not a third state.
+ * Watchdog arms only while Master is unpublishable (HEALING).
  *
  * @typedef {object} TimelineRecoveryOptions
- * @property {() => void} [onEnter] called once when entering HEALING (e.g. start tick buffer)
- * @property {() => void} [onRecovered] called on publishable / watchdog Retry (e.g. loadDashboard)
+ * @property {() => void} [onEnter] HEALING enter (buffer ticks)
+ * @property {(ctx: { generation: number, reason: string }) => void} [onReplaceSnapshot]
+ * @property {() => void} [onRetry] watchdog Retry — same recovery contract, not fake LIVE
  * @property {number} [watchdogMs] default 25000
  */
 (function (global) {
@@ -49,7 +51,10 @@
    */
   function create(options = {}) {
     const onEnter = typeof options.onEnter === 'function' ? options.onEnter : null;
-    const onRecovered = typeof options.onRecovered === 'function' ? options.onRecovered : null;
+    const onReplaceSnapshot = typeof options.onReplaceSnapshot === 'function'
+      ? options.onReplaceSnapshot
+      : null;
+    const onRetry = typeof options.onRetry === 'function' ? options.onRetry : null;
     const watchdogMs = Number.isFinite(options.watchdogMs) && options.watchdogMs > 0
       ? Math.floor(options.watchdogMs)
       : DEFAULT_WATCHDOG_MS;
@@ -58,6 +63,8 @@
     let enteredAt = 0;
     let watchdogTimer = null;
     let lastReason = '';
+    let snapshotRequired = false;
+    let recoveryGeneration = 0;
 
     function clearWatchdog() {
       if (watchdogTimer != null) {
@@ -66,16 +73,20 @@
       }
     }
 
-    function exitToLive(logLabel) {
-      const elapsedMs = enteredAt ? Date.now() - enteredAt : 0;
+    function clearHealingUi() {
       clearWatchdog();
       state = STATE_LIVE;
       enteredAt = 0;
       setBadge(false);
-      if (logLabel) {
-        logInfo(`[Timeline] ${logLabel}`, { elapsedSec: (elapsedMs / 1000).toFixed(1) });
+    }
+
+    function retry() {
+      snapshotRequired = true;
+      lastReason = 'manual_retry';
+      recoveryGeneration += 1;
+      try { onRetry?.(); } catch (err) {
+        logError('[Timeline] onRetry failed:', err);
       }
-      logInfo('[Timeline] EXIT healing');
     }
 
     function armWatchdog() {
@@ -94,11 +105,7 @@
             el.removeEventListener('keydown', onKey);
             el.removeAttribute('role');
             el.removeAttribute('tabindex');
-            // Exit HEALING then recover (avoid sticky state if reload fails).
-            exitToLive('WATCHDOG retry');
-            try { onRecovered?.(); } catch (err) {
-              logError('[Timeline] onRecovered failed:', err);
-            }
+            retry();
           };
           const onKey = (ev) => {
             if (ev.key === 'Enter' || ev.key === ' ') {
@@ -112,15 +119,24 @@
       }, watchdogMs);
     }
 
+    function markSnapshotRequired(reason) {
+      const why = String(reason || lastReason || 'unknown');
+      snapshotRequired = true;
+      lastReason = why;
+      recoveryGeneration += 1;
+      return recoveryGeneration;
+    }
+
     function enter(reason) {
       const why = String(reason || 'unknown');
+      snapshotRequired = true;
+      lastReason = why;
       if (state === STATE_HEALING) {
         logInfo('[Timeline] duplicate enter ignored', { reason: why });
         return false;
       }
       state = STATE_HEALING;
       enteredAt = Date.now();
-      lastReason = why;
       logInfo('[Timeline] ENTER healing', { reason: why });
       setBadge(true, 'Synchronizing live data…', false);
       armWatchdog();
@@ -130,33 +146,99 @@
       return true;
     }
 
-    function publishable() {
-      if (state !== STATE_HEALING) {
-        logWarn('[Timeline] publishable ignored (not healing)');
-        return false;
+    /**
+     * Current Master bool. Returns action for the dashboard owner.
+     * @returns {{ action: 'observe'|'replace'|'heal', generation: number, reason: string, snapshotRequired: boolean }}
+     */
+    function onTimelineState(publishable) {
+      const ok = publishable === true;
+      if (!ok) {
+        snapshotRequired = true;
+        enter(lastReason || 'master_unpublishable');
+        return {
+          action: 'heal',
+          generation: recoveryGeneration,
+          reason: lastReason,
+          snapshotRequired: true,
+        };
       }
-      const elapsedMs = Date.now() - enteredAt;
-      logInfo('[Timeline] PUBLISHABLE', { afterSec: (elapsedMs / 1000).toFixed(1), reason: lastReason });
-      exitToLive(null);
-      try { onRecovered?.(); } catch (err) {
-        logError('[Timeline] onRecovered failed:', err);
+      if (!snapshotRequired) {
+        return {
+          action: 'observe',
+          generation: recoveryGeneration,
+          reason: lastReason,
+          snapshotRequired: false,
+        };
+      }
+      if (state === STATE_HEALING) {
+        clearHealingUi();
+        logInfo('[Timeline] EXIT healing (snapshot replace; Master publishable)');
+      }
+      return {
+        action: 'replace',
+        generation: recoveryGeneration,
+        reason: lastReason,
+        snapshotRequired: true,
+      };
+    }
+
+    function snapshotCommitted(generation) {
+      if (generation !== recoveryGeneration) return false;
+      snapshotRequired = false;
+      if (state === STATE_HEALING) {
+        clearHealingUi();
+        logInfo('[Timeline] EXIT healing');
       }
       return true;
+    }
+
+    function requestReplace(generation) {
+      try {
+        onReplaceSnapshot?.({ generation, reason: lastReason });
+      } catch (err) {
+        logError('[Timeline] onReplaceSnapshot failed:', err);
+      }
     }
 
     function isHealing() {
       return state === STATE_HEALING;
     }
 
+    function isSnapshotRequired() {
+      return snapshotRequired;
+    }
+
+    function currentGeneration() {
+      return recoveryGeneration;
+    }
+
+    function lastRecoveryReason() {
+      return lastReason;
+    }
+
     /** Test / diagnostics */
     function _debugState() {
-      return { state, enteredAt, lastReason, watchdogArmed: watchdogTimer != null };
+      return {
+        state,
+        enteredAt,
+        lastReason,
+        snapshotRequired,
+        recoveryGeneration,
+        watchdogArmed: watchdogTimer != null,
+      };
     }
 
     return {
       enter,
-      publishable,
+      markSnapshotRequired,
+      onTimelineState,
+      snapshotCommitted,
+      requestReplace,
       isHealing,
+      isSnapshotRequired,
+      currentGeneration,
+      lastRecoveryReason,
+      retry,
       _debugState,
       STATE_LIVE,
       STATE_HEALING,
