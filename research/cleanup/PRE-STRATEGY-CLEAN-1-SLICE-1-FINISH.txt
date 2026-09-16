@@ -1,0 +1,316 @@
+PRE-STRATEGY-CLEAN-1 / SLICE-1-FINISH
+Date: 2026-09-16
+
+Verdict: PRE_STRATEGY_CLEAN_SLICE1_GREEN
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+SLICE-1-FINISH is surgical debris removal after the already-accepted
+Falcon-era Backtest amputation. Live machine #1 was not rewritten.
+
+Exact-reference search ran before each delete. Zero-consumer items
+were deleted. Real consumers were kept.
+
+Not reverted: BacktestEngine, RunStreamingReplay, /api/backtest/*,
+Backtest tab/UI, trade_marker_plugin.js.
+
+Kept: ApplyBacktestRSXConfig (behavior + tests + DumpFeatureTape).
+Kept: FalconEngine callers (observe only).
+Kept: /api/stats + API.fetchStats (FUTURE CONSUMER AUDIT).
+Kept: market.ChartPoint (navigator geometry).
+Kept: GET /api/history columnar + ReplayClosedBarsMasked.
+
+Git: no commit in this pass (user did not ask to commit; mixed tree).
+See section G.
+
+======================================================================
+B. DELETED DEBRIS
+======================================================================
+
+CSS (no remaining DOM IDs/classes):
+  index.html: .backtest-inline, .bt-inline, .bt-date-*, .btn-compact,
+              .backtest-panel, #backtest-chart-container, #bt-*-wrap
+  style.css: .backtest-panel, #bt-price-chart / #bt-wozduh-chart /
+             #bt-rsx-chart, #bt-*-wrap, #backtest-chart-container
+
+NOT deleted (audit over-called "Backtest CSS"):
+  .loading-dots — still used by live RSX wrap (.rsx-wrap > .loading-dots)
+  .stats-panel* — Stats UI collateral; out of this pass
+  .btn-ghost — live toolbar still uses it
+
+localStorage constants (definitions only; no remaining reads):
+  LS_BT_STRATEGY_KEY / dashboard_backtest_strategy
+  LS_PANE_KEY_BT / dashboard_pane_heights_bt
+  LS_RSX_SETTINGS_BACKTEST_KEY
+  WOZDUH_PREFS_BACKTEST_KEY
+  No migration; old browser values may remain unused.
+
+config:
+  BACKTEST_HISTORY_CHUNK_LIMIT (5000) + CONFIG export
+  HISTORY_CHUNK_LIMIT = 3000 unchanged
+
+shims:
+  isBacktestTabActive / isBacktestTfContext
+  navigator getContext() now always 'live'
+  chartLegendState.backtest / _dirtyState.backtest
+  scale-controller context === 'backtest' host branch
+  window.currentBacktestPayload
+  window.tradeMarkers
+  ChartAdapter.applyAllMarkers noop + toolbar tog-spike call
+    (tog-spike still toggles .active; visibility still read from checkbox)
+
+ChartDataStore:
+  patchBacktestData, setTrades, getTrades, this._trades
+
+ViewportManager.restore:
+  Backtest TimeCamera shim body deleted.
+  Function kept as live no-op (see corrections).
+
+/api/history/chunk island (see C):
+  route, handleHistoryChunk, server.ChartPoint, historyChunkResponse,
+  chartPointsFromSeries, parseHistoryChunkLimit, maxBacktestChunkLimit
+  TestHandleHistoryChunk_BadRequest
+  TestParseRSXSettingsFromRequest URL retargeted to /api/history?...
+    (test protects parseRSXSettingsFromRequest, not the dead route)
+
+======================================================================
+C. /api/history/chunk FINAL CONSUMER VERDICT
+======================================================================
+
+HISTORY_CHUNK_ORPHAN_DELETED
+
+Repo search after delete: zero production FE, research runner, CLI, or
+in-repo contract for "/api/history/chunk", handleHistoryChunk,
+fetchBacktestHistoryChunk, parseHistoryChunkLimit, maxBacktestChunkLimit.
+
+server.ChartPoint deleted with the island.
+market.ChartPoint remains (market/trendline_navigator.go).
+
+Live paging remains:
+  API.fetchColumnarHistory → GET /api/history?format=columnar
+  limit HISTORY_CHUNK_LIMIT=3000
+  server columnar_history.go → ReplayClosedBarsMasked
+
+======================================================================
+D. SURVIVING LEGACY-NAMED BEHAVIOR
+======================================================================
+
+ApplyBacktestRSXConfig (KEEP)
+  Consumers: DumpFeatureTape (market/forecast_tape.go),
+  frame_rsx_backtest_test.go, RSX facts tests, forecast tape/eval tests,
+  research_feature_tape_regen_test.go.
+  Still pins Frame RSX settings and Falcon SetRSX* then replayStreamingLocked.
+  Classification: SURVIVING NAME DEBT / FUTURE OWNERSHIP MIGRATION
+  (FALCON-RETIREMENT-1 / research-replay owner). Not renamed this pass.
+
+ResolveNavigatorPanes — live navigator POST. Untouched.
+
+FalconEngine — Live Evaluate + HTF + tests. Untouched.
+
+/api/stats + API.fetchStats — no UI tab. FUTURE CONSUMER AUDIT.
+
+mappers.js chartPointsToOsc / chartPointsToCandles /
+chartPointsToStorePayload — no remaining callers after patchBacktestData
+delete. Left in place (not listed as proven CSS/LS/chunk debris;
+opportunistic mapper deletion refused).
+
+ViewportManager.restore — exported, no current callers found.
+Kept as no-op so the ViewportManager surface does not grow a missing
+method if something still calls restore().
+
+WozduhController non-live checkbox fallback (comment: "Backtest / legacy")
+  — dead if context is always live. Not deleted: Wozduh is out of scope.
+
+LS_NAV_SETTINGS_PREFIX (dashboard_nav_settings_ without _live_)
+  — still the else-branch of navigatorSettingsStorageKey when context
+  !== 'live'. getContext() is always 'live', so the else is tautological
+  but live key must stay LS_NAV_SETTINGS_LIVE_PREFIX. Prefix constant kept
+  to avoid changing live storage keys.
+
+======================================================================
+E. LIVE MACHINE #1 OWNERSHIP
+======================================================================
+
+Unchanged:
+
+  HydrationOrchestrator (boot.js)
+    → API.fetchColumnarHistory
+    → GET /api/history?...&format=columnar
+    → handleHistory / columnar_history.go
+    → ReplayClosedBarsMasked
+    → Frame / DAG
+    → ColumnarStore / ChartCompositor
+
+No new dependency on Falcon Backtest packing, deleted chunk route, or
+compatibility glue.
+
+======================================================================
+F. TEST CENSUS
+======================================================================
+
+Deleted:
+  TestHandleHistoryChunk_BadRequest (server/webserver_indicators_test.go)
+
+Retargeted (kept law):
+  TestParseRSXSettingsFromRequest — query parse still tested; URL is now
+  /api/history?... so the test is not a corpse of the chunk route.
+
+Retained (non-exhaustive):
+  frame_rsx_backtest_test.go, synthetic_klines_test.go,
+  navigator_defaults_test.go, rsx_settings_json_test.go,
+  ReplayClosedBarsMasked tests, RSX facts, forecast tape,
+  scale + timeline recovery tests, Falcon tests.
+
+Results:
+  go test ./market/                          PASS
+  go test ./server/ -skip TestGoldenAudit    PASS
+  node web/scale_paint_ownership_test.js     PASS
+  node web/scale_controller_test.js          PASS
+  node web/timeline_recovery_state_test.js   PASS
+  node web/timeline_recovery_test.js         PASS
+  node web/history_continuation_test.js      PASS
+  node web/navigator_timestamp_test.js       PASS
+
+go test ./... -skip TestGoldenAudit:
+  CAUSED_BY_SLICE_1_FINISH: none
+  ENVIRONMENT: exchange TestBinanceMarketCombinedStream dial Forbidden
+  ENVIRONMENT: indicators TestMarketRSXParityStage2/3Probe missing
+               /tmp/btcusdt_15m_*.csv
+  PREEXISTING / UNRELATED: cmd/repair_archive_gap build fail
+               (declared and not used: restored)
+  TestGoldenAudit skipped (prior ENVIRONMENT Binance Forbidden)
+
+======================================================================
+G. MIXED GIT BOUNDARY
+======================================================================
+
+TIMELINE-RECOVERY-STATE-1 is NOT committed. HEAD is still scale work
+(e31f050 / f93c305 / eaed1d2). Working tree mixes two chapters.
+
+No git add -A. No commit this pass.
+
+Timeline-only (do not mix into cleanup commit):
+  market/kline_gap.go
+  web/timeline-recovery.js
+  web/timeline_recovery_test.js
+  web/timeline_recovery_state_test.js (untracked)
+  web/sparse_recovery_test.js
+  web/ws.js
+  server/timeline_state_ws_test.go (untracked)
+  research/history/* (untracked)
+  web/scale_blank_price_diag_test.js (deleted earlier; scale/timeline forest)
+
+Cleanup-only (SLICE-1 amputation + FINISH):
+  market/backtest*.go deleted, streaming_replay*.go deleted
+  market/frame.go, navigator_defaults.go, rsx_presentation_test.go
+  market/navigator_defaults_test.go, rsx_settings_json_test.go,
+  market/synthetic_klines_test.go (untracked)
+  server/backtest*.go deleted, timeframes.go, stats_test.go,
+  webserver_indicators_test.go, webserver_test.go, rsx_presentation_test.go
+  web/api.js, config.js, store.js, style.css, trade_marker_plugin.js
+  web/ui/backtest-*.js, chart-projection.js, tabs/navigator/rsx/scale/
+  toolbar/viewport/layout/timeframe/wozduh
+  research/cleanup/* (untracked)
+
+UNAVOIDABLE MIXED HUNKS (do not rewrite behavior to split git):
+  server/webserver.go
+    timeline_state WS + Backtest/chunk handler deletion in one file
+  web/boot.js
+    timeline recovery + Backtest global/shim removal
+  web/index.html
+    Backtest CSS deletion; live chart markup shared
+  docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/HISTORY.md,
+  docs/OPEN_DEBTS.md, MEMORY.md
+    both TIMELINE-RECOVERY-STATE-1 status and SLICE-1 GREEN
+
+Desired later history (user must request commit):
+  commit A: TIMELINE-RECOVERY-STATE-1 (already live-verified)
+  commit B: PRE-STRATEGY-CLEAN-1 / SLICE-1 + FINISH
+  Selective staging of mixed files is possible but error-prone; report
+  rather than force a pretty split.
+
+======================================================================
+H. MANUAL / STATIC VERIFICATION
+======================================================================
+
+User prior live verification (post-amputation, pre-FINISH) stands:
+  Live chart, history paging, TF switch, no visible errors.
+
+This pass: no dashboard process smoke in browser (no running bot
+session used). Static ownership:
+
+  boot.js still calls API.fetchColumnarHistory
+  api.js still hits /api/history with format=columnar
+  server still registers /api/history, not /api/history/chunk
+  columnar_history.go still ReplayClosedBarsMasked
+
+Request a short live smoke when convenient:
+  Live tab, hydrate, scroll-left paging, several TFs, RSX/Wozduh,
+  console clean. Not a chapter blocker.
+
+======================================================================
+I. REMAINING PRE-STRATEGY DEBT (headings only — NOT implemented)
+======================================================================
+
+  artifact/index forest
+  Qdrant / vector_db
+  empty speculative sockets (ScoreEngine / execution / strategy)
+  Marker ownership (FRACTAL-MARKER-SSOT)
+  Falcon retirement (FALCON-RETIREMENT-1)
+  old Brain / V1 execution forest
+  current Brain3 / forecast audit
+  /api/stats FUTURE CONSUMER AUDIT
+  ApplyBacktestRSXConfig ownership migration
+  unused mappers ChartPoint helpers (optional later)
+  WozduhController dead non-live checkbox fallback
+  POLICY-SIMULATOR-1 (does not exist; do not invent)
+
+======================================================================
+J. FINAL VERDICT
+======================================================================
+
+PRE_STRATEGY_CLEAN_SLICE1_GREEN
+
+Chapter FROZEN. HARD STOP.
+
+Do not start Qdrant / Falcon / Brain / Wozduh in this run.
+Next cleanup slice: fresh AUDIT → consumer graph → approval → IMPLEMENT.
+
+======================================================================
+CORRECTIONS vs the GPT finish prompt
+======================================================================
+
+1. .loading-dots is not Backtest-only. Deleting it would have hit live
+   RSX loading styles. Consumer search beats the audit CSS list.
+
+2. ViewportManager.restore had no callers. Deleting the method entirely
+   is slightly more aggressive than "delete the Backtest branch".
+   No-op preserve is the conservative live-byte match (live already
+   returned immediately).
+
+3. chartPointsTo* in mappers.js became caller-less after
+   patchBacktestData died. The prompt did not authorize a mapper
+   cleanup; leaving dead helpers is honest debris, not a new owner.
+
+4. Wozduh non-live fallback is leftover Backtest-shaped code, but
+   Wozduh is out of scope. Recorded, not cut.
+
+5. TestParseRSXSettingsFromRequest was not a corpse test. Only the
+   incidental /api/history/chunk URL was wrong. Retarget, don't delete.
+
+6. Do not git-commit mixed TIMELINE + SLICE-1. Prompt wanted isolation;
+   isolation is reported, not forced. No commit without explicit ask.
+
+7. go test ./... is not fully green in this environment. Failures are
+   classified; none were caused by SLICE-1-FINISH. Do not "fix" probes
+   or repair_archive_gap in this chapter.
+
+8. Stats CSS remaining in index.html is wider than Backtest packing.
+   Left with /api/stats as FUTURE CONSUMER AUDIT.
+
+The old Backtest product is history.
+The future Policy Simulator was not invented here.
+Canonical history/fact replay remains one owner.
+STOP.

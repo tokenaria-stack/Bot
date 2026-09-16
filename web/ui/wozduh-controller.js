@@ -1,13 +1,13 @@
 /**
- * Phase 19.5 — Wozduh visibility menu (live + backtest osc panes).
+ * Phase 19.5 — Wozduh visibility menu (live osc pane).
  */
 const WozduhController = (() => {
-  function wozduhStorageKey(context) {
-    return context === 'backtest' ? WOZDUH_PREFS_BACKTEST_KEY : WOZDUH_PREFS_LIVE_KEY;
+  function wozduhStorageKey() {
+    return WOZDUH_PREFS_LIVE_KEY;
   }
 
-  function oscContextFromWrap(wrap) {
-    return wrap?.id === 'bt-osc-wrap' ? 'backtest' : 'live';
+  function oscContextFromWrap() {
+    return 'live';
   }
 
   function getSettingsMenu(wrap) {
@@ -57,8 +57,8 @@ const WozduhController = (() => {
     return null;
   }
 
-  function getSettingsFromUI(context = 'backtest') {
-    const wrapId = context === 'backtest' ? 'bt-osc-wrap' : 'osc-wrap';
+  function getSettingsFromUI() {
+    const wrapId = 'osc-wrap';
     const menu = document.getElementById(wrapId)?.querySelector('.wozduh-settings-menu');
     if (menu) return readPrefsFromMenu(menu);
     return loadPrefsForContext(context) || CONFIG.defaultWozduhPrefs();

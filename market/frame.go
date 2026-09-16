@@ -143,7 +143,7 @@ func (a *Frame) ReapplyRSXSettings() {
 	a.replayStreamingLocked()
 }
 
-// ApplyBacktestRSXConfig pins per-run RSX settings and replays engines for isolated backtests.
+// ApplyBacktestRSXConfig pins RSX settings on this Frame for isolated replay (research/tests).
 func (a *Frame) ApplyBacktestRSXConfig(settings RSXSettings) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

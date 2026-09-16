@@ -113,92 +113,6 @@
 
     .command-spacer { flex: 1; min-width: 8px; }
 
-    .backtest-inline {
-      display: none;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .backtest-inline.visible { display: flex; }
-
-    .bt-inline {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .bt-inline label {
-      font-size: 10px;
-      color: var(--tv-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .bt-inline input,
-    .bt-inline select {
-      background: #131722;
-      border: 1px solid var(--tv-border);
-      border-radius: 3px;
-      color: var(--tv-text);
-      font-size: 11px;
-      height: 24px;
-      padding: 0 6px;
-      font-family: inherit;
-    }
-
-    .bt-inline input[type="text"] { width: 88px; }
-    .bt-inline input[type="date"] { width: 112px; }
-    .bt-inline select { width: 64px; }
-
-    .bt-date-wrap {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
-
-    .bt-date-nav {
-      width: 18px;
-      height: 24px;
-      padding: 0;
-      border: 1px solid var(--tv-border);
-      background: #131722;
-      color: var(--tv-muted);
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 13px;
-      line-height: 1;
-      font-family: inherit;
-      flex-shrink: 0;
-    }
-
-    .bt-date-nav:hover {
-      color: var(--tv-text);
-      border-color: var(--tv-muted);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .bt-date-wrap input[type="date"] {
-      width: 112px;
-      padding: 0 4px;
-    }
-
-    .btn-compact {
-      background: var(--tv-accent);
-      border: none;
-      border-radius: 3px;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 600;
-      height: 24px;
-      padding: 0 10px;
-      cursor: pointer;
-      font-family: inherit;
-    }
-
-    .btn-compact:hover { filter: brightness(1.08); }
-    .btn-compact:disabled { opacity: 0.5; cursor: not-allowed; }
-
     .btn-ghost {
       background: transparent;
       border: 1px solid var(--tv-border);
@@ -708,33 +622,6 @@
       cursor: pointer;
     }
 
-    /* ── Backtester tab ── */
-    .backtest-panel {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      padding: 0;
-      background: var(--tv-bg);
-    }
-
-    #backtest-chart-container {
-      width: 100%;
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #backtest-chart-container.pro-chart-root .charts-stack {
-      flex: 1;
-      min-height: 0;
-      padding: 4px 4px 0;
-    }
-
-    /* ── Statistics tab ── */
     .pro-chart-root {
       flex: 1;
       display: flex;
@@ -931,7 +818,6 @@
 
     @media (max-width: 900px) {
       .command-bar { gap: 10px; }
-      .backtest-inline { flex-wrap: wrap; }
     }
 
     .charts-stack {
@@ -956,15 +842,12 @@
       flex-direction: column;
     }
 
-    #price-wrap,
-    #bt-price-wrap {
+    #price-wrap {
       min-height: 120px;
     }
 
     #osc-wrap,
-    #bt-osc-wrap,
-    #rsx-wrap,
-    #bt-rsx-wrap {
+    #rsx-wrap {
       min-height: 0;
     }
 
@@ -1207,8 +1090,6 @@
   <div class="command-bar">
     <div class="command-tabs tabs-nav">
       <button type="button" class="tab-btn active" data-tab="tab-live">Live</button>
-      <button type="button" class="tab-btn" data-tab="tab-stats">Stats</button>
-      <button type="button" class="tab-btn" data-tab="tab-backtest">Backtest</button>
     </div>
 
     <div class="command-sep"></div>
@@ -1267,39 +1148,6 @@
       <button type="button" class="matrix-btn" id="btn-ind-menu" title="Indicators">Ind</button>
       <div id="ind-menu" class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="down" hidden></div>
     </div>
-
-    <form class="backtest-inline" id="backtest-controls" onsubmit="return false;">
-      <div class="bt-inline">
-        <input type="text" id="bt-symbol" value="BTCUSDT" autocomplete="off" title="Symbol" />
-      </div>
-      <div class="bt-inline">
-        <select id="bt-interval" title="Timeframe">
-          <option value="1m">1m</option>
-          <option value="3m">3m</option>
-          <option value="15m" selected>15m</option>
-          <option value="1h">1h</option>
-          <option value="4h">4h</option>
-          <option value="1d">D</option>
-          <option value="1w">W</option>
-        </select>
-      </div>
-      <div class="bt-inline">
-        <div class="bt-date-wrap" data-date-wrap="bt-start">
-          <button type="button" class="bt-date-nav" data-date-nav="bt-start" data-dir="-1" title="Previous month" aria-label="Previous month">‹</button>
-          <input type="date" id="bt-start" title="Start" />
-          <button type="button" class="bt-date-nav" data-date-nav="bt-start" data-dir="1" title="Next month" aria-label="Next month">›</button>
-        </div>
-      </div>
-      <div class="bt-inline">
-        <div class="bt-date-wrap" data-date-wrap="bt-end">
-          <button type="button" class="bt-date-nav" data-date-nav="bt-end" data-dir="-1" title="Previous month" aria-label="Previous month">‹</button>
-          <input type="date" id="bt-end" title="End" />
-          <button type="button" class="bt-date-nav" data-date-nav="bt-end" data-dir="1" title="Next month" aria-label="Next month">›</button>
-        </div>
-      </div>
-      <button type="button" id="btn-run-backtest" class="btn-compact">Run</button>
-      <button type="button" id="btn-stop-backtest" class="btn-compact btn-stop" disabled title="Stop simulation">Stop</button>
-    </form>
 
     <div class="command-spacer"></div>
   </div>
@@ -1434,155 +1282,6 @@
     </div>
     </div>
 
-    <div id="tab-stats" class="tab-content">
-      <div class="stats-panel">
-        <div class="stats-mode-selector">
-          <button type="button" class="mode-btn active" data-mode="backtest">Бэктест</button>
-          <button type="button" class="mode-btn" data-mode="paper">Бумажный (Paper)</button>
-          <button type="button" class="mode-btn" data-mode="live">Live (Real)</button>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-card-label">Total Trades</div>
-            <div class="stat-card-value" id="stat-total-trades">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-label">Win Rate (%)</div>
-            <div class="stat-card-value" id="stat-win-rate">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-label">Net Profit (%)</div>
-            <div class="stat-card-value" id="stat-net-profit">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-label">Profit Factor</div>
-            <div class="stat-card-value" id="stat-profit-factor">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-label">Max Drawdown (%)</div>
-            <div class="stat-card-value" id="stat-max-drawdown">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-card-label">Recovery Factor</div>
-            <div class="stat-card-value" id="stat-recovery-factor">0.00</div>
-          </div>
-        </div>
-
-        <div class="stats-section-title">Equity Curve</div>
-        <div id="equity-chart"></div>
-
-        <div class="stats-section-title">Trade History</div>
-        <div class="trade-history-wrap">
-          <table id="trade-history-table">
-            <thead>
-              <tr>
-                <th>Entry Time</th>
-                <th>Exit Time</th>
-                <th>Type</th>
-                <th>Entry Price</th>
-                <th>Exit Price</th>
-                <th>Fee</th>
-                <th>PnL</th>
-                <th>Reason</th>
-              </tr>
-            </thead>
-            <tbody id="trade-history-body">
-              <tr><td colspan="8" class="stats-empty">No trades yet</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div id="tab-backtest" class="tab-content">
-      <div class="backtest-panel">
-        <div id="backtest-chart-container" class="pro-chart-root">
-          <div class="charts-stack" id="bt-charts-stack">
-            <div class="chart-wrap chart-wrapper" id="bt-price-wrap" data-pane-host="price">
-              <div class="chart-legend" data-pane="price" data-context="backtest"></div>
-              <div id="bt-price-chart" class="lwc-host"></div>
-              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="price" data-allow-log="true" aria-label="Price scale controls">
-                <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
-                <button type="button" class="scale-btn scale-btn--log" data-action="log" title="Logarithmic scale">Log</button>
-              </div>
-              <div id="bt-ruler-shade" class="ruler-shade"></div>
-              <div id="bt-ruler-tooltip" class="ruler-tooltip"></div>
-            </div>
-            <div class="chart-wrap osc-wrap" id="bt-osc-wrap" data-pane-host="wozduh">
-              <div class="chart-legend" data-pane="wozduh" data-context="backtest"></div>
-              <div id="bt-wozduh-chart" class="lwc-host"></div>
-              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="wozduh" data-allow-log="false" aria-label="Wozduh scale controls">
-                <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
-              </div>
-              <div class="indicator-settings-menu indicator-settings-menu--floating wozduh-settings-menu" data-float-direction="down" hidden>
-                <!-- Backtest: legacy static menu still required until BT DDR cutover. -->
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiPrice" checked /> Красная — RSI(Close)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="emaRsi" /> Зелёная — EMA(RSI)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiRsi" /> Оранжевая — RSI(RSI)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2" checked /> Фиолетовая — RSI(HL2)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiVol" checked /> Голубая/Синяя — Vol RSI + Dots</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiHl2Vol" /> Navy — RSI(HL2×Vol)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="macdRsi" /> Жёлтый — MACD(RSI)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="rsiAd" /> Бордовая — RSI(AD)</label>
-                <label class="menu-row"><input type="checkbox" class="wozduh-chk" data-pref-key="priceChan" /> Красный — RSI(cana) Канал</label>
-              </div>
-            </div>
-            <div class="chart-wrap rsx-wrap" id="bt-rsx-wrap" data-pane-host="rsx">
-              <div class="chart-legend" data-pane="rsx" data-context="backtest"></div>
-              <div id="bt-rsx-chart" class="lwc-host"></div>
-              <div class="scale-controls" data-scale-context="backtest" data-scale-pane="rsx" data-allow-log="false" aria-label="RSX scale controls">
-                <button type="button" class="scale-btn scale-btn--auto" data-action="auto" title="Auto scale (Y)">Auto</button>
-              </div>
-              <span id="backtest-loading" class="loading-dots hidden"><span>.</span><span>.</span><span>.</span></span>
-              <div class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="up" hidden>
-                <div class="indicator-settings-menu__drag-handle" title="Drag to move">⋮⋮⋮</div>
-                <div class="setting-row">
-                  <label>RSX Length:</label>
-                  <input type="number" class="rsx-length-input" min="3" max="100" step="1" value="14" />
-                </div>
-                <div class="setting-row">
-                  <label>Div Lookback (bars):</label>
-                  <input type="number" class="rsx-div-lookback-input" min="10" max="200" step="1" value="90" />
-                </div>
-                <div class="setting-row">
-                  <label>Signal Line Length:</label>
-                  <input type="number" class="rsx-signal-length-input" min="2" max="50" step="1" value="9" />
-                </div>
-                <div class="setting-row">
-                  <label>Source:</label>
-                  <select class="rsx-source-select">
-                    <option value="hlc3" selected>hlc3</option>
-                    <option value="close">close</option>
-                  </select>
-                </div>
-                <div class="setting-row">
-                  <label>Pivot Radius:</label>
-                  <input type="number" class="rsx-pivot-radius-input" min="1" max="10" step="1" value="2" />
-                </div>
-                <div class="setting-row">
-                  <label>Min Price Delta Ratio:</label>
-                  <input type="number" class="rsx-min-price-delta-input" min="0" step="0.0001" value="0.0" />
-                </div>
-                <div class="setting-row">
-                  <label>Min Osc Delta:</label>
-                  <input type="number" class="rsx-min-osc-delta-input" min="0" step="0.1" value="0.0" />
-                </div>
-                <div class="setting-row setting-row--stack">
-                  <label>RSX Signals</label>
-                  <label class="menu-row"><input type="checkbox" class="rsx-vis-chk" data-vis-key="show_tv_div" checked /> TV Divergence</label>
-                  <label class="menu-row"><input type="checkbox" class="rsx-vis-chk" data-vis-key="show_tv_pivot" checked /> TV Pivots</label>
-                  <label class="menu-row"><input type="checkbox" class="rsx-vis-chk" data-vis-key="show_zz_div" checked /> ZigZag Divergence</label>
-                  <label class="menu-row"><input type="checkbox" class="rsx-vis-chk" data-vis-key="show_fractal_div" checked /> Fractal Divergence</label>
-                  <label class="menu-row"><input type="checkbox" class="rsx-vis-chk" data-vis-key="show_fractal_pivot" checked /> Fractal Pivots</label>
-                </div>
-                <button type="button" class="risk-save-btn rsx-save-btn">Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </main>
   </div>
 
@@ -1813,7 +1512,6 @@
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="/chart-theme.js?v=3.4.0-rsx-signal-1-1"></script>
   <script src="/trendline_plugin.js?v=3.1.0"></script>
-  <script src="/trade_marker_plugin.js?v=3.1.0"></script>
   <script src="/config.js?v=3.8.0-rsx-vis-1" defer></script>
   <script src="/mappers.js?v=3.7.0-dag-demand-1" defer></script>
   <script src="/ui/scale-contribution.js?v=1.0.0" defer></script>
@@ -1838,8 +1536,6 @@
   <script src="/rsx-scale-lines.js?v=1.0-rsx-scale-1" defer></script>
   <script src="/chart-core.js?v=4.27.0-ss1" defer></script>
   <script src="/ui/viewport-manager.js?v=4.4.0-max-visible-20k" defer></script>
-  <script src="/ui/chart-projection.js?v=3.1.0" defer></script>
-  <script src="/ui/backtest-pipeline.js?v=3.1.0" defer></script>
   <script src="/api.js?v=3.3.0-rsx-vis-1" defer></script>
   <script src="/ws.js?v=4.6.0-timeline-state-1" defer></script>
   <script src="/timeline-recovery.js?v=1.1.0-state-1" defer></script>
@@ -1849,7 +1545,6 @@
   <script src="/ui/wozduh-controller.js?v=4.0.0" defer></script>
   <script src="/ui/risk-controller.js?v=3.1.0" defer></script>
   <script src="/ui/timeframe-controller.js?v=3.7.1" defer></script>
-  <script src="/ui/backtest-controller.js?v=3.1.0" defer></script>
   <script src="/ui/rsx-controller.js?v=3.3.0-dag-demand-1" defer></script>
   <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.2.0-wozduh-visual-1" defer></script>

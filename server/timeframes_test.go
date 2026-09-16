@@ -7,48 +7,6 @@ import (
 	"trading_bot/exchange"
 )
 
-func TestResolveBacktestInterval(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		in      string
-		binance string
-		wantErr bool
-	}{
-		{"1m", "1m", false},
-		{"1D", "1d", false},
-		{"D", "1d", false},
-		{"1W", "1w", false},
-		{"W", "1w", false},
-		{"1M", "1M", false},
-		{"2h", "2h", false},
-		{"6h", "6h", false},
-		{"3d", "", true},
-		{"2m", "", true},
-		{"10m", "", true},
-		{"3h", "", true},
-		{"1s", "", true},
-		{"3M", "", true},
-		{"3M", "", true},
-		{"35m", "", true},
-	}
-	for _, tc := range cases {
-		spec, err := ResolveBacktestInterval(tc.in)
-		if tc.wantErr {
-			if err == nil {
-				t.Fatalf("ResolveBacktestInterval(%q) expected error", tc.in)
-			}
-			continue
-		}
-		if err != nil {
-			t.Fatalf("ResolveBacktestInterval(%q): %v", tc.in, err)
-		}
-		if spec.BinanceInterval != tc.binance {
-			t.Fatalf("ResolveBacktestInterval(%q) binance=%q want %q", tc.in, spec.BinanceInterval, tc.binance)
-		}
-	}
-}
-
 func TestResolveTimeframe(t *testing.T) {
 	t.Parallel()
 

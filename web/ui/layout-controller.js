@@ -44,16 +44,6 @@
         rsx: 'rsx-chart',
       },
     },
-    backtest: {
-      stackId: 'bt-charts-stack',
-      priceId: 'bt-price-wrap',
-      hostWraps: { wozduh: 'bt-osc-wrap', rsx: 'bt-rsx-wrap' },
-      chartHosts: {
-        price: 'bt-price-chart',
-        wozduh: 'bt-wozduh-chart',
-        rsx: 'bt-rsx-chart',
-      },
-    },
   };
 
   /**
@@ -138,7 +128,6 @@
     const run = () => {
       resizeRaf = 0;
       forceChartResize('live');
-      forceChartResize('backtest');
     };
     if (typeof requestAnimationFrame === 'function') {
       resizeRaf = requestAnimationFrame(run);
@@ -507,7 +496,7 @@
       });
     }
 
-    // Live charts only (ChartAdapter); backtest may grow a mirror later.
+    // Live charts only (ChartAdapter).
     if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.setBottomTimeAxis === 'function') {
       ChartAdapter.setBottomTimeAxis(owner);
     }
@@ -522,7 +511,6 @@
     }
     const state = paneLayout.getState();
     applyStack('live', state);
-    applyStack('backtest', state);
     syncLegendEyes(state);
     syncBottomTimeAxis(state);
     document.body?.classList.toggle('is-pane-fullscreen', !!state.fullscreenPaneId);

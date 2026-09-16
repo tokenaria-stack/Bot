@@ -13,7 +13,6 @@ class ChartDataStore {
     this._dirtyIsNewBar = false;
     this._dirtyAnnotations = false;
     this._sealed = false;
-    this._trades = [];
     this._fingerprint = null;
   }
 
@@ -45,7 +44,6 @@ class ChartDataStore {
     this.candles.clear();
     this.osc.clear();
     this.annotations.clear();
-    this._trades = [];
     this._fingerprint = null;
     this._resetDirtyState();
   }
@@ -223,53 +221,6 @@ class ChartDataStore {
     const coverage = this.getCoverage();
     if (coverage.startSec == null || coverage.endSec == null) return false;
     return reqStartSec >= coverage.startSec && reqEndSec <= coverage.endSec;
-  }
-
-  setTrades(trades) {
-    this._trades = trades || [];
-  }
-
-  getTrades() {
-    return this._trades || [];
-  }
-
-  patchBacktestData(payload, tf) {
-    let patchedOsc = 0;
-
-    let oscillators = payload.oscillators || [];
-    if (!oscillators.length && Array.isArray(payload.simData) && payload.simData.length) {
-      oscillators = chartPointsToOsc(payload.simData);
-    }
-    if (!oscillators.length && Array.isArray(payload.chartData) && payload.chartData.length) {
-      oscillators = chartPointsToOsc(payload.chartData);
-    }
-
-    oscillators.forEach((o) => {
-      const norm = typeof Mappers !== 'undefined' ? Mappers.normalizeOscPoint(o) : normalizeOscPoint(o);
-      if (!norm) return;
-      const ms = ChartDataStore._snapMs(norm.time, tf);
-      if (!ms) return;
-
-      const snapped = { ...norm, timeMs: ms, time: ChartDataStore.msToChartSec(ms) };
-      const existing = this.osc.get(ms);
-
-      if (existing) {
-        const merged = this._mergeOsc(existing, snapped);
-        this.osc.set(ms, merged);
-        this._syncOscAnnotationProps(merged);
-      } else {
-        this.osc.set(ms, snapped);
-        this._syncOscAnnotationProps(snapped);
-      }
-      patchedOsc += 1;
-    });
-
-    if (Array.isArray(payload.annotations)) {
-      this._ingestAnnotations(payload.annotations, tf);
-    }
-
-    this._resetDirtyState();
-    return { patchedOsc };
   }
 
   sortedCandleTimesMs() {
@@ -551,29 +502,8 @@ class ChartDataStore {
   }
 }
 
-const backtestStore = (function () {
-  const store = new ChartDataStore('backtest');
-  let _viewIntent = null;
-
-  function markViewDirty(intent) {
-    _viewIntent = intent;
-  }
-
-  function consumeViewDirty() {
-    const intent = _viewIntent;
-    _viewIntent = null;
-    return intent;
-  }
-
-  return Object.assign(store, {
-    markViewDirty,
-    consumeViewDirty,
-  });
-})();
-
 if (typeof window !== 'undefined') {
   window.ChartDataStore = ChartDataStore;
-  window.backtestStore = backtestStore;
 }
 
 if (typeof module !== 'undefined' && module.exports) {

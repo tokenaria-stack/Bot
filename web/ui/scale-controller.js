@@ -1,6 +1,6 @@
 /**
  * ScaleController — ADR-020 HostID-based Y-scale owner.
- * Prefs per hostId (shared across live/backtest UI). Bindings per context+hostId.
+ * Prefs per hostId. Bindings per context+hostId.
  * scaleGroup is a dormant socket (default = hostId); no group apply yet.
  * Log only when allowLog=true (price). Visibility must never reset prefs.
  *
@@ -199,7 +199,7 @@
 
   function resolveHostId(context, hostId) {
     if (hostId != null && String(hostId).trim() !== '') return String(hostId).trim();
-    if (context === 'live' || context === 'backtest') return 'price';
+    if (context === 'live') return 'price';
     if (context != null && String(context).trim() !== '') return String(context).trim();
     return 'price';
   }

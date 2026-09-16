@@ -1,17 +1,16 @@
 /**
- * Phase 19.5.5 — RSX indicator settings menus (live + backtest).
+ * Phase 19.5.5 — RSX indicator settings menus (live).
  */
 const RsxController = (() => {
   let liveSettings = defaultRsxSettings();
-  let backtestSettings = defaultRsxSettings();
   let settingsChangedCallbacks = [];
 
-  function contextFromWrap(wrap) {
-    return wrap?.id === 'bt-rsx-wrap' ? 'backtest' : 'live';
+  function contextFromWrap() {
+    return 'live';
   }
 
-  function getWrap(context = 'live') {
-    return document.getElementById(context === 'backtest' ? 'bt-rsx-wrap' : 'rsx-wrap');
+  function getWrap() {
+    return document.getElementById('rsx-wrap');
   }
 
   function getSettingsMenu(wrap) {
@@ -19,18 +18,17 @@ const RsxController = (() => {
     return wrap.querySelector('.indicator-settings-menu');
   }
 
-  function getSettingsState(context = 'live') {
-    return context === 'backtest' ? backtestSettings : liveSettings;
+  function getSettingsState() {
+    return liveSettings;
   }
 
-  function storageKey(context) {
-    return context === 'backtest' ? LS_RSX_SETTINGS_BACKTEST_KEY : LS_RSX_SETTINGS_LIVE_KEY;
+  function storageKey() {
+    return LS_RSX_SETTINGS_LIVE_KEY;
   }
 
   function setSettings(context, settings) {
-    const normalized = normalizeRsxSettingsFromAPI(settings, getSettingsState(context));
-    if (context === 'backtest') backtestSettings = normalized;
-    else liveSettings = normalized;
+    const normalized = normalizeRsxSettingsFromAPI(settings, liveSettings);
+    liveSettings = normalized;
     return normalized;
   }
 
@@ -78,7 +76,7 @@ const RsxController = (() => {
   function readSettingsFromMenu(contextOrWrap, context = 'live') {
     const wrap = typeof contextOrWrap === 'string'
       ? getWrap(contextOrWrap)
-      : (contextOrWrap?.id === 'rsx-wrap' || contextOrWrap?.id === 'bt-rsx-wrap'
+      : (contextOrWrap?.id === 'rsx-wrap'
         ? contextOrWrap
         : contextOrWrap?.closest?.('.rsx-wrap') || contextOrWrap);
     const ctx = typeof contextOrWrap === 'string' ? contextOrWrap : (context || contextFromWrap(wrap));
@@ -149,7 +147,6 @@ const RsxController = (() => {
   }
 
   function notifySettingsChanged(context) {
-    if (context === 'backtest') return;
     const settings = getSettings(context);
     settingsChangedCallbacks.forEach((cb) => {
       try {
@@ -177,19 +174,8 @@ const RsxController = (() => {
     if (context === 'live' && typeof wsSubscribeTf === 'function') {
       wsSubscribeTf(window.currentTf);
     }
-    if (context === 'live' && typeof liveRenderScheduler !== 'undefined' && liveRenderScheduler) {
+    if (typeof liveRenderScheduler !== 'undefined' && liveRenderScheduler) {
       liveRenderScheduler.markDirty({ mode: 'full' });
-      return;
-    }
-    const chartKey = context === 'backtest' ? 'backtest' : 'live';
-    const chartData = ChartAdapter.getChartHandle(chartKey);
-    const store = chartKey === 'backtest' ? backtestStore : null;
-    if (!store) return;
-    const storeData = store.getForLightweightCharts();
-    const osc = storeData.osc;
-    const anns = storeData.annotations;
-    if (chartData?.rsxSeries && osc?.length) {
-      ChartAdapter.applyRsxData(chartKey, osc, anns);
     }
   }
 
@@ -200,9 +186,7 @@ const RsxController = (() => {
       active.blur();
     }
     try {
-      if (context === 'backtest') {
-        syncFromMenu('backtest');
-      } else if (typeof flushRsxSettingsSync === 'function') {
+      if (typeof flushRsxSettingsSync === 'function') {
         // Figma-style: flush pending or no-op if already synced; always close.
         await flushRsxSettingsSync('live');
       } else if (typeof syncRsxIndicatorSettings === 'function') {
@@ -217,9 +201,7 @@ const RsxController = (() => {
 
   function init() {
     loadFromStorage('live');
-    loadFromStorage('backtest');
     applyToMenu('live', liveSettings);
-    applyToMenu('backtest', backtestSettings);
 
     const rsxFieldSelector = '.rsx-length-input, .rsx-div-lookback-input, .rsx-signal-length-input, .rsx-source-select, .rsx-pivot-radius-input, .rsx-min-price-delta-input, .rsx-min-osc-delta-input, .rsx-vis-chk';
     document.querySelectorAll('.rsx-wrap').forEach((wrap) => {
@@ -245,10 +227,8 @@ const RsxController = (() => {
           el.addEventListener('change', () => refreshPivotsOnChart(context));
           return;
         }
-        if (context !== 'backtest') {
           el.addEventListener('input', () => notifySettingsChanged(context));
           el.addEventListener('change', () => notifySettingsChanged(context));
-        }
       });
 
       menu.addEventListener('mousedown', (e) => e.stopPropagation());

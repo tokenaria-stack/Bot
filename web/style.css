@@ -183,7 +183,7 @@
   min-width: 220px;
 }
 
-/* ── Backtest loading indicator ── */
+/* ── Loading indicator ── */
 .loading-dots {
   display: inline-block;
   margin-left: 8px;
@@ -609,8 +609,7 @@
   display: none !important;
 }
 
-.pro-chart-root,
-.backtest-panel {
+.pro-chart-root {
   display: flex;
   flex-direction: column;
   flex: 1 1 100%;
@@ -649,57 +648,29 @@
   width: 100%;
 }
 
-#bt-price-chart {
-  flex: 55;
-  min-height: 150px;
-  position: relative;
-  width: 100%;
-}
-
-#bt-wozduh-chart {
-  flex: 22;
-  min-height: 100px;
-  position: relative;
-  width: 100%;
-}
-
-#bt-rsx-chart {
-  flex: 23;
-  min-height: 100px;
-  position: relative;
-  width: 100%;
-}
-
 .chart-host,
 #price-wrap,
-#bt-price-wrap,
 #osc-wrap,
-#bt-osc-wrap,
-#rsx-wrap,
-#bt-rsx-wrap {
+#rsx-wrap {
   display: flex;
   flex-direction: column;
   min-height: 0;
   position: relative;
 }
 
-#price-wrap,
-#bt-price-wrap {
+#price-wrap {
   flex: 55 1 0;
 }
 
-#osc-wrap,
-#bt-osc-wrap {
+#osc-wrap {
   flex: 22 1 0;
 }
 
-#rsx-wrap,
-#bt-rsx-wrap {
+#rsx-wrap {
   flex: 23 1 0;
 }
 
-.lwc-host,
-#backtest-chart-container {
+.lwc-host {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;

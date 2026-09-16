@@ -1,5 +1,5 @@
 /**
- * Phase 19.5 — Timeframe toolbar (favorites, dropdown, live/backtest switching).
+ * Phase 19.5 — Timeframe toolbar (favorites, dropdown, live TF switching).
  */
 const TimeframeController = (() => {
   let tfFavorites = [];
@@ -61,9 +61,6 @@ const TimeframeController = (() => {
   }
 
   function getActiveTf() {
-    if (TabsController.isBacktestTfContext()) {
-      return normalizeTf(getBacktestInterval() || backtestTf || getActiveTfFromToolbar());
-    }
     return currentTf;
   }
 
@@ -222,14 +219,6 @@ const TimeframeController = (() => {
     // Buffering overlay owned by loadDashboard (Atomic Publish) — do not clear here.
   }
 
-  function switchBacktestTimeframe(tf, event) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    handleBacktestIntervalChange(tf);
-  }
-
   function switchTimeframe(tf, event) {
     if (event) {
       event.preventDefault();
@@ -237,12 +226,7 @@ const TimeframeController = (() => {
     }
     const nextTf = resolveTf(tf);
     if (!nextTf) return;
-    if (!TabsController.isBacktestTfContext() && !LIVE_CHART_TFS.includes(nextTf)) {
-      return;
-    }
-
-    if (TabsController.isBacktestTfContext()) {
-      switchBacktestTimeframe(nextTf, event);
+    if (!LIVE_CHART_TFS.includes(nextTf)) {
       return;
     }
 
@@ -342,7 +326,6 @@ const TimeframeController = (() => {
     getActiveTfFromToolbar,
     switchTimeframe,
     switchLiveTimeframe,
-    switchBacktestTimeframe,
     loadFavorites,
     renderTfBar,
     renderTfMenu,

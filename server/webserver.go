@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"math"
 	"net/http"
@@ -36,8 +34,6 @@ const (
 	defaultStateCandleLimit = 3000
 	maxStateCandleLimit     = 10000
 	stateTailPollLimit      = 20 // skip navigators/hasMore for lightweight tail polls
-	maxBacktestChunkLimit   = 50000
-	maxBacktestBars         = 100000
 	historyFetchLimit       = 1000
 	binanceMaxKlinesLimit   = 1000
 	defaultStaticDir        = "web"
@@ -96,7 +92,6 @@ type DashboardServer struct {
 	ensureFetch      closedRangeFetchFunc
 	ensureMu         sync.Mutex
 	ensureInFlight   map[string]*historyEnsureCall
-	backtestRuns     *backtestRunManager
 	uiRegistry       *core.UIRegistry
 	projector        *wire.Projector
 }
@@ -238,12 +233,6 @@ type markerPayload struct {
 	Kind   string  `json:"kind,omitempty"`
 }
 
-type historyChunkResponse struct {
-	ChartData   []ChartPoint             `json:"chartData"`
-	HasMore     bool                     `json:"hasMore"`
-	Annotations []market.ChartAnnotation `json:"annotations,omitempty"`
-}
-
 type historyResponse struct {
 	Status      string                               `json:"status"`
 	Code        string                               `json:"code,omitempty"`
@@ -282,7 +271,6 @@ func NewDashboardServer(
 		clients:          make(map[*WSClient]bool),
 		clientTF:         make(map[*WSClient]string),
 		tradeHistory:     domain.NewTradeHistoryStore(),
-		backtestRuns:     newBacktestRunManager(),
 		paperTrading:     paperTrading,
 		sandboxMode:      sandboxMode,
 		tradingTimeframe: tradingTimeframe,
@@ -302,12 +290,9 @@ func (d *DashboardServer) Start(port string) error {
 
 	mux.HandleFunc("/api/state", withGzip(d.handleState))
 	mux.HandleFunc("/api/history", withGzip(d.handleHistory))
-	mux.HandleFunc("/api/history/chunk", withGzip(d.handleHistoryChunk))
 	mux.HandleFunc("/api/settings/indicators", withGzip(d.handleIndicatorSettings))
 	mux.HandleFunc("/api/settings/navigators", withGzip(d.handleNavigatorSettings))
 	mux.HandleFunc("/api/ui/manifest", withGzip(d.handleUIManifest))
-	mux.HandleFunc("/api/backtest/run", withGzip(d.handleBacktestRun))
-	mux.HandleFunc("/api/backtest/stop", withGzip(d.handleBacktestStop))
 	mux.HandleFunc("/api/stats", withGzip(d.handleStats))
 	mux.HandleFunc("/api/cache/clear", withGzip(d.handleCacheClear))
 	mux.HandleFunc("/api/debug/tip-ssot", withGzip(d.handleDebugTipSSOT))
@@ -939,11 +924,7 @@ func (d *DashboardServer) handleNavigatorSettings(w http.ResponseWriter, r *http
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		panes := market.ResolveBacktestNavigators(
-			&market.BacktestRunSettings{Navigators: req.Navigators},
-			req.Navigators,
-			market.NavigatorUISettings{},
-		)
+		panes := market.ResolveNavigatorPanes(req.Navigators, market.NavigatorUISettings{})
 		d.setLiveNavigatorPanes(panes)
 		d.syncMasterNavigatorPanes()
 		writeJSON(w, map[string]any{"navigators": d.getLiveNavigatorPanes()})
@@ -978,125 +959,6 @@ func (d *DashboardServer) applyRSXSettingsToFrames(prev, next market.RSXSettings
 	return n
 }
 
-// BacktestRequest is the JSON payload for POST /api/backtest/run.
-type BacktestRequest struct {
-	Symbol     string                                `json:"symbol"`
-	Interval   string                                `json:"interval"`
-	StartDate  string                                `json:"startDate"`
-	EndDate    string                                `json:"endDate"`
-	Settings   *market.BacktestRunSettings           `json:"settings"`
-	Navigator  market.NavigatorUISettings            `json:"navigator,omitempty"`
-	Navigators map[string]market.NavigatorUISettings `json:"navigators,omitempty"`
-	MtfOptions map[string]bool                       `json:"mtfOptions,omitempty"`
-	SimOnly    bool                                  `json:"simOnly"`
-}
-
-// ChartPoint is one candle with full indicator values for the backtest chart.
-type ChartPoint struct {
-	Time            int64                           `json:"time"`
-	Open            float64                         `json:"open"`
-	High            float64                         `json:"high"`
-	Low             float64                         `json:"low"`
-	Close           float64                         `json:"close"`
-	Volume          float64                         `json:"volume,omitempty"`
-	Jurik           float64                         `json:"jurik,omitempty"`
-	RSX             float64                         `json:"rsx"`
-	RSXSignal       float64                         `json:"rsx_signal"`
-	RsiPrice        float64                         `json:"rsiPrice,omitempty"`
-	EmaRsi          float64                         `json:"emaRsi,omitempty"`
-	RsiRsi          float64                         `json:"rsiRsi,omitempty"`
-	RsiHl2          float64                         `json:"rsiHl2,omitempty"`
-	RsiVolFast      float64                         `json:"rsiVolFast,omitempty"`
-	RsiVolSlow      float64                         `json:"rsiVolSlow,omitempty"`
-	MacdRsi         float64                         `json:"macdRsi,omitempty"`
-	RsiAd           float64                         `json:"rsiAd,omitempty"`
-	RsiHl2Vol       float64                         `json:"rsiHl2Vol,omitempty"`
-	VolCrossMarker  string                          `json:"volCrossMarker,omitempty"`
-	VolChanMid      float64                         `json:"volChanMid,omitempty"`
-	VolChanUp       float64                         `json:"volChanUp,omitempty"`
-	VolChanDn       float64                         `json:"volChanDn,omitempty"`
-	PriceChanMid    float64                         `json:"priceChanMid,omitempty"`
-	PriceChanUp     float64                         `json:"priceChanUp,omitempty"`
-	PriceChanDn     float64                         `json:"priceChanDn,omitempty"`
-	Marker          string                          `json:"marker,omitempty"`
-	VolumeSpikeUp   bool                            `json:"volumeSpikeUp,omitempty"`
-	VolumeSpikeDown bool                            `json:"volumeSpikeDown,omitempty"`
-	WozduhUp        float64                         `json:"wozduh_up,omitempty"`
-	WozduhDown      float64                         `json:"wozduh_down,omitempty"`
-	LongScore       int                             `json:"longScore,omitempty"`
-	ShortScore      int                             `json:"shortScore,omitempty"`
-	RawAction       string                          `json:"rawAction,omitempty"`
-	FinalAction     string                          `json:"finalAction,omitempty"`
-	IsVetoed        bool                            `json:"isVetoed,omitempty"`
-	VetoReason      string                          `json:"vetoReason,omitempty"`
-	Factors         map[string]decision.ScoreFactor `json:"factors,omitempty"`
-}
-
-// SimPoint is a slim chart point (indicators only, no OHLC) for simOnly backtest responses.
-type SimPoint struct {
-	Time            int64   `json:"time"`
-	Jurik           float64 `json:"jurik,omitempty"`
-	RSX             float64 `json:"rsx,omitempty"`
-	RSXSignal       float64 `json:"rsxSignal,omitempty"`
-	RsiVolFast      float64 `json:"rsiVolFast,omitempty"`
-	RsiVolSlow      float64 `json:"rsiVolSlow,omitempty"`
-	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
-	Marker          string  `json:"marker,omitempty"`
-	VolumeSpikeUp   bool    `json:"volumeSpikeUp,omitempty"`
-	VolumeSpikeDown bool    `json:"volumeSpikeDown,omitempty"`
-}
-
-// BacktestTrade is a single simulated trade in a backtest result.
-type BacktestTrade struct {
-	Time            int64    `json:"time"`
-	EntryTime       int64    `json:"entryTime"`
-	Side            string   `json:"side"`
-	EntryPrice      float64  `json:"entryPrice"`
-	ExitPrice       float64  `json:"exitPrice"`
-	StopLossPrice   float64  `json:"stopLossPrice"`
-	ExitReason      string   `json:"exitReason"`
-	EntryReason     string   `json:"entryReason,omitempty"`
-	FactorsSnapshot []string `json:"factorsSnapshot,omitempty"`
-	StrategySource  string   `json:"strategySource,omitempty"`
-	ActiveFactors   []string `json:"activeFactors,omitempty"`
-	SignalKind      string   `json:"signalKind,omitempty"`
-	EntryScore      float64  `json:"entryScore,omitempty"`
-	PnL             float64  `json:"pnl"`
-	Duration        string   `json:"duration"`
-}
-
-// EquityPoint is one point on the equity curve (time in Unix seconds).
-type EquityPoint struct {
-	Time  int64   `json:"time"`
-	Value float64 `json:"value"`
-}
-
-// BacktestResult is returned after a backtest run completes.
-type BacktestResult struct {
-	TotalTrades    int                                  `json:"totalTrades"`
-	WinRate        float64                              `json:"winRate"`
-	NetProfit      float64                              `json:"netProfit"`
-	ProfitFactor   float64                              `json:"profitFactor"`
-	MaxDrawdown    float64                              `json:"maxDrawdown"`
-	RecoveryFactor float64                              `json:"recoveryFactor"`
-	Cancelled      bool                                 `json:"cancelled,omitempty"`
-	Trades         []BacktestTrade                      `json:"trades"`
-	EquityCurve    []EquityPoint                        `json:"equityCurve"`
-	ChartData      []ChartPoint                         `json:"chartData"`
-	SimData        []SimPoint                           `json:"simData,omitempty"`
-	NavigatorData  market.NavigatorResultDTO            `json:"navigatorData"`
-	NavigatorPrice market.NavigatorResultDTO            `json:"navigatorPrice"` // legacy alias for navigatorData
-	Navigators     map[string]market.NavigatorResultDTO `json:"navigators,omitempty"`
-	Annotations    []market.ChartAnnotation             `json:"annotations,omitempty"`
-}
-
-func truncateLogBody(b []byte, max int) string {
-	if max <= 0 || len(b) <= max {
-		return string(b)
-	}
-	return string(b[:max]) + "...(truncated)"
-}
-
 func (d *DashboardServer) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1111,324 +973,6 @@ func (d *DashboardServer) handleCacheClear(w http.ResponseWriter, r *http.Reques
 	log.Printf("[Dashboard] cache cleared: htf entries=%d", removed)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Cache cleared"))
-}
-
-func (d *DashboardServer) handleBacktestRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req BacktestRequest
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("[CRITICAL] Failed to read BacktestRequest body: %v", err)
-		http.Error(w, "Bad Request: cannot read body", http.StatusBadRequest)
-		return
-	}
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Printf("[CRITICAL] JSON Decode Error: %v. Body was: %s", err, truncateLogBody(bodyBytes, 8192))
-		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err := data.InitDB(); err != nil {
-		log.Printf("[Backtest] history DB init failed: %v", err)
-		http.Error(w, "history database unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	if d.rest == nil {
-		http.Error(w, "exchange client unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	spec, err := ResolveBacktestInterval(req.Interval)
-	if err != nil {
-		log.Printf("[Backtest] bad interval %q: %v", req.Interval, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if spec.BinanceInterval == "" {
-		log.Printf("[Backtest] interval %q resolved to %q but has no Binance mapping", req.Interval, spec.ID)
-		http.Error(w, "interval not supported for backtest", http.StatusBadRequest)
-		return
-	}
-
-	startMs, endMs, err := market.ParseBacktestDateRange(req.StartDate, req.EndDate)
-	if err != nil {
-		log.Printf("[Backtest] bad date range start=%q end=%q: %v", req.StartDate, req.EndDate, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	intervalMs, intervalErr := data.IntervalDurationMs(spec.BinanceInterval)
-	if intervalErr == nil && intervalMs > 0 {
-		expectedBars := (endMs - startMs) / intervalMs
-		if expectedBars > maxBacktestBars {
-			errMsg := fmt.Sprintf(
-				"Слишком большой период. Ожидается ~%d свечей. Максимально разрешено %d. Уменьшите период дат или выберите старший таймфрейм.",
-				expectedBars, maxBacktestBars,
-			)
-			log.Printf("[Backtest] %s: symbol=%s interval=%s start=%s end=%s",
-				errMsg, req.Symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
-			http.Error(w, errMsg, http.StatusBadRequest)
-			return
-		}
-	}
-
-	symbol := req.Symbol
-	if symbol == "" {
-		symbol = d.symbol
-	}
-	if symbol == "" {
-		symbol = "BTCUSDT"
-	}
-
-	log.Printf("[Backtest] run request: symbol=%s interval=%s start=%s end=%s",
-		symbol, spec.BinanceInterval, req.StartDate, req.EndDate)
-
-	effectiveStartMs := startMs
-	candles, err := d.rest.FetchClosedRangePages(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
-	if err != nil {
-		log.Printf("[Backtest] fetch history failed: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-
-	minBars := market.BacktestMinBars()
-	for padAttempt := 0; len(candles) < minBars && padAttempt < 4; padAttempt++ {
-		paddedStart, ok := market.PadBacktestStartMs(spec.BinanceInterval, effectiveStartMs, endMs, len(candles))
-		if !ok {
-			break
-		}
-		log.Printf("[Backtest] padding start (attempt %d): have %d candles, need %d — extending start %s → %s",
-			padAttempt+1, len(candles), minBars,
-			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"),
-			time.UnixMilli(paddedStart).UTC().Format("2006-01-02"))
-		effectiveStartMs = paddedStart
-		candles, err = d.rest.FetchClosedRangePages(symbol, spec.BinanceInterval, effectiveStartMs, endMs)
-		if err != nil {
-			log.Printf("[Backtest] fetch history failed after padding: %v", err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-	}
-
-	if len(candles) < minBars {
-		msg := fmt.Sprintf("not enough candles (%d) for backtest", len(candles))
-		log.Printf("[Backtest] %s: symbol=%s interval=%s start=%s end=%s (effective start %s)",
-			msg, symbol, spec.BinanceInterval, req.StartDate, req.EndDate,
-			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"))
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	if effectiveStartMs != startMs {
-		log.Printf("[Backtest] used padded start %s (requested %s) — fetched %d candles",
-			time.UnixMilli(effectiveStartMs).UTC().Format("2006-01-02"), req.StartDate, len(candles))
-	}
-
-	navigators := market.ResolveBacktestNavigators(req.Settings, req.Navigators, req.Navigator)
-	market.ApplyMtfOptionsToNavigators(navigators, req.MtfOptions)
-
-	log.Printf("[Backtest] parsed settings: navigatorPanes=%d (chart replay, trading purged)", len(navigators))
-	for pane, ui := range navigators {
-		log.Printf("[Backtest] navigator[%s] enabled=%v source=%s useLong=%v longLen=%d",
-			pane, ui.Enabled, ui.Source, ui.UseLong, ui.LongLen)
-	}
-
-	rsxSettings, hasRSX := market.ResolveBacktestRSXSettings(req.Settings)
-	var rsxCfg *market.RSXSettings
-	if hasRSX {
-		rsxCfg = &rsxSettings
-	}
-	var wozduhPrefs map[string]bool
-	if req.Settings != nil && len(req.Settings.WozduhSettings) > 0 {
-		wozduhPrefs = req.Settings.WozduhSettings
-	}
-	if hasRSX {
-		log.Printf("[Backtest] RSX settings: length=%d lookback=%d pivot_radius=%d source=%s",
-			rsxSettings.Length, rsxSettings.DivLookback, rsxSettings.PivotRadius, rsxSettings.Source)
-	}
-
-	simOnly := req.SimOnly
-	if req.Settings != nil && req.Settings.SimOnly {
-		simOnly = true
-	}
-	skipNavigators := false
-	if req.Settings != nil && req.Settings.SkipNavigators {
-		skipNavigators = true
-	}
-	if simOnly {
-		log.Printf("[Backtest] simOnly=true — wire response will omit OHLC chartData")
-	}
-	if skipNavigators {
-		log.Printf("[Backtest] skipNavigators=true — navigator geometry bypassed")
-	}
-
-	ctx, endRun := d.backtestRuns.begin(r.Context())
-	defer endRun()
-
-	engine := market.NewBacktestEngine(market.BacktestConfig{
-		Symbol:         symbol,
-		Interval:       spec.BinanceInterval,
-		Navigator:      req.Navigator,
-		Navigators:     navigators,
-		HTF:            d.htfProvider,
-		RSXSettings:    rsxCfg,
-		WozduhPrefs:    wozduhPrefs,
-		SimOnly:        simOnly,
-		SkipNavigators: skipNavigators,
-	})
-	runResult, err := engine.Run(ctx, candles)
-	if err != nil {
-		log.Printf("[Backtest] simulation failed: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if runResult.Cancelled {
-		log.Printf("[Backtest] stopped early: trades=%d chartPoints=%d candles=%d/%d",
-			runResult.TotalTrades, len(runResult.ChartData), len(runResult.ChartData), len(candles))
-	} else {
-		log.Printf("[Backtest] complete: trades=%d net=%.2f%% winRate=%.1f%% chartPoints=%d candles=%d",
-			runResult.TotalTrades, runResult.NetProfit, runResult.WinRate, len(runResult.ChartData), len(candles))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	result := backtestResultFromStrategy(runResult)
-	respBytes, err := json.Marshal(result)
-	if err != nil {
-		log.Printf("[ERROR] JSON Marshal failed: %v", err)
-		http.Error(w, `{"error": "Failed to serialize response due to invalid float values (NaN/Inf)"}`, http.StatusInternalServerError)
-		return
-	}
-	if _, err := w.Write(respBytes); err != nil {
-		log.Printf("[ERROR] backtest response write failed: %v", err)
-	}
-}
-
-func (d *DashboardServer) handleBacktestStop(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	stopped := false
-	if d.backtestRuns != nil {
-		stopped = d.backtestRuns.stop()
-	}
-	log.Printf("[Backtest] stop requested: stopped=%v", stopped)
-	writeJSON(w, map[string]any{"stopped": stopped})
-}
-
-func backtestResultFromStrategy(run *market.BacktestRunResult) BacktestResult {
-	if run == nil {
-		return BacktestResult{}
-	}
-
-	trades := make([]BacktestTrade, len(run.Trades))
-	for i, t := range run.Trades {
-		trades[i] = BacktestTrade{
-			Time:            t.Time,
-			EntryTime:       t.EntryTime,
-			Side:            t.Side,
-			EntryPrice:      t.EntryPrice,
-			ExitPrice:       t.ExitPrice,
-			StopLossPrice:   t.StopLossPrice,
-			ExitReason:      t.ExitReason,
-			EntryReason:     t.EntryReason,
-			FactorsSnapshot: append([]string(nil), t.FactorsSnapshot...),
-			StrategySource:  t.StrategySource,
-			ActiveFactors:   append([]string(nil), t.ActiveFactors...),
-			SignalKind:      t.SignalKind,
-			EntryScore:      t.EntryScore,
-			PnL:             t.PnL,
-			Duration:        t.Duration,
-		}
-	}
-
-	equity := make([]EquityPoint, len(run.EquityCurve))
-	for i, p := range run.EquityCurve {
-		equity[i] = EquityPoint{Time: p.Time, Value: p.Value}
-	}
-
-	chartData := make([]ChartPoint, len(run.ChartData))
-	for i, p := range run.ChartData {
-		chartData[i] = ChartPoint{
-			Time:            p.Time,
-			Open:            p.Open,
-			High:            p.High,
-			Low:             p.Low,
-			Close:           p.Close,
-			Volume:          p.Volume,
-			Jurik:           p.Jurik,
-			RSX:             p.RSX,
-			RSXSignal:       p.RSXSignal,
-			RsiPrice:        p.RsiPrice,
-			EmaRsi:          p.EmaRsi,
-			RsiRsi:          p.RsiRsi,
-			RsiHl2:          p.RsiHl2,
-			RsiVolFast:      p.RsiVolFast,
-			RsiVolSlow:      p.RsiVolSlow,
-			MacdRsi:         p.MacdRsi,
-			RsiAd:           p.RsiAd,
-			RsiHl2Vol:       p.RsiHl2Vol,
-			VolCrossMarker:  p.VolCrossMarker,
-			VolChanMid:      p.VolChanMid,
-			VolChanUp:       p.VolChanUp,
-			VolChanDn:       p.VolChanDn,
-			PriceChanMid:    p.PriceChanMid,
-			PriceChanUp:     p.PriceChanUp,
-			PriceChanDn:     p.PriceChanDn,
-			Marker:          p.Marker,
-			VolumeSpikeUp:   p.VolumeSpikeUp,
-			VolumeSpikeDown: p.VolumeSpikeDown,
-			WozduhUp:        p.RsiVolFast,
-			WozduhDown:      p.RsiVolSlow,
-			LongScore:       p.LongScore,
-			ShortScore:      p.ShortScore,
-			RawAction:       p.RawAction,
-			FinalAction:     p.FinalAction,
-			IsVetoed:        p.IsVetoed,
-			VetoReason:      p.VetoReason,
-			Factors:         p.Factors,
-		}
-	}
-
-	simData := make([]SimPoint, len(run.SimData))
-	for i, p := range run.SimData {
-		simData[i] = SimPoint{
-			Time:            p.Time,
-			Jurik:           p.Jurik,
-			RSX:             p.RSX,
-			RSXSignal:       p.RSXSignal,
-			RsiVolFast:      p.RsiVolFast,
-			RsiVolSlow:      p.RsiVolSlow,
-			VolCrossMarker:  p.VolCrossMarker,
-			Marker:          p.Marker,
-			VolumeSpikeUp:   p.VolumeSpikeUp,
-			VolumeSpikeDown: p.VolumeSpikeDown,
-		}
-	}
-
-	return BacktestResult{
-		TotalTrades:    run.TotalTrades,
-		WinRate:        run.WinRate,
-		NetProfit:      run.NetProfit,
-		ProfitFactor:   run.ProfitFactor,
-		MaxDrawdown:    run.MaxDrawdown,
-		RecoveryFactor: run.RecoveryFactor,
-		Cancelled:      run.Cancelled,
-		Trades:         trades,
-		EquityCurve:    equity,
-		ChartData:      chartData,
-		SimData:        simData,
-		NavigatorData:  run.NavigatorData,
-		NavigatorPrice: run.NavigatorData,
-		Navigators:     run.Navigators,
-		Annotations:    run.Annotations,
-	}
 }
 
 func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -1574,164 +1118,6 @@ func (d *DashboardServer) handleHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, resp)
-}
-
-func parseHistoryChunkLimit(r *http.Request) int {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 {
-		limit = historyFetchLimit
-	}
-	if limit > maxBacktestChunkLimit {
-		limit = maxBacktestChunkLimit
-	}
-	return limit
-}
-
-func (d *DashboardServer) handleHistoryChunk(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if err := requestCtxErr(r.Context()); err != nil {
-		return
-	}
-
-	if err := data.InitDB(); err != nil {
-		log.Printf("[HistoryChunk] DB init failed: %v", err)
-		http.Error(w, "history database unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = r.URL.Query().Get("tf")
-	}
-	endTimeMs, _ := strconv.ParseInt(r.URL.Query().Get("endTime"), 10, 64)
-	limit := parseHistoryChunkLimit(r)
-
-	symbol := r.URL.Query().Get("symbol")
-	if symbol == "" {
-		symbol = d.symbol
-	}
-	if symbol == "" {
-		symbol = "BTCUSDT"
-	}
-
-	if interval == "" || endTimeMs <= 0 {
-		http.Error(w, "interval and endTime required", http.StatusBadRequest)
-		return
-	}
-
-	spec, err := ResolveTimeframe(interval)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if spec.Kind != TFBinanceREST || spec.BinanceInterval == "" {
-		http.Error(w, "interval not supported for history chunk", http.StatusBadRequest)
-		return
-	}
-
-	intervalMs, err := data.IntervalDurationMs(spec.BinanceInterval)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	fetchEndMs := endTimeMs - intervalMs
-	if fetchEndMs <= 0 {
-		writeJSON(w, historyChunkResponse{ChartData: []ChartPoint{}, HasMore: false})
-		return
-	}
-
-	rsxSettings := parseRSXSettingsFromRequest(r)
-	_ = parseRSXLookback(r) // legacy query param; replay uses RSX settings only
-
-	wantBars := limit + market.IndicatorWarmupBars
-	if err := data.InitDB(); err == nil {
-		candles, loadErr := exchange.LoadContinuousContractBeforeEnd(symbol, spec.BinanceInterval, fetchEndMs, wantBars)
-		if loadErr == nil && len(candles) > 0 {
-			klines := candlesToKlines(candles)
-			if wantBars > 0 && len(klines) > wantBars {
-				klines = klines[len(klines)-wantBars:]
-			}
-			trim := historyWarmupTrim(len(klines), limit, market.IndicatorWarmupBars)
-			if err := requestCtxErr(r.Context()); err != nil {
-				return
-			}
-			chartCandles, oscillators, annotations := d.buildHistoryChartSeriesTrimmed(r.Context(), klines, trim, spec.BinanceInterval, rsxSettings)
-			if limit > 0 && len(chartCandles) > limit {
-				drop := len(chartCandles) - limit
-				chartCandles = chartCandles[drop:]
-				oscillators = oscillators[drop:]
-				annotations = trimAnnotations(annotations, drop, klines)
-			}
-			chartData := chartPointsFromSeries(chartCandles, oscillators)
-			hasMore := false
-			if len(klines) > 0 {
-				hasMore = d.sqliteHasBarsBefore(spec.BinanceInterval, klines[0].OpenTime)
-			}
-			if err := requestCtxErr(r.Context()); err != nil {
-				return
-			}
-			writeJSON(w, historyChunkResponse{
-				ChartData:   chartData,
-				HasMore:     hasMore,
-				Annotations: annotations,
-			})
-			return
-		}
-	} else {
-		log.Printf("[HistoryChunk] DB init failed: %v", err)
-	}
-
-	log.Printf("[HistoryChunk] no SQLite data for %s %s end<=%d", symbol, spec.BinanceInterval, fetchEndMs)
-	http.Error(w, "no historical data available", http.StatusServiceUnavailable)
-}
-
-func chartPointsFromSeries(candles []ChartCandle, oscillators []ChartOscillator) []ChartPoint {
-	n := len(candles)
-	if len(oscillators) < n {
-		n = len(oscillators)
-	}
-	out := make([]ChartPoint, n)
-	for i := 0; i < n; i++ {
-		c := candles[i]
-		o := oscillators[i]
-		out[i] = ChartPoint{
-			Time:            c.Time,
-			Open:            c.Open,
-			High:            c.High,
-			Low:             c.Low,
-			Close:           c.Close,
-			Volume:          c.Volume,
-			Jurik:           o.Jurik,
-			RSX:             o.RSX,
-			RSXSignal:       o.RSXSignal,
-			RsiPrice:        o.RsiPrice,
-			EmaRsi:          o.EmaRsi,
-			RsiRsi:          o.RsiRsi,
-			RsiHl2:          o.RsiHl2,
-			RsiVolFast:      o.RsiVolFast,
-			RsiVolSlow:      o.RsiVolSlow,
-			MacdRsi:         o.MacdRsi,
-			RsiAd:           o.RsiAd,
-			RsiHl2Vol:       o.RsiHl2Vol,
-			VolCrossMarker:  o.VolCrossMarker,
-			VolChanMid:      o.VolChanMid,
-			VolChanUp:       o.VolChanUp,
-			VolChanDn:       o.VolChanDn,
-			PriceChanMid:    o.PriceChanMid,
-			PriceChanUp:     o.PriceChanUp,
-			PriceChanDn:     o.PriceChanDn,
-			Marker:          o.Marker,
-			VolumeSpikeUp:   o.VolumeSpikeUp,
-			VolumeSpikeDown: o.VolumeSpikeDown,
-			WozduhUp:        o.RsiVolFast,
-			WozduhDown:      o.RsiVolSlow,
-		}
-	}
-	return out
 }
 
 func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSpec, rsxLookback int, candleLimit int, endTimeMs int64, tailPoll bool, navigatorsOnly bool) (*MarketState, error) {

@@ -67,17 +67,6 @@ func TestHandleIndicatorSettings(t *testing.T) {
 	}
 }
 
-func TestHandleHistoryChunk_BadRequest(t *testing.T) {
-	t.Parallel()
-
-	d := &DashboardServer{symbol: "BTCUSDT"}
-	rec := httptest.NewRecorder()
-	d.handleHistoryChunk(rec, httptest.NewRequest(http.MethodGet, "/api/history/chunk", nil))
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", rec.Code)
-	}
-}
-
 func TestParseRSXLookbackUsesGlobalSettings(t *testing.T) {
 	market.ResetRSXSettings()
 	t.Cleanup(market.ResetRSXSettings)

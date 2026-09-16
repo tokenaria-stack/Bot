@@ -7,6 +7,16 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## PRE-STRATEGY-CLEAN-1 slice 1 (Sep 2026)
+
+**Context:** Falcon-era dashboard "Backtest" was historical chart + indicator snapshot packing (`BacktestEngine` / `RunStreamingReplay` / Falcon `Evaluate`), not a policy simulator. Brain3 answers a different question (learner science). Trade/PnL fields were empty sockets after Phase F.
+
+**Decision:** Amputate the Backtest tab, Stats tab (backtest PnL theater), `/api/backtest/*`, and Falcon replay packing. Live chart + `/api/history` + `ReplayClosedBars` remain machine #1 (truth/fact replay). Policy simulator is not built until Strategy Book + ExecutionPolicy exist.
+
+**Rejected:** Renovating `market/backtest.go` into the future simulator — **Reason:** second indicator universe. Keeping the tab as "history replay" under a Backtest label — **Reason:** conceptual debt. Extracting PnL kernels — **Reason:** empty after Phase F.
+
+**Consequences:** Dashboard is Live-only. Falcon still allocated for Live mode / HTF (`FALCON-RETIREMENT-1`, later). `ApplyBacktestRSXConfig` kept as Frame RSX pin for research/`DumpFeatureTape` (name debt; do not rename until Falcon is unmixed). `#29` closed. SLICE-1-FINISH deleted orphan `/api/history/chunk` + `server.ChartPoint` (not `market.ChartPoint`) and dead FE Backtest CSS/LS/shims. `/api/stats` left for a later consumer audit. Chapter **GREEN / FROZEN** after SLICE-1-FINISH.
+
 ---
 
 ## TIMELINE-RECOVERY-STATE-1 (Sep 2026)
@@ -18,6 +28,8 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 **Rejected:** State-on-every-subscribe — **Reason:** TF change is not recovery (Y-scale observation trap). JS REST/gap fill — **Reason:** wrong owner. Reopen Master heal — **Reason:** no T0 proof of missing backend PK. New FE FSM states — **Reason:** `snapshotRequired` is a bit, not a third state.
 
 **Consequences:** Live-certified 2026-09-16 16:26 +08 (Binance disconnect → Master reconcile → FE snapshot replace, `deltaSec: 0`, no stalled badge). Frozen. Do not reopen reconnect/timeline-recovery/native-gap repair except a real regression. Next research: WOZDUH-TRUTH-1. Artifact `research/history/TIMELINE-RECOVERY-STATE-1.txt`.
+
+---
 
 ## SCALE-GESTURE-OWNERSHIP-1 (Sep 2026)
 
@@ -1200,7 +1212,7 @@ History/Cap Replay remains closed-only (`dropFormingTip` + `ReplayDAGKlines`). T
 
 **Rejected:** Multi-state reconnect ladders; server UX FSM; restarting timers on duplicate healing; heal using full-screen Buffering overlay.
 
-**Consequences:** Duplicate healing no longer extends wait; publishable exits immediately. Debt **#89**. Module: `web/timeline-recovery.js`. Regression: `web/timeline_recovery_test.js`.
+**Consequences:** Duplicate healing no longer extends wait. **TIMELINE-RECOVERY-STATE-1** amends: `timeline_publishable` / `timeline_state=true` with `snapshotRequired` means snapshot replace, not an immediate LIVE flip. Wire also sends current state (welcome + request). Debt **#89**. Module: `web/timeline-recovery.js`. Regression: `web/timeline_recovery_test.js` + `web/timeline_recovery_state_test.js`.
 
 MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts ignore Master heal/publishable (no enter, no `loadDashboard`). Browser reconnect uses Shot 10B + preserved VIEW. Do not teach TimelineRecovery about micro TFs.
 

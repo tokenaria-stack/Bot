@@ -5,7 +5,6 @@
 const NavigatorController = (() => {
   const chartLegendState = {
     live: { price: {}, wozduh: {}, rsx: {} },
-    backtest: { price: {}, wozduh: {}, rsx: {} },
   };
 
   let openNavigatorPopupEl = null;
@@ -14,19 +13,18 @@ const NavigatorController = (() => {
 
   const _dirtyState = {
     live: false,
-    backtest: false,
   };
 
   function getContext() {
-    return TabsController.isBacktestTabActive() ? 'backtest' : 'live';
+    return 'live';
   }
 
-  function navigatorSettingsStorageKey(pane, context = 'backtest') {
+  function navigatorSettingsStorageKey(pane, context = 'live') {
     const prefix = context === 'live' ? LS_NAV_SETTINGS_LIVE_PREFIX : LS_NAV_SETTINGS_PREFIX;
     return `${prefix}${pane}`;
   }
 
-  function loadNavigatorPaneSettings(pane, context = 'backtest') {
+  function loadNavigatorPaneSettings(pane, context = 'live') {
     try {
       const raw = localStorage.getItem(navigatorSettingsStorageKey(pane, context));
       if (raw) return { ...defaultNavigatorPaneSettings(pane), ...JSON.parse(raw) };
@@ -36,7 +34,7 @@ const NavigatorController = (() => {
     return defaultNavigatorPaneSettings(pane);
   }
 
-  function saveNavigatorPaneSettings(pane, settings, context = 'backtest') {
+  function saveNavigatorPaneSettings(pane, settings, context = 'live') {
     localStorage.setItem(navigatorSettingsStorageKey(pane, context), JSON.stringify(settings));
   }
 
@@ -154,12 +152,7 @@ const NavigatorController = (() => {
     return groups;
   }
 
-  function resolveChartTfForNavigator(context) {
-    if (context === 'backtest') {
-      return normalizeTf(
-        BacktestController.getFormValues().interval || '15m',
-      );
-    }
+  function resolveChartTfForNavigator() {
     return normalizeTf(currentTf || TimeframeController.getActiveTfFromToolbar() || '15m');
   }
 
@@ -372,23 +365,11 @@ const NavigatorController = (() => {
         safePane,
       );
       saveNavigatorPaneSettings(safePane, uiSettings, context);
-      if (context === 'backtest') {
-        _dirtyState.backtest = true;
-      } else {
-        _dirtyState.live = true;
-      }
+      _dirtyState.live = true;
     }
 
     if (context === 'live') {
       return getNavigatorPayload('live');
-    }
-
-    if (typeof buildFinalBacktestPayload === 'function') {
-      const finalPayload = buildFinalBacktestPayload();
-      console.log(`[UI] Ok clicked for ${safePane}. Payload injected:`, finalPayload.settings.navigators[safePane]);
-      console.log('[UI] Full navigators:', finalPayload.settings.navigators);
-      console.log('[UI] Backtest navigators:', finalPayload.settings?.navigators);
-      return finalPayload;
     }
 
     return null;
@@ -414,7 +395,6 @@ const NavigatorController = (() => {
       try {
         commitPaneSettings(pane);
 
-        renderChartLegends('backtest');
         renderChartLegends('live');
 
         popup.hidden = true;
@@ -819,21 +799,15 @@ const NavigatorController = (() => {
         chartLegendState[context][pane].trendlines = { visible: tlState.linesVisible !== false };
         legendEl.appendChild(renderLegendItem(context, pane, tlDef, false));
       }
-
-      if (context === 'backtest' && pane === 'price') {
-        const tradeDef = { id: 'trades', label: 'Trades', kind: 'trades' };
-        legendEl.appendChild(renderLegendItem(context, pane, tradeDef, true));
-      }
     });
   }
 
   function initLegends() {
     ['price', 'rsx', 'wozduh'].forEach((pane) => {
       const popup = ensureNavigatorPopup(pane);
-      applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane, 'backtest'));
+      applyNavigatorSettingsToPopup(popup, loadNavigatorPaneSettings(pane, 'live'));
     });
     renderChartLegends('live');
-    renderChartLegends('backtest');
   }
 
   function init() {
@@ -969,10 +943,9 @@ const NavigatorController = (() => {
     renderChartLegends,
     hideAllPopups,
     openNavigatorPopup,
-    consumeDirtyState: (context = 'backtest') => {
-      const key = context === 'live' ? 'live' : 'backtest';
-      const isDirty = _dirtyState[key];
-      _dirtyState[key] = false;
+    consumeDirtyState: () => {
+      const isDirty = _dirtyState.live;
+      _dirtyState.live = false;
       return isDirty;
     },
   };

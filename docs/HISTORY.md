@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## PRE-STRATEGY-CLEAN-1 slice 1 — Falcon-era backtester amputated (Sep 2026) GREEN / FROZEN
+
+- Deleted Backtest/Stats tabs, `/api/backtest/run|stop`, `BacktestEngine`, Falcon `RunStreamingReplay` packing, backtest FE pipeline/store.
+- Kept live history (`ReplayClosedBarsMasked` / DAG / `/api/history` columnar) as truth/fact replay. No policy simulator yet.
+- Neutral trade accounting was empty sockets — nothing extracted.
+- SLICE-1-FINISH: removed proven debris (dead CSS/LS/`isBacktest*`/store trade methods) and orphan `/api/history/chunk` + `server.ChartPoint`. `ApplyBacktestRSXConfig` kept. Artifact `research/cleanup/PRE-STRATEGY-CLEAN-1-SLICE-1-FINISH.txt`.
+
 ## SCALE/TIMELINE test-forest cleanup (Sep 2026) ✅
 
 - Deleted diagnostic `scale_blank_price_diag_test.js`. Kept ownership-law scale + timeline tests. Kept `[FEGap]` / `[HealProbe]`. Deleted volume-ingest canvas.

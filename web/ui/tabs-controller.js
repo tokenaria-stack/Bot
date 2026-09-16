@@ -1,57 +1,27 @@
 /**
- * Phase 19.5 — Main tab switching (Live / Stats / Backtest).
- * DOM class toggles only; chart orchestration delegates to app.js globals at runtime.
+ * Main tab switching. Dashboard is Live-only after PRE-STRATEGY-CLEAN-1
+ * amputated the Falcon-era Backtest/Stats tabs.
  */
 const TabsController = (() => {
   function getActiveTabId() {
-    const active = document.querySelector('.tab-content.active');
-    return active?.id || 'tab-live';
-  }
-
-  function isBacktestTabActive() {
-    return getActiveTabId() === 'tab-backtest';
-  }
-
-  function isBacktestTfContext() {
-    const tab = getActiveTabId();
-    return tab === 'tab-backtest' || tab === 'tab-stats';
+    return 'tab-live';
   }
 
   function isLiveTabActive() {
-    return getActiveTabId() === 'tab-live';
+    return true;
   }
 
   function getActiveStrategyContext() {
-    return isBacktestTfContext() ? 'backtest' : 'live';
+    return 'live';
   }
 
-  function applyToolbarVisibility(targetId) {
+  function applyToolbarVisibility() {
     const toolbar = document.querySelector('.toolbar');
-    if (toolbar) {
-      toolbar.style.display = targetId === 'tab-stats' ? 'none' : '';
-    }
-    const backtestControls = document.getElementById('backtest-controls');
-    if (backtestControls) {
-      backtestControls.classList.toggle('visible', targetId === 'tab-backtest');
-    }
+    if (toolbar) toolbar.style.display = '';
   }
 
-  function switchTab(targetId) {
-    if (typeof StrategyController !== 'undefined') {
-      StrategyController.saveThresholdsFromHeaderToState(getActiveStrategyContext());
-    }
-
-    const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
-    const panels = document.querySelectorAll('.tab-content');
-    tabs.forEach((b) => b.classList.toggle('active', b.dataset.tab === targetId));
-    panels.forEach((panel) => {
-      const isActive = panel.id === targetId;
-      panel.classList.toggle('active', isActive);
-      panel.style.display = isActive ? 'flex' : 'none';
-    });
-
-    applyToolbarVisibility(targetId);
-
+  function switchTab() {
+    applyToolbarVisibility();
     if (typeof ChartAdapter !== 'undefined' && ChartAdapter.resetRuler) {
       ChartAdapter.resetRuler();
     } else if (typeof resetRuler === 'function') {
@@ -63,79 +33,17 @@ const TabsController = (() => {
     if (typeof TimeframeController !== 'undefined') {
       TimeframeController.syncToolbar();
     }
-    if (typeof ChartAdapter !== 'undefined') {
-      ChartAdapter.applyWozduhVisibility(getActiveUiContext());
-    }
-
-    const nextStrategyContext = (targetId === 'tab-backtest' || targetId === 'tab-stats') ? 'backtest' : 'live';
-    if (typeof StrategyController !== 'undefined') {
-      StrategyController.applyThresholdsToHeader(
-        StrategyController.getStrategyState(nextStrategyContext).thresholds,
-      );
-    }
-
-    if (targetId === 'tab-live' && typeof pushRsxSettingsToServer === 'function') {
-      pushRsxSettingsToServer(coerceRsxSettingsForAPI(RsxController.getSettings('live')))
-        .then(() => {
-          if (ChartAdapter.chartInitialized() && isLiveTabActive()) {
-            reloadRsxChartFromServer();
-          }
-        })
-        .catch((err) => console.warn('Failed to restore live RSX settings:', err));
-    }
-
-    if (targetId === 'tab-live' && ChartAdapter?.getChartHandle('live')?.chart) {
-      if (typeof wsSubscribeTf === 'function') wsSubscribeTf(currentTf);
-      if (!ChartAdapter.chartInitialized()) {
-        loadDashboard();
-      } else {
-        beginDataUpdate();
-        try {
-          applySeriesData();
-        } finally {
-          endDataUpdate();
-        }
-        if (typeof shouldRunLivePoll === 'function' && shouldRunLivePoll()) {
-          pollLatestState();
-        }
-      }
-    } else if (targetId === 'tab-stats') {
-      ChartAdapter?.resizeEquity?.();
-      ChartAdapter?.fitEquityContent?.();
-      if (typeof refreshStatsForMode === 'function') {
-        refreshStatsForMode(BacktestController?.getStatsMode?.() ?? 'backtest');
-      }
-    } else if (targetId === 'tab-backtest') {
-      if (typeof ChartProjection !== 'undefined') {
-        ChartProjection.trySync();
-      }
-      if (typeof BacktestPipeline !== 'undefined') {
-        BacktestPipeline.loadShell({ force: false })
-          .then(() => {
-            if (typeof ChartProjection !== 'undefined') ChartProjection.trySync();
-          })
-          .catch(console.error);
-      }
-    }
   }
 
   function init() {
     const tabs = document.querySelectorAll('.tabs-nav .tab-btn');
-    if (!tabs.length) {
-      console.warn('[TabsController] No tab buttons found (.tabs-nav .tab-btn)');
-      return;
-    }
     tabs.forEach((btn) => {
-      if (!btn.dataset.tab) {
-        console.warn('[TabsController] Tab button missing data-tab attribute', btn);
-        return;
-      }
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      btn.addEventListener('click', () => switchTab());
     });
     try {
-      switchTab('tab-live');
+      switchTab();
     } catch (err) {
-      console.error('[TabsController] switchTab(tab-live) failed:', err);
+      console.error('[TabsController] switchTab failed:', err);
     }
   }
 
@@ -143,8 +51,6 @@ const TabsController = (() => {
     init,
     switchTab,
     getActiveTabId,
-    isBacktestTabActive,
-    isBacktestTfContext,
     isLiveTabActive,
     getActiveStrategyContext,
     applyToolbarVisibility,

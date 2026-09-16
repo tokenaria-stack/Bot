@@ -95,7 +95,7 @@ func TestParseRSXSettingsFromRequest(t *testing.T) {
 	t.Parallel()
 
 	base := market.GetRSXSettings()
-	req, err := http.NewRequest(http.MethodGet, "/api/history/chunk?rsx_length=21&rsx_signal_length=5&rsx_source=hlc3&rsx_pivot_radius=4&min_price_delta_ratio=0.001&min_osc_delta=1.5&rsx_div_lookback=120", nil)
+	req, err := http.NewRequest(http.MethodGet, "/api/history?rsx_length=21&rsx_signal_length=5&rsx_source=hlc3&rsx_pivot_radius=4&min_price_delta_ratio=0.001&min_osc_delta=1.5&rsx_div_lookback=120", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

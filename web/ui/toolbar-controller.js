@@ -115,7 +115,6 @@ const ToolbarController = (() => {
     if (togSpike) {
       togSpike.addEventListener('change', (e) => {
         e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-        ChartAdapter.applyAllMarkers();
       });
     } else {
       console.warn('[ToolbarController] #tog-spike not found');

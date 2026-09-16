@@ -1,7 +1,7 @@
 /**
  * ViewportManager — ADR-028 D2 capture / translate helper only.
  *
- * Allowed: capture geometry seed for TF handoff, host layout helpers, backtest legacy restore shim.
+ * Allowed: capture geometry seed for TF handoff, host layout helpers.
  * Forbidden: live navigation policy, direct LWC camera writes (applyOptions/scroll/setVisible).
  *
  * Live navigation → TimeCamera.proposeAfterData / proposeFreshLive → CameraCommit.
@@ -16,8 +16,8 @@
     ? MAX_VISIBLE_BARS
     : 5000;
 
-  function priceHostId(context) {
-    return context === 'backtest' ? 'bt-price-chart' : 'price-chart';
+  function priceHostId() {
+    return 'price-chart';
   }
 
   function hostHasLayout(context) {
@@ -27,10 +27,7 @@
     return !!(el && el.clientWidth > 0 && el.clientHeight > 0);
   }
 
-  function storeForContext(context) {
-    if (context === 'backtest') {
-      return typeof backtestStore !== 'undefined' ? backtestStore : null;
-    }
+  function storeForContext() {
     return global.liveColumnarStore || null;
   }
 
@@ -307,48 +304,11 @@
   }
 
   /**
-   * @deprecated live navigation — use TimeCamera.proposeAfterData.
-   * Backtest-only temporary shim (ChartProjection).
+   * Live path must not restore here — compositor owns TimeCamera propose.
+   * Kept as a no-op so existing ViewportManager.restore callers stay valid.
    */
-  function restore(context, anchor, store) {
-    if (context === 'live') {
-      // Live path must not restore here — compositor owns TimeCamera propose.
-      return;
-    }
-    // Backtest compatibility shim (not live D2 surface).
-    if (!anchor || anchor.centerTimeMs == null) return;
-    if (typeof ChartAdapter === 'undefined') return;
-    const targetStore = store || storeForContext(context);
-    const times = timesSecFromStore(targetStore);
-    if (!times.length) return;
-    const tip = times.length - 1;
-    const seed = {
-      intent: anchor.isAtRightEdge ? 'LIVE' : 'HISTORY',
-      _liveEdge: !!anchor.isAtRightEdge,
-      centerTime: anchor.centerTimeMs,
-      visibleBars: anchor.visibleBars,
-      barSpacing: anchor.barSpacing,
-      rightPadding: anchor.rightOffset,
-    };
-    if (typeof TimeCamera !== 'undefined' && TimeCamera.bindDataResolve) {
-      TimeCamera.bindDataResolve({
-        nearestLogicalForTime: (ms) => {
-          if (typeof ChartCompositor !== 'undefined' && ChartCompositor.findIndexByTimeMs) {
-            return ChartCompositor.findIndexByTimeMs(times, ms);
-          }
-          return null;
-        },
-      });
-    }
-    if (typeof TimeCamera !== 'undefined' && TimeCamera.proposeAfterData) {
-      TimeCamera.observeCommittedWorld?.({ tipLogical: tip, timesSec: times });
-      TimeCamera.proposeAfterData({
-        tipLogical: tip,
-        timesSec: times,
-        seed,
-        mode: 'switch',
-      });
-    }
+  function restore() {
+    return;
   }
 
   const ViewportManager = {

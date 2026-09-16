@@ -17,7 +17,6 @@ const TV = (typeof ChartTheme !== 'undefined' && ChartTheme.palette)
 const THRESHOLDS_KEY = 'bot_thresholds';
 const SCORING_MATRIX_KEY = 'bot_scoring_matrix';
 const LS_LIVE_STRATEGY_KEY = 'dashboard_live_strategy';
-const LS_BT_STRATEGY_KEY = 'dashboard_backtest_strategy';
 
 const DEFAULT_STRATEGY_THRESHOLDS = { long: 70, short: 70 };
 
@@ -232,14 +231,11 @@ const TF_MENU = {
 const LS_FAV_KEY = 'dashboard_tf_favorites';
 const LS_TF_KEY = 'dashboard_tf_current';
 const LS_PANE_KEY = 'dashboard_pane_heights';
-const LS_PANE_KEY_BT = 'dashboard_pane_heights_bt';
 const LS_RSX_SETTINGS_LIVE_KEY = 'dashboard_rsx_settings_live';
-const LS_RSX_SETTINGS_BACKTEST_KEY = 'dashboard_rsx_settings_backtest';
 const LS_RSX_LOOKBACK_KEY = 'dashboard_rsx_lookback';
 const LS_RSX_SIGNAL_LENGTH_KEY = 'dashboard_rsx_signal_length';
 const LS_RSX_LENGTH_KEY = 'dashboard_rsx_length';
 const WOZDUH_PREFS_LIVE_KEY = 'wozduh_visibility_prefs_live';
-const WOZDUH_PREFS_BACKTEST_KEY = 'wozduh_visibility_prefs_backtest';
 const WOZDUH_PREFS_KEY = 'wozduh_visibility_prefs';
 const DEFAULT_FAVS = ['1m', '3m', '15m', '1h', '4h', '1d', '1w'];
 /** Higher-TF quick-sync toggles in trendlines menu (any period can be added here). */
@@ -353,7 +349,6 @@ const SHARED_TIME_SCALE = {
   fixRightEdge: false,
 };
 
-const BACKTEST_HISTORY_CHUNK_LIMIT = 5000;
 const LIVE_HISTORY_SCROLL_THRESHOLD = 50;
 /** P1: start edge hydrate when this fraction of the visible span remains to the loaded edge. */
 const HISTORY_EDGE_PREFETCH_FRAC = 0.25;
@@ -368,28 +363,12 @@ const LIVE_CHART_SELECTORS = {
   rsxContainer: 'rsx-chart',
 };
 
-const BACKTEST_CHART_SELECTORS = {
-  priceWrap: 'bt-price-wrap',
-  oscWrap: 'bt-osc-wrap',
-  rsxWrap: 'bt-rsx-wrap',
-  chartContainer: 'bt-price-chart',
-  oscContainer: 'bt-wozduh-chart',
-  rsxContainer: 'bt-rsx-chart',
-};
-
 const PANE_STACK_CONFIG = {
   live: {
     price: 'price-wrap',
     osc: 'osc-wrap',
     rsx: 'rsx-wrap',
     lsKey: LS_PANE_KEY,
-    defaults: { price: 55, osc: 22, rsx: 23 },
-  },
-  backtest: {
-    price: 'bt-price-wrap',
-    osc: 'bt-osc-wrap',
-    rsx: 'bt-rsx-wrap',
-    lsKey: LS_PANE_KEY_BT,
     defaults: { price: 55, osc: 22, rsx: 23 },
   },
 };
@@ -422,8 +401,8 @@ if (typeof window !== 'undefined') {
     MAX_STORE_BARS, MAX_VISIBLE_BARS,
     STORE_BUDGET_TARGET, STORE_BUDGET_HARD_CAP,
     MAX_STORE_CAPACITY, STORE_PRUNE_CHUNK,
-    LIVE_HISTORY_SCROLL_THRESHOLD, HISTORY_EDGE_PREFETCH_FRAC, BACKTEST_HISTORY_CHUNK_LIMIT,
-    LIVE_CHART_SELECTORS, BACKTEST_CHART_SELECTORS, PANE_STACK_CONFIG,
+    LIVE_HISTORY_SCROLL_THRESHOLD, HISTORY_EDGE_PREFETCH_FRAC,
+    LIVE_CHART_SELECTORS, PANE_STACK_CONFIG,
     defaultRsxSettings, defaultNavigatorPaneSettings, defaultRiskSettings, defaultWozduhPrefs,
     ensureChartLibraryStyles,
   };

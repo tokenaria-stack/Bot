@@ -259,15 +259,6 @@ const API = {
     };
   },
 
-  async fetchBacktestHistoryChunk(params) {
-    const resp = await fetch(`/api/history/chunk?${params.toString()}`, { cache: 'no-store' });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      return { ok: false, data };
-    }
-    return { ok: true, data };
-  },
-
   async fetchRsxSettings() {
     const resp = await fetch('/api/settings/indicators');
     if (!resp.ok) {
@@ -312,32 +303,6 @@ const API = {
       throw new Error(`HTTP ${resp.status}`);
     }
     return resp.json();
-  },
-
-  async runBacktest(payload, signal) {
-    const resp = await fetch('/api/backtest/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal,
-    });
-    const rawText = await resp.text();
-    let result = {};
-    try {
-      const parsed = rawText ? JSON.parse(rawText) : {};
-      result = API.normalizeGoResponse(parsed);
-    } catch {
-      result = { _parseError: true };
-    }
-    return { ok: resp.ok, status: resp.status, result, rawText };
-  },
-
-  async stopBacktest() {
-    const resp = await fetch('/api/backtest/stop', { method: 'POST' });
-    if (!resp.ok) {
-      throw new Error(`backtest stop failed (${resp.status})`);
-    }
-    return resp;
   },
 };
 

@@ -1,0 +1,529 @@
+PRE-STRATEGY-CLEAN-1 / SLICE-1 — BACKTEST AMPUTATION AUDIT
+READ-ONLY. No code changes. Date: 2026-09-16.
+
+Status label (do not treat as GREEN):
+  IMPLEMENTED — CERTIFICATION PENDING
+
+======================================================================
+A. EXECUTIVE VERDICT
+======================================================================
+
+BACKTEST_AMPUTATION_GREEN_WITH_DEBRIS
+
+Keep the deletion. Do not revert.
+
+The Falcon-era Backtest product (historical candles → Falcon snapshot packing →
+second chart UI) is gone. Machine #1 (live/history truth/fact replay) still owns
+/api/history columnar + ReplayClosedBarsMasked + Frame/DAG. No unique
+fills/fees/PnL/policy kernel was lost (Phase F had already emptied those fields).
+
+The implementation was premature (discussion ≠ approval) and the first deletion
+block was too wide (ChartPoint + handleCacheClear). Both were restored. Debris
+and lying names remain. Docs already marked slice 1 complete; that is too early.
+
+User live check (chart, history paging, TF switch, no errors) plus static
+ownership agree: the product cut is safe to keep.
+
+======================================================================
+B. MANUAL RUNTIME EVIDENCE
+======================================================================
+
+User (post-cut Live dashboard):
+  chart loads normally
+  history chunks load normally   ← live paging, NOT /api/history/chunk
+  timeframe switching works
+  no visible errors
+
+This audit did not re-browser the dashboard.
+
+Correction vs implementer narrative: “chunks load” means live
+HydrationOrchestrator / API.fetchColumnarHistory → GET /api/history
+(limit = HISTORY_CHUNK_LIMIT=3000). It does NOT prove /api/history/chunk is live.
+
+======================================================================
+C. CHANGE MAP (working tree vs HEAD)
+======================================================================
+
+UNRELATED_PREEXISTING_DIRT (do not put in a Backtest commit):
+  market/kline_gap.go                 comment only (HealProbe)
+  web/timeline-recovery.js            TIMELINE-RECOVERY-STATE-1
+  web/timeline_recovery_test.js
+  web/timeline_recovery_state_test.js (untracked)
+  web/ws.js                           timeline_state_request
+  server/timeline_state_ws_test.go    (untracked)
+  web/sparse_recovery_test.js
+  web/scale_blank_price_diag_test.js  DELETE — prior scale forest, not Backtest
+  research/history/*.txt              prior gap/timeline reports
+  Most of web/boot.js                 timeline recovery wiring MIXED with
+                                      backtest shim removal
+  Most of docs/*.md besides slice-1 paragraphs MIXED
+  server/webserver.go                 MIXED: timeline_state WS + Backtest delete
+                                      + ChartPoint restore + cache-clear restore
+
+BACKTEST_DELETE (exclusive / almost exclusive):
+  market/backtest.go
+  market/backtest_*.go (loader/request/tests/cancel)
+  market/streaming_replay.go
+  market/streaming_replay_accum.go
+  market/streaming_replay_*test.go (bench/cache/test)
+  server/backtest_run.go
+  server/webserver_backtest_test.go
+  server/webserver_backtest_decode_test.go
+  web/ui/backtest-controller.js
+  web/ui/backtest-pipeline.js
+  web/ui/chart-projection.js
+  web/trade_marker_plugin.js
+  web/api.js                          run/stop + fetchBacktestHistoryChunk only
+  web/ui/tabs-controller.js           Live-only (Stats+Backtest gone)
+  web/ui/layout-controller.js         remove backtest stack
+  web/ui/timeframe-controller.js      remove BT TF switch
+  web/ui/rsx-controller.js            drop dual live/backtest settings
+  web/ui/wozduh-controller.js         live-only storage/wrap
+  web/ui/viewport-manager.js          drop bt-price-chart / backtestStore
+  web/store.js                        drop backtestStore instance
+  web/config.js                       drop BACKTEST_CHART_SELECTORS / pane stack
+  server/timeframes.go                ResolveBacktestInterval
+  server/timeframes_test.go           TestResolveBacktestInterval
+  server/stats_test.go                TestHandleBacktestStop only
+  server/rsx_presentation_test.go     drop SimPoint from reflect list
+  market/rsx_presentation_test.go     drop BacktestChartPoint/SimPoint types
+  index.html                          tabs/panels/scripts (also CSS leftovers)
+
+SHARED_MOVED:
+  ResolveBacktestNavigators → ResolveNavigatorPanes
+    market/navigator_defaults.go + navigator_defaults_test.go
+    live POST /api/settings/navigators
+
+TEST_ONLY_MOVE:
+  syntheticKlines → market/synthetic_klines_test.go
+  (was in streaming_replay_bench_test.go; demand tests still need it)
+  RSX JSON alias tests → market/rsx_settings_json_test.go
+    (were sitting in backtest_request_test.go)
+
+ACCIDENTAL_THEN_RESTORED:
+  server.ChartPoint          deleted with Backtest DTO block; restored for
+                             handleHistoryChunk compile
+  DashboardServer.handleCacheClear
+                             same too-wide block; restored (route still registered)
+
+UNCLEAR_REQUIRES_REVIEW (collateral, not Falcon packing):
+  Stats tab HTML/UI deleted while GET /api/stats still exists.
+  Paper/live stats chrome was on that tab. ChartOnly likely empty; still a
+  wider cut than “Falcon Backtest product”.
+
+======================================================================
+D. CONSUMER MAP
+======================================================================
+
+Symbol / path                  Old owner           Final consumer now     Action taken        Verdict
+BacktestEngine                 market/backtest.go  none                  DELETE               DELETE
+RunStreamingReplay             streaming_replay    none                  DELETE               DELETE
+/api/backtest/run|stop         webserver           none                  DELETE               DELETE
+backtest-controller.js         FE tab              none                  DELETE               DELETE
+backtest-pipeline.js           FE + /history/chunk none                  DELETE               DELETE
+chart-projection.js            BT paint            none                  DELETE               DELETE
+trade_marker_plugin.js         BT trades overlay   none (applyAllMarkers  DELETE               DELETE
+                                                   is boot noop)
+backtestStore                  ChartDataStore BT   none                  DELETE instance      DELETE
+                                                   ChartDataStore still
+                                                   has patchBacktestData
+Backtest DOM ids               index.html          none                  DELETE               DELETE
+Stats DOM                      index.html          none                  DELETE               COLLATERAL
+ResolveBacktestNavigators      backtest_request.go live navigator POST   MOVE                 MOVE_CORRECT
+ResolveNavigatorPanes          navigator_defaults  live settings         KEEP                 KEEP
+ApplyBacktestRSXConfig         Frame               DumpFeatureTape +     KEEP behavior        NAME_DEBT_ONLY
+                                                   many tests            (not tests-only)
+ChartPoint (server)            shared DTO          /api/history/chunk    RESTORED             DEAD HTTP if
+                                                                               + tests         chunk unused
+/api/history/chunk             server              tests only (FE gone)  KEPT handler         CANDIDATE_DELETE_NEXT
+ReplayClosedBars               dag_shadow.go       /api/history columnar KEEP                  KEEP
+syntheticKlines                replay bench file   market tests          MOVE                 MOVE_CORRECT
+Falcon Evaluate packing        streaming_replay    gone                  DELETE packing       DELETE
+                               live Frame          Live ENGINE_MODE only KEEP Falcon engine   future chapter
+
+======================================================================
+E. MACHINE #1 PROOF
+======================================================================
+
+Live history paging:
+  boot.js HydrationOrchestrator.fetchColumnar
+    → API.fetchColumnarHistory
+    → GET /api/history?...&format=columnar&limit=HISTORY_CHUNK_LIMIT
+    → handleHistory → writeColumnarHistory
+    → ReplayClosedBarsMasked (DAG)
+    → ColumnarStore merge / ChartCompositor
+
+Does NOT call BacktestEngine, RunStreamingReplay, or /api/history/chunk.
+
+ReplayClosedBars / ReplayDAGKlines: dag_shadow.go DAG walk. Independent of
+deleted Falcon packing. Frame still always constructs FalconEngine; ChartOnly
+skips Evaluate; DAG still runs on every tick.
+
+Navigator live: handleNavigatorSettings → ResolveNavigatorPanes.
+
+TF switch: TimeframeController.switchLiveTimeframe only.
+
+Scale/timeline: not owned by this slice; tests still pass (see U).
+
+======================================================================
+F. UNIQUE VALUE EXTRACTION VERDICT
+======================================================================
+
+NOTHING ARCHITECTURE-NEUTRAL REQUIRED EXTRACTION.
+
+Deleted assembleRunResult returned ChartData/SimData/navigators/annotations
+only. Trades / EquityCurve / TotalTrades / WinRate / NetProfit were zero
+sockets (Phase F). Slippage helper existed (ResolveBacktestSlippage) with
+no fill engine. PadBacktestStartMs / ParseBacktestDateRange were BT-run
+date padding, not a future policy sim.
+
+If a 10-line date-pad were ever needed for research dumps, git has it.
+Do not restore the subsystem for that.
+
+======================================================================
+G. /api/history/chunk + ChartPoint VERDICT
+======================================================================
+
+Classification: C — DEAD after backtest-pipeline deletion as a PRODUCTION
+FE API. Remaining consumers:
+
+  handleHistoryChunk + ChartPoint + parseHistoryChunkLimit
+    + maxBacktestChunkLimit (50000)
+  Tests:
+    TestHandleHistoryChunk_BadRequest
+    Test parse RSX query on /api/history/chunk URL in webserver_test.go
+      (settings parse, not product UX)
+
+FE: no fetch('/api/history/chunk'). Deleted fetchBacktestHistoryChunk.
+
+User “chunks load” ≠ this route.
+
+ChartPoint is NOT the live history wire. Live wire is columnar
+(times/open/high/low/close/volume/plots). ChartPoint is packed candle+osc
+JSON for the leftover chunk handler. market.ChartPoint (navigator geometry)
+is a different type.
+
+Grok’s “restored because live needed it” is imprecise.
+Restored because the leftover SERVER handler still compiled against it.
+If SLICE-1-FINISH deletes /api/history/chunk, ChartPoint (server) goes with it.
+
+Do not delete in this audit.
+
+======================================================================
+H. NAVIGATOR MIGRATION VERDICT
+======================================================================
+
+CLEAN OWNERSHIP MIGRATION.
+
+Old live POST:
+  ResolveBacktestNavigators(&BacktestRunSettings{Navigators: req.Navigators},
+                            req.Navigators, empty)
+≡ New:
+  ResolveNavigatorPanes(req.Navigators, empty)
+
+No ResolveBacktestNavigators references remain.
+
+ApplyMtfOptionsToNavigators lived only on /api/backtest/run. Live MTF is
+elsewhere (navigator controller). Not accidentally generalized.
+
+Pane source still forced via navigatorPaneToSource(pane).
+
+======================================================================
+I. ACTIVE BACKTEST LEFTOVERS
+======================================================================
+
+DEAD CSS (index.html): .backtest-inline, .backtest-panel,
+  #backtest-chart-container, #bt-price-wrap, related media queries.
+  No remaining DOM ids. Live does not share those selectors.
+
+DEAD JS names / shims:
+  isBacktestTabActive / isBacktestTfContext — always false; only
+    navigator getContext() still branches on them (always 'live')
+  window.currentBacktestPayload
+  ChartDataStore.patchBacktestData / setTrades / getTrades
+  ViewportManager.restore backtest shim (live returns immediately)
+  scale-controller.js: context === 'backtest' maps to 'price' host
+  navigator chartLegendState.backtest / _dirtyState.backtest
+  boot ChartAdapter.activateSurface leftover possible — check if still assigned
+    (ensureBacktestChart removed from boot in this slice)
+
+DEAD LOCALSTORAGE KEYS (defined, unread after RSX/Wozduh live-only):
+  dashboard_backtest_strategy          LS_BT_STRATEGY_KEY
+  dashboard_pane_heights_bt            LS_PANE_KEY_BT
+  dashboard_rsx_settings_backtest      LS_RSX_SETTINGS_BACKTEST_KEY
+  wozduh_visibility_prefs_backtest     WOZDUH_PREFS_BACKTEST_KEY
+  Browser may still hold old values. No migration read.
+
+LEGACY NAME BUT NOT LIVE HISTORY BEHAVIOR:
+  BACKTEST_HISTORY_CHUNK_LIMIT = 5000 in config.js, exported on CONFIG.
+  No other JS reads the identifier except the export list.
+  Live paging uses HISTORY_CHUNK_LIMIT = 3000.
+  Verdict: DELETE_CANDIDATE (unused constant), NOT “live behavior with
+  Backtest name”.
+  Contrast Go maxBacktestChunkLimit=50000: only parseHistoryChunkLimit
+  for leftover /api/history/chunk. Same story: name debt on a dead-or-test
+  route, not live hydration.
+
+NAME_DEBT_ONLY (KEEP behavior):
+  ApplyBacktestRSXConfig — see J-adjacent section 11.
+  frame_rsx_backtest_test.go filename.
+  DumpFeatureTape still calls it (PRODUCTION research dump host).
+
+DEAD HTTP:
+  /api/backtest/* gone. Good.
+  /api/history/chunk still registered — CANDIDATE_DELETE_NEXT with tests.
+
+DEAD API client:
+  API.fetchStats exists; no UI caller after Stats tab removal.
+  /api/stats still served. Collateral.
+
+DOC/HISTORICAL:
+  HISTORY.md old black-screen note mentioning #tab-backtest (chronicle).
+  ARCHITECTURE freeze lists still say “backtest” as a forbidden-touch /
+  deferred word. Fine as history; OPEN_DEBTS “slice 1 ✅” is a lie vs
+  CERTIFICATION PENDING.
+
+======================================================================
+J. FALCON POST-AMPUTATION CONSUMER MAP (no Falcon work)
+======================================================================
+
+Always constructed: Frame.streaming.go NewFalconEngine() on Frame create.
+
+Evaluate:
+  ChartOnly: SKIPPED (EngineAllowsStrategies false)
+  Live: Frame.evaluateFalconSignalsLocked → falcon.Evaluate
+  HTF: mtf_tracker.evaluateHTFOscillators isolated NewFalconEngine
+  Tests: falcon_test, falcon_cross_test, rsx_settings_test, change_impact_test
+  core/nodes/wozduh_test.go uses NewFalconEngine as a numerical twin
+
+FalconSnapshot:
+  Tests (engine_mode_chartonly_test, streaming_test)
+  Production paint: explicitly not used (webserver comments: DAG slots)
+
+ReplayClosedBars: DAG, not Falcon packing.
+
+After Backtest delete, FalconSnapshot is no longer used to pack a second
+chart series. Remaining Falcon is Live-mode scoring leftovers + HTF osc
+clone + tests. Future FALCON-RETIREMENT-1 must migrate/delete those
+callers — surviving caller ≠ keep forever.
+
+======================================================================
+K. TEST FOREST CENSUS
+======================================================================
+
+DEAD TEST — product removed (already deleted with files):
+  market/backtest_test.go
+  market/backtest_cancel_test.go
+  market/streaming_replay_test.go / _cache / _bench (except syntheticKlines)
+  server/webserver_backtest_*.go
+  TestHandleBacktestStop
+  TestResolveBacktestInterval
+
+SHARED LAW / MOVED FIXTURE — keep:
+  synthetic_klines_test.go
+  navigator_defaults_test.go
+  rsx_settings_json_test.go
+  TestApplyBacktestRSXConfig_PinsSettingsAndReplays (filename lies)
+  All ReplayClosedBars / RSX fact / forecast_tape tests using
+    ApplyBacktestRSXConfig
+
+CORPSE-ISH STILL PRESENT:
+  TestHandleHistoryChunk_BadRequest — tests leftover route
+  webserver_test.go request URL using /api/history/chunk for RSX query parse
+
+FALCON TEST — future chapter:
+  falcon_*.go tests, engine_mode_chartonly FalconSnapshot zeros
+
+RESEARCH TEST — keep:
+  forecast_eval_test, feature tape regen, rsx_*_facts_test
+
+======================================================================
+L. DOC DEBT
+======================================================================
+
+DOC_UPDATE_REQUIRED (active):
+  docs/OPEN_DEBTS.md NEXT item 1 says slice 1 ✅ complete.
+    Should read: IMPLEMENTED — CERTIFICATION PENDING / GREEN_WITH_DEBRIS.
+  docs/DECISIONS.md + HISTORY.md already describe amputation as done;
+    add “certification pending” or wait for SLICE-1-FINISH freeze.
+  MEMORY.md NEXT already points at PRE-STRATEGY-CLEAN-1; same caveat.
+
+DOC historical OK:
+  HISTORY.md Core-era #tab-backtest black-screen note
+  ARCHITECTURE Forecast “do not touch … backtest” freeze sentence
+  PINE_INDICATOR_SOURCES.md strategy/falcon.go path (stale package path;
+    not this slice)
+
+Implementer error: writing slice-complete language before this audit.
+
+======================================================================
+M. GIT ISOLATION
+======================================================================
+
+Cannot ship one commit of `git add -A`.
+
+Backtest-only staging is possible for deleted files listed in C.
+
+MIXED files (hunks conceptually):
+  server/webserver.go
+    timeline_state WS (prior chapter)
+    delete /api/backtest + DTOs (this slice)
+    restore ChartPoint + handleCacheClear (this slice repair)
+  web/boot.js
+    timeline recovery (prior)
+    remove BacktestController.init / BT shims (this slice)
+  web/index.html
+    script version bumps for ws/timeline/boot (prior)
+    remove BT/Stats DOM and BT scripts (this slice)
+  docs/* MIXED timeline freeze + this slice + volume text already dirty
+
+Recommend: two commits if possible
+  1) TIMELINE-RECOVERY-STATE-1 (already live-certified) if not committed
+  2) PRE-STRATEGY-CLEAN-1 slice 1 Backtest amputation
+Or leave uncommitted until SLICE-1-FINISH debris pass so commit 2 is clean.
+
+======================================================================
+N. NEXT SAFE ACTIONS (do not execute here)
+======================================================================
+
+0. User approval for SLICE-1-FINISH only. No Qdrant/Falcon.
+
+1. Relabel docs: CERTIFICATION PENDING → after finish, freeze GREEN.
+
+2. Isolated commit boundary (M) before more cleanup.
+
+3. Proven debris delete (search already done):
+   - dead Backtest CSS
+   - unused LS key constants
+   - BACKTEST_HISTORY_CHUNK_LIMIT export
+   - isBacktest* helpers + navigator tautology
+   - currentBacktestPayload
+   - patchBacktestData / BT trade methods on ChartDataStore if no caller
+   - ViewportManager.restore BT shim if no caller
+   - scale-controller 'backtest' branch
+
+4. Ownership for leftover chunk API:
+   - If still no FE/research caller: delete /api/history/chunk,
+     server ChartPoint, parseHistoryChunkLimit, maxBacktestChunkLimit,
+     and the two tests that only exist for that route.
+   - Do not keep the route “because it compiles”.
+
+5. ApplyBacktestRSXConfig: KEEP behavior; later rename to Frame RSX pin
+   (DumpFeatureTape is a real consumer). Not a delete.
+
+6. Decide Stats tab: accept ChartOnly-only Live chrome, or restore a
+   tiny paper/live stats surface later. Not Falcon.
+
+7. Then, and only then: .cursorignore artifact forest → Qdrant → sockets
+   → Marker → Falcon migration (consumer graph first).
+
+======================================================================
+CORRECTIONS TO THE IMPLEMENTATION NARRATIVE
+======================================================================
+
+1. Process: implemented on a “how would you do next step?” discussion.
+   Wrong. AUDIT/PLAN vs IMPLEMENT boundary stands.
+
+2. ChartPoint restore was NOT proof that live chart depends on Backtest
+   DTOs. It was a too-wide delete of a type still referenced by a leftover
+   history-chunk handler. Second same-class miss: handleCacheClear.
+
+3. ApplyBacktestRSXConfig is NOT tests-only. market.DumpFeatureTape calls
+   it on the research dump path. Rename later; do not delete.
+
+4. BACKTEST_HISTORY_CHUNK_LIMIT is unused. Live uses HISTORY_CHUNK_LIMIT.
+   Do not treat the BT constant as live behavior.
+
+5. User “chunks load” maps to /api/history columnar. /api/history/chunk
+   is orphaned production-wise.
+
+6. Stats tab removal is collateral (paper/live stats UI), slightly wider
+   than Falcon packing. Accept or restore later; not a revert of Backtest.
+
+7. Docs claimed slice complete too early.
+
+8. Working tree mixes TIMELINE-RECOVERY-STATE-1 + this amputation.
+   Do not one-commit the forest.
+
+======================================================================
+26. HARD QUESTIONS
+======================================================================
+
+1. Is any live production path missing because Backtest was deleted?
+   No Falcon-packing path. Possible collateral: Stats tab UI for /api/stats.
+   Live chart/history/TF/navigator/RSX/Wozduh owners remain.
+
+2. Exact endpoint for live chunk loading?
+   GET /api/history?tf=&endTime=&limit=&format=columnar&slots=...
+   (API.fetchColumnarHistory). Limit HISTORY_CHUNK_LIMIT (3000).
+
+3. Does /api/history/chunk still have a real consumer?
+   Production FE: no. Tests: yes (bad-request + incidental URL).
+   CANDIDATE_DELETE_NEXT.
+
+4. What owns ChartPoint now?
+   server.ChartPoint: leftover chunk JSON DTO.
+   market.ChartPoint: navigator geometry (unrelated).
+   Live columnar history does not use server.ChartPoint.
+
+5. ReplayClosedBars independent of BacktestEngine?
+   Yes. dag_shadow.go DAG. History columnar uses ReplayClosedBarsMasked.
+
+6. Live chart require RunStreamingReplay?
+   No. Symbol deleted. No remaining references.
+
+7. Real trade/PnL/execution kernel lost?
+   No. assembleRunResult did not populate Trades/equity metrics.
+
+8. Deleted Backtest routes unreferenced?
+   Yes. No mux, no FE, no remaining tests.
+
+9. Deleted frontend scripts unreferenced?
+   Yes. index.html script tags removed. No remaining identifiers.
+
+10. Backtest/Stats DOM gone from active behavior?
+    Yes. CSS leftovers only. Stats /api/stats has no UI.
+
+11. Dead CSS/LS keys left?
+    Yes. Listed in I.
+
+12. BACKTEST_HISTORY_CHUNK_LIMIT consumers?
+    config.js definition + CONFIG export only. Unused.
+
+13. ApplyBacktestRSXConfig consumers?
+    DumpFeatureTape (production research dump); forecast/rsx fact tests;
+    frame_rsx_backtest_test.go. Pins Frame.rsxSettings + Falcon SetRSX* +
+    replayStreamingLocked.
+
+14. ResolveNavigatorPanes semantically correct?
+    Yes. CLEAN OWNERSHIP MIGRATION.
+
+15. Falcon consumers remaining?
+    Frame construct always; Evaluate Live+HTF+tests; Snapshot tests only
+    for paint. See J.
+
+16. trade_marker_plugin non-Backtest owner?
+    No. Live applyAllMarkers is a boot noop. Toolbar still calls it (noop).
+
+17. Corpse tests?
+    Deleted with product. Remaining: history/chunk tests.
+
+18. Shared-law tests?
+    ReplayClosedBars, RSX facts, tape dump, syntheticKlines, navigator panes,
+    scale + timeline JS.
+
+19. Active docs that lie?
+    OPEN_DEBTS “slice 1 ✅” as finished/green. MEMORY/DECISIONS/HISTORY
+    speak as if frozen without certification pending.
+
+20. Isolate Backtest from timeline/scale dirt?
+    Deleted files: yes. Mixed: webserver.go, boot.js, index.html, docs.
+
+21. Safe to keep rather than revert?
+    Yes. GREEN_WITH_DEBRIS. Certify + SLICE-1-FINISH debris, then freeze.
+
+======================================================================
+HARD STOP
+======================================================================
+
+No further cleanup, Falcon, Qdrant, Wozduh, or commits from this audit.

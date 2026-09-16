@@ -29,11 +29,12 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **NEXT order (do not start inside this freeze):**
 
-1. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
-2. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
-3. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
-4. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
-5. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). **DATASET-C / VALIDATION-PLAN-C ✅ frozen** (`151e530`). **OOF-MATRIX-C ✅ frozen** (`307b5e8`). **CATBOOST-BRAIN-1 ✅ frozen** (`cecc5a3`). **DECISION-RESEARCH-C ✅ frozen** (NOT_ELIGIBLE). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Do not start FINALIZATION-C. V1 KEEP ≠ SUPPORT.
+1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated; SLICE-1-FINISH removed proven debris (CSS/LS/shims + orphan `/api/history/chunk`). Do not reopen old Backtest. Next slices (fresh AUDIT + approval): artifact/index forest, Qdrant/`vector_db`, empty ScoreEngine/execution/strategy stubs, Falcon retirement via DAG ownership, V1 Brain executors off HEAD. Then **WOZDUH-TRUTH-1**. `/api/stats` is a **FUTURE CONSUMER AUDIT** (UI gone; route kept). `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT** (research replay still mixed with Falcon).
+2. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
+3. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
+4. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
+5. FE paint skip + Wozduh demand: HIDDEN-RENDER-SKIP-1 + WOZDUH-OWNER-1 + **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`). **Do not reopen Wozduh.**  
+6. **DAG-DEMAND-1 ✅ frozen** (`0837c77`). **FORECAST-SPEC-1 ✅** `5afabfc`+`0ed000d`. **FEATURE-TAPE-1A ✅ frozen** (`b88bcd2`). **FEATURE-TAPE-1B ✅ frozen** (`6715718`). **ATR-TRUTH-1 ✅ frozen** (`84124a0`). **LABEL-SET-1A ✅ frozen** (`690d0be` + `1433626`). **LABEL-SET-1B ✅ frozen** (`8e88844`). **RSX-TV-ONE-BRAIN-1 ✅ frozen** (`4688160`). **FEATURE-TAPE-RSX-REGEN-1 ✅**. **RESEARCH-DATASET-1 ✅ frozen** (`f311203`). **VALIDATION-PLAN-1 ✅ frozen** (`0737c59` / docs `45155eb`). **OOF-MATRIX-1 ✅ frozen** (`d749042`). **MODEL-FIT-1 ✅ frozen** (`0d60270` + SciPy `29cb928`). **CALIBRATION-1 ✅ frozen** (`4c8c08e` + ftol `b550613`). **RANK-1 ✅ frozen** (`cc49528`). **RECIPE-FREEZE-1 ✅ frozen** (`c2d278a`). **FINAL-MODEL-FIT-1 ✅ frozen** (`9cb03f5`). **FORECAST-BUNDLE-1 ✅ frozen** (`a9e1228`). **OOF-FORECAST-EVIDENCE-1 ✅ frozen** (`124f273`). **DECISION-VALIDATION-PLAN-1 ✅ frozen** (`a0da055`). **DECISION-CONTRACT-1 ✅ frozen** (`b7a76b4`). **DECISION-RESEARCH-1 ✅ frozen** (`789ddcd`). **FEATURE-SPEC-2 ✅ frozen** (`0c54848`). **FEATURE-TAPE-2 ✅ frozen** (`61d5ca0`). **LABEL-SET-C ✅ frozen** (`ce3e542`). **DATASET-C / VALIDATION-PLAN-C ✅ frozen** (`151e530`). **OOF-MATRIX-C ✅ frozen** (`307b5e8`). **CATBOOST-BRAIN-1 ✅ frozen** (`cecc5a3`). **DECISION-RESEARCH-C ✅ frozen** (NOT_ELIGIBLE). Brain V2 ledger (this file). Holdout sealed. **TARGET-RESOLUTION-2** deferred. Do not start FINALIZATION-C. V1 KEEP ≠ SUPPORT.
 
 **RSX-TRUTH-CLEAN-1 ✅ frozen** (`5f8a290`). Backend RSX is numerical/factual only. Live paint stays FE. Do not reopen slope-vs-50 color, `rsxColor` wire, or empty L/LL/S/SS sockets.
 
@@ -84,7 +85,7 @@ Do not start a generic “indicator certification framework.”
 
 **Parked (keep intentionally — not DAG-DEMAND):** Wozduh SaveState while asleep; wake under Frame lock; 1024 IIR epsilon; legacy `finiteOrZero`; unfiltered WS = Wozduh all.
 
-**Product later (do not mix in):** #69 S6/69D, DATA-1B, #81 P1/P2, #82 FE calendar snap, fib/drawings, #29 backtest projection.
+**Product later (do not mix in):** #69 S6/69D, DATA-1B, #81 P1/P2, #82 FE calendar snap, fib/drawings. **POLICY-SIMULATOR-1** after Strategy Book + ExecutionPolicy (not a renovation of the deleted Falcon backtester).
 
 **WOZDUH-ACTIVE-1A ✅ frozen** (`2cd4ca4`). `/api/history` replay uses a fixed Wozduh compute mask. Do **not** reopen.
 
@@ -368,7 +369,7 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | **79** | Self-heal `loadDashboard` resets camera to fresh | 🟢 | Wire `viewportAnchor` on gap-heal/reconnect |
 | **49** | Active Driver / slave scroll (Shot 6B) | ✅ **ADR-021 P0–P3** | TimeCamera + Crosshair + **InteractionController** (ADR-024); ChartAdapter = LWC adapter only |
 | **35** (charts) | Phase 8B annotations UI on prepend | 🔜 | `applyUniversalAnnotations` |
-| **29** | Backtest history bypasses Projection | 🟡 | Asymmetry vs live Atomic |
+| **29** | Backtest history bypasses Projection | ✅ closed | Falcon-era backtester amputated; SLICE-1 GREEN / FROZEN. |
 | **82** | `prependMonolith` times not normalized via `chartTime` | 🟢 | Latent; server sends seconds |
 | **92** | **DAG-DEMAND-1** (was “backend skip unused plots”) | ✅ | Implemented with #93. |
 

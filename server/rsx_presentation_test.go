@@ -10,8 +10,6 @@ func TestNoBackendRSXPresentationWireFields(t *testing.T) {
 
 	for _, typ := range []reflect.Type{
 		reflect.TypeOf(tickPayload{}),
-		reflect.TypeOf(ChartPoint{}),
-		reflect.TypeOf(SimPoint{}),
 		reflect.TypeOf(ChartOscillator{}),
 	} {
 		if _, ok := typ.FieldByName("RSXColor"); ok {

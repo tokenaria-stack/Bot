@@ -10,18 +10,13 @@
 
   // ── Global state (legacy UI contract) — must live on window for UI controllers ──
   window.currentTf = window.currentTf || '15m';
-  window.backtestTf = window.backtestTf || '15m';
   // Shot 11B: single discard axis for TF / history / WS / buffer (replaces requestId + historyEpoch).
   window.projectionEpoch = window.projectionEpoch ?? 0;
   window.navigatorRequestId = window.navigatorRequestId ?? 0;
   window.historyHasMore = window.historyHasMore ?? true;
   window.historyHasNewer = window.historyHasNewer ?? true;
   window.isLoadingHistory = window.isLoadingHistory ?? false;
-  window.backtestHistoryLoading = window.backtestHistoryLoading ?? false;
-  window.backtestHistoryHasMore = window.backtestHistoryHasMore ?? true;
   window.isAppInitialized = window.isAppInitialized ?? false;
-  window.backtestRunActive = window.backtestRunActive ?? false;
-  window.tradeMarkers = window.tradeMarkers ?? [];
   window.sessionTrades = window.sessionTrades ?? [];
   window.spikeMarkers = window.spikeMarkers ?? [];
   window.refreshTimer = window.refreshTimer ?? null;
@@ -30,7 +25,6 @@
   window.__isDashboardLoading = false;
   window.__isSettingsUpdating = false;
   window.lastFibZones = window.lastFibZones ?? [];
-  window.currentBacktestPayload = window.currentBacktestPayload || null;
 
   let backendTradingTimeframe = null;
   let liveHistoryScrollArmed = false;
@@ -575,8 +569,6 @@
       pollOrderFlowState: noopAsync,
       updateBufferingOverlay,
       abortLiveStateFetch: noop,
-      handleBacktestIntervalChange: noop,
-      getBacktestInterval: () => window.backtestTf,
       disarmLiveHistoryScroll,
       openFloatingMenu: (menu, anchor) => {
         if (window.FloatingMenu?.open) return window.FloatingMenu.open(menu, anchor);
@@ -585,10 +577,7 @@
         if (window.FloatingMenu?.initDrag) return window.FloatingMenu.initDrag(menu);
       },
       getActiveUiContext: () => 'live',
-      buildFinalBacktestPayload: () => window.currentBacktestPayload || {},
       shouldPaintLiveChart: () => TabsController?.isLiveTabActive?.() !== false,
-      runBacktest: noopAsync,
-      stopBacktest: noop,
       syncRsxIndicatorSettings,
       pushRsxSettingsToServer,
       reloadRsxChartFromServer: async () => {
@@ -642,7 +631,6 @@
         candleSeries: null,
       }),
       setToggleSeriesVisible: noop,
-      applyAllMarkers: noop,
       setChartType: noop,
       renderFib: noop,
       setEquityData: noop,
@@ -654,8 +642,6 @@
       setNavigatorOverlay: noop,
       hideLegacyOscillatorSeries: noop,
       enableDDROscCutover: noop,
-      ensureBacktestChart: () => false,
-      applyBacktestMarkers: noop,
       destroyLiveCharts: noop,
       syncVisibleLogicalRange: noop,
       activateSurface: () => false,
@@ -1966,7 +1952,6 @@
         });
       }
     });
-    safeInit('UI backtest', () => BacktestController.init());
     safeInit('UI tabs', () => TabsController.init());
     safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: false }));
     safeInit('UI toolbar', () => ToolbarController.init());

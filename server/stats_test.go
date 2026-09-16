@@ -1,12 +1,10 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"trading_bot/domain"
 )
@@ -49,25 +47,5 @@ func TestHandleStats_PaperTrades(t *testing.T) {
 	}
 	if resp.Mode != "paper" || resp.TotalTrades != 1 {
 		t.Fatalf("resp=%+v", resp)
-	}
-}
-
-func TestHandleBacktestStop(t *testing.T) {
-	t.Parallel()
-
-	d := &DashboardServer{backtestRuns: newBacktestRunManager()}
-	ctx, end := d.backtestRuns.begin(context.Background())
-	defer end()
-
-	rec := httptest.NewRecorder()
-	d.handleBacktestStop(rec, httptest.NewRequest(http.MethodPost, "/api/backtest/stop", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d", rec.Code)
-	}
-
-	select {
-	case <-ctx.Done():
-	case <-time.After(time.Second):
-		t.Fatal("context not cancelled")
 	}
 }

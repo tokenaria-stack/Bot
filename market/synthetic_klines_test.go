@@ -40,24 +40,3 @@ func TestExtractDAGNavigatorSeries_3000BarsTiming(t *testing.T) {
 	}
 	t.Logf("DAG navigator series 3000 bars: %s", elapsed.Round(time.Millisecond))
 }
-
-func BenchmarkStreamingReplayAccumulator_3000Bars(b *testing.B) {
-	klines := syntheticKlines(3050)
-	settings := NormalizeRSXSettings(GetRSXSettings())
-	cfg := ChartStreamingReplayConfig(settings, "1m")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = NewStreamingReplayAccumulator(klines, cfg)
-	}
-}
-
-func TestStreamingReplayAccumulator_3000BarsUnderBudget(t *testing.T) {
-	klines := syntheticKlines(3050)
-	settings := NormalizeRSXSettings(GetRSXSettings())
-	cfg := ChartStreamingReplayConfig(settings, "1m")
-	start := time.Now()
-	_ = NewStreamingReplayAccumulator(klines, cfg)
-	elapsed := time.Since(start)
-	t.Logf("streaming replay 3050 bars: %s", elapsed.Round(time.Millisecond))
-}

@@ -387,7 +387,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Decision sockets |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF/backtest). Scoring island removed. |
+| Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF). ChartOnly skips `Evaluate`. Scoring island and Falcon-era backtest packing removed. |
 | Sizing | `execution/` | Quantity math socket |
 | Qdrant | `vector_db/` | Pattern memory socket (#8) |
 
@@ -852,4 +852,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **VOLUME-SOURCE-ARBITRATION-1 STEP 2 FROZEN** (`volume-truth:futures-base-v1`). **SCALE-GESTURE-OWNERSHIP-1 FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN** (live 16:26 +08). Next research: **WOZDUH-TRUTH-1** (not started).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **VOLUME-SOURCE-ARBITRATION-1 STEP 2 FROZEN** (`volume-truth:futures-base-v1`). **SCALE-GESTURE-OWNERSHIP-1 FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN** (live 16:26 +08). Next cleanup slice needs a fresh AUDIT. Next research after remaining clean: **WOZDUH-TRUTH-1**.

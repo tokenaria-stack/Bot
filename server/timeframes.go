@@ -71,18 +71,6 @@ func ResolveTimeframe(raw string) (TimeframeSpec, error) {
 	return parseCustomTimeframe(raw)
 }
 
-// ResolveBacktestInterval maps UI interval strings to a Binance-backed spec for backtest runs.
-func ResolveBacktestInterval(raw string) (TimeframeSpec, error) {
-	spec, err := ResolveTimeframe(raw)
-	if err != nil {
-		return TimeframeSpec{}, err
-	}
-	if spec.Kind == TFBinanceREST && spec.BinanceInterval != "" {
-		return spec, nil
-	}
-	return TimeframeSpec{}, fmt.Errorf("interval %q not supported for backtest", raw)
-}
-
 func normalizeTFKey(raw string) string {
 	k := strings.TrimSpace(raw)
 	lower := strings.ToLower(k)
