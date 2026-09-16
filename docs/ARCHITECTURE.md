@@ -852,4 +852,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **VOLUME-SOURCE-ARBITRATION-1 STEP 2 FROZEN** (`volume-truth:futures-base-v1`). **SCALE-GESTURE-OWNERSHIP-1 FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN** (live 16:26 +08). Next cleanup slice needs a fresh AUDIT. Next research after remaining clean: **WOZDUH-TRUTH-1**.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN.** Next CODE: **QDRANT-CONSUMER-AUDIT-1** (read-only). Then remaining clean, then **WOZDUH-TRUTH-1**.

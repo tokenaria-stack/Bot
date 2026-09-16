@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## INDEX-FOREST-1 (Sep 2026)
+
+**Context:** Workspace ~2 GiB excl `.git`; ~6–8 MiB maintainable source. Large families were already gitignored but `.cursorignore` excluded only `.cursor/mcp.json`. Gitignored ≠ Cursor-ignored.
+
+**Decision:** Hide exact venv, numeric-artifact, and runtime DB paths from agent indexing. Keep source, small reports, specs, `requirements.txt`, and `research/modelfit/testdata` visible. Do not ignore `research/` as a whole. Do not delete bytes.
+
+**Rejected:** Broad `research/**` or `*.db` — **Reason:** hides Python/reports or future fixtures. Deleting venvs/tapes/OOF/`history.db` — **Reason:** existence ≠ index. Copying `research/brain3/*.txt` gitignore into `.cursorignore` — **Reason:** already too broad.
+
+**Consequences:** `INDEX_FOREST_GREEN` `1b03f00`. Physical scratch and Brain3 gitignore breadth remain later chapters. `ARTIFACT-INDEX-AUDIT-1.txt` may stay untracked until a Git-policy decision. Next CODE: QDRANT-CONSUMER-AUDIT-1 (read-only).
+
+---
+
 ## PRE-STRATEGY-CLEAN-1 slice 1 (Sep 2026)
 
 **Context:** Falcon-era dashboard "Backtest" was historical chart + indicator snapshot packing (`BacktestEngine` / `RunStreamingReplay` / Falcon `Evaluate`), not a policy simulator. Brain3 answers a different question (learner science). Trade/PnL fields were empty sockets after Phase F.

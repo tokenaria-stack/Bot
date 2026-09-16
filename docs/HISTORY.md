@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## INDEX-FOREST-1 — exclude generated artifacts from agent indexing (Sep 2026) GREEN / FROZEN
+
+- `.cursorignore` only (`1b03f00`). ~2.01 GiB venv/tapes/OOF/CatBoost/work/`history.db` hidden from index; bytes kept. `research/` not globally ignored.
+- No deletion, no `.gitignore` edit, no runtime change. Artifact `research/cleanup/INDEX-FOREST-1.txt`.
+- Untracked leftover: `research/cleanup/ARTIFACT-INDEX-AUDIT-1.txt` — do not mix into Qdrant; Git policy for research audit reports is a later decision.
+
 ## PRE-STRATEGY-CLEAN-1 slice 1 — Falcon-era backtester amputated (Sep 2026) GREEN / FROZEN
 
 - Deleted Backtest/Stats tabs, `/api/backtest/run|stop`, `BacktestEngine`, Falcon `RunStreamingReplay` packing, backtest FE pipeline/store.
