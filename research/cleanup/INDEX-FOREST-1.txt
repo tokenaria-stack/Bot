@@ -1,0 +1,155 @@
+INDEX-FOREST-1
+Date: 2026-09-16
+Baseline: pre-strategy-cleanup-slice1-green (a7134af)
+Audit: ARTIFACT-INDEX-AUDIT-1 GREEN
+
+Verdict: INDEX_FOREST_GREEN
+
+This chapter changed ONLY .cursorignore (plus this report).
+No files deleted or moved. .gitignore unchanged. No runtime/DB/MCP work.
+
+Cursor native index introspection was not used. Verification is
+gitignore-style pattern matching against the written rules.
+
+======================================================================
+A. IMPLEMENTED PATTERNS
+======================================================================
+
+Preserved:
+  .cursor/mcp.json
+    SQLITE-2 MCP autostart file. Indexing it is useless and dangerous.
+
+Python environments (KEEP ON DISK, not indexed):
+  /research/brain3/.venv/      372.6 MiB   VENV
+  /research/modelfit/.venv/    184.5 MiB   VENV
+  Exact paths only. No **/.venv/
+
+Generated ML/research artifacts (KEEP ON DISK, not indexed):
+  /research/tapes/             52.8 MiB    FeatureTape v1 + rejected copy
+  /research/tapes2/           108.5 MiB    certified FeatureTape2
+  /research/oof/              123.4 MiB    certified OOF matrices
+  /research/labels/            44.4 MiB    certified LabelSets
+  /research/logits/            16.7 MiB    certified + rejected logits
+  /research/catboost/         140.1 MiB    logits/pcb/result + runA.tmp/runB.tmp
+      Directory contains ONLY generated files (no .py). Source lives in
+      research/catboost1/ which is NOT ignored.
+  /research/brain3/work/       78.7 MiB    fold model.json dumps
+  /research/structuralstop1/   32.9 MiB    JSON snapshots
+  /research/forecast_evidence/ 11.5 MiB    .ofev
+  /research/setupdataset/       3.1 MiB    certified JSON
+  /research/setuplabels/        1.6 MiB
+  /research/ranks/              1.4 MiB
+  /research/calibrations/       ~0         generated family (exists, empty-ish)
+  /research/recipes/            ~0
+  /research/final_models/       ~0
+  /research/bundles/            ~0
+  /research/decision_validation/~0
+  /research/decision_research/  ~0
+
+Not added (path does not exist):
+  research/catboost_models/
+
+Runtime SQLite — exact confirmed paths (not *.db):
+  /history.db                 880.7 MiB   canonical archive
+  /history.db-wal               4.0 MiB
+  /history.db-shm               0.0 MiB
+  /history (1).db-wal           4.0 MiB   stray Finder-style WAL (index hide only)
+  /data/history.db-wal|shm
+  /market/history.db-wal|shm
+  /server/history.db + wal/shm
+
+Why indexing is unnecessary: binary SQLite, site-packages/.so, numeric
+row dumps, and CatBoost CBM/JSON work dirs do not help Go/JS/architecture
+edits. Existence is a separate question; all bytes remain.
+
+Correction vs a broad `*.db` glob: tiny fixtures and future docs named
+*.db.example stay searchable. Only proven runtime/stray paths are listed.
+
+Did NOT copy research/brain3/*.txt into .cursorignore.
+
+======================================================================
+B. PRESERVED INDEXED SOURCE
+======================================================================
+
+Pattern-match VISIBLE (not covered by .cursorignore):
+
+  market/frame.go
+  server/webserver.go
+  indicators/rsx.go
+  forecast/oof_matrix.go
+  brain3/doc.go
+  vector_db/db.go
+  web/boot.js  web/ws.js  web/timeline-recovery.js  web/ui/scale-controller.js
+  docs/ARCHITECTURE.md  MEMORY.md
+  research/brain3/fit.py  research/brain3/__init__.py
+  research/brain3/requirements.txt  research/brain3/metalabel-1.txt
+  research/modelfit/fit.py  research/modelfit/requirements.txt
+  research/modelfit/testdata/tiny.oofmatrix
+  research/catboost1/requirements.txt
+  research/cleanup/*.txt  research/volume/*.txt  research/history/*.txt
+
+research/ as a whole is NOT ignored (research/foo.py would stay visible).
+
+======================================================================
+C. APPROXIMATE IMPACT
+======================================================================
+
+Physical workspace: unchanged (~2.02 GiB excl .git).
+
+Bytes matching new ignore patterns (du -sk sum):  2061.0 MiB  (~2.01 GiB)
+
+Maintainable source/docs still indexable: ~6–8 MiB (unchanged from audit).
+
+Statement (disk proxy, not token count):
+
+  Approximately 2.01 GiB of artifact/runtime/dependency files are now
+  excluded from .cursorignore while ~6–8 MiB of maintainable source
+  remains available. Cursor may still honor additional ignore sources;
+  this file is the explicit agent-index policy.
+
+======================================================================
+D. FILES NOT DELETED
+======================================================================
+
+Preserved on disk:
+
+  history.db + history.db-wal + history.db-shm
+  both Python venvs
+  tapes / tapes2 / oof / labels / logits
+  research/catboost/ including runA.tmp and runB.tmp
+  research/brain3/work/
+  stray WAL copies
+  all certified numeric artifacts from the audit
+
+======================================================================
+E. KNOWN DEBT NOT TOUCHED
+======================================================================
+
+  FUTURE_GITIGNORE_DEBT: research/brain3/*.txt (and *.json / *.jsonl)
+    hides reports and requirements from git. Not fixed here.
+
+  Physical scratch: catboost runA.tmp/runB.tmp, Finder WAL, package WAL
+    copies. Not deleted.
+
+  PREEXISTING COMPILE DEBT: cmd/repair_archive_gap unused `restored`.
+
+  Qdrant/vector_db: ~8 KB Go, no data forest. Next CODE chapter.
+
+  ARTIFACT-INDEX-AUDIT-1.txt remains untracked (previous chapter report,
+    not mixed into this commit).
+
+======================================================================
+F. GIT STATUS (before commit)
+======================================================================
+
+  M  .cursorignore
+  ?? research/cleanup/ARTIFACT-INDEX-AUDIT-1.txt
+  ?? research/cleanup/INDEX-FOREST-1.txt   (this file)
+
+Commit isolation: only .cursorignore + this report.
+
+======================================================================
+G. FINAL VERDICT
+======================================================================
+
+INDEX_FOREST_GREEN

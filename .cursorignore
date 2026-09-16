@@ -1,3 +1,43 @@
 # Local MCP autostart (SQLITE-2). Do not index/review/commit.
 # Recipe to copy when the user asks: .cursor/mcp.json.example
 .cursor/mcp.json
+
+# INDEX-FOREST-1 — agent index only. Bytes stay on disk. Git tracking unchanged.
+# Do not ignore research/ as a whole (Python source, reports, specs stay visible).
+
+# Python environments
+/research/brain3/.venv/
+/research/modelfit/.venv/
+
+# Generated ML / research artifacts (certified or work; not source)
+/research/tapes/
+/research/tapes2/
+/research/oof/
+/research/labels/
+/research/logits/
+/research/catboost/
+/research/brain3/work/
+/research/structuralstop1/
+/research/forecast_evidence/
+/research/setupdataset/
+/research/setuplabels/
+/research/ranks/
+/research/calibrations/
+/research/recipes/
+/research/final_models/
+/research/bundles/
+/research/decision_validation/
+/research/decision_research/
+
+# Runtime SQLite — exact confirmed paths (not *.db)
+/history.db
+/history.db-wal
+/history.db-shm
+/history (1).db-wal
+/data/history.db-wal
+/data/history.db-shm
+/market/history.db-wal
+/market/history.db-shm
+/server/history.db
+/server/history.db-wal
+/server/history.db-shm
