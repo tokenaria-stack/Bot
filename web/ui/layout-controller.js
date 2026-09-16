@@ -552,7 +552,7 @@
     // Heights live in PaneLayout; kept as no-op socket for legacy callers.
   }
 
-  const LayoutController = {
+const LayoutController = {
     init,
     attach,
     apply,

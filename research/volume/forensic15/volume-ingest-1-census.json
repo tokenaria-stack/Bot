@@ -1,0 +1,657 @@
+{
+  "verdict": "VOLUME_TRUTH_BLOCKED_UNKNOWN_CORRUPTION",
+  "repair": "NONE",
+  "notes": [
+    "1s micro Volume is MicroTradeBaseVolume (sum aggTrade Qty). No historical aggTrade tape; REST 1s kline not used (no invented API). Producer fixtures lock the builder.",
+    "VOLUME_INGEST_ONLY=15m"
+  ],
+  "futures": {
+    "15m": {
+      "stored": 246110,
+      "compared": 246110,
+      "no_authority": 0,
+      "authority_extra": 6,
+      "TOTAL_BASE": 246052,
+      "TAKER_BUY_BASE": 38,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 9,
+      "MATCH_NONE": 11
+    }
+  },
+  "futures_by_year": {
+    "15m": {
+      "2019": {
+        "stored": 10969,
+        "compared": 10969,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 10969,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 0
+      },
+      "2020": {
+        "stored": 35136,
+        "compared": 35136,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35136,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 0
+      },
+      "2021": {
+        "stored": 35040,
+        "compared": 35040,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35040,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 0
+      },
+      "2022": {
+        "stored": 35040,
+        "compared": 35040,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35040,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 0
+      },
+      "2023": {
+        "stored": 35040,
+        "compared": 35040,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35035,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 5,
+        "MATCH_NONE": 0
+      },
+      "2024": {
+        "stored": 35136,
+        "compared": 35136,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35125,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 4,
+        "MATCH_NONE": 7
+      },
+      "2025": {
+        "stored": 35040,
+        "compared": 35040,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 35036,
+        "TAKER_BUY_BASE": 0,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 4
+      },
+      "2026": {
+        "stored": 24709,
+        "compared": 24709,
+        "no_authority": 0,
+        "authority_extra": 0,
+        "TOTAL_BASE": 24671,
+        "TAKER_BUY_BASE": 38,
+        "TOTAL_QUOTE": 0,
+        "TAKER_BUY_QUOTE": 0,
+        "ZERO_OR_MISSING": 0,
+        "MATCH_NONE": 0
+      }
+    }
+  },
+  "spot": {
+    "15m": {
+      "stored": 67886,
+      "compared": 67805,
+      "no_authority": 81,
+      "authority_extra": 128,
+      "TOTAL_BASE": 67798,
+      "TAKER_BUY_BASE": 0,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 7
+    }
+  },
+  "live_recert": {
+    "15m": {
+      "stored": 12,
+      "compared": 12,
+      "no_authority": 0,
+      "authority_extra": 8,
+      "TOTAL_BASE": 0,
+      "TAKER_BUY_BASE": 12,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 0
+    },
+    "1h": {
+      "stored": 12,
+      "compared": 12,
+      "no_authority": 0,
+      "authority_extra": 3,
+      "TOTAL_BASE": 4,
+      "TAKER_BUY_BASE": 8,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 0
+    },
+    "1m": {
+      "stored": 12,
+      "compared": 12,
+      "no_authority": 0,
+      "authority_extra": 90,
+      "TOTAL_BASE": 0,
+      "TAKER_BUY_BASE": 12,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 0
+    },
+    "4h": {
+      "stored": 12,
+      "compared": 12,
+      "no_authority": 0,
+      "authority_extra": 2,
+      "TOTAL_BASE": 11,
+      "TAKER_BUY_BASE": 1,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 0
+    },
+    "5m": {
+      "stored": 12,
+      "compared": 12,
+      "no_authority": 0,
+      "authority_extra": 20,
+      "TOTAL_BASE": 0,
+      "TAKER_BUY_BASE": 12,
+      "TOTAL_QUOTE": 0,
+      "TAKER_BUY_QUOTE": 0,
+      "ZERO_OR_MISSING": 0,
+      "MATCH_NONE": 0
+    }
+  },
+  "micro_klines": {
+    "N": 30817,
+    "MinOT": 1789376080000,
+    "MaxOT": 1789463788000
+  },
+  "mismatch_samples": [
+    {
+      "open_time": 1699629300000,
+      "stored": 0,
+      "v": 2531.089,
+      "V": 1058.095,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1699630200000,
+      "stored": 0,
+      "v": 3517.925,
+      "V": 1391.216,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1699631100000,
+      "stored": 0,
+      "v": 3982.465,
+      "V": 2515.675,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1699632000000,
+      "stored": 0,
+      "v": 11704.938,
+      "V": 6537.1,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1699632900000,
+      "stored": 0,
+      "v": 7017.955,
+      "V": 3583.511,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1711541700000,
+      "stored": 1663.097,
+      "v": 1392.806,
+      "V": 563.648,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1711542600000,
+      "stored": 1950.378,
+      "v": 1749.455,
+      "V": 786.9,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1711621800000,
+      "stored": 1613.971,
+      "v": 1613.834,
+      "V": 960.448,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1711623600000,
+      "stored": 4300.854,
+      "v": 4300.833,
+      "V": 2225.013,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1711626300000,
+      "stored": 1724.464,
+      "v": 1496.302,
+      "V": 785.281,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1711629000000,
+      "stored": 2232.018,
+      "v": 2231.935,
+      "V": 1145.62,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1730145600000,
+      "stored": 0,
+      "v": 2554.775,
+      "V": 1335.028,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1730146500000,
+      "stored": 0,
+      "v": 233.266,
+      "V": 182.352,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1730147400000,
+      "stored": 0,
+      "v": 1130.06,
+      "V": 728.568,
+      "class": "ZERO_OR_MISSING"
+    },
+    {
+      "open_time": 1730149200000,
+      "stored": 32.637,
+      "v": 1395.29,
+      "V": 748.539,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1736861400000,
+      "stored": 12092.983,
+      "v": 14066.114,
+      "V": 7592.337,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1789373700000,
+      "stored": 865.765,
+      "v": 1494.822,
+      "V": 865.765,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789374600000,
+      "stored": 388.432,
+      "v": 697.96,
+      "V": 388.432,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789375500000,
+      "stored": 228.848,
+      "v": 505.207,
+      "V": 228.848,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789376400000,
+      "stored": 244.434,
+      "v": 595.584,
+      "V": 244.434,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789433100000,
+      "stored": 712.772,
+      "v": 1223.063,
+      "V": 712.772,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789434000000,
+      "stored": 1197.968,
+      "v": 2277.465,
+      "V": 1197.968,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789434900000,
+      "stored": 1278.981,
+      "v": 2423.87,
+      "V": 1278.981,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789435800000,
+      "stored": 816.559,
+      "v": 1395.059,
+      "V": 816.559,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1517985000000,
+      "stored": 396.187958,
+      "v": 396.964369,
+      "V": 201.789099,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1520173800000,
+      "stored": 43.228292,
+      "v": 69.090058,
+      "V": 30.919727,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1521515700000,
+      "stored": 721.529929,
+      "v": 723.259598,
+      "V": 399.492922,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1529465400000,
+      "stored": 115.236658,
+      "v": 121.717016,
+      "V": 30.187323,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1543199400000,
+      "stored": 521.894377,
+      "v": 523.009327,
+      "V": 270.772273,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1545042600000,
+      "stored": 396.888708,
+      "v": 397.353399,
+      "V": 247.859579,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1557304200000,
+      "stored": 141.888473,
+      "v": 142.02386,
+      "V": 74.27568,
+      "class": "MATCH_NONE"
+    },
+    {
+      "open_time": 1789462980000,
+      "stored": 53.423,
+      "v": 89.929,
+      "V": 53.423,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463040000,
+      "stored": 66.155,
+      "v": 134.03,
+      "V": 66.155,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463100000,
+      "stored": 36.194,
+      "v": 87.482,
+      "V": 36.194,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463160000,
+      "stored": 35.449,
+      "v": 70.242,
+      "V": 35.449,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463220000,
+      "stored": 31.296,
+      "v": 68.356,
+      "V": 31.296,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463280000,
+      "stored": 58.992,
+      "v": 101.354,
+      "V": 58.992,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463340000,
+      "stored": 36.822,
+      "v": 63.996,
+      "V": 36.822,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789463400000,
+      "stored": 19.679,
+      "v": 39.914,
+      "V": 19.679,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789459800000,
+      "stored": 565.879,
+      "v": 1006.073,
+      "V": 565.879,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789460100000,
+      "stored": 416.729,
+      "v": 723.06,
+      "V": 416.729,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789460400000,
+      "stored": 548.618,
+      "v": 961.726,
+      "V": 548.618,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789460700000,
+      "stored": 466.558,
+      "v": 1039.397,
+      "V": 466.558,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789461000000,
+      "stored": 232.418,
+      "v": 417.493,
+      "V": 232.418,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789461300000,
+      "stored": 185.844,
+      "v": 322.508,
+      "V": 185.844,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789461600000,
+      "stored": 127.113,
+      "v": 230.644,
+      "V": 127.113,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789461900000,
+      "stored": 438.179,
+      "v": 720.216,
+      "V": 438.179,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789452000000,
+      "stored": 676.483,
+      "v": 1392.775,
+      "V": 676.483,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789452900000,
+      "stored": 486.622,
+      "v": 1060.612,
+      "V": 486.622,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789453800000,
+      "stored": 730.059,
+      "v": 1161.838,
+      "V": 730.059,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789454700000,
+      "stored": 1055.312,
+      "v": 2583.415,
+      "V": 1055.312,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789455600000,
+      "stored": 973.849,
+      "v": 1871.409,
+      "V": 973.849,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789456500000,
+      "stored": 641.534,
+      "v": 1226.249,
+      "V": 641.534,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789457400000,
+      "stored": 1372.36,
+      "v": 3454.049,
+      "V": 1372.36,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789458300000,
+      "stored": 1317.818,
+      "v": 3032.878,
+      "V": 1317.818,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789430400000,
+      "stored": 2423.99,
+      "v": 5124.846,
+      "V": 2423.99,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789434000000,
+      "stored": 4362.819,
+      "v": 7955.222,
+      "V": 4362.819,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789437600000,
+      "stored": 2150.012,
+      "v": 3957.125,
+      "V": 2150.012,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789441200000,
+      "stored": 2716.279,
+      "v": 4966.703,
+      "V": 2716.279,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789444800000,
+      "stored": 2559.476,
+      "v": 5696.983,
+      "V": 2559.476,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789448400000,
+      "stored": 3816.235,
+      "v": 7412.961,
+      "V": 3816.235,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789452000000,
+      "stored": 2948.476,
+      "v": 6198.64,
+      "V": 2948.476,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789455600000,
+      "stored": 4305.561,
+      "v": 9584.585,
+      "V": 4305.561,
+      "class": "TAKER_BUY_BASE"
+    },
+    {
+      "open_time": 1789430400000,
+      "stored": 11653.1,
+      "v": 22003.896,
+      "V": 11653.1,
+      "class": "TAKER_BUY_BASE"
+    }
+  ],
+  "derived_checked": [
+    "2m←1m AssembleChildOHLCV (unit test)",
+    "sparse seconds ← 1s AssembleChildOHLCV (unit test)"
+  ]
+}

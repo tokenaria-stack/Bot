@@ -1,0 +1,3 @@
+# Local MCP autostart (SQLITE-2). Do not index/review/commit.
+# Recipe to copy when the user asks: .cursor/mcp.json.example
+.cursor/mcp.json
