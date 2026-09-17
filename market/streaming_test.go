@@ -1,8 +1,10 @@
 package market
 
 import (
+	"math"
 	"testing"
 
+	"trading_bot/core"
 	"trading_bot/exchange"
 )
 
@@ -148,11 +150,11 @@ func TestMarker_RedLineCrossGreenUpInMarker(t *testing.T) {
 	klines := makeSyntheticKlines(60)
 	frame := NewFrame(klines, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	falcon := frame.FalconSnapshot()
-	if falcon.GreenLine <= 0 {
-		t.Fatalf("expected dynamic GreenLine > 0, got %f", falcon.GreenLine)
+	if falcon.GreenLine != 0 || falcon.JurikRSX != 0 {
+		t.Fatalf("Frame tick must not Evaluate Falcon, got %+v", falcon)
 	}
-	if falcon.JurikRSX <= 0 {
-		t.Fatalf("expected JurikRSX > 0, got %f", falcon.JurikRSX)
+	if math.IsNaN(frame.RSXSlot(core.SlotJurikRSX)) {
+		t.Fatal("DAG Jurik must still run")
 	}
 }
 

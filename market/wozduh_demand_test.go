@@ -67,26 +67,21 @@ func TestWozduhDemand_ChartOnlyZero(t *testing.T) {
 	}
 }
 
-func TestWozduhDemand_LiveMandatoryFastSlow(t *testing.T) {
+func TestWozduhDemand_LiveUnusedZero(t *testing.T) {
 	withEngineMode(t, EngineModeLive)
 	f := testDemandFrame(t, 80)
-	want := nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22
-	mask, s0, _ := f.WozduhLiveStats()
-	if mask != want {
-		t.Fatalf("Live unused mask=%#b want %#b", mask, want)
+	mask, streams, wakes := f.WozduhLiveStats()
+	if mask != 0 {
+		t.Fatalf("Live unused mask=%#b want 0 (no Falcon shadow demand)", mask)
 	}
-	if math.IsNaN(f.WozduhSlot(core.SlotWozduhFast)) || math.IsNaN(f.WozduhSlot(core.SlotWozduhSlow)) {
-		t.Fatal("Live shadow woz_fast/slow must stay finite")
+	if streams != 0 {
+		t.Fatalf("Live unused streams=%d want 0", streams)
 	}
-	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolCross)) {
-		t.Fatal("VolCross must not be mandatory in Live")
+	if wakes != 0 {
+		t.Fatalf("wakes=%d", wakes)
 	}
-	for i := 80; i < 90; i++ {
-		appendClosedBar(f, i)
-	}
-	_, s1, _ := f.WozduhLiveStats()
-	if s1 <= s0 {
-		t.Fatalf("Live internal streams must still Update: %d → %d", s0, s1)
+	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhFast)) {
+		t.Fatal("unused Live woz_fast must be NaN")
 	}
 }
 
@@ -192,17 +187,15 @@ func TestWozduhDemand_WakeMatchesFreshReplay(t *testing.T) {
 }
 
 func TestWozduhDemand_WakeVsAlwaysOnEpsilon(t *testing.T) {
-	// Live birth runs VolBase|Wt11|Wt22 over every init bar (older than the
-	// retained dagHistoryCap window). ChartOnly wake rebuilds only that window.
-	// Bit-exact equality is not required (contract B).
 	n := dagHistoryCap + 80
-	withEngineMode(t, EngineModeLive)
+	withEngineMode(t, EngineModeChartOnly)
+	demand := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"})
 	always := NewFrame(syntheticKlines(n), "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
+	always.SetWozduhDemand(demand)
 	want := always.WozduhSlot(core.SlotWozduhFast)
 
-	SetEngineMode(EngineModeChartOnly)
 	woken := NewFrame(syntheticKlines(n), "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
-	woken.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"}))
+	woken.SetWozduhDemand(demand)
 	got := woken.WozduhSlot(core.SlotWozduhFast)
 	if math.IsNaN(got) || math.IsNaN(want) {
 		t.Fatal("woz_fast must be finite")
@@ -212,18 +205,18 @@ func TestWozduhDemand_WakeVsAlwaysOnEpsilon(t *testing.T) {
 	}
 }
 
-func TestWozduhDemand_InternalClosureMatchesShadowReads(t *testing.T) {
+func TestWozduhDemand_InternalMaskZero(t *testing.T) {
 	want := nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22
 	if got := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"}); got != want {
-		t.Fatalf("shadow woz_fast/slow closure %#b want %#b", got, want)
+		t.Fatalf("woz_fast/slow closure %#b want %#b", got, want)
 	}
 	withEngineMode(t, EngineModeChartOnly)
 	if wozduhInternalMask() != 0 {
 		t.Fatal("ChartOnly internalMask must be 0")
 	}
 	SetEngineMode(EngineModeLive)
-	if wozduhInternalMask() != want {
-		t.Fatalf("Live internalMask %#b want %#b", wozduhInternalMask(), want)
+	if wozduhInternalMask() != 0 {
+		t.Fatal("Live internalMask must be 0 after Falcon shadow removal")
 	}
 }
 
@@ -326,8 +319,8 @@ func TestWozduhDemand_Measure(t *testing.T) {
 	if defPer != 6 {
 		t.Fatalf("default streams/bar=%d want 6", defPer)
 	}
-	if liveUnusedPer != 4 {
-		t.Fatalf("Live unused streams/bar=%d want 4 (VolBase×2 + Wt11 + Wt22)", liveUnusedPer)
+	if liveUnusedPer != 0 {
+		t.Fatalf("Live unused streams/bar=%d want 0", liveUnusedPer)
 	}
 	if z1 != z0 {
 		t.Fatalf("unused seconds Frame still computing: %d → %d", z0, z1)

@@ -1,8 +1,6 @@
 package market
 
 import (
-	"log/slog"
-	"math"
 	"sync/atomic"
 
 	"trading_bot/core"
@@ -96,48 +94,6 @@ func (a *Frame) runDAGShadowLocked(k exchange.Kline, barIndex int, isClosed bool
 		return
 	}
 	a.dag.TickUpdate(k.Open, k.High, k.Low, k.Close, k.Volume, barIndex, isClosed)
-	if isClosed {
-		a.validateDAGShadowLocked()
-	}
-}
-
-func (a *Frame) validateDAGShadowLocked() {
-	// Falcon parity checks only make sense when Falcon is evaluating (Live).
-	if a.dag == nil || !EngineAllowsStrategies() {
-		return
-	}
-	bus := a.dag.Bus()
-	if bus == nil || bus.Cur == nil {
-		return
-	}
-	cur := bus.Cur
-	checks := []struct {
-		slot string
-		got  float64
-		want float64
-	}{
-		{"jurik_rsx", cur.Get(core.SlotJurikRSX), a.falconSignals.JurikRSX},
-		{"jurik_signal", cur.Get(core.SlotJurikSignal), a.falconSignals.JurikRSXSignal},
-		{"woz_fast", cur.Get(core.SlotWozduhFast), a.falconSignals.RsiVolFast},
-		{"woz_slow", cur.Get(core.SlotWozduhSlow), a.falconSignals.RsiVolSlow},
-	}
-	for _, c := range checks {
-		if !shadowValuesMatch(c.got, c.want) {
-			slog.Warn("dag shadow drift",
-				"slot", c.slot,
-				"dag", c.got,
-				"falcon", c.want,
-				"delta", math.Abs(c.got-c.want),
-			)
-		}
-	}
-}
-
-func shadowValuesMatch(got, want float64) bool {
-	if math.IsNaN(got) && math.IsNaN(want) {
-		return true
-	}
-	return math.Abs(got-want) <= dagShadowEpsilon
 }
 
 // DAGTickFrame returns the current DAG bus frame for dual-write projection (read-only).

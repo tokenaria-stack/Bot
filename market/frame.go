@@ -298,14 +298,9 @@ func (a *Frame) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
 	a.evaluateTickLocked(k, barIndex, isClosed)
 }
 
-// evaluateTickBulkChartLocked is the chart-only cold replay path.
-// Shot 9F: ChartOnly → DAG only; Live → Falcon (RSX trading labels purged in Phase F).
+// evaluateTickBulkChartLocked is the chart cold replay path (DAG + facts only).
 func (a *Frame) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isClosed bool) {
 	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
-	if !EngineAllowsStrategies() {
-		return
-	}
-	a.recordDataBusBarLocked(barIndex, a.falconSignals)
 }
 
 // SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).

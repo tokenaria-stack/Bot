@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-LIVE-ORPHAN-STREAM-1 (Sep 2026)
+
+**Context:** FALCON-CONSUMER-MIGRATION-AUDIT-1. Live `Evaluate` fed unpublished flags, DataBus series, Frame ZigZag/fib/geometry, Falcon-fed VolatilityEngine, and DAG-vs-Falcon shadow logs. Chart/facts already DAG-owned. ChartOnly already skipped Evaluate.
+
+**Decision:** Stop production-tick Falcon Evaluate. Delete the Live extra stream and Falcon shadow comparison. Drop Live-only Wozduh internal mask that existed solely for shadow reads. Keep Frame.falcon allocation, `ApplyBacktestRSXConfig`, FalconEngine tests, VolatilityEngine type, DAG ZigZagNode, navigator geometry.
+
+**Rejected:**
+- Migrate dead Live values onto DAG fields — **Reason:** no consumer.
+- Delete Frame.falcon / rename ApplyBacktestRSXConfig — **Reason:** later oracle/unwire chapters.
+- Merge with HTF-OSC-DEAD-1 — **Reason:** separate rollback boundary.
+
+**Consequences:** Live and ChartOnly ticks share DAG+facts only. Falcon remains test/config scaffolding. Next: FALCON-ORACLE-REPLACE-1.
+
+---
+
 ## FALCON-HTF-OSC-DEAD-1 (Sep 2026)
 
 **Context:** FALCON-CONSUMER-MIGRATION-AUDIT-1. Isolated `evaluateHTFOscillators` ran `NewFalconEngine` over strictly-closed HTF candles and stored `HTFState.RSXValue` / `WozduhUp` / `WozduhDown`. Those fields had no production or research readers. Navigator geometry is `BuildHTFNavigatorLayer`. Research HTF RSX is `nativeRSXContext` (FeatureTape2), not this tracker.

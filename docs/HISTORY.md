@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-LIVE-ORPHAN-STREAM-1 — stop unpublished Live Falcon extra stream (Sep 2026)
+
+- Production ticks no longer call `FalconEngine.Evaluate` (ChartOnly or Live).
+- Removed Live flags / DataBus Falcon writes / Frame ZZ-fib-geometry updates / Falcon-fed volEngine / DAG-Falcon shadow logs.
+- Live unused Wozduh internal wt11/wt22 mask dropped (was shadow-only).
+- Kept Frame.falcon, ApplyBacktestRSXConfig, canonical DAG/facts/chart.
+- Artifact: `research/cleanup/FALCON-LIVE-ORPHAN-STREAM-1.txt`.
+
 ## FALCON-HTF-OSC-DEAD-1 — delete unread HTF Falcon oscillators (Sep 2026)
 
 - Audit: `FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND` (`research/cleanup/FALCON-CONSUMER-MIGRATION-AUDIT-1.txt`).

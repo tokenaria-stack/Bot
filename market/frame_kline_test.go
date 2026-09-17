@@ -1,10 +1,30 @@
 package market
 
 import (
+	"math"
 	"testing"
 
+	"trading_bot/core"
 	"trading_bot/exchange"
 )
+
+func syntheticRSXKlines(n int) []exchange.Kline {
+	klines := make([]exchange.Kline, n)
+	price := 100.0
+	for i := range klines {
+		wave := math.Sin(float64(i)*0.25) * 5
+		klines[i] = exchange.Kline{
+			OpenTime: int64(i) * 60_000,
+			Open:     price + wave,
+			High:     price + wave + 2,
+			Low:      price + wave - 2,
+			Close:    price + wave + 0.5,
+			Volume:   1000,
+		}
+		price += 0.05
+	}
+	return klines
+}
 
 func TestMarker_UpdateKlineTick_RolloverPerMinute(t *testing.T) {
 	m := NewFrame(nil, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
@@ -90,51 +110,20 @@ func warmupMarkerBars(m *Frame, n int, startMs int64, stepMs int64) {
 }
 
 func markerJurikRSX(m *Frame) float64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.falconSignals.JurikRSX
-}
-
-func markerLatestAO(m *Frame) float64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.latestAO
-}
-
-func markerADValue(m *Frame) float64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.ad.Value()
-}
-
-func markerVolATR(m *Frame) float64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.volatilityState.ATR
+	return m.RSXSlot(core.SlotJurikRSX)
 }
 
 func markerRSXBarCount(m *Frame) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return len(m.JurikLines)
+	hist := m.dagHistoryLocked()
+	if hist == nil {
+		return 0
+	}
+	return hist.Count()
 }
 
-func assertIntraBarStable(t *testing.T, name string, want, got float64) {
-	t.Helper()
-	const eps = 1e-9
-	if want == 0 && got == 0 {
-		return
-	}
-	diff := got - want
-	if diff < 0 {
-		diff = -diff
-	}
-	if diff > eps {
-		t.Fatalf("intra-bar %s = %v, want %v (single evaluate on final OHLC)", name, got, want)
-	}
-}
-
-func TestMarker_UpdateKlineTick_IntraBarDoesNotCompoundFalcon(t *testing.T) {
+func TestMarker_UpdateKlineTick_IntraBarDoesNotCompoundDAGRSX(t *testing.T) {
 	const stepMs = int64(60_000)
 	startMs := int64(1_700_000_000_000)
 
@@ -182,44 +171,7 @@ func TestMarker_UpdateKlineTick_IntraBarDoesNotCompoundFalcon(t *testing.T) {
 	}
 }
 
-func TestMarker_UpdateKlineTick_IntraBarDoesNotCompoundstreaming(t *testing.T) {
-	const stepMs = int64(60_000)
-	startMs := int64(1_700_000_000_000)
-
-	lastOpen := startMs + 58*stepMs
-	final := exchange.Kline{
-		OpenTime:  lastOpen,
-		CloseTime: lastOpen + stepMs - 1,
-		Open:      158,
-		High:      161,
-		Low:       157,
-		Close:     160.5,
-		Volume:    42,
-	}
-	ticks := []exchange.Kline{
-		{OpenTime: lastOpen, CloseTime: lastOpen + stepMs - 1, Open: 158, High: 159, Low: 157, Close: 158.2, Volume: 10},
-		{OpenTime: lastOpen, CloseTime: lastOpen + stepMs - 1, Open: 158, High: 160, Low: 156.5, Close: 159.8, Volume: 20},
-		final,
-	}
-
-	cfg := ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34}
-
-	single := NewFrame(nil, "1m", cfg)
-	warmupMarkerBars(single, 59, startMs, stepMs)
-	single.UpdateKlineTick(final, false)
-
-	intra := NewFrame(nil, "1m", cfg)
-	warmupMarkerBars(intra, 59, startMs, stepMs)
-	for _, tick := range ticks {
-		intra.UpdateKlineTick(tick, false)
-	}
-
-	assertIntraBarStable(t, "AO", markerLatestAO(single), markerLatestAO(intra))
-	assertIntraBarStable(t, "AD", markerADValue(single), markerADValue(intra))
-	assertIntraBarStable(t, "ATR", markerVolATR(single), markerVolATR(intra))
-}
-
-func TestMarker_UpdateKlineTick_IntraBarDoesNotGrowRSXOrPoisonDiv(t *testing.T) {
+func TestMarker_UpdateKlineTick_IntraBarDoesNotGrowDAGHist(t *testing.T) {
 	const stepMs = int64(60_000)
 	startMs := int64(1_700_000_000_000)
 

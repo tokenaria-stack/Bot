@@ -37,7 +37,7 @@ func TestEvaluateTick_ChartOnlySkipsFalconKeepsDAG(t *testing.T) {
 		t.Fatal("Live must run DAG")
 	}
 	lfs := live.FalconSnapshot()
-	if lfs.JurikRSX == 0 && lfs.RedLine == 0 {
-		t.Fatal("Live warmup should populate Falcon signals")
+	if lfs.JurikRSX != 0 || lfs.RedLine != 0 || lfs.GreenLine != 0 {
+		t.Fatalf("Live tick path must not Evaluate Falcon, got %+v", lfs)
 	}
 }

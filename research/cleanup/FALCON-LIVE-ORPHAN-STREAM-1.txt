@@ -1,0 +1,249 @@
+FALCON-LIVE-ORPHAN-STREAM-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent: f921ee0 FALCON-HTF-OSC-DEAD-1 GREEN / committed
+Basis: FALCON-CONSUMER-MIGRATION-AUDIT-1 → FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND
+User approval: this chapter only (not oracle/unwire/remove)
+
+PROMPT CORRECTIONS
+======================================================================
+
+C1. Live Wozduh internal mask (wt11/wt22) was not a Falcon-number consumer.
+    It existed so validateDAGShadowLocked could read finite DAG slots.
+    After deleting shadow, keeping that mask would be a compatibility ghost.
+    Dropped wozduhInternalMask to 0. Canonical WozduhNode unchanged.
+    Client/plot demand still wakes streams.
+
+C2. Live rsxInternalMask NeedRSXCore KEPT. That is DAG RSX on Live unused
+    TFs, not Falcon-fed. Changing it would be DAG-DEMAND work, not this cut.
+
+C3. evaluateFalconSignalsLocked is now a misnomer (DAG + facts only).
+    Do not rename in this chapter (unwire later).
+
+C4. Frame still allocates Falcon, volEngine, zigzag, geometry, AO, AD,
+    DataBus series, streamingSnapshot. Those are empty scaffolding, not
+    production writes. Full field deletion is FALCON-FRAME-UNWIRE-1.
+
+C5. Did not migrate any dead Live float onto DAG.
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Production ChartOnly and Live ticks now:
+
+  evaluateTickLocked
+    → evaluateFalconSignalsLocked
+         DAG TickUpdate
+         RSX TV / ZZ / fractal facts
+
+No FalconEngine.Evaluate on that path.
+
+Deleted live extra stream body (flags, DataBus Falcon writes, Frame
+ZigZag/fib/geometry updates, Falcon-fed VolatilityEngine.Evaluate,
+restore/save of that stream, DAG-vs-Falcon shadow logs).
+
+Kept Frame.falcon, NewFalconEngine, FalconSnapshot, ApplyBacktestRSXConfig,
+Falcon SetRSX*, VolatilityEngine type + tests, DAG ZigZagNode, navigator.
+
+======================================================================
+B. PRE-DELETE CONSUMER RECHECK
+======================================================================
+
+HEAD after HTF freeze (f921ee0), before this edit:
+
+redLineCrossGreen* / wozduxVolumeSpike* / jurikValue / jurikIsRising
+  writers: evaluateTickLocked Live
+  readers: snapshot restore only
+  production: none
+
+JurikLines / WozduhRed / WozduhGreen
+  writers: recordDataBusBarLocked(FalconSignals) Live
+  readers: DataBus interface, incremental test
+  production: none (chart uses DAG)
+
+Frame zigzag → geometry → fibZones
+  writers: Live Evaluate Jurik
+  readers: FibZonesSnapshot unused; server FibZones nil
+  DAG ZZ facts: ZigZagNode + ZZDivFactCollector (kept)
+
+volEngine.Evaluate(..., falcon Jurik)
+  writers: Live
+  readers: LastATR / ClosedVolatilityRegime / VolatilityStateSnapshot
+           — no production callers; wire VolatilityRegime ""
+  VolatilityEngine tests call NewVolatilityEngine directly (kept)
+
+validateDAGShadowLocked
+  Live slog vs falconSignals; dag_shadow_test twin
+  certification: TEMPORARY_MIGRATION_ORACLE only
+
+No NEW production consumer. Did not STOP.
+
+======================================================================
+C. LIVE ORPHAN STATE DELETED
+======================================================================
+
+Stopped writing (production tick):
+
+  redLineCrossGreen* flags
+  wozduxVolumeSpike* flags
+  jurikValue / jurikIsRising
+  Falcon DataBus Jurik/Wozduh series
+  Frame zigzag/fib/geometry updates
+  Falcon-fed volEngine.Evaluate
+  DAG-Falcon shadow comparison/logging
+
+Deleted tests tied to orphan stream:
+
+  TestDAGShadowParityWithFalcon
+  TestMarker_DataBus_SaveRestore_IntraBarNoGrowth
+  Intra-bar AO/AD/ATR Frame compounding test
+
+Rewrote:
+
+  engine_mode_chartonly_test — Live FalconSnapshot stays zero
+  streaming Frame FalconSnapshot test — DAG Jurik still runs
+  intra-bar RSX — DAG SlotJurikRSX / hist.Count()
+  Wozduh Live unused — mask 0 (no shadow demand)
+
+Kept pure detectRedLineCrossGreen / DetectWozduxVolumeSpike unit tests
+(not Frame Live stream).
+
+======================================================================
+D. FALCON EVALUATE RUNTIME STATUS
+======================================================================
+
+Production Live tick path: DOES NOT call FalconEngine.Evaluate.
+
+Evaluate remains on:
+
+  tests: falcon_test, falcon_cross_test, rsx_settings_test,
+         change_impact SetRSXLength, core/nodes/wozduh_test twin
+  ApplyBacktestRSXConfig still SetRSX* on allocated engine (no tick Evaluate)
+
+======================================================================
+E. DATABUS CLEANUP
+======================================================================
+
+Stopped Falcon recordDataBusBarLocked from ticks.
+
+Did not delete DataBus type, JurikLines fields, align/trim, Append*.
+Unused writer remains as scaffolding.
+
+canonical DAG slots unchanged.
+
+======================================================================
+F. ZIGZAG / FIB / GEOMETRY RESULT
+======================================================================
+
+Frame Live UpdateCandle / fib / geometryTracker.updateBar: stopped.
+
+KEPT: DAG ZigZagNode, ZZDivFactCollector, rsx_zz_div facts,
+BuildHTFNavigatorLayer, Frame.zigzag allocation (rsx_demand isolation
+test), geometry_tracker.go file.
+
+======================================================================
+G. VOLATILITY RESULT
+======================================================================
+
+Removed Falcon Jurik → volEngine.Evaluate on ticks.
+
+KEPT: market/volatility.go, volatility_test.go, Frame.volEngine
+allocation, LastATR accessors (now idle).
+
+Not VOLATILITY-CLEAN-1.
+
+======================================================================
+H. DAG SHADOW RESULT
+======================================================================
+
+Deleted validateDAGShadowLocked and TestDAGShadowParityWithFalcon.
+
+runDAGShadowLocked is still the DAG TickUpdate name (name debt).
+
+Did not add a replacement dual production engine.
+
+WozduhNode golden parity still uses Falcon as test twin
+(FALCON-ORACLE-REPLACE-1).
+
+======================================================================
+I. FACT SAFETY
+======================================================================
+
+noteRSTV / ZZ / fractal still run from evaluateFalconSignalsLocked.
+No fact math change.
+
+======================================================================
+J. CHART / SERVER SAFETY
+======================================================================
+
+DAG slots → projector → plots / annotations unchanged.
+No FalconSnapshot on wire.
+
+======================================================================
+K. FEATURETAPE / BRAIN3 SAFETY
+======================================================================
+
+Untouched. Fill still DAG. Tape2 still nativeRSXContext.
+
+======================================================================
+L. REMAINING FALCON OWNERSHIP
+======================================================================
+
+Temporary reasons Falcon still exists:
+
+  Frame.falcon allocation + SetRSX* from ApplyBacktestRSXConfig
+    and UpdateRSXScanConfig
+  FalconSnapshot / RSXSignalLine accessors (zeros on ticks)
+  NewFalconEngine / Evaluate test oracles
+  WozduhNode golden twin
+  ADR-013 Falcon SetRSXLength test
+
+Not a production Live calculator.
+
+======================================================================
+M. TEST RESULTS
+======================================================================
+
+  go test ./market/ -count=1     PASS
+  go test ./core/nodes/ -count=1 PASS
+  go test ./server/ -count=1 -skip TestGoldenAudit  PASS
+  go build .                    PASS
+
+  go test ./... -skip known list
+    FAIL only cmd/repair_archive_gap unused `restored` (preexisting)
+
+======================================================================
+N. POST-DELETE SEARCH
+======================================================================
+
+evaluateFalconSignalsLocked  — exists; DAG+facts only (name debt)
+falcon.Evaluate              — tests + FalconEngine method; not tick path
+falconSignals                — Frame field / FalconSnapshot zeros
+redLineCrossGreen*           — Frame fields zeroed at reset; not written on tick
+wozduxVolumeSpike*           — same + pure Detect* tests
+jurikValue / jurikIsRising   — Frame/snapshot fields; not written on tick
+validateDAGShadowLocked      — GONE
+JurikLines / WozduhRed/Green — fields + unused recordDataBusBarLocked
+
+HTF evaluateHTFOscillators   — not reintroduced
+
+======================================================================
+O. GIT STATUS
+======================================================================
+
+HTF commit: f921ee0 (ahead of origin; not pushed in that freeze unless asked)
+
+This chapter: separate commit after GREEN.
+
+Untracked audits left unstaged.
+
+======================================================================
+P. FINAL VERDICT
+======================================================================
+
+    FALCON_LIVE_ORPHAN_STREAM_GREEN
+
+HARD STOP. Next: FALCON-ORACLE-REPLACE-1 only after explicit approval.
+
+END

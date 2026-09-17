@@ -134,14 +134,8 @@ func (a *Frame) markTailCommittedLocked(klines []exchange.Kline) {
 }
 
 func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	// Shot 9F: ChartOnly skips Falcon.Evaluate; DAG always runs for Projector/WS plots.
-	if EngineAllowsStrategies() && a.falcon != nil {
-		a.falcon.RestoreState()
-		a.falconSignals = a.falcon.Evaluate(k.High, k.Low, k.Close, k.Volume)
-		if isClosed {
-			a.falcon.SaveState()
-		}
-	}
+	// FALCON-LIVE-ORPHAN-STREAM-1: production ticks do not Evaluate Falcon.
+	// Frame.falcon stays allocated for later oracle/unwire chapters.
 	a.runDAGShadowLocked(k, barIndex, isClosed)
 	a.noteRSTVFactLocked(isClosed, barIndex)
 	a.noteRSTZZFactLocked(isClosed, barIndex)
@@ -149,93 +143,7 @@ func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isCl
 }
 
 func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	if EngineAllowsStrategies() && !a.bulkReplayMode {
-		a.restoreStreamingState()
-	}
-	// DAG (and Falcon when Live) — chart delivery oxygen.
 	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
-	if !EngineAllowsStrategies() {
-		return
-	}
-
-	curRed := a.falconSignals.RedLine
-	curGreen := a.falconSignals.GreenLine
-	a.redLineCrossGreenUp = detectRedLineCrossGreenUp(a.prevFalconRed, a.prevFalconGreen, curRed, curGreen)
-	a.redLineCrossGreenDown = detectRedLineCrossGreenDown(a.prevFalconRed, a.prevFalconGreen, curRed, curGreen)
-	curBlue := a.falconSignals.BlueLine
-	a.wozduxVolumeSpikeUp = detectWozduxVolumeSpikeUp(a.prevFalconBlue, curBlue, curRed)
-	a.wozduxVolumeSpikeDown = detectWozduxVolumeSpikeDown(a.prevFalconBlue, curBlue, curRed)
-	a.prevFalconRed = curRed
-	a.prevFalconGreen = curGreen
-	a.prevFalconBlue = curBlue
-
-	curJurik := a.falconSignals.JurikRSX
-	a.jurikPrevBar = a.prevJurik
-	a.jurikValue = curJurik
-	a.jurikIsRising = curJurik > a.prevJurik
-	a.prevJurik = curJurik
-
-	a.volatilityState = a.volEngine.Evaluate(k.High, k.Low, k.Close, k.Volume, curJurik)
-
-	hl2 := (k.High + k.Low) / 2
-
-	adVal := a.ad.UpdateCandle(k.High, k.Low, k.Close)
-	a.accumulationRising, a.distributionFalling = detectADFlow(adVal, a.adHistory)
-	a.adHistory = appendADHistory(a.adHistory, adVal, adTrendLookback+1)
-
-	curAO := a.ao.Update(hl2)
-	if a.prevAOReady {
-		a.aoCrossZeroUp = a.prevAO <= 0 && curAO > 0
-		a.aoCrossZeroDown = a.prevAO >= 0 && curAO < 0
-	} else {
-		a.aoCrossZeroUp = false
-		a.aoCrossZeroDown = false
-	}
-	a.prevAO = curAO
-	a.prevAOReady = true
-	a.latestAO = curAO
-	a.stoch.UpdateCandle(k.High, k.Low, k.Close)
-
-	zzUpd := a.zigzag.UpdateCandle(k.High, k.Low, k.Close, a.falconSignals.JurikRSX)
-	a.zigZagState = ZigZagState{
-		Direction: zzUpd.Direction,
-		LastNode:  zzUpd.Node,
-	}
-
-	if a.isNewZigZagNode(zzUpd) {
-		a.geometry.onSwingNode(barIndex, zzUpd.Node)
-		if a.prevZigHas {
-			a.fibWaveStart = a.prevZigNode.Price
-			a.fibWaveEnd = zzUpd.Node.Price
-			a.fibWaveReady = true
-		}
-		a.prevZigNode = zzUpd.Node
-		a.prevZigHas = true
-	}
-
-	atr := a.volatilityState.ATR
-	if a.fibWaveReady {
-		a.fibZones = a.fibEngine.CalculatePriceZones(a.fibWaveStart, a.fibWaveEnd, k.Close, atr)
-	}
-	a.geometryState = a.geometry.updateBar(barIndex, k.High, k.Low, k.Close, k.Open, k.Volume, atr)
-	a.geometryBounceUp = a.geometryState.BounceUp
-	a.geometryBounceDown = a.geometryState.BounceDown
-	a.geometryTriangle = a.geometryState.TriangleKind != ""
-	a.recordDataBusBarLocked(barIndex, a.falconSignals)
-
-	if isClosed && !a.bulkReplayMode {
-		a.saveStreamingState()
-	}
-}
-
-func (a *Frame) isNewZigZagNode(upd indicators.ZigZagUpdate) bool {
-	if !upd.Node.Confirmed {
-		return false
-	}
-	if !a.prevZigHas {
-		return true
-	}
-	return upd.Node.Price != a.prevZigNode.Price || upd.Node.IsHigh != a.prevZigNode.IsHigh
 }
 
 func detectRedLineCrossGreenUp(prevRed, prevGreen, curRed, curGreen float64) bool {

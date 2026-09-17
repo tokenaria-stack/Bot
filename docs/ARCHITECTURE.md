@@ -319,15 +319,13 @@ Binance WS kline
   → Runtime.routeTick
   → Frame.UpdateKlineTick(k, isClosed)
   → evaluateTickLocked
-       1. restoreStreamingState()      // O(1) rollback open bar
-       2. FalconEngine.Evaluate        // gated unless EngineAllowsStrategies()
-       3. Volatility / oscillators / ZigZag / divergence / geometry
-       4. saveStreamingState()         // only if isClosed
+       1. DAG TickUpdate + RSX facts (TV / ZZ / fractal)
+       FalconEngine.Evaluate is not on this path (FALCON-LIVE-ORPHAN-STREAM-1).
 ```
 
 **Double-commit guard (Core 4.8):** `lastCommittedOpenTime` ensures one DAG commit per closed bar (root cause candidate for RSX tip spike #67).
 
-**Keep:** `market/falcon.go` until ScoreNodes (#76).
+**Keep:** `market/falcon.go` until `FALCON-ORACLE-REPLACE-1` / `FALCON-FRAME-UNWIRE-1` / `FALCON-REMOVE-1`. Allocated on Frame; not evaluated on ticks.
 
 ---
 
@@ -386,7 +384,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Numerical calculator (Live Frame). ChartOnly skips `Evaluate`. HTF isolated Falcon oscillators deleted (`FALCON-HTF-OSC-DEAD-1`). Scoring island and Falcon-era backtest packing removed. |
+| Falcon bus | `market/falcon.go` | Allocated on Frame; **not** evaluated on ChartOnly or Live ticks (`FALCON-LIVE-ORPHAN-STREAM-1`). HTF oscillators already deleted. Test/config scaffolding until unwire/remove. |
 
 **Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
@@ -797,7 +795,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 **Tip Ownership:** Native/1s History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip (ADR-010); WS OVERWRITE same open. 5s–45s HTTP: closed Replay immutable; at most one Frame forming row appended (`projectSparseSecondFormingTip`, SPARSE-ADR010-TIP-1). Frame runtime replay = closed→forming (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner via ADR-023 `timeScale.visible`; future strip via ADR-027 Decoration Plane; crosshair time label always rendered on that owner (not the hovered pane).  
-**Wozduh:** DAG bus only; Falcon Evaluate gated; legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union OR Live fast/slow closure; ChartOnly unused Frames compute none. Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
+**Wozduh:** DAG bus only; Falcon Evaluate is not on the tick path. Legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union (Live unused Frames no longer force wt11/wt22 for Falcon shadow). Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). PRESENTATION does not own computation. Layers are distinct: bar truth (always) / analytical truth (consumers) / fact materialization (consumers) / transport (subscribe) / paint (visibility). `RSXCore` does not imply TV, Fractal, or ZZ. ScoreNodes later OR into the same mask — no redesign. Do **not** reopen.
 
@@ -851,4 +849,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **FALCON-HTF-OSC-DEAD-1** implemented (audit frozen `FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND`). Next: **FALCON-LIVE-ORPHAN-STREAM-1**. Product later: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **FALCON-LIVE-ORPHAN-STREAM-1** implemented. Next: **FALCON-ORACLE-REPLACE-1**. Product later: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
