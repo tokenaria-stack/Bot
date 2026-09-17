@@ -17,7 +17,8 @@ Institutional streaming-first market analysis engine.
 - NOT an indicator collection dump
 
 Primary goal: **deterministic market state** (`market.Frame` / `Runtime`).  
-Trading decisions are secondary and live only behind `decision/` + `ENGINE_MODE=live`.
+Trading decisions are secondary. Live facts travel `exchange → market → server/web`.  
+Research opinion lives in `decision/` (DECISION-CONTRACT-1) and is not on the live wire.
 
 ## Philosophy
 
@@ -31,12 +32,20 @@ Trading decisions are secondary and live only behind `decision/` + `ENGINE_MODE=
 
 ## Import DAG (MUST)
 
+Live / factual:
+
 ```
-exchange → market → decision
+exchange → market → server / web
 ```
 
-- `market` answers "what is happening?"
-- `decision` answers "what to do?" (research opinion contract today) and MUST NOT import `market`
+Research opinion:
+
+```
+forecast → decision → decisionresearch
+```
+
+- `market` answers "what is happening?" and MUST NOT import `decision`
+- `decision` answers "what to do?" as a research opinion contract and MUST NOT import `market`
 - `exchange` MUST NOT import `market` or `decision`
 - `strategy/` is a legacy beacon (`doc.go` only) — NEVER put new code there
 - There is no `execution/` package. Future **ExecutionPolicy** is built from the first real order-sizing consumer, not a placeholder.
@@ -45,9 +54,11 @@ exchange → market → decision
 
 Current research opinion contract: `ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)`.
 
-`ScoreDecision` / `ScoreFactor` are leftover wire DTOs until SCORE-WIRE-1. There is no `ScoreEngine`.
+There is no `ScoreEngine`, no `ScoreDecision`, no `ScoreFactor`, and no BUY/SELL/WAIT decision language.
 
 Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy.
+
+`DirectionalIntent` is not TradeIntent.
 
 See `docs/ARCHITECTURE.md`.
 
@@ -73,12 +84,13 @@ store; skipping a bad tick in the UI while the Frame state stays poisoned.
 We do not blend signals into an opaque aggregate before they can be tested or shown.
 
 Every trading factor or signal MUST stay mathematically isolated so it can be unit-tested
-and rendered on the UI on its own. Use the pattern:
+and rendered on the UI on its own.
 
-`ScoreDecision` → `map[string]ScoreFactor`
+Each indicator owns only its own voice. Combining, vetoes, and lot modifiers happen later,
+as explicit named steps — never by mutating evidence payloads early.
 
-Each indicator owns only its own voice (`BUY` / `SELL` / `WAIT`). Summing, vetoes, and
-lot modifiers happen later, as explicit steps — never by mutating factor payloads early.
+DECISION-CONTRACT-1 stays `ForecastEvidence` → `ApplyDecision` → `DirectionalIntent`.
+BUY / SELL / WAIT is not current decision language.
 
 **MUST:** keep factors separable end-to-end (engine → wire → UI).
 **NEVER:** collapse multiple indicators into one unexplained number without a named factor.
@@ -145,7 +157,7 @@ the path, remove it — do not build bypasses around it.
 Design one step ahead: ship sockets (interfaces, contracts, policies) — not unused power plants.
 
 Examples of good sockets: Bar Source Seam in `exchange/ingress.go`, `Authority`,
-`IngressPolicy`, empty `ScoreDecision` types in `decision/`.
+`IngressPolicy`, DECISION-CONTRACT-1 in `decision/`.
 
 Forbidden until a real consumer exists: speculative candle FSMs, Revision/Version fields
 "for later", per-exchange settlement registries, Renko/Kagi/Volume builders with no caller.
@@ -183,6 +195,7 @@ Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second p
 
 - NEVER modify `strategy/` except the beacon `doc.go`.
 - NEVER import `market` into `decision`.
+- NEVER import `decision` into `market`.
 - NEVER import `market` / `decision` into `exchange`.
 - NEVER import `server` into `market`.
 - NEVER use `go-talib` or external TA libraries; math is streaming-first in `indicators/`.
@@ -228,7 +241,7 @@ Do NOT revive these as type / var / method names:
 
 Allowed: FE chart label field `Marker string` with `json:"marker"` (wire contract only).
 
-Canonical names: `Frame`, `Runtime`, `streaming` / `snapshot`, `ScoreDecision`, `ScoreFactor`.
+Canonical names: `Frame`, `Runtime`, `streaming` / `snapshot`, `ForecastEvidence`, `ApplyDecision`, `DirectionalIntent`.
 
 ---
 

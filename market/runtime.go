@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"trading_bot/decision"
 
 	"trading_bot/data"
 	"trading_bot/exchange"
@@ -32,7 +31,6 @@ const (
 
 // Runtime routes market data: WS ticks → TFrames → chart callbacks →
 // persistence. Trading/scoring engines were purged in Core 5.0 Phase F.
-// ScoreDecision telemetry is a zeroed wire fossil until SCORE-WIRE-1.
 // Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy.
 //
 // Timeline publish gate (thin; not an FSM):
@@ -81,7 +79,6 @@ type Runtime struct {
 }
 
 type closedBarTelemetry struct {
-	score  decision.ScoreDecision
 	regime string
 }
 
@@ -288,22 +285,6 @@ func (m *Runtime) SetPersistenceQueue(q *data.PersistenceQueue) {
 	m.mu.Lock()
 	m.persistQ = q
 	m.mu.Unlock()
-}
-
-// ScoreDecisionForTelemetry returns the last closed-bar ScoreDecision for dashboard/API consumers.
-// Contract socket: empty until a strategy engine is plugged back in (Core 5.x).
-func (m *Runtime) ScoreDecisionForTelemetry(marker *Frame) decision.ScoreDecision {
-	if m == nil || marker == nil {
-		return decision.ScoreDecision{Factors: make(map[string]decision.ScoreFactor)}
-	}
-	tf := marker.Timeframe()
-	if tf == "" {
-		tf = m.TradingTimeframe()
-	}
-	if t, ok := m.closedBarTelemetryFor(tf); ok {
-		return t.score
-	}
-	return decision.ScoreDecision{Factors: make(map[string]decision.ScoreFactor)}
 }
 
 // ClosedVolatilityRegimeForTelemetry returns the regime fixed at the last closed bar.

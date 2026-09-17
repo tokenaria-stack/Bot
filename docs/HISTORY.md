@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SCORE-WIRE-1 — remove legacy ScoreDecision wire fossils (Sep 2026) GREEN / FROZEN
+
+- Deleted `ScoreDecision` / `ScoreFactor` / `ActionType` (`BUY`/`SELL`/`WAIT`) and `decision/score_types.go`.
+- Removed empty `ScoreDecisionForTelemetry` / `closedBarTelemetry.score` and zeroed `/api/state` + WS tick score fields.
+- Kept DECISION-CONTRACT-1 (`ApplyDecision` / `ForecastEvidence` / `DecisionSpec` / `DirectionalIntent`). Did not rename DirectionalIntent. Did not add TradeIntent / ExecutionPolicy.
+- Live import DAG is `exchange → market → server/web`. Research opinion is `forecast → decision → decisionresearch`.
+- Artifact: `research/cleanup/SCORE-WIRE-1.txt`. Untracked SCORE-WIRE-CONSUMER-AUDIT-1 is evidence, not this freeze.
+
 ## SOCKET-CLEAN-1 — delete unused execution package and ScoreEngine husk (Sep 2026) GREEN / FROZEN
 
 - Deleted `execution/` (`RiskManager` / sizing had no importer). Deleted `ScoreEngine`, `DefaultScoreEngine`, unused `ScoreDecision` methods.

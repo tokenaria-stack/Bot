@@ -150,7 +150,7 @@ Implementation may evolve (e.g. Primitive instead of an HTML guide; Phase D navi
 exchange/    transport + Ingress (Bar Source Seam, Authority, merge/validate)
 data/        SQLite archive + PersistenceQueue (single runtime writer)
 market/      Frame, Runtime, streaming/snapshot, Boot, MTF, falcon bus, chart replay
-decision/    DECISION-CONTRACT-1 (ApplyDecision) + leftover ScoreDecision wire DTOs
+decision/    DECISION-CONTRACT-1 (ApplyDecision / DirectionalIntent; research only)
 core/        DAG runner + nodes (RSX, Wozduh, divergence slots)
 server/      HTTP/WS projection (HistoryProvider, Projector, columnar wire)
 web/         DDR charts (boot.js composition root)
@@ -158,7 +158,9 @@ indicators/  Streaming math (no go-talib)
 strategy/    doc.go beacon only (Phase F purged legacy code)
 ```
 
-**Import DAG:** `exchange → market → decision` (one-way). Future ExecutionPolicy is not a package yet.
+**Live import DAG:** `exchange → market → server/web`.  
+**Research opinion:** `forecast → decision → decisionresearch`.  
+`market` and `server` do not import `decision`. Future ExecutionPolicy is not a package yet.
 
 ### Timestamp units (#83)
 
@@ -196,7 +198,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | `EnsureHistoryWindow` | HIST-1: era-local REST acquire + persist for `/api/history` only |
 | `HistoryProvider` | Chart history window owner: SQLite ∪ RAM |
 | `Projector` | Slot → wire packer for live plots + columnar history |
-| `ScoreDecision` / `ScoreFactor` | Decision contracts in `decision/` |
+| `ApplyDecision` / `DirectionalIntent` | DECISION-CONTRACT-1 research opinion (`decision/`); not TradeIntent |
 | `ProjectionEpoch` | FE discard axis for TF / load / hydrate / WS |
 | `Tip Ownership` | Native/1s: Cap-closed History + ADR-010 overlay (WS OVERWRITE same forming open). 5s–45s HTTP: SPARSE-ADR010-TIP-1 append-only forming row (no Replay overwrite). Frame replay = closed→forming (ADR-016) |
 | `Bar boundary` | ADR-011: fixed TF = duration floor; calendar TF (`1w`/`1M`) = Monday / 1st-of-month UTC (`CurrentBarOpen` / `Prev` / `Next`) |
@@ -222,7 +224,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 | `Marker` (type) | `Frame` |
 | `MasterGeneral` | `Runtime` |
 | `layer2.go` | `streaming.go` + `snapshot.go` |
-| `score_types` in `strategy/` | `decision/score_types.go` |
+| `score_types` / `ScoreDecision` | deleted (SCORE-WIRE-1); do not revive |
 | active `strategy/` code | `strategy/doc.go` beacon |
 
 ---
@@ -383,7 +385,6 @@ Remaining contracts:
 | Component | Path | Role |
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
-| `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Wire fossils until SCORE-WIRE-1 (always zeroed on dashboard) |
 | `Frame` accessors | `market/` | State for future scoring |
 | Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF). ChartOnly skips `Evaluate`. Scoring island and Falcon-era backtest packing removed. |
 
@@ -695,7 +696,7 @@ Honesty: development selection/robustness only. Not end-to-end evaluation. `evid
 
 ### DECISION-CONTRACT-1 (runtime decision language)
 
-`decision.ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)` is the only v1 decision brain (`decision:target-utility-rank-gate-v1`). Intent is `UP_INTENT` / `DOWN_INTENT` / `ABSTAIN` — not an order. Input is frozen `ForecastEvidence` only (no `At`, Outcome, folds). `DecisionSpec` copies TargetSpec barrier multiples as target-space utilities (not PnL) plus two future search knobs (`min_EU`, `min_abs_rank`) with `0 < min_EU < min(U,L)` and `0 < min_rank < 1`. One quantity `EU = U*P_UP - L*P_DOWN`; `EU_DOWN ≡ -EU`. Conjunction of utility and rank gates. Invalid evidence is an error, never ABSTAIN. Does not reuse `ScoreDecision` BUY/SELL/WAIT. Selector/grid/folds/metrics/execution/holdout are later chapters.
+`decision.ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)` is the only v1 decision brain (`decision:target-utility-rank-gate-v1`). Intent is `UP_INTENT` / `DOWN_INTENT` / `ABSTAIN` — not an order. Input is frozen `ForecastEvidence` only (no `At`, Outcome, folds). `DecisionSpec` copies TargetSpec barrier multiples as target-space utilities (not PnL) plus two future search knobs (`min_EU`, `min_abs_rank`) with `0 < min_EU < min(U,L)` and `0 < min_rank < 1`. One quantity `EU = U*P_UP - L*P_DOWN`; `EU_DOWN ≡ -EU`. Conjunction of utility and rank gates. Invalid evidence is an error, never ABSTAIN. Does not reuse BUY/SELL/WAIT. Selector/grid/folds/metrics/execution/holdout are later chapters.
 
 **HARD STOP.** Frozen `b7a76b4`. Do not reopen the runtime contract. Selector/grid live in DECISION-RESEARCH-1.
 
@@ -831,7 +832,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Frame / streaming | `market/frame.go`, `streaming.go`, `snapshot.go` |
 | Runtime / Boot | `market/runtime.go`, `boot_controller.go` |
 | Timeline publish gate | `market/kline_gap.go`, `exchange/ws.go` hooks, `web/boot.js` + `ws.js` |
-| Decision | `decision/apply.go`, `decision/contract.go`; `score_types.go` wire fossils until SCORE-WIRE-1 |
+| Decision | `decision/apply.go`, `decision/contract.go` |
 | DAG | `core/runner.go`, `core/nodes/`, `market/dag_shadow.go` |
 | Falcon | `market/falcon.go` |
 | History delivery | `server/history_provider.go`, `server/columnar_history.go`, `server/wire/` |
@@ -850,4 +851,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **SOCKET-CLEAN-1 GREEN / FROZEN.** **QDRANT-REMOVE-1 GREEN / FROZEN.** Then SCORE-WIRE-1 (candidate), Marker, Falcon audit, then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **SCORE-WIRE-1 GREEN / FROZEN.** Next cleanup: **MARKER-OWNERSHIP-AUDIT-1** (read-only). Then Falcon audit. Product: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).

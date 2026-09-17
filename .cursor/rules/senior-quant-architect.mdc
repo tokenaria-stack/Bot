@@ -67,7 +67,7 @@ Answer each item. If any answer is wrong, stop and redesign.
 - [ ] Live path is streaming-safe (O(1); no batch-only `*Values` on ticks)?
 - [ ] Stateful open-bar engines are Snapshot/Restore safe?
 - [ ] Zero look-ahead on any decision MTF path?
-- [ ] Import DAG respected (`exchange → market → decision`)?
+- [ ] Import DAG respected (live: `exchange → market → server/web`; research: `forecast → decision → decisionresearch`)?
 - [ ] No unjustified hot-path allocations or second pipeline?
 - [ ] No banned vocabulary / no new name for an existing concept?
 - [ ] Change is a justified refactor (see Protocol "When NOT to refactor") — or not a refactor?

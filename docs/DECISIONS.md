@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SCORE-WIRE-1 (Sep 2026)
+
+**Context:** SCORE-WIRE-CONSUMER-AUDIT-1. After SOCKET-CLEAN-1, `ScoreDecision` / `ScoreFactor` / `ActionType` still sat on dashboard JSON as zeros with no producer and no frontend reader.
+
+**Decision:** Delete the legacy score wire island (`decision/score_types.go`, telemetry helper, MarketState/tickPayload score fields). Keep DECISION-CONTRACT-1. Keep Brain3, FeatureTape, Falcon, Marker, Wozduh, history columnar, `ScoreComponents()`, volatility `LotModifier`/`SafeStopDist`, and adjacent header debris (`BrainStatus` / `AIStatus` / `FibZones` / `VolatilityRegime` / `ChartTrade.FactorsSnapshot`). Do not invent TradeIntent or ExecutionPolicy.
+
+**Rejected:**
+- Keep `longScore: 0` / `factors: {}` for compatibility — **Reason:** INTERNAL_ONLY_SAFE; zeros are not a contract.
+- Rename `DirectionalIntent` → TradeIntent — **Reason:** research opinion ≠ order.
+- Delete BrainStatus / FibZones / VolatilityRegime in this slice — **Reason:** adjacent debris; separate audits.
+
+**Consequences:** Live DAG is `exchange → market → server/web`. Research is `forecast → decision → decisionresearch`. GET `/api/state` and WS ticks no longer emit score keys.
+
+---
+
 ## SOCKET-CLEAN-1 (Sep 2026)
 
 **Context:** SOCKET-CONSUMER-AUDIT-1. `execution/` had no importer. `ScoreEngine` was an empty struct. `ApplyDecision` is the real research contract. `ScoreDecision` still sits on dashboard JSON.
@@ -973,7 +988,7 @@ Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, d
 
 **Context:** Legacy ScoreEngine / trade FSM / matrix / risk settings blocked a clean decision layer and confused AI/humans.
 
-**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `falcon.go`). Default `ENGINE_MODE=ChartOnly`. *(Phase F also listed `vector_db/` and `execution/` as keeps; **QDRANT-REMOVE-1** and **SOCKET-CLEAN-1** later deleted those unused packages.)*
+**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `falcon.go`). Default `ENGINE_MODE=ChartOnly`. *(Phase F also listed `vector_db/` and `execution/` as keeps; **QDRANT-REMOVE-1** and **SOCKET-CLEAN-1** later deleted those unused packages. **SCORE-WIRE-1** later deleted `score_types.go`.)*
 
 **Rejected:**
 - Rebranding legacy modules in place — **Reason:** keeps lie-names and dead paths; Delete > Deprecate.
@@ -987,7 +1002,7 @@ Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, d
 
 **Context:** Names `Marker` / `MasterGeneral` / `Layer2` / `Analyst` lied about responsibilities and invited wrong imports.
 
-**Decision:** `Frame` + `Runtime` in `market/`; contracts in `decision/`; `strategy/` = `doc.go` beacon. Import DAG `exchange → market → decision` (execution package removed SOCKET-CLEAN-1).
+**Decision:** `Frame` + `Runtime` in `market/`; contracts in `decision/`; `strategy/` = `doc.go` beacon. Live import DAG `exchange → market → server/web`. Research opinion `forecast → decision → decisionresearch` (SCORE-WIRE-1). `decision` still MUST NOT import `market`.
 
 **Rejected:**
 - Keeping types in `strategy/` with new names only — **Reason:** package boundary still wrong; museum code invites revival.

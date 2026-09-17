@@ -5,7 +5,6 @@ import (
 
 	"trading_bot/core"
 	"trading_bot/core/nodes"
-	"trading_bot/decision"
 	"trading_bot/exchange"
 	"trading_bot/market"
 	"trading_bot/server/wire"
@@ -27,7 +26,7 @@ func TestDagHeaderFromFrame(t *testing.T) {
 		t.Fatalf("signal %+v", h)
 	}
 
-	state := &MarketState{Factors: map[string]decision.ScoreFactor{"x": {}}}
+	state := &MarketState{}
 	applyDAGHeaderToMarketState(state, h)
 	if state.Jurik != 55.5 {
 		t.Fatalf("state.Jurik=%v", state.Jurik)
@@ -40,7 +39,7 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 	market.SetEngineMode(market.EngineModeChartOnly)
 
 	marker := newTestDAGMarker(80)
-	state := &MarketState{Factors: map[string]decision.ScoreFactor{"legacy": {}}}
+	state := &MarketState{}
 	reg, err := ui_config.BuildUIRegistry()
 	if err != nil {
 		t.Fatal(err)
@@ -56,40 +55,14 @@ func TestEnrichFromDAG_ChartOnlyZerosScore(t *testing.T) {
 	if state.Jurik != wantJurik {
 		t.Fatalf("Jurik=%v want DAG SlotJurikRSX=%v", state.Jurik, wantJurik)
 	}
-	if state.LongScore != 0 || state.ShortScore != 0 {
-		t.Fatalf("ChartOnly scores must be zero, got L=%d S=%d", state.LongScore, state.ShortScore)
-	}
-	if state.RawAction != "" || state.FinalAction != "" || state.IsVetoed {
-		t.Fatal("ChartOnly must not emit action/veto telemetry")
-	}
 	if state.FibZones != nil {
 		t.Fatal("FibZones must be nil")
-	}
-	if len(state.Factors) != 0 {
-		t.Fatalf("Factors must be empty, got %v", state.Factors)
 	}
 	if len(state.Plots) == 0 {
 		t.Fatal("expected tip plots from projector")
 	}
 	if _, ok := state.Plots["line_rsx"]; !ok {
 		t.Fatalf("expected line_rsx in plots, got %v", state.Plots)
-	}
-}
-
-func TestEnrichFromDAG_LiveLongScoreStaysZero(t *testing.T) {
-	prev := market.GetEngineMode()
-	t.Cleanup(func() { market.SetEngineMode(prev) })
-	market.SetEngineMode(market.EngineModeLive)
-
-	marker := newTestDAGMarker(80)
-	state := &MarketState{}
-	d := &DashboardServer{}
-	d.enrichFromDAG(state, marker)
-	if state.LongScore != 0 {
-		t.Fatalf("LongScore=%d want 0", state.LongScore)
-	}
-	if state.ShortScore != 0 {
-		t.Fatal("ShortScore must stay 0")
 	}
 }
 

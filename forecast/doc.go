@@ -25,7 +25,8 @@
 //
 // # Position in the import DAG
 //
-// The existing Jeweler DAG is exchange → market → decision.
+// The live Jeweler DAG is exchange → market → server/web.
+// Research opinion is forecast → decision → decisionresearch.
 // package forecast imports indicators for ATRSpec ownership (ATR-TRUTH-1)
 // and data.NextBarOpen / CurrentBarOpen for primary-gap continuity (calendar-safe).
 // It still imports NOTHING from exchange/market/decision.

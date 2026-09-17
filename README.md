@@ -36,7 +36,7 @@ go run .               # dashboard :8080
 exchange/     transport + Ingress (Authority, merge)
 data/         SQLite + PersistenceQueue
 market/       Frame, Runtime, streaming/snapshot, Boot, falcon bus
-decision/     DECISION-CONTRACT-1 + leftover ScoreDecision wire DTOs
+decision/     DECISION-CONTRACT-1 (research opinion; not live wire)
 indicators/   streaming math (no go-talib)
 core/         DAG runner + nodes
 server/       HTTP/WS projection
@@ -44,7 +44,8 @@ web/          DDR charts (boot.js)
 strategy/     doc.go beacon only
 ```
 
-**Import DAG:** `exchange → market → decision`
+**Live import DAG:** `exchange → market → server/web`  
+**Research opinion:** `forecast → decision → decisionresearch`
 
 ## Status
 

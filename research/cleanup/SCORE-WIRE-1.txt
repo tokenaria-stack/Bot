@@ -1,0 +1,329 @@
+SCORE-WIRE-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent HEAD: 3830496 (SOCKET-CLEAN-1)
+Basis: SCORE-WIRE-CONSUMER-AUDIT-1 → SCORE_WIRE_AUDIT_GREEN_DELETE_RECOMMENDED
+User approval: SCORE-WIRE-1 exact slice
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Deleted the proven-dead legacy ScoreDecision wire island only.
+
+Kept DECISION-CONTRACT-1, Brain3, FeatureTape, Falcon, Marker, Wozduh,
+history columnar, plots/Jurik/annotations, ui_config.ScoreComponents(),
+market.VolatilityState.LotModifier / SafeStopDist, and adjacent header
+debris (BrainStatus / AIStatus / FibZones / VolatilityRegime /
+ChartTrade.FactorsSnapshot).
+
+Did not invent TradeIntent, ExecutionPolicy, or a generic learner socket.
+Did not rename DirectionalIntent.
+
+GET /api/state and WS ticks no longer emit the removed score keys.
+Zeros were not kept as fake compatibility.
+
+======================================================================
+B. FINAL CONSUMER SAFETY CHECK
+======================================================================
+
+Re-run against CURRENT HEAD 3830496 before edit:
+
+  ScoreDecision / ScoreFactor / ActionType / BuyAction / SellAction /
+  WaitAction / ScoreDecisionForTelemetry
+
+  no new production producer or consumer since the audit.
+
+Frontend readers of longScore / shortScore / rawAction / finalAction /
+factors / isVetoed / vetoReason: still ZERO.
+
+Verdict: proceed. Not SCORE_WIRE_BLOCKED_NEW_CONSUMER.
+
+======================================================================
+C. TYPES DELETED
+======================================================================
+
+  decision/score_types.go (file deleted)
+
+  ActionType
+  BuyAction   ("BUY")
+  SellAction  ("SELL")
+  WaitAction  ("WAIT")
+  ScoreFactor
+  ScoreDecision
+
+WinningScore / HasRawSignal / HasFinalSignal were already gone
+(SOCKET-CLEAN-1) and were not revived.
+
+No replacement DTO (ScoreDTO / DecisionDTO / TradeIntent / BrainOutput /
+SignalDecision).
+
+======================================================================
+D. TELEMETRY CLEANUP
+======================================================================
+
+Removed:
+
+  Runtime.ScoreDecisionForTelemetry
+  closedBarTelemetry.score
+  market → decision import
+
+Kept:
+
+  SeedClosedBarTelemetry (MTF sync; still does not write regime)
+  closedBarTelemetry.regime
+  ClosedVolatilityRegimeForTelemetry
+
+closedBarTelemetry is now { regime string } only.
+
+Test rewrite (correction vs prompt):
+
+  Deleted TestScoreDecisionForTelemetryFrozen_Shot9B (ZERO_FOSSIL_TEST).
+  Did NOT delete market/runtime_telemetry_test.go.
+  Replaced the fossil with TestSeedClosedBarTelemetryDoesNotMutateRegime
+  so SeedClosedBarTelemetry's read-only regime law stays tested.
+
+======================================================================
+E. REST SCHEMA CHANGE
+======================================================================
+
+GET /api/state (MarketState) no longer includes:
+
+  longScore
+  shortScore
+  rawAction
+  finalAction
+  isVetoed
+  vetoReason
+  factors
+
+Not retained as longScore:0 / factors:{}.
+
+INTERNAL_ONLY_SAFE / LOW_INTERNAL_SCHEMA_CLEANUP. No public OpenAPI
+promise of those keys.
+
+/api/history was not modified and still has no these fields.
+
+======================================================================
+F. WS SCHEMA CHANGE
+======================================================================
+
+tickPayload no longer includes (were omitempty; normally absent):
+
+  longScore
+  shortScore
+  rawAction
+  finalAction
+  isVetoed
+  vetoReason
+  factors
+
+Removed empty map literals and explicit zeros whose only job was those
+fields (RouteChartTick Factors, enrichFromDAG score zeros,
+applyDAGHeaderToTick score zeros).
+
+Kept tick: OHLC, time, timeframe, plots, annotations, marker,
+BrainStatus / AIStatus / VolatilityRegime (still zeroed, out of scope).
+
+======================================================================
+G. FRONTEND SAFETY
+======================================================================
+
+web/ search after delete: zero readers/stores/renders for the removed
+keys.
+
+No frontend source change (correct state = absence).
+No compatibility defaults added.
+
+Browser automation was not used this chapter. Safety is static consumer
+proof + Go server tests (DAG plots/Jurik). No new JS score-field errors
+are possible from removed keys that were never read.
+
+======================================================================
+H. DECISION-CONTRACT-1 SAFETY
+======================================================================
+
+Unchanged (git name-only vs parent):
+
+  decision/contract.go
+  decision/apply.go
+  decision/contract_test.go
+
+ApplyDecision / ForecastEvidence / DecisionSpec / DirectionalIntent
+untouched. DirectionalIntent was NOT renamed.
+
+Isolation test still bans BUY/SELL/WAIT / ScoreDecision / LotMod /
+StopDist strings in apply.go. Ban remains meaningful as a vocabulary
+law even though the types are gone.
+
+decision/doc.go comment-only: live vs research DAG.
+
+======================================================================
+I. BRAIN3 / FEATURETAPE SAFETY
+======================================================================
+
+brain3/ and FeatureTape paths not edited.
+go test ./brain3/ PASS.
+
+======================================================================
+J. CURRENT VOLATILITY SAFETY
+======================================================================
+
+market/volatility.go LotModifier and SafeStopDist untouched
+(git name-only vs parent empty).
+
+These are NOT ScoreDecision.LotMod / StopDist.
+
+======================================================================
+K. IMPORT DAG RESULT
+======================================================================
+
+Proven after cut:
+
+  market → decision   ZERO
+  server → decision   ZERO
+
+Remaining decision importers (research only):
+
+  decisionresearch/
+  cmd/research_decision_research/
+
+Truthful post-cut ownership:
+
+  LIVE / FACTUAL
+    exchange → market → server / web
+
+  RESEARCH OPINION
+    forecast → decision → decisionresearch
+
+  Law: Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy
+  DirectionalIntent = research opinion, not TradeIntent.
+
+======================================================================
+L. ADJACENT DEBRIS LEFT INTENTIONALLY
+======================================================================
+
+Not forgotten — out of SCORE-WIRE-1 scope:
+
+  BrainStatus
+  AIStatus
+  FibZones
+  VolatilityRegime
+  ChartTrade.FactorsSnapshot
+
+Also kept: ui_config.ScoreComponents() (empty registrar = no score overlay).
+
+Next cleanup chapter is MARKER-OWNERSHIP-AUDIT-1 (read-only), not this debris.
+
+======================================================================
+M. TEST RESULTS
+======================================================================
+
+  go test ./decision/ -count=1                         PASS
+  go test ./market/ -count=1                           PASS  (unsandboxed)
+  go test ./server/ -count=1 -skip TestGoldenAudit     PASS  (unsandboxed)
+  go build .                                           PASS
+
+  go test ./... -count=1 -skip 'TestGoldenAudit|GoldenAudit'
+
+    PASS: brain3, core, data, decision, decisionresearch, exchange,
+          forecast, market, server, server/wire, ui_config, …
+
+    PREEXISTING (not SCORE-WIRE-1):
+      cmd/repair_archive_gap unused `restored`   COMPILE DEBT
+      indicators /tmp RSX CSVs missing           ENVIRONMENT / FIXTURE
+
+Sandbox note: first ./market run in sandbox failed opening
+research/tapes (.cursorignore). Re-run with full permissions PASS.
+Not a SCORE-WIRE regression.
+
+No JS chart tests run (no FE change; no payload fixture in web/).
+
+======================================================================
+N. POST-DELETE SEARCH
+======================================================================
+
+Active Go:
+
+  ScoreDecision              ZERO
+  ScoreFactor                ZERO
+  ActionType / Buy/Sell/Wait ZERO
+  ScoreDecisionForTelemetry  ZERO
+  longScore JSON tags        ZERO
+  market → decision          ZERO
+  server → decision          ZERO
+
+Allowed survivors:
+
+  decision/contract_test.go  ban list (isolation law)
+  jeweler-protocol           "there is no ScoreDecision" (current law)
+  HISTORY / DECISIONS / OPEN_DEBTS / ARCHITECTURE rename table
+  research/cleanup audits    untracked evidence
+  SOCKET-CLEAN-1 history     "kept until SCORE-WIRE-1"
+
+======================================================================
+O. GIT STATUS
+======================================================================
+
+Parent: 3830496 SOCKET-CLEAN-1
+
+Staged for this commit (intended):
+
+  decision/score_types.go (delete)
+  decision/doc.go
+  market/runtime.go
+  market/runtime_telemetry_test.go
+  server/webserver.go
+  server/dag_header_test.go
+  forecast/doc.go
+  README.md MEMORY.md
+  docs/ARCHITECTURE.md DECISIONS.md HISTORY.md OPEN_DEBTS.md
+  .cursor/rules/jeweler-protocol.mdc
+  .cursor/rules/senior-quant-architect.mdc
+  research/cleanup/SCORE-WIRE-1.txt
+
+NOT staged:
+
+  research/cleanup/ARTIFACT-INDEX-AUDIT-1.txt
+  research/cleanup/QDRANT-CONSUMER-AUDIT-1.txt
+  research/cleanup/SOCKET-CONSUMER-AUDIT-1.txt
+  research/cleanup/SCORE-WIRE-CONSUMER-AUDIT-1.txt
+
+======================================================================
+P. FINAL VERDICT
+======================================================================
+
+SCORE_WIRE_GREEN
+
+HARD STOP. Next cleanup: MARKER-OWNERSHIP-AUDIT-1 (read-only).
+Do not start Falcon, Wozduh, or dashboard-debris deletes.
+
+======================================================================
+CORRECTIONS VS THE IMPLEMENTATION PROMPT
+======================================================================
+
+1. market/runtime_telemetry_test.go was not deleted. The fossil Shot 9B
+   helper test is gone; SeedClosedBarTelemetry regime non-mutation remains.
+   Deleting the whole file would have dropped a real law for a kept function.
+
+2. applyDAGHeaderToTick originally zeroed AIStatus and VolatilityRegime
+   next to score fields. First edit accidentally dropped those zeros with
+   the score island. Restored immediately. Adjacent header sockets stay
+   zeroed and in-scope-out.
+
+3. TestEnrichFromDAG_ChartOnlyZerosScore kept (renamed behavior inside):
+   Jurik/plots + FibZones nil. FibZones field itself was not deleted.
+   TestEnrichFromDAG_LiveLongScoreStaysZero deleted (LongScore-only fossil).
+
+4. Import DAG repair went into forecast/doc.go and ADR-005, not only
+   jeweler/ARCHITECTURE. Those files still claimed
+   `exchange → market → decision` as the live Jeweler DAG.
+
+5. Rule 2 no longer cites ScoreDecision → map[ScoreFactor] as a current
+   socket. Isolation law kept; BUY/SELL/WAIT removed as current language.
+
+6. No live dashboard/WS browser smoke. FE had zero readers; report relies
+   on static proof + server DAG tests.
+
+7. go test ./... still hits known unrelated debts (repair_archive_gap,
+   /tmp RSX CSVs). Not fixed.

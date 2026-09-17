@@ -20,7 +20,6 @@ import (
 	"trading_bot/core"
 	"trading_bot/core/nodes"
 	"trading_bot/data"
-	"trading_bot/decision"
 	"trading_bot/domain"
 	"trading_bot/exchange"
 	"trading_bot/market"
@@ -105,13 +104,6 @@ type MarketState struct {
 	UpdatedAt        int64                                `json:"updatedAt"`
 	VolatilityRegime string                               `json:"volatilityRegime"`
 	Jurik            float64                              `json:"jurik"`
-	LongScore        int                                  `json:"longScore"`
-	ShortScore       int                                  `json:"shortScore"`
-	RawAction        string                               `json:"rawAction,omitempty"`
-	FinalAction      string                               `json:"finalAction,omitempty"`
-	IsVetoed         bool                                 `json:"isVetoed,omitempty"`
-	VetoReason       string                               `json:"vetoReason,omitempty"`
-	Factors          map[string]decision.ScoreFactor      `json:"factors"`
 	BrainStatus      string                               `json:"brainStatus"`
 	AIStatus         string                               `json:"aiStatus"`
 	Candles          []ChartCandle                        `json:"candles"`
@@ -198,28 +190,21 @@ type wsEnvelope struct {
 }
 
 type tickPayload struct {
-	Timeframe        string                          `json:"timeframe,omitempty"`
-	Time             int64                           `json:"time"`
-	Open             float64                         `json:"open"`
-	High             float64                         `json:"high"`
-	Low              float64                         `json:"low"`
-	Close            float64                         `json:"close"`
-	Volume           float64                         `json:"volume,omitempty"`
-	Jurik            float64                         `json:"jurik,omitempty"`
-	RSX              float64                         `json:"rsx,omitempty"`
-	RSXSignal        float64                         `json:"rsx_signal,omitempty"`
-	LongScore        int                             `json:"longScore,omitempty"`
-	ShortScore       int                             `json:"shortScore,omitempty"`
-	RawAction        string                          `json:"rawAction,omitempty"`
-	FinalAction      string                          `json:"finalAction,omitempty"`
-	IsVetoed         bool                            `json:"isVetoed,omitempty"`
-	VetoReason       string                          `json:"vetoReason,omitempty"`
-	Factors          map[string]decision.ScoreFactor `json:"factors,omitempty"`
-	BrainStatus      string                          `json:"brainStatus,omitempty"`
-	AIStatus         string                          `json:"aiStatus,omitempty"`
-	IsClosed         bool                            `json:"isClosed,omitempty"`
-	VolatilityRegime string                          `json:"volatilityRegime,omitempty"`
-	Plots            map[string]float64              `json:"plots,omitempty"`
+	Timeframe        string             `json:"timeframe,omitempty"`
+	Time             int64              `json:"time"`
+	Open             float64            `json:"open"`
+	High             float64            `json:"high"`
+	Low              float64            `json:"low"`
+	Close            float64            `json:"close"`
+	Volume           float64            `json:"volume,omitempty"`
+	Jurik            float64            `json:"jurik,omitempty"`
+	RSX              float64            `json:"rsx,omitempty"`
+	RSXSignal        float64            `json:"rsx_signal,omitempty"`
+	BrainStatus      string             `json:"brainStatus,omitempty"`
+	AIStatus         string             `json:"aiStatus,omitempty"`
+	IsClosed         bool               `json:"isClosed,omitempty"`
+	VolatilityRegime string             `json:"volatilityRegime,omitempty"`
+	Plots            map[string]float64 `json:"plots,omitempty"`
 	// Markers come from IndicatorFactEvent projection.
 	Marker      string            `json:"marker,omitempty"`
 	Annotations []wire.Annotation `json:"annotations,omitempty"`
@@ -375,7 +360,6 @@ func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle,
 		Plots:       plots,
 		Marker:      marker,
 		Annotations: anns,
-		Factors:     map[string]decision.ScoreFactor{},
 	}
 	applyDAGHeaderToTick(&payload, hdr)
 	d.routeTick(timeframe, wsEnvelope{Type: "tick", Data: payload})
@@ -462,8 +446,8 @@ func (d *DashboardServer) sessionTrades() []ChartTrade {
 }
 
 // sessionTradesForChart returns executed trade markers for the price chart.
-// Telemetry-only signals (FinalAction) never appear here; orphan entry markers at
-// the tail are dropped when the master state machine is IDLE (e.g. failed live order).
+// Orphan entry markers at the tail are dropped when the master state machine
+// is IDLE (e.g. failed live order).
 func (d *DashboardServer) sessionTradesForChart() []ChartTrade {
 	trades := d.sessionTrades()
 	if len(trades) == 0 {
@@ -1143,7 +1127,6 @@ func (d *DashboardServer) buildMarketState(ctx context.Context, spec TimeframeSp
 		SandboxMode:      d.sandboxMode,
 		Candles:          []ChartCandle{},
 		Oscillators:      []ChartOscillator{},
-		Factors:          map[string]decision.ScoreFactor{},
 	}
 	if !tailPoll && candleLimit > stateTailPollLimit {
 		if err := requestCtxErr(ctx); err != nil {
@@ -1203,7 +1186,6 @@ func (d *DashboardServer) buildNavigatorOnlyState(ctx context.Context, spec Time
 		UpdatedAt:        time.Now().Unix(),
 		Candles:          []ChartCandle{},
 		Oscillators:      []ChartOscillator{},
-		Factors:          map[string]decision.ScoreFactor{},
 		Navigators: buildNavigatorsFromSeries(
 			ctx, d.symbol, klines, rsxVals, wozVals, trimBars, binanceInterval, d.getLiveNavigatorPanes(), d.htfProvider,
 		),
@@ -1525,14 +1507,8 @@ func (d *DashboardServer) enrichFromDAG(state *MarketState, tf *market.Frame) {
 		state.Plots = d.projector.BuildTickJSON(dagFrame)
 	}
 
-	// Phase F: ScoreEngine / Veto / Fib / streaming regime purged — JSON sockets stay zeroed.
-	state.LongScore = 0
-	state.ShortScore = 0
-	state.RawAction = ""
-	state.FinalAction = ""
-	state.IsVetoed = false
-	state.VetoReason = ""
-	state.Factors = map[string]decision.ScoreFactor{}
+	// Phase F: ScoreEngine / Veto / Fib / streaming regime purged — leftover
+	// header sockets stay zeroed (BrainStatus/AIStatus/FibZones/VolatilityRegime).
 	state.BrainStatus = ""
 	state.AIStatus = ""
 	state.FibZones = nil
@@ -1575,19 +1551,10 @@ func applyDAGHeaderToTick(p *tickPayload, h dagHeader) {
 	p.Jurik = h.Jurik
 	p.RSX = h.RSX
 	p.RSXSignal = h.RSXSignal
-	// Wire purge Stage 5: no Falcon Red/Green/Blue / ScoreEngine fields on tick.
-	p.LongScore = 0
-	p.ShortScore = 0
-	p.RawAction = ""
-	p.FinalAction = ""
-	p.IsVetoed = false
-	p.VetoReason = ""
+	// Wire purge Stage 5: no Falcon Red/Green/Blue on tick.
 	p.BrainStatus = ""
 	p.AIStatus = ""
 	p.VolatilityRegime = ""
-	if p.Factors == nil {
-		p.Factors = map[string]decision.ScoreFactor{}
-	}
 }
 
 func trimAnnotations(annotations []market.ChartAnnotation, trim int, klines []exchange.Kline) []market.ChartAnnotation {

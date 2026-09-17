@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **SOCKET-CLEAN-1 GREEN / FROZEN** — deleted unused `execution/` and empty `ScoreEngine`. **QDRANT-REMOVE-1** / **INDEX-FOREST-1** frozen. Next CODE candidate: **SCORE-WIRE-1**, then Marker, Falcon audit, **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** parked. Untracked: ARTIFACT / QDRANT-CONSUMER / SOCKET-CONSUMER audits (Git policy later).
+2. **SCORE-WIRE-1 GREEN / FROZEN** — deleted leftover `ScoreDecision` / `ScoreFactor` / `ActionType` wire. **SOCKET-CLEAN-1** / **QDRANT-REMOVE-1** / **INDEX-FOREST-1** frozen. Next cleanup: **MARKER-OWNERSHIP-AUDIT-1** (read-only), then Falcon audit, **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** parked. Untracked: ARTIFACT / QDRANT-CONSUMER / SOCKET-CONSUMER / SCORE-WIRE-CONSUMER audits (Git policy later).
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -358,7 +358,7 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
 | **35** | DAG → TradeManager wiring | ⏸ | Re-enable only with `ENGINE_MODE=live` + new strategies |
-| **36** | TradeIntent wire contract | ⏸ | Type does not exist. `ScoreDecision` is a wire fossil (SCORE-WIRE-1), not TradeIntent. Do not rename `DirectionalIntent`. |
+| **36** | TradeIntent wire contract | ⏸ | Type does not exist. `ScoreDecision` was deleted SCORE-WIRE-1. Do not rename `DirectionalIntent` → TradeIntent. |
 | **37** | Execution gate `isClosed` only | ⏸ | TickLiveCh frozen in ChartOnly |
 | **38** | Risk/settings SSOT parity | ⏸ | `execution.RiskManager` deleted SOCKET-CLEAN-1; revisit with first real ExecutionPolicy consumer |
 
