@@ -280,7 +280,6 @@ func FormatVolumeIngest1(z VolumeIngestReport) string {
 	b.WriteString("  repair_volumes: REST v via MAX; not used as type converter in this chapter\n\n")
 	b.WriteString("C. CONSUMER TABLE (formulas unchanged)\n")
 	b.WriteString("  Wozduh SlotVolume <- Kline.Volume  assumed BaseVolume (next chapter binds it)\n")
-	b.WriteString("  Falcon Evaluate volume              assumed BaseVolume\n")
 	b.WriteString("  geometry CheckBreakout              assumed BaseVolume\n")
 	b.WriteString("  VolumeWeightedEMA                   assumed BaseVolume\n")
 	b.WriteString("  chart / FeatureTape bar copies      assumed BaseVolume\n")

@@ -32,9 +32,6 @@ func (a *Frame) resetStreamingEngines() {
 	a.latestAO = 0
 	a.fibZones = nil
 	a.fibWaveReady = false
-	a.prevFalconRed = 0
-	a.prevFalconGreen = 0
-	a.prevFalconBlue = 0
 	a.redLineCrossGreenUp = false
 	a.redLineCrossGreenDown = false
 	a.prevJurik = 0
@@ -127,15 +124,11 @@ func (a *Frame) markTailCommittedLocked(klines []exchange.Kline) {
 	a.lastCommittedOpenTime = klines[len(klines)-1].OpenTime
 }
 
-func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isClosed bool) {
+func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
 	a.runDAGShadowLocked(k, barIndex, isClosed)
 	a.noteRSTVFactLocked(isClosed, barIndex)
 	a.noteRSTZZFactLocked(isClosed, barIndex)
 	a.noteRSTFractalFactLocked(isClosed, barIndex)
-}
-
-func (a *Frame) evaluateTickLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
 }
 
 func detectRedLineCrossGreenUp(prevRed, prevGreen, curRed, curGreen float64) bool {

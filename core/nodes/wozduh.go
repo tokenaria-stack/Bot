@@ -7,7 +7,7 @@ import (
 	"trading_bot/indicators"
 )
 
-// Wozduh Pine periods — must stay bit-identical to market/falcon.go defaults.
+// Wozduh Pine periods — SSOT for WozduhNode (RSIVol_2graf.02).
 const (
 	wozduhChannelPeriod = 24
 	wozduhChannelPhi    = 1.6185

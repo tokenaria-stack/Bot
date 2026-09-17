@@ -320,12 +320,11 @@ Binance WS kline
   → Frame.UpdateKlineTick(k, isClosed)
   → evaluateTickLocked
        1. DAG TickUpdate + RSX facts (TV / ZZ / fractal)
-       FalconEngine is not constructed or evaluated on this path (FALCON-FRAME-UNWIRE-1).
 ```
 
 **Double-commit guard (Core 4.8):** `lastCommittedOpenTime` ensures one DAG commit per closed bar (root cause candidate for RSX tip spike #67).
 
-**Keep:** `market/falcon.go` until `FALCON-REMOVE-1`. File remains; Frame no longer owns or constructs FalconEngine.
+FalconEngine is retired (`FALCON-REMOVE-1`). Canonical numbers live on `indicators` + DAG nodes + facts.
 
 ---
 
@@ -384,7 +383,6 @@ Remaining contracts:
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon file | `market/falcon.go` | Temporary leftover until `FALCON-REMOVE-1`. No Frame field, no production/research construction, no Evaluate on ticks. |
 
 **Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
@@ -765,7 +763,7 @@ Walk-forward fold models exist only to produce honest out-of-fold predictions fo
 
 v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built here: Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Reliability, TARGET-RESOLUTION-2 (separate 15m→1s TargetSpec). REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path. Analogue-memory / vector retrieval is **not** a Forecast v1 concern (`ANALOGUE-MEMORY-RESEARCH-1`, parked).
 
-**Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, Falcon, old scores, strategies, execution, backtest, Decision.
+**Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, old scores, strategies, execution, backtest, Decision.
 
 ---
 
@@ -795,7 +793,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 **Tip Ownership:** Native/1s History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip (ADR-010); WS OVERWRITE same open. 5s–45s HTTP: closed Replay immutable; at most one Frame forming row appended (`projectSparseSecondFormingTip`, SPARSE-ADR010-TIP-1). Frame runtime replay = closed→forming (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner via ADR-023 `timeScale.visible`; future strip via ADR-027 Decoration Plane; crosshair time label always rendered on that owner (not the hovered pane).  
-**Wozduh:** DAG bus only; Frame does not own Falcon. Legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union (Live unused Frames no longer force wt11/wt22 for Falcon shadow). Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
+**Wozduh:** DAG bus only. Legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union (Live unused Frames no longer force wt11/wt22 for Falcon shadow). Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). PRESENTATION does not own computation. Layers are distinct: bar truth (always) / analytical truth (consumers) / fact materialization (consumers) / transport (subscribe) / paint (visibility). `RSXCore` does not imply TV, Fractal, or ZZ. ScoreNodes later OR into the same mask — no redesign. Do **not** reopen.
 
@@ -832,7 +830,6 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Timeline publish gate | `market/kline_gap.go`, `exchange/ws.go` hooks, `web/boot.js` + `ws.js` |
 | Decision | `decision/apply.go`, `decision/contract.go` |
 | DAG | `core/runner.go`, `core/nodes/`, `market/dag_shadow.go` |
-| Falcon leftover | `market/falcon.go` (unused until `FALCON-REMOVE-1`) |
 | History delivery | `server/history_provider.go`, `server/columnar_history.go`, `server/wire/` |
 | Frontend | `web/boot.js`, `columnar-store.js`, `chart-compositor.js`, `ui/viewport-manager.js` |
 | Strategy beacon | `strategy/doc.go` |

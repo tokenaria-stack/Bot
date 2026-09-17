@@ -328,7 +328,7 @@ func validOHLC(open, high, low, closePrice float64) bool {
 // RouteChartTick delivers an atomic chart frame (OHLCV + DAG plots + header tip) to
 // clients subscribed to this timeframe only (Core 4.2 Timeframe-pure Transport).
 // Contract: every live tick carries plots when the Frame DAG frame is available — never price-only.
-// Header Jurik/Wozduh come from DAG slots only — never FalconSnapshot.
+// Header Jurik/Wozduh come from DAG slots only.
 func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle, isClosed bool, dagFrame *core.TickFrame) {
 	chart, ok := ChartCandleFromDomain(candle)
 	if !ok {

@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-REMOVE-1 — retire Falcon engine (Sep 2026)
+
+- Deleted ownerless `market/falcon.go` (FalconEngine, DetectVolCross, duplicate Wozduh).
+- Removed `prevFalcon*` snapshot debris. Inlined `evaluateFalconSignalsLocked` into `evaluateTickLocked`.
+- Canonical RSX/Wozduh/DAG/facts unchanged. `ApplyBacktestRSXConfig` name kept.
+- Artifact: `research/cleanup/FALCON-REMOVE-1.txt`.
+
 ## FALCON-FRAME-UNWIRE-1 — remove Falcon from Frame ownership (Sep 2026)
 
 - Deleted `Frame.falcon` / `falconSignals`, `NewFalconEngine` from `resetStreamingEngines`, and Falcon `SetRSX*` from `ApplyBacktestRSXConfig` / `UpdateRSXScanConfig`.

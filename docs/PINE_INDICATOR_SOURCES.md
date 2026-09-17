@@ -6,7 +6,7 @@
 | # | Индикатор | Pine shorttitle | Go-реализация | Статус |
 |---|-----------|-----------------|---------------|--------|
 | 1 | Jurik RSX (everget) | `RSX` | `indicators/jurik.go`, `strategy/rsx_chart.go` | ✅ core ported |
-| 2 | RSIVolume Wozduh | `RSIVol_2graf.02` | `strategy/falcon.go`, `indicators/rsi.go`, `indicators/ema.go` | ✅ core ported |
+| 2 | RSIVolume Wozduh | `RSIVol_2graf.02` | `core/nodes/wozduh.go`, `indicators/rsi.go`, `indicators/ema.go` | ✅ core ported |
 | 3 | Trendline Breakout Navigator | `LuxAlgo - Trendline Breakout Navigator` | `indicators/geometry.go`, `strategy/geometry_tracker.go` (partial) | 🔜 planned |
 
 **Сырые `.pine` файлы:** каталог [`pine/`](../pine/) (полные исходники для diff и портирования).
@@ -198,9 +198,9 @@ plotshape(piv ? na : shrt ? (pivotl ? min_rsi - 3 : na) : na, location=location.
 
 **TradingView:** `study(title="RSIVolume_2graf.02[wozdux]", shorttitle="RSIVol_2graf.02")`  
 **Автор:** @wozdux  
-**Назначение в боте:** панель Wozduh / Falcon — объёмный RSI, каналы, кроссы, вспомогательные линии для скоринга.
+**Назначение в боте:** панель Wozduh — объёмный RSI, каналы, кроссы, вспомогательные линии.
 
-### Ключевые входы Pine → Go (`strategy/falcon.go`)
+### Ключевые входы Pine → Go (`core/nodes/wozduh.go`)
 
 | Pine variable | Default | Go field / const |
 |---------------|---------|------------------|
@@ -372,7 +372,7 @@ fill(vv, vv0, color=yellow, transp=80)
 
 ### Заметки для сверки с Go
 
-- **Объёмная цена:** `VWEMA(price) = EMA(volume×price)/EMA(volume)` — `indicators` VWEMA / `FalconEngine`.
+- **Объёмная цена:** `VWEMA(price) = EMA(volume×price)/EMA(volume)` — `indicators` VWEMA / `WozduhNode`.
 - **Голубая/синяя пара:** `rsi11 = rsi(aaa1, lenvol)`, `wt11 = ema(rsi11, 12)`, `wt22 = ema(rsi11, 5)` — кросс даёт сигнал spike в скоринге (`useWozduhCross`, `useWozduhSpike`).
 - **Канал объёма:** `SMA(wt22, 24) ± 1.6185·σ` — `VolChanMid/Up/Dn`.
 - **Канал цены:** то же на `rsi(close, 14)` — `PriceChanMid/Up/Dn`.

@@ -9,10 +9,9 @@ import (
 type EngineMode string
 
 const (
-	// EngineModeChartOnly delivers OHLCV + DAG plots; Falcon Evaluate is not on the tick path.
+	// EngineModeChartOnly delivers OHLCV + DAG plots.
 	EngineModeChartOnly EngineMode = "ChartOnly"
-	// EngineModeLive starts Runtime.Run. Falcon Evaluate is not on the tick path
-	// (FALCON-LIVE-ORPHAN-STREAM-1); DAG/facts still run.
+	// EngineModeLive starts Runtime.Run. DAG/facts still run on the tick path.
 	EngineModeLive EngineMode = "Live"
 )
 
@@ -38,7 +37,7 @@ func GetEngineMode() EngineMode {
 }
 
 // EngineAllowsStrategies reports whether Live-only process wiring may run (Runtime.Run).
-// DAG chart indicators always run regardless of this gate. Falcon Evaluate is not gated here.
+// DAG chart indicators always run regardless of this gate.
 func EngineAllowsStrategies() bool {
 	return GetEngineMode() == EngineModeLive
 }

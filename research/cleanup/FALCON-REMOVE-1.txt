@@ -1,0 +1,238 @@
+FALCON-REMOVE-1
+Date: 2026-09-18
+Prerequisite: FALCON_FRAME_UNWIRE_GREEN (358966b, already on origin)
+Base: HEAD 358966b matched origin/2026-07-06-puvo; tracked tree clean
+      (untracked audit reports left unstaged)
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Physical Falcon deletion. No migration, no extraction, no adapter.
+
+Deleted market/falcon.go.
+Removed prevFalcon* snapshot debris.
+Collapsed evaluateFalconSignalsLocked into evaluateTickLocked.
+
+Canonical RSX/Wozduh/DAG/facts unchanged.
+ApplyBacktestRSXConfig still pin + replayStreamingLocked.
+
+======================================================================
+B. PRE-DELETE CONSUMER PROOF
+======================================================================
+
+FalconEngine / FalconSignals / NewFalconEngine:
+  definition only in market/falcon.go
+  ZERO production/research callers
+  ZERO Frame SetRSX* on Falcon
+
+DetectVolCross:
+  falcon.go only
+  canonical tests use detectVolCrossCode (core/nodes)
+
+prevFalcon*:
+  Frame + streamingSnapshot zeroed leftovers; not read by math
+
+evaluateFalconSignalsLocked:
+  DAG + three fact noters; two trampoline callers
+  (evaluateTickLocked, evaluateTickBulkChartLocked)
+
+STOP condition (real FalconEngine consumer): did not fire.
+
+======================================================================
+C. falcon.go DELETION
+======================================================================
+
+Deleted market/falcon.go in full:
+
+  FalconEngine, FalconSignals, NewFalconEngine
+  Evaluate, SaveState, RestoreState
+  SetRSXLength / SetRSXSignalLength / SetRSXSource
+  DetectVolCross
+  duplicate Wozduh internals / Falcon-only helpers
+
+Compile after deletion: PASS (no hidden consumer).
+
+======================================================================
+D. REMAINING TEST RESULT
+======================================================================
+
+No falcon_test.go / falcon_cross_test.go (already gone in ORACLE-REPLACE).
+
+No test required FalconEngine.
+
+Left test *names* that mention Falcon historically:
+  TestEvaluateTick_BothModesRunDAGWithoutFalcon
+  TestMarker_TickDoesNotEvaluateFalconKeepsDAG
+  wozduh_demand_test strings about Falcon shadow demand
+
+These assert DAG / mask invariants, not FalconEngine.
+Not retargeted (would be rename-only hygiene).
+
+Did not port Falcon same-length SetRSX no-op onto JurikRSX/RSXNode.
+
+======================================================================
+E. SNAPSHOT DEBRIS REMOVAL
+======================================================================
+
+Deleted prevFalconRed / prevFalconGreen / prevFalconBlue from:
+  Frame
+  streamingSnapshot
+  save/restore
+  resetStreamingEngines zeros
+
+Left redLineCrossGreen* and wozduxVolumeSpike* (out of scope).
+
+======================================================================
+F. evaluateFalconSignalsLocked RESULT
+======================================================================
+
+INLINED. Not renamed.
+
+Two callers existed, both one-line trampolines around the same body.
+
+Action:
+  body moved into evaluateTickLocked
+  evaluateTickBulkChartLocked now calls evaluateTickLocked
+  evaluateFalconSignalsLocked deleted
+
+Why not evaluateDAGAndFactsLocked:
+  that would add a third name in the chain for no semantic split.
+  Live and bulk tick paths already share DAG+facts after LIVE-ORPHAN.
+
+DAG fact timing / AnchorAt / ConfirmedAt unchanged.
+
+======================================================================
+G. CANONICAL RSX / WOZDUH SAFETY
+======================================================================
+
+Untouched numerically:
+  indicators.JurikRSX
+  indicators.RSXSignalLine
+  RSXNode
+  WozduhNode (comment only: periods SSOT is WozduhNode, not falcon.go)
+  detectVolCrossCode
+
+======================================================================
+H. FACT SAFETY
+======================================================================
+
+Untouched:
+  RSTVState, FractalFactsAt, ZZDivFactCollector, IndicatorFactEvent
+  AnchorAt, ConfirmedAt
+  projector / wire.Annotation
+
+======================================================================
+I. ApplyBacktestRSXConfig / UpdateRSXScanConfig SAFETY
+======================================================================
+
+ApplyBacktestRSXConfig: Normalize + pin rsxSettings + replayStreamingLocked.
+  Name kept.
+
+UpdateRSXScanConfig: ChangeImpact + DAG OnConfigChange + replay.
+  Semantics kept.
+
+DumpFeatureTape still calls ApplyBacktestRSXConfig.
+Brain3 / FEATURE-SPEC-2 / nativeRSXContext untouched.
+
+======================================================================
+J. DOC / COMMENT REPAIR
+======================================================================
+
+ARCHITECTURE: tick path no longer keeps falcon.go; Falcon retired;
+  Falcon row removed from contracts and key file map.
+OPEN_DEBTS: NEXT = WOZDUH-TRUTH-1; SCORE-CLEAN note updated.
+MEMORY NEXT: FALCON-REMOVE-1 implemented.
+PINE_INDICATOR_SOURCES: Wozduh owner core/nodes/wozduh.go (not strategy/falcon.go).
+HISTORY + new ADR: this chapter only (historical prior ADRs preserved).
+
+Code comments:
+  WozduhNode period SSOT
+  engine_mode.go (no "Falcon Evaluate is not on the path")
+  webserver header DAG slots
+  volume_ingest_census dropped "Falcon Evaluate volume" consumer row
+
+Left historical "never Falcon" exclusion comments in chart_cache /
+  dag_navigator / webserver wire purge (true, not current ownership claims).
+
+GPT missed: volume census still listed Falcon Evaluate as a live volume
+consumer. That is an active lie after deletion; removed that one row only.
+
+======================================================================
+K. POST-DELETE SEARCH
+======================================================================
+
+Active Go FalconEngine / FalconSignals / NewFalconEngine:
+  ZERO
+
+DetectVolCross (Falcon copy):
+  ZERO
+  detectVolCrossCode remains
+
+prevFalconRed/Green/Blue:
+  ZERO
+
+evaluateFalconSignalsLocked:
+  ZERO
+
+falcon.go:
+  ZERO in Go
+  mentioned in HISTORY/DECISIONS for this deletion (historical)
+
+Canonical owners intact (JurikRSX, RSXNode, WozduhNode,
+detectVolCrossCode, IndicatorFactEvent).
+
+======================================================================
+L. TEST RESULTS
+======================================================================
+
+Required (unsandboxed):
+  go test ./market/ -count=1                          PASS
+  go test ./core/nodes/ -count=1                      PASS
+  go test ./server/ -count=1 -skip TestGoldenAudit    PASS
+  go test ./brain3/ -count=1                          PASS
+  go build .                                          PASS
+
+Targeted pin/replay live inside ./market/ (ApplyBacktestRSXConfig,
+UpdateRSXScanConfig tests).
+
+Broader `go test ./...` not re-run this chapter (environment gate). Known
+unrelated debts from prior Falcon chapters remain:
+  cmd/repair_archive_gap unused restored     PREEXISTING
+  indicators /tmp RSX parity CSV             ENVIRONMENT PREEXISTING
+
+======================================================================
+M. GIT STATUS
+======================================================================
+
+See chat after commit.
+
+Not staged: unrelated untracked audit reports.
+
+HARD STOP. Do not auto-push.
+
+======================================================================
+N. FINAL VERDICT
+======================================================================
+
+FALCON_REMOVE_GREEN
+
+======================================================================
+GPT / PROMPT CORRECTIONS
+======================================================================
+
+1. evaluateFalconSignalsLocked had TWO callers, not one. Inlining into
+   evaluateTickLocked and pointing bulk at it is smaller than inventing
+   evaluateDAGAndFactsLocked.
+
+2. WozduhNode comment pointing at falcon.go would have been a compile-time
+   documentation lie. Comment-only repair; no period change.
+
+3. volume_ingest_census Falcon Evaluate consumer row was an active SSOT
+   lie GPT did not list; deleted that row only.
+
+4. Test function names still say WithoutFalcon. They are not FalconEngine
+   tests. Left alone (no rename sweep).
+
+5. Did not touch redLineCross / wozdux spike / DataBus Append* /
+   ApplyBacktestRSXConfig name.

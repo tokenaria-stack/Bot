@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **FALCON-FRAME-UNWIRE-1 implemented** — Frame no longer owns FalconEngine. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. Next: **FALCON-REMOVE-1** after UNWIRE is reviewed, frozen, and pushed. **WOZDUH-TRUTH-1** after Falcon retirement. HTF / Live orphan / oracle chapters frozen.
+2. **FALCON-REMOVE-1 implemented** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. Next: **WOZDUH-TRUTH-1**. Falcon retirement chapters frozen.
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -51,7 +51,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **SLOT-CLEAN-1 ✅** — compacted dead slots.
 
-**FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator kept. Frame ZigZag kept (fib/geometry).
+**FALCON-SCORE-CLEAN-1 ✅** — write-only SmartDivergenceEngine / `divSignal` deleted. FalconEngine numerical calculator later deleted in **FALCON-REMOVE-1**. Frame ZigZag kept (fib/geometry).
 
 **RSX-SIGNAL-3 ✅ frozen** (`c856fef`). Fractal facts (`rsx_fractal_div` class_a/b/c, `rsx_fractal_pivot`) + bounded `FractalFactsAt`. Do **not** reopen detector math or lookback search.
 

@@ -10,9 +10,6 @@ type streamingSnapshot struct {
 	jurikPrevBar          float64
 	jurikValue            float64
 	jurikIsRising         bool
-	prevFalconRed         float64
-	prevFalconGreen       float64
-	prevFalconBlue        float64
 	redLineCrossGreenUp   bool
 	redLineCrossGreenDown bool
 	wozduxVolumeSpikeUp   bool
@@ -53,9 +50,6 @@ func (a *Frame) restoreStreamingState() {
 	a.jurikPrevBar = s.jurikPrevBar
 	a.jurikValue = s.jurikValue
 	a.jurikIsRising = s.jurikIsRising
-	a.prevFalconRed = s.prevFalconRed
-	a.prevFalconGreen = s.prevFalconGreen
-	a.prevFalconBlue = s.prevFalconBlue
 	a.redLineCrossGreenUp = s.redLineCrossGreenUp
 	a.redLineCrossGreenDown = s.redLineCrossGreenDown
 	a.wozduxVolumeSpikeUp = s.wozduxVolumeSpikeUp
@@ -94,9 +88,6 @@ func (a *Frame) saveStreamingState() {
 		jurikPrevBar:          a.jurikPrevBar,
 		jurikValue:            a.jurikValue,
 		jurikIsRising:         a.jurikIsRising,
-		prevFalconRed:         a.prevFalconRed,
-		prevFalconGreen:       a.prevFalconGreen,
-		prevFalconBlue:        a.prevFalconBlue,
 		redLineCrossGreenUp:   a.redLineCrossGreenUp,
 		redLineCrossGreenDown: a.redLineCrossGreenDown,
 		wozduxVolumeSpikeUp:   a.wozduxVolumeSpikeUp,

@@ -43,9 +43,6 @@ type Frame struct {
 	fibWaveStart          float64
 	fibWaveEnd            float64
 	fibWaveReady          bool
-	prevFalconRed         float64
-	prevFalconGreen       float64
-	prevFalconBlue        float64
 	redLineCrossGreenUp   bool
 	redLineCrossGreenDown bool
 	jurikValue            float64
@@ -292,7 +289,7 @@ func (a *Frame) evalTick(k exchange.Kline, barIndex int, isClosed bool) {
 
 // evaluateTickBulkChartLocked is the chart cold replay path (DAG + facts only).
 func (a *Frame) evaluateTickBulkChartLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	a.evaluateFalconSignalsLocked(k, barIndex, isClosed)
+	a.evaluateTickLocked(k, barIndex, isClosed)
 }
 
 // SetCurrentMTFState stores walk-forward HTF navigator state for scoring (keyed by interval).

@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-REMOVE-1 (Sep 2026)
+
+**Context:** After FRAME-UNWIRE-1, FalconEngine had no HTF, Live Evaluate, oracle, Frame, or FeatureTape owner. `market/falcon.go` was dead code in `market`.
+
+**Decision:** Delete `falcon.go` and Falcon-only snapshot/name debris. Inline the Falcon-named tick trampoline into `evaluateTickLocked`. Do not extract DetectVolCross or Wozduh internals. Do not rename `ApplyBacktestRSXConfig`.
+
+**Rejected:**
+- Keep falcon.go as a dormant library — **Reason:** no consumer; Rule 6.
+- Extract Falcon helpers into a compatibility package — **Reason:** canonical kernels already exist.
+- Rename ApplyBacktestRSXConfig here — **Reason:** still a real pin/replay helper; name debt later.
+
+**Consequences:** Falcon is absent from active Go. Next product chapter is WOZDUH-TRUTH-1, not more Falcon work.
+
+---
+
 ## FALCON-FRAME-UNWIRE-1 (Sep 2026)
 
 **Context:** After ORACLE-REPLACE-1, Falcon was unused as a twin but Frame still constructed FalconEngine and `ApplyBacktestRSXConfig` / `UpdateRSXScanConfig` still called Falcon `SetRSX*`. Canonical RSX lives on DAG (`RSXNode`) plus `rsxSettings` pin/replay.
