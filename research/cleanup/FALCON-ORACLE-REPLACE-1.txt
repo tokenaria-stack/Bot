@@ -1,0 +1,103 @@
+FALCON-ORACLE-REPLACE-1
+IMPLEMENTATION
+Date: 2026-09-18
+Parent: ca96cd1 FALCON-LIVE-ORPHAN-STREAM-1 (origin already had f921ee0+ca96cd1; push was up-to-date)
+Basis: FALCON-CONSUMER-MIGRATION-AUDIT-1
+
+THOUGHTS VS GPT
+======================================================================
+
+Agree: next was oracles, not production math; WozduhNode must not be
+certified by Falcon; sequence oracle → unwire → remove is right.
+
+Correction: Falcon SetRSXLength same-length no-op is NOT a canonical
+Jurik invariant. indicators.JurikRSX.Reconfigure always rebuilds.
+That Falcon test was wrapper-only and production replay rebuilds
+engines anyway. Deleted as CORPSE, not ported onto JurikRSX (would
+be a production-math change).
+
+FalconSnapshot zeros on Frame ticks stay as LIVE-ORPHAN production
+law until FRAME-UNWIRE, not as a numerical twin.
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Retargeted Falcon test oracles onto canonical owners.
+
+Did NOT:
+  delete Frame.falcon
+  change ApplyBacktestRSXConfig
+  delete falcon.go
+  change WozduhNode / RSXNode formulas
+
+======================================================================
+B. TEST CLASSIFICATION
+======================================================================
+
+TestWozduh_GoldenParity (Falcon twin)
+  REAL_CURRENT_LAW → WozduhNode dual-instance + frozen bar 20 fixture
+
+TestFalconEngine_Evaluate (range)
+  COVERED by indicators JurikRSX range + Wozduh RsiPrice range
+  DELETED falcon_test.go
+
+TestDetectVolCross / TestFalconEngine_VolCross
+  REAL → detectVolCrossCode in package nodes
+  Falcon engine smoke DELETED
+
+TestFalconEngine_SetRSXLength / RSXSourceClose / SetRSXSignalLength
+  REAL → RSXNode tests (length, close vs hlc3, signal reconfigure)
+
+TestFalconEngine_RSXSourceSnapshotIgnoresGlobalMutation
+  Falcon construct-time GetRSXSettings pin
+  Canonical RSXNode source is constructor/config, not globals
+  DELETED (no production global follow on RSXNode.Update)
+
+TestFalconSetRSXLength_SameLengthNoClear
+  CORPSE_TEST — wrapper only; JurikRSX.Reconfigure always clears;
+  ApplyBacktestRSXConfig then replayStreamingLocked rebuilds anyway
+  DELETED
+
+engine_mode / streaming FalconSnapshot==0
+  REAL_CURRENT_LAW from LIVE-ORPHAN (ticks do not Evaluate)
+  KEPT until FRAME-UNWIRE
+
+ApplyBacktestRSXConfig tests
+  RESEARCH pin — KEPT (still calls Falcon SetRSX* in production fn)
+
+======================================================================
+C. PRODUCTION MATH
+======================================================================
+
+Unchanged.
+
+======================================================================
+D. REMAINING FALCON
+======================================================================
+
+  NewFalconEngine only in streaming.resetStreamingEngines + falcon.go
+  ApplyBacktestRSXConfig / UpdateRSXScanConfig SetRSX*
+  FalconSnapshot / Frame.falconSignals zeros
+  FalconEngine type
+
+Next: FALCON-FRAME-UNWIRE-1
+
+======================================================================
+E. TESTS
+======================================================================
+
+  go test ./core/nodes ./market ./server -count=1 -skip TestGoldenAudit
+  PASS
+
+  indicators /tmp RSX parity CSV — preexisting ENVIRONMENT, skipped intent
+
+======================================================================
+F. VERDICT
+======================================================================
+
+  FALCON_ORACLE_REPLACE_GREEN
+
+HARD STOP. Next: FALCON-FRAME-UNWIRE-1 after approval.
+
+END

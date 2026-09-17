@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-ORACLE-REPLACE-1 — retire Falcon as test twin (Sep 2026)
+
+- WozduhNode certifies vs a second node + frozen bar-20 fixture, not Falcon.
+- RSX length/source/signal invariants moved to RSXNode tests.
+- Deleted market falcon_test / falcon_cross_test / Falcon SetRSX* tests.
+- Frame.falcon and ApplyBacktestRSXConfig Falcon SetRSX* still present.
+- Artifact: `research/cleanup/FALCON-ORACLE-REPLACE-1.txt`.
+
 ## FALCON-LIVE-ORPHAN-STREAM-1 — stop unpublished Live Falcon extra stream (Sep 2026)
 
 - Production ticks no longer call `FalconEngine.Evaluate` (ChartOnly or Live).

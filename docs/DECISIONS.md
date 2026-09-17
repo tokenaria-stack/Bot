@@ -7,6 +7,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-ORACLE-REPLACE-1 (Sep 2026)
+
+**Context:** After LIVE-ORPHAN-STREAM-1, Falcon was unused on production ticks but tests still treated FalconEngine as the numerical twin for WozduhNode and RSX config.
+
+**Decision:** Retarget valuable invariants onto WozduhNode, RSXNode, and detectVolCrossCode. Freeze a Wozduh bar-20 fixture from the canonical node. Delete FalconEngine-only tests, including same-length SetRSXLength (wrapper no-op; production replay rebuilds engines; JurikRSX.Reconfigure always clears). Do not unwire Frame.falcon or ApplyBacktestRSXConfig Falcon SetRSX*. Do not change production math.
+
+**Rejected:**
+- Keep Falcon as permanent Wozduh/RSX oracle — **Reason:** backwards; canonical owner must certify itself.
+- Change JurikRSX.Reconfigure to no-op on same length in this chapter — **Reason:** production math/config semantics; not an oracle task.
+
+**Consequences:** Tests no longer import NewFalconEngine. Falcon remains allocated scaffolding until FRAME-UNWIRE-1.
+
+---
+
 ## FALCON-LIVE-ORPHAN-STREAM-1 (Sep 2026)
 
 **Context:** FALCON-CONSUMER-MIGRATION-AUDIT-1. Live `Evaluate` fed unpublished flags, DataBus series, Frame ZigZag/fib/geometry, Falcon-fed VolatilityEngine, and DAG-vs-Falcon shadow logs. Chart/facts already DAG-owned. ChartOnly already skipped Evaluate.

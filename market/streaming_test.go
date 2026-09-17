@@ -144,7 +144,7 @@ func TestDetectADFlow(t *testing.T) {
 	}
 }
 
-func TestMarker_RedLineCrossGreenUpInMarker(t *testing.T) {
+func TestMarker_TickDoesNotEvaluateFalconKeepsDAG(t *testing.T) {
 	t.Parallel()
 
 	klines := makeSyntheticKlines(60)

@@ -384,7 +384,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Allocated on Frame; **not** evaluated on ChartOnly or Live ticks (`FALCON-LIVE-ORPHAN-STREAM-1`). HTF oscillators already deleted. Test/config scaffolding until unwire/remove. |
+| Falcon bus | `market/falcon.go` | Allocated on Frame; **not** evaluated on ticks. Tests no longer use it as a numerical twin (`FALCON-ORACLE-REPLACE-1`). Config SetRSX* remains until unwire. |
 
 **Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
@@ -849,4 +849,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **FALCON-LIVE-ORPHAN-STREAM-1** implemented. Next: **FALCON-ORACLE-REPLACE-1**. Product later: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **FALCON-ORACLE-REPLACE-1** implemented. Next: **FALCON-FRAME-UNWIRE-1**. Product later: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).

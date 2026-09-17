@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// Strategy unit tests exercise Falcon/Score math — run under Live.
-// ChartOnly gate behavior is covered explicitly in engine_mode_test.go.
+// Market package tests default to Live so RSX internal Core demand matches
+// production Live Frames. ChartOnly gates are covered in engine_mode tests.
 func TestMain(m *testing.M) {
 	SetEngineMode(EngineModeLive)
 	os.Exit(m.Run())

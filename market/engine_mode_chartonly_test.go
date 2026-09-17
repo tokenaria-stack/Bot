@@ -6,7 +6,7 @@ import (
 	"trading_bot/exchange"
 )
 
-func TestEvaluateTick_ChartOnlySkipsFalconKeepsDAG(t *testing.T) {
+func TestEvaluateTick_BothModesRunDAGWithoutFalcon(t *testing.T) {
 	prev := GetEngineMode()
 	t.Cleanup(func() { SetEngineMode(prev) })
 

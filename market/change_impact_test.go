@@ -105,28 +105,3 @@ func TestUpdateRSXScanConfig_LengthReplays(t *testing.T) {
 		t.Fatalf("Length 14→7 should change tip RSX (before=%v after=%v)", before, after)
 	}
 }
-
-func TestFalconSetRSXLength_SameLengthNoClear(t *testing.T) {
-	ResetRSXSettings()
-	SetRSXSettingsPath(filepath.Join(t.TempDir(), "rsx.json"))
-	t.Cleanup(func() {
-		ResetRSXSettings()
-		SetRSXSettingsPath("")
-	})
-	ApplyRSXSettings(RSXSettings{Length: 14, Source: "hlc3"})
-	eng := NewFalconEngine()
-	var last float64
-	for i := 0; i < 40; i++ {
-		p := 100 + math.Sin(float64(i)*0.3)*4
-		last = eng.Evaluate(p+1, p-1, p, 1000).JurikRSX
-	}
-	eng.SetRSXLength(14) // must not wipe
-	got := eng.Evaluate(105, 99, 102, 1000).JurikRSX
-	if got == 0 && last != 0 {
-		t.Fatal("same-length SetRSXLength cleared Jurik state")
-	}
-	// Continuity: value should remain finite and near prior regime
-	if math.IsNaN(got) || math.IsInf(got, 0) {
-		t.Fatalf("invalid RSX after same-length Set: %v", got)
-	}
-}
