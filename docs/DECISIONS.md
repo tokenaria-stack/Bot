@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FRACTAL-MARKER-SSOT-1 (Sep 2026)
+
+**Context:** MARKER-OWNERSHIP-AUDIT-1. Production fractal facts already live on `FractalFactsAt` → `IndicatorFactEvent` → `Frame.rsxFractalFacts`. `ScanRSXMarkers` / display-bar hit APIs had no production caller.
+
+**Decision:** Delete unused fractal scanner entry points only. Keep `fractalHitAtPivot`, `FractalFactsAt`, and `RSXMarkerHit` (TV `scanRSXTVHits` still uses the type). Do not migrate facts. Do not touch projector, annotations, WS trade markers, navigator markers, or Falcon.
+
+**Rejected:**
+- Treat this as a fact/presentation ownership migration — **Reason:** already correct.
+- Delete `RSXMarkerHit` with the fractal scanner — **Reason:** TV parity still needs it.
+- Generic marker cleanup (BroadcastMarker, Frame.Annotations, tick.Marker) — **Reason:** separate families.
+
+**Consequences:** FRACTAL-MARKER-SSOT-1 is unused-API debt, not duplicate live fact ownership.
+
+---
+
 ## SCORE-WIRE-1 (Sep 2026)
 
 **Context:** SCORE-WIRE-CONSUMER-AUDIT-1. After SOCKET-CLEAN-1, `ScoreDecision` / `ScoreFactor` / `ActionType` still sat on dashboard JSON as zeros with no producer and no frontend reader.

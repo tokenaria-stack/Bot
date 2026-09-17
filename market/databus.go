@@ -91,25 +91,6 @@ func (a *Frame) restoreDataBusFromSnapLocked(s streamingSnapshot, live dataBusLi
 	a.alignAllDataBusToKlinesLocked()
 }
 
-// batchDataBus is a static DataBus for REST/cold-path batch scans.
-type batchDataBus struct {
-	jurik  []float64
-	red    []float64
-	green  []float64
-	prices []float64
-	closes []float64
-}
-
-func newBatchDataBus(jurik, prices, closes []float64) *batchDataBus {
-	return &batchDataBus{jurik: jurik, prices: prices, closes: closes}
-}
-
-func (b *batchDataBus) JurikSeries() []float64       { return b.jurik }
-func (b *batchDataBus) WozduhRedSeries() []float64   { return b.red }
-func (b *batchDataBus) WozduhGreenSeries() []float64 { return b.green }
-func (b *batchDataBus) RSXPriceSeries() []float64    { return b.prices }
-func (b *batchDataBus) CloseSeries() []float64       { return b.closes }
-
 func writeBusSeries(series *[]float64, barIndex, klinesLen int, val float64) {
 	if barIndex < 0 || barIndex >= klinesLen {
 		return

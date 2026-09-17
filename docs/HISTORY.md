@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FRACTAL-MARKER-SSOT-1 — retire unused RSX fractal scanner APIs (Sep 2026) GREEN / FROZEN
+
+- Production owner was already `FractalFactsAt` → `IndicatorFactEvent` → `Frame.rsxFractalFacts`.
+- Deleted unused `ScanRSXMarkers`, `RSXHitAtDisplayBar`, `RSXLabelAtDisplayBar`, `scanRSXFractalHits`, `rsxFractalHitAtDisplayBar`.
+- Kept `fractalHitAtPivot` / `factFromFractalHit` kernel, `RSXMarkerHit` for TV `scanRSXTVHits`, projector, annotations, navigator, trade-marker wire.
+- Artifact: `research/cleanup/FRACTAL-MARKER-SSOT-1.txt`. Untracked MARKER-OWNERSHIP-AUDIT-1 is evidence, not this freeze.
+
 ## SCORE-WIRE-1 — remove legacy ScoreDecision wire fossils (Sep 2026) GREEN / FROZEN
 
 - Deleted `ScoreDecision` / `ScoreFactor` / `ActionType` (`BUY`/`SELL`/`WAIT`) and `decision/score_types.go`.

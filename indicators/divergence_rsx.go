@@ -62,56 +62,6 @@ func NormalizeRSXScanConfig(cfg RSXScanConfig) RSXScanConfig {
 	return cfg
 }
 
-// ScanRSXMarkers runs a full-series RSX divergence scan (stateless, reads from DataBus).
-func ScanRSXMarkers(bus DataBus, cfg RSXScanConfig) []RSXMarkerHit {
-	if bus == nil {
-		return nil
-	}
-	cfg = NormalizeRSXScanConfig(cfg)
-	prices := bus.RSXPriceSeries()
-	closes := bus.CloseSeries()
-	osc := bus.JurikSeries()
-	switch cfg.Mode {
-	case RSXScanFractal:
-		return scanRSXFractalHits(prices, osc, cfg)
-	default:
-		return scanRSXTVHits(closes, osc, cfg.Lookback)
-	}
-}
-
-// scanRSXMarkersFromSlices is a low-level helper for tests and batch adapters.
-func scanRSXMarkersFromSlices(prices, closes, osc []float64, cfg RSXScanConfig) []RSXMarkerHit {
-	cfg = NormalizeRSXScanConfig(cfg)
-	switch cfg.Mode {
-	case RSXScanFractal:
-		return scanRSXFractalHits(prices, osc, cfg)
-	default:
-		return scanRSXTVHits(closes, osc, cfg.Lookback)
-	}
-}
-
-// RSXHitAtDisplayBar returns a fractal-mode marker visible on displayBar, if any.
-// TV Everget facts are owned by RSTVState — this API does not reconstruct them.
-func RSXHitAtDisplayBar(bus DataBus, displayBar int, cfg RSXScanConfig) RSXMarkerHit {
-	if displayBar < 0 || bus == nil {
-		return RSXMarkerHit{}
-	}
-	cfg = NormalizeRSXScanConfig(cfg)
-	osc := bus.JurikSeries()
-	switch cfg.Mode {
-	case RSXScanFractal:
-		prices := bus.RSXPriceSeries()
-		return rsxFractalHitAtDisplayBar(prices, osc, displayBar, cfg)
-	default:
-		return RSXMarkerHit{}
-	}
-}
-
-// RSXLabelAtDisplayBar returns the marker label visible on displayBar, if any.
-func RSXLabelAtDisplayBar(bus DataBus, displayBar int, cfg RSXScanConfig) string {
-	return RSXHitAtDisplayBar(bus, displayBar, cfg).Label
-}
-
 func rsxTradingMarkerStrength(label string) int {
 	if st, ok := rsxTradingMarkerStrengthMap[label]; ok {
 		return st
@@ -198,36 +148,6 @@ func isRSXMacroPivotLow(rsx []float64, i, macroRadius int) bool {
 	return true
 }
 
-func scanRSXFractalHits(prices, rsx []float64, cfg RSXScanConfig) []RSXMarkerHit {
-	radius := cfg.PivotRadius
-	if len(rsx) < radius*2+1 || len(prices) != len(rsx) {
-		return nil
-	}
-
-	var hits []RSXMarkerHit
-	lastPivotHigh := -1
-	lastPivotLow := -1
-
-	for i := radius; i+radius < len(rsx); i++ {
-		switch {
-		case isRSXPivotHigh(rsx, i, radius):
-			hit := fractalHitAtPivot(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
-			if hit.PivotBar >= 0 {
-				hits = append(hits, hit)
-			}
-			lastPivotHigh = i
-
-		case isRSXPivotLow(rsx, i, radius):
-			hit := fractalHitAtPivot(prices, rsx, lastPivotLow, i, PeakLow, cfg)
-			if hit.PivotBar >= 0 {
-				hits = append(hits, hit)
-			}
-			lastPivotLow = i
-		}
-	}
-	return hits
-}
-
 func checkRSXPivotDivergence(prices, rsx []float64, idx1, idx2 int, peakType PeakType, cfg RSXScanConfig) DivergenceResult {
 	pricePeaks := []Peak{
 		{Index: idx1, Value: prices[idx1], Type: peakType},
@@ -307,20 +227,6 @@ func previousRSXFractalPivot(rsx []float64, pivot, radius, lookback int, high bo
 	return -1
 }
 
-func fractalHitStrength(hit RSXMarkerHit) int {
-	if hit.IsPivot {
-		return 0
-	}
-	switch hit.Class {
-	case ClassA, ClassC:
-		return 2
-	case ClassB:
-		return 1
-	default:
-		return -1
-	}
-}
-
 func scanRSXTVHits(closes, rsx []float64, lookback int) []RSXMarkerHit {
 	n := len(rsx)
 	if n < 3 || len(closes) != n {
@@ -352,66 +258,6 @@ func scanRSXTVHits(closes, rsx []float64, lookback int) []RSXMarkerHit {
 		}
 	}
 	return hits
-}
-
-// rsxFractalHitAtDisplayBar finds fractal-mode markers visible on displayBar (O(lookback)).
-func rsxFractalHitAtDisplayBar(prices, rsx []float64, displayBar int, cfg RSXScanConfig) RSXMarkerHit {
-	radius := cfg.PivotRadius
-	if radius <= 0 {
-		radius = DefaultRSXPivotRadius
-	}
-	n := len(rsx)
-	if n < radius*2+1 || len(prices) != n || displayBar < 0 {
-		return RSXMarkerHit{}
-	}
-	start := displayBar - cfg.Lookback - cfg.MacroPivotRadius
-	if start < radius {
-		start = radius
-	}
-	end := displayBar + radius
-	if end > n-radius-1 {
-		end = n - radius - 1
-	}
-
-	lastPivotHigh := -1
-	lastPivotLow := -1
-	for i := radius; i < start; i++ {
-		if isRSXPivotHigh(rsx, i, radius) {
-			lastPivotHigh = i
-		}
-		if isRSXPivotLow(rsx, i, radius) {
-			lastPivotLow = i
-		}
-	}
-
-	best := RSXMarkerHit{}
-	bestStrength := -1
-	for i := start; i <= end; i++ {
-		switch {
-		case isRSXPivotHigh(rsx, i, radius):
-			hit := fractalHitAtPivot(prices, rsx, lastPivotHigh, i, PeakHigh, cfg)
-			if hit.PivotBar >= 0 && hit.DisplayBar == displayBar {
-				st := fractalHitStrength(hit)
-				if st > bestStrength {
-					best = hit
-					bestStrength = st
-				}
-			}
-			lastPivotHigh = i
-
-		case isRSXPivotLow(rsx, i, radius):
-			hit := fractalHitAtPivot(prices, rsx, lastPivotLow, i, PeakLow, cfg)
-			if hit.PivotBar >= 0 && hit.DisplayBar == displayBar {
-				st := fractalHitStrength(hit)
-				if st > bestStrength {
-					best = hit
-					bestStrength = st
-				}
-			}
-			lastPivotLow = i
-		}
-	}
-	return best
 }
 
 func highestBarsAgo(values []float64, i, lookback int) int {

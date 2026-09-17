@@ -1,0 +1,253 @@
+FRACTAL-MARKER-SSOT-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent HEAD: 79de816 (SCORE-WIRE-1)
+Basis: MARKER-OWNERSHIP-AUDIT-1 → MARKER_AUDIT_GREEN_DELETE_DEBRIS_ONLY
+User approval: FRACTAL-MARKER-SSOT-1 exact slice
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Deleted unused fractal scanner/display-bar APIs only.
+
+Production ownership was already correct and was not migrated:
+
+  FractalFactsAt
+      ↓
+  IndicatorFactEvent (AnchorAt / ConfirmedAt)
+      ↓
+  Frame.rsxFractalFacts
+      ↓
+  projector / wire.Annotation / chart paint
+
+No product behavior change expected or observed.
+
+======================================================================
+B. FINAL CONSUMER CHECK
+======================================================================
+
+Pre-delete search on HEAD 79de816:
+
+  ScanRSXMarkers / RSXHitAtDisplayBar / RSXLabelAtDisplayBar /
+  scanRSXFractalHits / rsxFractalHitAtDisplayBar
+
+Production callers: ZERO.
+
+Remaining references were tests + SSOT wording only.
+
+Not FRACTAL_MARKER_SSOT_BLOCKED_NEW_CONSUMER.
+
+======================================================================
+C. APIs DELETED
+======================================================================
+
+  indicators.ScanRSXMarkers
+  indicators.RSXHitAtDisplayBar
+  indicators.RSXLabelAtDisplayBar
+  scanRSXFractalHits
+  rsxFractalHitAtDisplayBar
+  scanRSXMarkersFromSlices     (unreferenced wrapper)
+  fractalHitStrength           (only used by display-bar picker)
+
+Also unreferenced because those tests died:
+
+  market.batchDataBus / newBatchDataBus (test adapter for ScanRSXMarkers)
+
+======================================================================
+D. RSXMarkerHit STATUS
+======================================================================
+
+KEPT.
+
+Remaining consumers:
+
+  fractalHitAtPivot (kernel still returns RSXMarkerHit)
+  factFromFractalHit / factFromFractalHitIfConfirm
+  scanRSXTVHits
+  indicators/rstv_legacy_parity_test.go
+  indicators/market_rsx_parity_stage2_probe_test.go splitHits
+
+TV leftover scanner was not folded into this slice.
+
+======================================================================
+E. FACT OWNER SAFETY
+======================================================================
+
+Unchanged:
+
+  FractalFactsAt
+  fractalHitAtPivot
+  factFromFractalHit
+  IndicatorFactEvent
+  Frame.rsxFractalFacts
+
+git: those kernels were not rewritten (only dead scanners removed
+around them).
+
+======================================================================
+F. CAUSAL TIMING SAFETY
+======================================================================
+
+Unchanged:
+
+  AnchorAt / ConfirmedAt closed-bar OpenTime ms
+  Annotation.Time remains ChartTimeSec(AnchorAt) (file not edited)
+
+======================================================================
+G. PRESENTATION SAFETY
+======================================================================
+
+Unchanged (not edited):
+
+  AnnotationFromFact
+  wire.Annotation
+  ChartTimeSec
+  FE setMarkers / annotationToNativeMarker
+
+No frontend change. Matches audited ownership boundary.
+
+======================================================================
+H. TEST RETARGETING
+======================================================================
+
+Deleted as zombie oracle:
+
+  TestFractalDetectorParity_ScanHitsMatchFacts
+  TestFractalFactsAt_MatchesPrefixScanAtConfirmBar
+
+Retargeted (same factual law, FractalFacts access path):
+
+  TestScanRSXFractalHits_SingleP
+      → TestFractalFacts_SinglePivotHigh
+        (indicators/divergence_rsx_test.go and market/rsx_chart_test.go)
+
+  TestScanRSXFractalMarkers_NoPWithoutMacro
+      → TestFractalFacts_NoPivotWithoutMacro
+
+Retained:
+
+  TestFractalFacts_ClassMapping
+  TestFractalFacts_AAndCDoNotCollapse
+  TestFractalFacts_NoDivergenceMacroPivot
+  TestFractalFacts_PivotLow
+  TestFractalFacts_EventOnceAndNoLookahead
+  market/rsx_fractal_facts_test.go (incl. VisibilityDoesNotOwnFacts)
+  TestIsRSXPivotHigh
+
+Removed stubDataBus from indicators tests (only served ScanRSXMarkers).
+
+======================================================================
+I. OTHER MARKER FAMILIES LEFT UNTOUCHED
+======================================================================
+
+  BroadcastMarker / WS type "marker"
+  tickPayload.Marker
+  Frame.Annotations / ChartAnnotation / ExportAllAnnotations
+  Navigator TrendlineMarker / NavigatorMarkerDTO
+  scanRSXTVHits
+  UI Kind "marker"
+  spike/wozduh marker helpers
+
+======================================================================
+J. SSOT REPAIR
+======================================================================
+
+FRACTAL-MARKER-SSOT-1 was unused API debt, not duplicate live fact
+ownership.
+
+Updated:
+
+  docs/OPEN_DEBTS.md  GREEN / FROZEN; wording no longer claims competing owners
+  docs/ARCHITECTURE.md  FractalFactsAt as emitter; notes scanner delete
+  docs/DECISIONS.md  ADR
+  docs/HISTORY.md  chapter summary
+  MEMORY.md NEXT
+
+HISTORY RSX-SIGNAL-3 salvage of scanRSXFractalHits left as historical record.
+
+======================================================================
+K. TEST RESULTS
+======================================================================
+
+  go test ./indicators/ -count=1 -skip 'TestMarketRSXParity|TestStage4DataWindowBar'
+      PASS
+  go test ./market/ -count=1
+      PASS
+  go test ./server/ -count=1 -skip TestGoldenAudit
+      PASS
+  go build .
+      PASS
+
+  go test ./indicators/ (no skip): ENVIRONMENT /tmp RSX CSVs missing
+      PREEXISTING, not this chapter
+
+  go test ./... -skip golden/parity CSVs:
+      PREEXISTING cmd/repair_archive_gap unused `restored`
+      TestTipHandoff_ProjectionSeam against live history.db
+          ENVIRONMENT / live tip (passed isolated server suite)
+
+======================================================================
+L. POST-DELETE SEARCH
+======================================================================
+
+Active Go:
+
+  ScanRSXMarkers              ZERO
+  scanRSXFractalHits          ZERO
+  rsxFractalHitAtDisplayBar   ZERO
+  RSXHitAtDisplayBar          ZERO
+  RSXLabelAtDisplayBar        ZERO
+
+  RSXMarkerHit                KEPT (kernel + scanRSXTVHits + TV tests)
+  FractalFactsAt              production
+  fractalHitAtPivot           production
+  rsxFractalFacts             production
+
+======================================================================
+M. GIT STATUS
+======================================================================
+
+Parent: 79de816
+
+Staged (intended):
+
+  indicators/divergence_rsx.go
+  indicators/divergence_rsx_test.go
+  indicators/divergence_fractal_facts_test.go
+  market/rsx_chart_test.go
+  market/databus.go
+  market/rsx_ssot.go
+  docs/ARCHITECTURE.md DECISIONS.md HISTORY.md OPEN_DEBTS.md
+  MEMORY.md
+  research/cleanup/FRACTAL-MARKER-SSOT-1.txt
+
+NOT staged: untracked consumer/ownership audits.
+
+======================================================================
+N. FINAL VERDICT
+======================================================================
+
+FRACTAL_MARKER_SSOT_GREEN
+
+HARD STOP. Next: FALCON-CONSUMER-MIGRATION-AUDIT-1 (read-only).
+
+======================================================================
+CORRECTIONS VS THE IMPLEMENTATION PROMPT
+======================================================================
+
+1. Also deleted scanRSXMarkersFromSlices and fractalHitStrength.
+   They had no remaining caller after the public scanner APIs died.
+   Shared kernel fractalHitAtPivot was kept.
+
+2. Deleted market batchDataBus / newBatchDataBus. It existed only as a
+   DataBus adapter for ScanRSXMarkers tests. Frame DataBus series remain.
+
+3. Did not delete indicators.DataBus interface or Frame JurikSeries methods.
+   Those are Frame series ownership, not the dead scanner.
+
+4. Did not delete unused rsxTradingMarkerStrength (already unused before
+   this chapter; not caused by this delete).
+
+5. OPEN_DEBTS parked table kept 3 columns; GREEN note lives in "Why later".
+======================================================================

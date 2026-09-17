@@ -4,8 +4,8 @@ import (
 	"trading_bot/indicators"
 )
 
-// RSXScanConfigFromSettings maps dashboard RSX settings to the fractal scanner
-// used by ScanRSXMarkers / tests. TV and ZigZag facts use their own paths.
+// RSXScanConfigFromSettings maps dashboard RSX settings to FractalFactsAt config.
+// TV and ZigZag facts use their own paths.
 func RSXScanConfigFromSettings(s RSXSettings) indicators.RSXScanConfig {
 	return fractalScanConfigFromSettings(s)
 }

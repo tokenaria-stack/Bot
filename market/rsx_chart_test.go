@@ -16,50 +16,49 @@ func TestIsRSXPivotHigh(t *testing.T) {
 	}
 }
 
-func TestScanRSXFractalHits_SingleP(t *testing.T) {
+func TestFractalFacts_SinglePivotHigh(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 	ApplyRSXSettings(RSXSettings{PivotRadius: 2})
 
 	rsx := []float64{50, 52, 54, 58, 62, 64, 63, 70, 63, 61, 58, 54, 52, 50, 48}
 	prices := make([]float64, len(rsx))
+	opens := make([]int64, len(rsx))
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
+		opens[i] = 1_700_000_000_000 + int64(i)*60_000
 	}
 	cfg := RSXScanConfigFromSettings(GetRSXSettings())
-	bus := newBatchDataBus(rsx, prices, nil)
-	hits := indicators.ScanRSXMarkers(bus, cfg)
+	facts := indicators.FractalFacts(prices, rsx, opens, cfg)
 	var pAtPivot int
-	for _, h := range hits {
-		if h.IsPivot && h.PivotBar == 7 && h.PeakType == indicators.PeakHigh {
+	for _, ev := range facts {
+		if ev.Source == indicators.FactSourceRSXFractalPivot && ev.Direction == indicators.FactDirPivotHigh && ev.AnchorAt == opens[7] {
 			pAtPivot++
 		}
 	}
 	if pAtPivot != 1 {
-		t.Fatalf("expected exactly one pivot high at 7, got %d hits: %+v", pAtPivot, hits)
+		t.Fatalf("expected exactly one pivot high at 7, got %d facts: %+v", pAtPivot, facts)
 	}
-	if len(hits) != 1 {
-		t.Fatalf("expected exactly one marker, got %d: %+v", len(hits), hits)
-	}
-	if hits[0].Label != "" {
-		t.Fatalf("fractal hit must not leak label %q", hits[0].Label)
+	if len(facts) != 1 {
+		t.Fatalf("expected exactly one fact, got %d: %+v", len(facts), facts)
 	}
 }
 
-func TestScanRSXFractalMarkers_NoPWithoutMacro(t *testing.T) {
+func TestFractalFacts_NoPivotWithoutMacro(t *testing.T) {
 	ResetRSXSettings()
 	t.Cleanup(ResetRSXSettings)
 	ApplyRSXSettings(RSXSettings{PivotRadius: 2})
 
 	rsx := []float64{55, 58, 62, 65, 63, 61, 59, 57}
 	prices := make([]float64, len(rsx))
+	opens := make([]int64, len(rsx))
 	for i := range prices {
 		prices[i] = 100 + rsx[i]
+		opens[i] = 1_700_000_000_000 + int64(i)*60_000
 	}
 	cfg := RSXScanConfigFromSettings(GetRSXSettings())
-	bus := newBatchDataBus(rsx, prices, nil)
-	hits := indicators.ScanRSXMarkers(bus, cfg)
-	if len(hits) != 0 {
-		t.Fatalf("expected no P without macro pivot, got %+v", hits)
+	facts := indicators.FractalFacts(prices, rsx, opens, cfg)
+	if len(facts) != 0 {
+		t.Fatalf("expected no fractal fact without macro pivot, got %+v", facts)
 	}
 }
