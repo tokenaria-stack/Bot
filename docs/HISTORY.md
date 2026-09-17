@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-FRAME-UNWIRE-1 — remove Falcon from Frame ownership (Sep 2026)
+
+- Deleted `Frame.falcon` / `falconSignals`, `NewFalconEngine` from `resetStreamingEngines`, and Falcon `SetRSX*` from `ApplyBacktestRSXConfig` / `UpdateRSXScanConfig`.
+- Kept pin + `replayStreamingLocked` + DAG `OnConfigChange`. Did not rename `ApplyBacktestRSXConfig`.
+- Deleted `FalconSnapshot` / Frame `RSXSignalLine` (zero real callers). `falcon.go` still exists.
+- Artifact: `research/cleanup/FALCON-FRAME-UNWIRE-1.txt`.
+
 ## FALCON-ORACLE-REPLACE-1 — retire Falcon as test twin (Sep 2026)
 
 - WozduhNode certifies vs a second node + frozen bar-20 fixture, not Falcon.

@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **FALCON-ORACLE-REPLACE-1 implemented** — Falcon no longer used as a numerical twin. Next: **FALCON-FRAME-UNWIRE-1**, then **FALCON-REMOVE-1**. **WOZDUH-TRUTH-1** after Falcon retirement. Live orphan / HTF oscillator chapters frozen.
+2. **FALCON-FRAME-UNWIRE-1 implemented** — Frame no longer owns FalconEngine. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. Next: **FALCON-REMOVE-1** after UNWIRE is reviewed, frozen, and pushed. **WOZDUH-TRUTH-1** after Falcon retirement. HTF / Live orphan / oracle chapters frozen.
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  

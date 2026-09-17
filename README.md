@@ -35,7 +35,7 @@ go run .               # dashboard :8080
 ```
 exchange/     transport + Ingress (Authority, merge)
 data/         SQLite + PersistenceQueue
-market/       Frame, Runtime, streaming/snapshot, Boot, falcon bus
+market/       Frame, Runtime, streaming/snapshot, Boot
 decision/     DECISION-CONTRACT-1 (research opinion; not live wire)
 indicators/   streaming math (no go-talib)
 core/         DAG runner + nodes

@@ -35,7 +35,7 @@ On request / only when the task needs them:
 | Import DAG | live `exchange → market → server/web`; research `forecast → decision → decisionresearch` |
 | Timestamp | **#83 PASS** — tag `TS_CONTRACT_CLEAN` (Go A–D+E2, FE F2/F3/F5a–F5f) |
 | Chart | **Frozen** — `CHART_FROZEN` + HISTORY-IDLE-PUMP-1 ✅ + SPARSE-LIVE-INGEST-1 ✅ + **SPARSE-ADR010-TIP-1 ✅** + **SCALE-GESTURE-OWNERSHIP-1 ✅** + **TIMELINE-RECOVERY-STATE-1 ✅** |
-| NEXT | **FALCON-ORACLE-REPLACE-1** implemented. Next: **FALCON-FRAME-UNWIRE-1**, then **FALCON-REMOVE-1**. **WOZDUH-TRUTH-1** after Falcon retirement. |
+| NEXT | **FALCON-FRAME-UNWIRE-1** implemented. Next: **FALCON-REMOVE-1** after this commit is reviewed, frozen, and pushed. **WOZDUH-TRUTH-1** after Falcon retirement. |
 | RSX | **RSX-TV-ONE-BRAIN-1 frozen** `4688160`. **MARKET-RSX-PARITY-1 closed.** **FEATURE-TAPE-RSX-REGEN-1 closed.** **RESEARCH-DATASET-1 frozen** `f311203`. **VALIDATION-PLAN-1 frozen** `0737c59`. **OOF-MATRIX-1 frozen** `d749042`. **MODEL-FIT-1 frozen** `0d60270`+`29cb928`. **CALIBRATION-1 frozen** `4c8c08e`+`b550613`. **RANK-1 frozen** `cc49528`. **RECIPE-FREEZE-1 frozen** `c2d278a`. **FINAL-MODEL-FIT-1 frozen** `9cb03f5`. **FORECAST-BUNDLE-1 frozen** `a9e1228`. **OOF-FORECAST-EVIDENCE-1 frozen** `124f273`. **DECISION-VALIDATION-PLAN-1 frozen** `a0da055`. **DECISION-CONTRACT-1 frozen** `b7a76b4`. **DECISION-RESEARCH-1 frozen** `789ddcd`. Do not reopen RSX unless regression. |
 | Wozduh | **WOZDUH-WIRE-1 frozen** (`0c2ecce`) + **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`) + **WOZDUH-ACTIVE-1B frozen** (`1b724ef`) |
 

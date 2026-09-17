@@ -149,10 +149,6 @@ func TestMarker_TickDoesNotEvaluateFalconKeepsDAG(t *testing.T) {
 
 	klines := makeSyntheticKlines(60)
 	frame := NewFrame(klines, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
-	falcon := frame.FalconSnapshot()
-	if falcon.GreenLine != 0 || falcon.JurikRSX != 0 {
-		t.Fatalf("Frame tick must not Evaluate Falcon, got %+v", falcon)
-	}
 	if math.IsNaN(frame.RSXSlot(core.SlotJurikRSX)) {
 		t.Fatal("DAG Jurik must still run")
 	}

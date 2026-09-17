@@ -23,10 +23,6 @@ func TestEvaluateTick_BothModesRunDAGWithoutFalcon(t *testing.T) {
 
 	SetEngineMode(EngineModeChartOnly)
 	chart := NewFrame(klines, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
-	fs := chart.FalconSnapshot()
-	if fs.JurikRSX != 0 || fs.RedLine != 0 || fs.GreenLine != 0 {
-		t.Fatalf("ChartOnly must not evaluate Falcon, got %+v", fs)
-	}
 	if chart.DAGTickFrame() == nil {
 		t.Fatal("ChartOnly must still run DAG")
 	}
@@ -35,9 +31,5 @@ func TestEvaluateTick_BothModesRunDAGWithoutFalcon(t *testing.T) {
 	live := NewFrame(klines, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	if live.DAGTickFrame() == nil {
 		t.Fatal("Live must run DAG")
-	}
-	lfs := live.FalconSnapshot()
-	if lfs.JurikRSX != 0 || lfs.RedLine != 0 || lfs.GreenLine != 0 {
-		t.Fatalf("Live tick path must not Evaluate Falcon, got %+v", lfs)
 	}
 }

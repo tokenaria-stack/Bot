@@ -149,7 +149,7 @@ Implementation may evolve (e.g. Primitive instead of an HTML guide; Phase D navi
 ```
 exchange/    transport + Ingress (Bar Source Seam, Authority, merge/validate)
 data/        SQLite archive + PersistenceQueue (single runtime writer)
-market/      Frame, Runtime, streaming/snapshot, Boot, MTF, falcon bus, chart replay
+market/      Frame, Runtime, streaming/snapshot, Boot, MTF, chart replay
 decision/    DECISION-CONTRACT-1 (ApplyDecision / DirectionalIntent; research only)
 core/        DAG runner + nodes (RSX, Wozduh, divergence slots)
 server/      HTTP/WS projection (HistoryProvider, Projector, columnar wire)
@@ -237,7 +237,7 @@ Allowed wire field: `Marker string` + `json:"marker"` for chart labels only.
 4. **SQLite closed volume.** UPSERT `high=MAX`, `low=MIN`, **volume ASSIGN** (`excluded.volume`) for closed native bars (VOLUME-TRUTH-RECOVERY-1). Forming never uses `SaveKlines`. REST Grace (`KlineSettleGraceMs=5000`) still avoids under-indexed first writes. Dedicated `AssignCanonicalVolume` repairs exact PK volume only.
 5. **Time Model Rule (ADR-011).** Fixed intervals (`1m`…`1d`) use duration arithmetic. Calendar intervals (`1w`, `1M`) use bar boundaries (Monday / month-start UTC) via `CurrentBarOpen` / `PreviousBarOpen` / `NextBarOpen`. Never use `IntervalDurationMs` for Cap, REST align, next tip, or month gap checks.
 6. **Indicator Configuration Rule (ADR-012).** Indicator parameters are engine state. Browser menus POST to `/api/settings/indicators`; never own live math config. Autosave on disk. Future: Registry → Config → DAG membership → Runtime → Projection (implement when 2+ indicators need enable/disable).
-7. **Indicator Change Impact (ADR-013).** Classify settings via `ChangeImpact` before mutating runtime. Never `Set*` outside the IndicatorReplay transaction. AnnotationOnly must not touch Falcon/Jurik.
+7. **Indicator Change Impact (ADR-013).** Classify settings via `ChangeImpact` before mutating runtime. Never mutate DAG RSX outside the IndicatorReplay transaction. AnnotationOnly must not touch Jurik.
 8. **Viewport Contract (ADR-014).** Indicator settings are projection events — never move camera/zoom/scroll/TF. Soft `applyProjection` + camera restore only.
 9. **Projection Continuity (ADR-015).** Server `projectViewportFormingTip` is the sole projector (APPEND or OVERWRITE). FE applies snapshots atomically; never synthesizes Cur. First WS after soft apply is idempotent when market unchanged.
 10. **Replay Lifecycle (ADR-016).** Frame runtime replay reproduces live candle lifecycle: closed (`isClosed=true` + commit) then optional forming (`isClosed=false`, never commit). Same Cap forming predicate as History tip strip. History Cap Replay stays closed-only. TipSSOT/ProjCont investigation probes are dormant (`DEBUG_TIP_SSOT` / `DEBUG_PROJ_CONT`); TransportDiag / Self-Healing stay on.
@@ -320,12 +320,12 @@ Binance WS kline
   → Frame.UpdateKlineTick(k, isClosed)
   → evaluateTickLocked
        1. DAG TickUpdate + RSX facts (TV / ZZ / fractal)
-       FalconEngine.Evaluate is not on this path (FALCON-LIVE-ORPHAN-STREAM-1).
+       FalconEngine is not constructed or evaluated on this path (FALCON-FRAME-UNWIRE-1).
 ```
 
 **Double-commit guard (Core 4.8):** `lastCommittedOpenTime` ensures one DAG commit per closed bar (root cause candidate for RSX tip spike #67).
 
-**Keep:** `market/falcon.go` until `FALCON-ORACLE-REPLACE-1` / `FALCON-FRAME-UNWIRE-1` / `FALCON-REMOVE-1`. Allocated on Frame; not evaluated on ticks.
+**Keep:** `market/falcon.go` until `FALCON-REMOVE-1`. File remains; Frame no longer owns or constructs FalconEngine.
 
 ---
 
@@ -384,7 +384,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Allocated on Frame; **not** evaluated on ticks. Tests no longer use it as a numerical twin (`FALCON-ORACLE-REPLACE-1`). Config SetRSX* remains until unwire. |
+| Falcon file | `market/falcon.go` | Temporary leftover until `FALCON-REMOVE-1`. No Frame field, no production/research construction, no Evaluate on ticks. |
 
 **Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
@@ -795,7 +795,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 **Tip Ownership:** Native/1s History = Cap-closed only (`dropFormingTip` + Replay). Viewport may seed Frame forming tip (ADR-010); WS OVERWRITE same open. 5s–45s HTTP: closed Replay immutable; at most one Frame forming row appended (`projectSparseSecondFormingTip`, SPARSE-ADR010-TIP-1). Frame runtime replay = closed→forming (ADR-016); never commit forming during replay.  
 **Discard axis:** `window.projectionEpoch`.  
 **Time axis labels:** UTC unix data unchanged. Crosshair uses detailed local-TZ `localization.timeFormatter`; axis ticks use minimal `tickMarkFormatter` by LWC `TickMarkType` ([`web/chart-core.js`](../web/chart-core.js)). Bottom-axis owner via ADR-023 `timeScale.visible`; future strip via ADR-027 Decoration Plane; crosshair time label always rendered on that owner (not the hovered pane).  
-**Wozduh:** DAG bus only; Falcon Evaluate is not on the tick path. Legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union (Live unused Frames no longer force wt11/wt22 for Falcon shadow). Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
+**Wozduh:** DAG bus only; Frame does not own Falcon. Legend = chrome only (no per-tick HTML metrics). **WOZDUH-WIRE-1 frozen** (`0c2ecce`): live/history pack only subscribed Wozduh scalar plot IDs. **WOZDUH-ACTIVE-1A frozen** (`2cd4ca4`): `/api/history` replay runs only the requested Wozduh compute closure; `ReplayClosedBars` default is still compute-all. **WOZDUH-ACTIVE-1B frozen** (`1b724ef`): persistent Frame Wozduh mask is per-TF WS union (Live unused Frames no longer force wt11/wt22 for Falcon shadow). Enable hydrates the current store window before reveal. `woz_slow` stays on the wire while hidden (pane/crosshair owner).
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). PRESENTATION does not own computation. Layers are distinct: bar truth (always) / analytical truth (consumers) / fact materialization (consumers) / transport (subscribe) / paint (visibility). `RSXCore` does not imply TV, Fractal, or ZZ. ScoreNodes later OR into the same mask — no redesign. Do **not** reopen.
 
@@ -832,7 +832,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Timeline publish gate | `market/kline_gap.go`, `exchange/ws.go` hooks, `web/boot.js` + `ws.js` |
 | Decision | `decision/apply.go`, `decision/contract.go` |
 | DAG | `core/runner.go`, `core/nodes/`, `market/dag_shadow.go` |
-| Falcon | `market/falcon.go` |
+| Falcon leftover | `market/falcon.go` (unused until `FALCON-REMOVE-1`) |
 | History delivery | `server/history_provider.go`, `server/columnar_history.go`, `server/wire/` |
 | Frontend | `web/boot.js`, `columnar-store.js`, `chart-compositor.js`, `ui/viewport-manager.js` |
 | Strategy beacon | `strategy/doc.go` |

@@ -125,20 +125,6 @@ func (a *Frame) AppendWozduhGreen(barIndex int, val float64) {
 	writeBusSeries(&a.WozduhGreen, barIndex, len(a.klines), val)
 }
 
-func (a *Frame) recordDataBusBarLocked(barIndex int, sig FalconSignals) {
-	n := len(a.klines)
-	a.AppendJurikValue(barIndex, sig.JurikRSX)
-	a.AppendWozduhRed(barIndex, sig.RedLine)
-	a.AppendWozduhGreen(barIndex, sig.GreenLine)
-	if barIndex < 0 || barIndex >= n {
-		return
-	}
-	k := a.klines[barIndex]
-	src := a.effectiveRSXSettings().Source
-	writeBusSeries(&a.closeLines, barIndex, n, k.Close)
-	writeBusSeries(&a.rsxPriceLines, barIndex, n, RSXSourcePrice(k.High, k.Low, k.Close, src))
-}
-
 func (a *Frame) JurikSeries() []float64       { return a.JurikLines }
 func (a *Frame) WozduhRedSeries() []float64   { return a.WozduhRed }
 func (a *Frame) WozduhGreenSeries() []float64 { return a.WozduhGreen }

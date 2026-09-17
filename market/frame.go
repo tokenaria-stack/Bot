@@ -31,8 +31,6 @@ type Frame struct {
 	klines                []exchange.Kline
 	timeframe             string
 	config                ChaosConfig
-	falcon                *FalconEngine
-	falconSignals         FalconSignals
 	volEngine             *VolatilityEngine
 	zigzag                *indicators.ZigZag
 	geometry              *geometryTracker
@@ -149,17 +147,14 @@ func (a *Frame) ApplyBacktestRSXConfig(settings RSXSettings) {
 	defer a.mu.Unlock()
 	normalized := NormalizeRSXSettings(settings)
 	a.rsxSettings = &normalized
-	a.falcon.SetRSXLength(normalized.Length)
-	a.falcon.SetRSXSignalLength(normalized.SignalLength)
-	a.falcon.SetRSXSource(normalized.Source)
 	a.replayStreamingLocked()
 }
 
 // UpdateRSXScanConfig applies live engine settings via ChangeImpact (ADR-013).
 // prev must be the settings snapshot from BEFORE ApplyRSXSettings committed.
 //
-// Invariant: Falcon/Jurik runtime is never mutated unless IndicatorReplay runs
-// SetRSX* and replayStreamingLocked in the same transaction.
+// Invariant: DAG RSX is never mutated unless IndicatorReplay runs
+// OnConfigChange and replayStreamingLocked in the same transaction.
 func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -170,9 +165,6 @@ func (a *Frame) UpdateRSXScanConfig(prev, next RSXSettings) {
 
 	switch RSXImpactOfChange(prev, normalized) {
 	case ChangeImpactIndicatorReplay:
-		a.falcon.SetRSXLength(normalized.Length)
-		a.falcon.SetRSXSignalLength(normalized.SignalLength)
-		a.falcon.SetRSXSource(normalized.Source)
 		if a.dag != nil {
 			_ = a.dag.OnConfigChange("rsx", nodes.RSXNodeConfig{
 				Length:       normalized.Length,
@@ -443,20 +435,6 @@ func (a *Frame) Timeframe() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.timeframe
-}
-
-// FalconSnapshot returns a copy of the latest Falcon dashboard values.
-func (a *Frame) FalconSnapshot() FalconSignals {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.falconSignals
-}
-
-// RSXSignalLine returns the Jurik RSX signal line value.
-func (a *Frame) RSXSignalLine() float64 {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.falconSignals.JurikRSXSignal
 }
 
 // FibZonesSnapshot returns a defensive copy of active Fibonacci zones.

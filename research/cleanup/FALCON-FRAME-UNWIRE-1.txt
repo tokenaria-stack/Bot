@@ -1,0 +1,322 @@
+FALCON-FRAME-UNWIRE-1
+Date: 2026-09-18
+Prerequisite: FALCON_ORACLE_REPLACE_GREEN (347170e)
+Base HEAD at start: 347170e (matched origin/2026-07-06-puvo; working tree clean except untracked audits)
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Removed Frame-level Falcon ownership. Frame now constructs DAG / facts /
+indicators only. FalconEngine is no longer allocated, configured, or
+snapshotted by production or research Frame paths.
+
+Kept:
+  ApplyBacktestRSXConfig (legacy name) — pin rsxSettings + replayStreamingLocked
+  UpdateRSXScanConfig — ChangeImpact + DAG OnConfigChange + replay
+  market/falcon.go (physical file; FALCON-REMOVE-1)
+
+Did not introduce FalconAdapter / LegacyIndicatorEngine / ShadowEngine /
+generic calculator interfaces.
+
+======================================================================
+B. PRE-DELETE CONSUMER RECHECK
+======================================================================
+
+Searched current HEAD before edits.
+
+Symbol                         Classification
+-----------------------------  ------------------------------------------
+Frame.falcon                   production construction (resetStreamingEngines)
+                               + config mutation (ApplyBacktest / UpdateRSX)
+                               NO Evaluate since LIVE-ORPHAN-STREAM-1
+falconSignals                  definition + FalconSnapshot / RSXSignalLine
+                               (zeros; tests only after orphan)
+NewFalconEngine                production: resetStreamingEngines
+                               definition: falcon.go
+                               tests: ZERO (oracle replacement)
+FalconSnapshot                 test only (engine_mode_chartonly_test,
+                               streaming_test) asserting zeros
+Frame.RSXSignalLine            definition only (no callers)
+SetRSXLength/Signal/Source     Frame config + falcon.go definition
+ApplyBacktestRSXConfig         research/tests + DumpFeatureTape (KEEP)
+UpdateRSXScanConfig            production server + tests (KEEP)
+resetStreamingEngines          production Frame lifecycle
+FalconEngine / FalconSignals   definition falcon.go
+recordDataBusBarLocked         unused after LIVE-ORPHAN (corpse;
+                               only remaining Frame FalconSignals writer)
+
+NEW real production/research consumer since audit? NO.
+
+GPT prompt "STOP if new consumer" did not fire.
+
+Correction vs GPT consumer map:
+  evaluateFalconSignalsLocked is NOT a Falcon Evaluate consumer. It only
+  runs DAG + fact collectors. Name is leftover (not renamed this chapter).
+
+======================================================================
+C. FRAME FALCON FIELD REMOVAL
+======================================================================
+
+Deleted from Frame:
+  falcon *FalconEngine
+  falconSignals FalconSignals
+
+Left (not FalconEngine ownership; zeroed leftovers from Live extra stream):
+  prevFalconRed / prevFalconGreen / prevFalconBlue
+  streamingSnapshot copies of the same
+  resetStreamingEngines zeros
+
+These fields are never updated from Falcon Evaluate (orphan already
+stopped that). Deleting them here would be snapshot-struct churn without
+changing numbers. FALCON-REMOVE-1 can drop the names.
+
+======================================================================
+D. CONSTRUCTION REMOVAL
+======================================================================
+
+resetStreamingEngines no longer:
+  settings := effectiveRSXSettings()
+  a.falcon = NewFalconEngine()
+  a.falcon.SetRSXLength / SetRSXSignalLength / SetRSXSource
+
+DAG still rebuilds from effectiveRSXSettings() via initDAGShadowLocked
+during warmup/replay. That was always the numerical owner.
+
+NewFalconEngine( call sites after this chapter:
+  definition in falcon.go ONLY.
+
+======================================================================
+E. FALCON SNAPSHOT / ACCESSOR RESULT
+======================================================================
+
+Deleted:
+  Frame.FalconSnapshot()
+  Frame.RSXSignalLine()   (Frame method; indicators.RSXSignalLine kernel kept)
+
+Callers were tests asserting zeros after LIVE-ORPHAN. No production or
+research caller.
+
+======================================================================
+F. ApplyBacktestRSXConfig RESULT
+======================================================================
+
+KEPT function and name.
+
+REMOVED:
+  a.falcon.SetRSXLength(normalized.Length)
+  a.falcon.SetRSXSignalLength(normalized.SignalLength)
+  a.falcon.SetRSXSource(normalized.Source)
+
+REMAINS:
+  NormalizeRSXSettings
+  a.rsxSettings = &normalized
+  a.replayStreamingLocked()  → reset engines + DAG + facts + FeatureTape Fill
+
+Those Falcon SetRSX* calls were wrapper-only. DAG RSX is reconstructed
+from the pin during replay. Removing them does not change canonical RSX.
+
+======================================================================
+G. UpdateRSXScanConfig RESULT
+======================================================================
+
+KEPT function.
+
+REMOVED Falcon SetRSX* in ChangeImpactIndicatorReplay.
+
+REMAINS:
+  clear Frame pin (live SSOT)
+  dag.OnConfigChange("rsx", RSXNodeConfig{...})
+  replayStreamingLocked
+  AnnotationOnly rebuildRSXAnnotationsLocked
+  no-op ProjectionOnly
+
+Timing of IndicatorReplay vs AnnotationOnly unchanged.
+
+======================================================================
+H. FEATURETAPE SAFETY
+======================================================================
+
+DumpFeatureTape still:
+  NewFrame → ApplyBacktestRSXConfig(settings) → BindFeatureEvaluator → Fill
+
+Fill still reads DAG slots / facts. Falcon Evaluate was already off this
+path. Pin still lands in rsxSettings before replay.
+
+Did NOT:
+  modify FEATURE-SPEC-2
+  regenerate certified tapes
+  change FeatureTape columns
+  change nativeRSXContext
+  change Brain3 artifacts
+
+market tests including forecast_tape / research_feature_tape_regen PASS
+(unsandboxed). Numerical tape path unchanged by construction.
+
+======================================================================
+I. RSX / FACT SAFETY
+======================================================================
+
+Untouched:
+  indicators.JurikRSX
+  RSXSignalLine kernel
+  RSXNode
+  RSTVState
+  FractalFactsAt
+  ZZDivFactCollector
+  IndicatorFactEvent
+  AnchorAt / ConfirmedAt
+
+Config owner is Frame rsxSettings + DAG RSXNode.
+
+======================================================================
+J. WOZDUH SAFETY
+======================================================================
+
+Untouched:
+  WozduhNode
+  Wozduh periods
+  detectVolCrossCode
+  core/nodes Wozduh tests from ORACLE-REPLACE
+
+Falcon duplicate Wozduh remains inside falcon.go until FALCON-REMOVE-1.
+
+======================================================================
+K. TEST CHANGES
+======================================================================
+
+Retargeted (canonical DAG still asserted; FalconSnapshot dropped):
+  market/engine_mode_chartonly_test.go
+    TestEvaluateTick_BothModesRunDAGWithoutFalcon
+    classification: canonical DAG-on-both-modes (was also Falcon-zero corpse)
+  market/streaming_test.go
+    TestMarker_TickDoesNotEvaluateFalconKeepsDAG
+    classification: keep DAG Jurik; drop FalconSnapshot zeros
+
+KEPT:
+  TestApplyBacktestRSXConfig_PinsSettingsAndReplays
+  TestUpdateRSXScanConfig_PivotRadiusPreservesTip
+  TestUpdateRSXScanConfig_LengthReplays
+  fact / FeatureTape / replay_lifecycle callers of pin/replay
+
+Did not reintroduce NewFalconEngine in helpers.
+
+Deleted unused:
+  recordDataBusBarLocked (FalconSignals → DataBus; no callers)
+
+Not deleted (exported DataBus writers; unused after orphan; out of scope):
+  AppendJurikValue / AppendWozduhRed / AppendWozduhGreen
+
+======================================================================
+L. POST-UNWIRE FALCON REFERENCE MAP
+======================================================================
+
+NewFalconEngine(
+  falcon.go definition only
+
+.falcon / falconSignals / FalconSnapshot
+  ZERO in Go after this chapter
+  leftover comment in server/webserver.go: "never FalconSnapshot" (still true)
+
+SetRSXLength / SetRSXSignalLength / SetRSXSource
+  FalconEngine methods in falcon.go only
+  ZERO Frame / production / research callers
+
+ApplyBacktestRSXConfig / UpdateRSXScanConfig
+  still present; no Falcon calls
+
+evaluateFalconSignalsLocked
+  leftover name; body is DAG + facts only
+  name debt for FALCON-REMOVE-1 (not a consumer)
+
+FalconEngine / FalconSignals / Evaluate
+  falcon.go only (no production Evaluate since LIVE-ORPHAN)
+
+======================================================================
+M. REMAINING FALCON CODE
+======================================================================
+
+market/falcon.go still contains:
+  FalconEngine, FalconSignals, NewFalconEngine, Evaluate,
+  SetRSX*, SaveState/RestoreState, duplicate Wozduh internals
+
+Why it still exists:
+  This chapter only removes ownership. Physical package/file deletion is
+  FALCON-REMOVE-1 so freeze/rollback stays one concern per commit.
+
+It now has no application architecture owner. Compiles because nothing
+imports it except the same package (market). Dead code in-package until
+REMOVE.
+
+======================================================================
+N. TEST RESULTS
+======================================================================
+
+Required:
+  go test ./market/ -count=1                 PASS (16.7s unsandboxed)
+  go test ./core/nodes/ -count=1             PASS
+  go test ./server/ -count=1 -skip TestGoldenAudit  PASS
+  go test ./brain3/ -count=1                 PASS
+  go build .                                 PASS
+
+Sandbox first market run FAIL: research/tapes "operation not permitted"
+(environment; rerun with full FS PASS). Not a product regression.
+
+Broader go test ./... :
+  FAIL cmd/repair_archive_gap unused `restored`     PREEXISTING
+  FAIL indicators TestMarketRSXParity* / Stage4     missing /tmp CSV
+                                                    ENVIRONMENT PREEXISTING
+  other packages ok
+
+Did not fix those here. Did not regenerate certified artifacts.
+
+======================================================================
+O. GIT STATUS
+======================================================================
+
+See post-commit status in the chat after commit.
+
+Intended commit:
+  FALCON-FRAME-UNWIRE-1: remove Falcon from Frame ownership
+
+Not staged:
+  research/cleanup/*CONSUMER-AUDIT* / ARTIFACT-INDEX (unrelated untracked)
+
+HARD STOP after commit. Do NOT auto-push.
+
+FALCON-REMOVE-1 only after this commit is reviewed, frozen, and pushed.
+
+======================================================================
+P. FINAL VERDICT
+======================================================================
+
+FALCON_FRAME_UNWIRE_GREEN
+
+======================================================================
+GPT / PROMPT CORRECTIONS
+======================================================================
+
+1. Freeze gate: prompt said STOP if 347170e still ahead of origin.
+   At start of this chapter origin already matched 347170e (push after
+   the earlier GitHub DNS failure). Proceeded.
+
+2. Falcon SetRSX* on ApplyBacktest/UpdateRSX were not the numerical
+   owner. DAG rebuild/OnConfigChange already applied pin. Removing them
+   is unwire, not a semantics change. Falcon same-length SetRSXLength
+   no-op never applied to Jurik on the DAG path (ORACLE-REPLACE already
+   recorded this).
+
+3. Did not rename ApplyBacktestRSXConfig (agreed). Also did not rename
+   evaluateFalconSignalsLocked — leftover name, not a Falcon consumer.
+
+4. Deleted recordDataBusBarLocked. GPT listed falconSignals as optional
+   delete; the unused DataBus writer was the last Frame FalconSignals
+   type use besides accessors. Leaving it would keep a fake Falcon
+   DataBus socket. Deleting it is required cleanliness, not a redesign.
+
+5. Did not delete prevFalcon* snapshot fields. They are zeroed corpses,
+   not Frame.falcon. Mixing that into UNWIRE would expand the snapshot
+   rollback surface. REMOVE can drop them.
+
+6. Did not delete falcon.go or Falcon Evaluate. Intermediate state is
+   exactly: Falcon code exists; architecture does not depend on it.

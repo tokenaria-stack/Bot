@@ -21,8 +21,6 @@ type ZigZagState struct {
 }
 
 func (a *Frame) resetStreamingEngines() {
-	settings := a.effectiveRSXSettings()
-	a.falcon = NewFalconEngine()
 	a.volEngine = NewVolatilityEngine()
 	a.zigzag = indicators.NewZigZag(indicators.DefaultATRPeriod)
 	a.zigzag.SetSensitivity(defaultZigZagSensitivity)
@@ -56,10 +54,6 @@ func (a *Frame) resetStreamingEngines() {
 	a.aoCrossZeroUp = false
 	a.aoCrossZeroDown = false
 	a.prevZigHas = false
-	a.falcon.SetRSXLength(settings.Length)
-	a.falcon.SetRSXSignalLength(settings.SignalLength)
-	// Falcon Jurik uses the same normalized source as DAG RSX.
-	a.falcon.SetRSXSource(settings.Source)
 	a.Annotations = nil
 	a.rsxTVFacts = nil
 	a.rstv = nil
@@ -134,8 +128,6 @@ func (a *Frame) markTailCommittedLocked(klines []exchange.Kline) {
 }
 
 func (a *Frame) evaluateFalconSignalsLocked(k exchange.Kline, barIndex int, isClosed bool) {
-	// FALCON-LIVE-ORPHAN-STREAM-1: production ticks do not Evaluate Falcon.
-	// Frame.falcon stays allocated for later oracle/unwire chapters.
 	a.runDAGShadowLocked(k, barIndex, isClosed)
 	a.noteRSTVFactLocked(isClosed, barIndex)
 	a.noteRSTZZFactLocked(isClosed, barIndex)

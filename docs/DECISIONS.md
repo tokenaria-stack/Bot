@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-FRAME-UNWIRE-1 (Sep 2026)
+
+**Context:** After ORACLE-REPLACE-1, Falcon was unused as a twin but Frame still constructed FalconEngine and `ApplyBacktestRSXConfig` / `UpdateRSXScanConfig` still called Falcon `SetRSX*`. Canonical RSX lives on DAG (`RSXNode`) plus `rsxSettings` pin/replay.
+
+**Decision:** Remove Frame Falcon ownership and Falcon config plumbing. Keep `ApplyBacktestRSXConfig` name and its pin/replay/DAG/facts behavior. Keep `falcon.go` until FALCON-REMOVE-1. Do not introduce an adapter.
+
+**Rejected:**
+- Rename `ApplyBacktestRSXConfig` in this chapter — **Reason:** name debt; behavior is still the research pin/replay helper.
+- Delete `falcon.go` here — **Reason:** separate physical-deletion rollback boundary.
+- Replace Falcon with a generic calculator interface — **Reason:** DAG already owns numbers.
+
+**Consequences:** Production/research no longer construct or configure Falcon. FeatureTape still uses pin+replay. Next: FALCON-REMOVE-1 after freeze and push.
+
+---
+
 ## FALCON-ORACLE-REPLACE-1 (Sep 2026)
 
 **Context:** After LIVE-ORPHAN-STREAM-1, Falcon was unused on production ticks but tests still treated FalconEngine as the numerical twin for WozduhNode and RSX config.
