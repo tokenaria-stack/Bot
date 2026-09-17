@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## QDRANT-REMOVE-1 — retire unused vector database subsystem (Sep 2026) GREEN / FROZEN
+
+- Deleted Falcon-era `vector_db/` (Qdrant client wrappers, `ReportSnapshot` 6-float packing, unused fractal/trade upsert). No final consumer.
+- Removed `github.com/qdrant/go-client`. `go mod tidy` dropped the gRPC stack pulled only by that client; `modernc.org/sqlite` correctly moved to a direct require (already used by `data/`).
+- Brain3, FeatureTape, `/api/history` DAG replay, Falcon Live/HTF: untouched.
+- **ANALOGUE-MEMORY-RESEARCH-1** parked (microscope → optional neighbour facts → infra only if needed). Not a production socket.
+- Artifact: `research/cleanup/QDRANT-REMOVE-1.txt`. Do not mix untracked `ARTIFACT-INDEX-AUDIT-1.txt` / `QDRANT-CONSUMER-AUDIT-1.txt` into this freeze.
+
 ## INDEX-FOREST-1 — exclude generated artifacts from agent indexing (Sep 2026) GREEN / FROZEN
 
 - `.cursorignore` only (`1b03f00`). ~2.01 GiB venv/tapes/OOF/CatBoost/work/`history.db` hidden from index; bytes kept. `research/` not globally ignored.

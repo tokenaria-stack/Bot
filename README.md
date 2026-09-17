@@ -43,7 +43,6 @@ core/         DAG runner + nodes
 server/       HTTP/WS projection
 web/          DDR charts (boot.js)
 strategy/     doc.go beacon only
-vector_db/    Qdrant socket
 ```
 
 **Import DAG:** `exchange → market → decision → execution`

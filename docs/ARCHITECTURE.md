@@ -156,7 +156,6 @@ core/        DAG runner + nodes (RSX, Wozduh, divergence slots)
 server/      HTTP/WS projection (HistoryProvider, Projector, columnar wire)
 web/         DDR charts (boot.js composition root)
 indicators/  Streaming math (no go-talib)
-vector_db/   Qdrant socket (no live consumer yet)
 strategy/    doc.go beacon only (Phase F purged legacy code)
 ```
 
@@ -389,7 +388,6 @@ Remaining contracts:
 | `Frame` accessors | `market/` | State for future scoring |
 | Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF). ChartOnly skips `Evaluate`. Scoring island and Falcon-era backtest packing removed. |
 | Sizing | `execution/` | Quantity math socket |
-| Qdrant | `vector_db/` | Pattern memory socket (#8) |
 
 Future strategies live under `decision/`. They consume market state without importing `market` into contract packages (pass snapshots / interfaces at the composition root).
 
@@ -766,7 +764,7 @@ Walk-forward fold models exist only to produce honest out-of-fold predictions fo
 
 ### v1 scope / deferred machinery
 
-v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built here: Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Qdrant/Reliability, TARGET-RESOLUTION-2 (separate 15m→1s TargetSpec). REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path.
+v1 is closed-bar forecast only (no forming-bar probability). Explicitly deferred, **not** built here: Python/training, model inference, multi-runtime map/registry/refcounting, `FeaturePlan` union across models, config database, Save As UI, activation infrastructure (`atomic.Pointer` swap / `EffectiveFrom` seam ownership), `MarketDataSnapshot`/`SourceManifest` machinery, Decision, backtest, Reliability, TARGET-RESOLUTION-2 (separate 15m→1s TargetSpec). REST/WS stitching and reconcile remain owned by the existing Boot/Ingress FSM — Forecast only checks Frame continuity/publishable, never a second reconcile path. Analogue-memory / vector retrieval is **not** a Forecast v1 concern (`ANALOGUE-MEMORY-RESEARCH-1`, parked).
 
 **Do not touch in this or future chapters without an explicit new debt:** RSX/Wozduh formulas, TV/Fractal/ZZ fact semantics, `AnchorAt`/`ConfirmedAt`, DAG-DEMAND-1, Wozduh demand, market reducers, sparse-seconds architecture, Boot/REST/WS reconcile, timestamp architecture, history/camera, Falcon, old scores, strategies, execution, backtest, Decision.
 
@@ -852,4 +850,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN.** Next CODE: **QDRANT-CONSUMER-AUDIT-1** (read-only). Then remaining clean, then **WOZDUH-TRUTH-1**.
+**NEXT:** see `docs/OPEN_DEBTS.md`. **QDRANT-REMOVE-1 GREEN / FROZEN.** **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN.** Then remaining clean, then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).

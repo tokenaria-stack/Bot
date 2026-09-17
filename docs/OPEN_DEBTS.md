@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`) — `.cursorignore` only; ~2.01 GiB artifact/venv/SQLite excluded from agent index; bytes remain on disk. **ARTIFACT-INDEX-AUDIT-1.txt** is preexisting untracked evidence (not mixed into Qdrant). Later: whether `research/cleanup` audit reports belong in Git. Next CODE chapter: **QDRANT-CONSUMER-AUDIT-1** (read-only first). Then empty sockets, Marker, Falcon, V1 Brain, Brain3/forecast, **WOZDUH-TRUTH-1**.
+2. **QDRANT-REMOVE-1 GREEN / FROZEN** — Falcon-era `vector_db/` + `github.com/qdrant/go-client` removed (no final consumer). **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **ARTIFACT-INDEX-AUDIT-1.txt** and **QDRANT-CONSUMER-AUDIT-1.txt** remain preexisting untracked evidence (Git policy later). Next CODE: remaining clean slices (empty sockets, Marker, Falcon), then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked — not next CODE, not a production socket.
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -76,6 +76,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 | **VOLUME-SOURCE-ARBITRATION-1** | **FROZEN STEP 2. Verdict VOLUME_SSOT_GREEN_V1.** REST-family SSOT + 1m additive integrity. 18 REST_15M_PARENT + 2 REST_1M_RECONSTRUCTION. Identity `volume-truth:futures-base-v1`. 1m/3m/spot SOURCE_CONFLICT still quarantined. Report `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`. | Next: **WOZDUH-TRUTH-1** (not started). Do not silently refresh v1 from future Binance history. |
 | **FRACTAL-MARKER-SSOT-1** | `rsxFractalHitAtDisplayBar` / `scanRSXFractalHits` vs `FractalFacts` / `FractalFactsAt`. | Local-radius math, not Everget carry. Inventory consumers, then delete leftover marker path if unused. Do not reopen RSX-SIGNAL-3 detector math. |
 | **ATR-VALUES-FRAME-1** | `market/frame.go` still hydrates via `indicators.ATRValues` (legacy batch). ATR-TRUTH-1 left `ATRSeries` as canonical. | ATR leftover, not TV facts. |
+| **ANALOGUE-MEMORY-RESEARCH-1** | Does causal nearest-neighbour information add predictive/explanatory value beyond certified facts Brain3 already has? Microscope first; neighbour-derived features only if OOF lift; retrieval infra (possibly Qdrant) only if scale/latency require it. As-of law: memory at T may use only examples whose features **and** outcomes were knowable before T. | Parked until Wozduh / opportunity vocabulary / Brain3 maturity. No socket in HEAD. First experiment: in-memory kNN on a certified matrix — not Qdrant. |
 | **FEATURE-TAPE-RSX-REGEN-1 ✅ closed** | analysis:v2 four-column tape regenerated with `DumpFeatureTape`. | Consumed by RESEARCH-DATASET-1. Do not reuse analysis:v1 tapes. |
 | **TV-BULL-QUARANTINE-1 ✅ closed** | Visual Bull/Bear match TV after ONE-BRAIN. | Features eligible; old `analysis:v1` tapes must not be reused. |
 | **TV-HIGHESTBARS-TIE-1** | Stage 3 leftover: possible TV builtin `highestbars` vs Go newest-wins on equal RSX. | Do **not** mix into ONE-BRAIN. Reopen only with real TV Data Window evidence of a mismatch after the Bear is published. |
@@ -347,7 +348,7 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
 | **44** | Order Flow / TickBarBuilder / `@aggTrade` | ⏸ | Amputated until settings UI + consumer; seam documented in Ingress |
-| **8** | Qdrant wired in `main` + AI veto consumer | 🔜 | `vector_db/` exists; no live consumer |
+| **8** | Falcon-era Qdrant / `vector_db` | ✅ | **QDRANT-REMOVE-1:** deleted; was never wired in `main`. Analogue retrieval is **ANALOGUE-MEMORY-RESEARCH-1** (parked), not a veto in front of execution. |
 | **64** | Navigators full `ReplayDAGKlines` each request (CPU) | 🟡 | Later: live HistoryBus tail |
 
 ---

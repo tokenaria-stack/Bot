@@ -7,6 +7,22 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## QDRANT-REMOVE-1 (Sep 2026)
+
+**Context:** `vector_db/` was a Falcon/Jurik 6-float Qdrant wrapper with no production, research, Brain3, FeatureTape, server, or startup consumer (`QDRANT-CONSUMER-AUDIT-1`). ADR-004 had kept it as a thin socket without an owner.
+
+**Decision:** Delete `vector_db/` and `github.com/qdrant/go-client`. Do not replace with an analogue-memory socket. Park **ANALOGUE-MEMORY-RESEARCH-1** as an unproven research question (microscope first; derived neighbour facts into Brain3 only if causal OOF lift; choose retrieval infra only if scale requires it). Execution never queries similarity. Analogue memory is retrieval, not a second brain.
+
+**Rejected:**
+- Keep the package because vector search might be useful later — **Reason:** no consumer; Jeweler sockets-not-power-plants.
+- Extract VectorizeCandles / ReportSnapshot — **Reason:** NOTHING_TO_EXTRACT; Falcon packing is obsolete.
+- Place Qdrant as a veto immediately before orders — **Reason:** second decision engine; Strategy Book owns intent.
+- Wire neighbour features into Brain3 now — **Reason:** unproven; look-ahead risk if the index is not as-of honest.
+
+**Consequences:** One current learner (Brain3). Additional future learners, if any, are a separate architecture chapter — they are not this deleted Qdrant package. Git preserves the old implementation.
+
+---
+
 ## INDEX-FOREST-1 (Sep 2026)
 
 **Context:** Workspace ~2 GiB excl `.git`; ~6–8 MiB maintainable source. Large families were already gitignored but `.cursorignore` excluded only `.cursor/mcp.json`. Gitignored ≠ Cursor-ignored.
@@ -15,7 +31,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Rejected:** Broad `research/**` or `*.db` — **Reason:** hides Python/reports or future fixtures. Deleting venvs/tapes/OOF/`history.db` — **Reason:** existence ≠ index. Copying `research/brain3/*.txt` gitignore into `.cursorignore` — **Reason:** already too broad.
 
-**Consequences:** `INDEX_FOREST_GREEN` `1b03f00`. Physical scratch and Brain3 gitignore breadth remain later chapters. `ARTIFACT-INDEX-AUDIT-1.txt` may stay untracked until a Git-policy decision. Next CODE: QDRANT-CONSUMER-AUDIT-1 (read-only).
+**Consequences:** `INDEX_FOREST_GREEN` `1b03f00`. Physical scratch and Brain3 gitignore breadth remain later chapters. `ARTIFACT-INDEX-AUDIT-1.txt` may stay untracked until a Git-policy decision. Qdrant consumer audit and removal followed as their own chapters.
 
 ---
 
@@ -942,7 +958,7 @@ Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, d
 
 **Context:** Legacy ScoreEngine / trade FSM / matrix / risk settings blocked a clean decision layer and confused AI/humans.
 
-**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `execution/`, `falcon.go`, `vector_db/`). Default `ENGINE_MODE=ChartOnly`.
+**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `execution/`, `falcon.go`). Default `ENGINE_MODE=ChartOnly`. *(Phase F also listed `vector_db/` as a keep; **QDRANT-REMOVE-1** later deleted it — no consumer, obsolete Falcon snapshot packing.)*
 
 **Rejected:**
 - Rebranding legacy modules in place — **Reason:** keeps lie-names and dead paths; Delete > Deprecate.

@@ -1,0 +1,248 @@
+QDRANT-REMOVE-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent HEAD: 7c3a7bd
+Basis: QDRANT-CONSUMER-AUDIT-1 → QDRANT_DEAD_DELETE_RECOMMENDED
+User approval: explicit QDRANT-REMOVE-1 prompt
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Deleted the Falcon-era `vector_db/` package and the unused Qdrant Go client.
+No replacement socket. No Brain3/FeatureTape/history/Falcon-outside-vector_db
+changes. Analogue retrieval remains a PARKED research question
+(ANALOGUE-MEMORY-RESEARCH-1), not production infrastructure.
+
+Corrections vs the implementation prompt (kept, documented):
+
+1. `go mod tidy` correctly promoted `modernc.org/sqlite v1.52.0` from
+   indirect → direct. That module was already imported by `data/`; listing
+   it as indirect was prior hygiene debt, not Qdrant ownership. Accepted.
+   Not broad unrelated version churn of sqlite itself.
+
+2. User note that the system may later have 2–3 learners: recorded in ADR
+   as a SEPARATE future architecture chapter. Analogue memory / Qdrant is
+   still not a "brain". This chapter does not add learners or Qdrant-as-brain.
+
+3. ADR-004 historical "keep vector_db" was annotated, not silently erased.
+   New ADR QDRANT-REMOVE-1 is the current keep/delete law.
+
+4. `pattern_test.go` tests only VectorizeCandles / VectorizeReport of the
+   dead packer. Deleted with the package. NOTHING_TO_EXTRACT unchanged.
+
+======================================================================
+B. FINAL PRE-DELETE CONSUMER CHECK
+======================================================================
+
+Re-search on HEAD 7c3a7bd before delete:
+
+  "trading_bot/vector_db" in *.go
+      only vector_db/pattern_test.go
+
+  github.com/qdrant/go-client
+      only vector_db/db.go, vector_db/memory.go
+
+  NewDBClient / SavePattern / PredictWinRate
+      no callers outside vector_db
+
+  main.go, config, server, market, brain3, forecast, cmd/*, research Python
+      no new consumer since the audit
+
+  Config/env/Docker
+      still none
+
+Result: no NEW real consumer. Deletion proceeded.
+
+======================================================================
+C. FILES DELETED
+======================================================================
+
+  vector_db/db.go
+  vector_db/memory.go
+  vector_db/pattern.go
+  vector_db/pattern_test.go
+
+Directory gone (`rmdir`). No leftover empty socket package.
+
+======================================================================
+D. DEPENDENCIES REMOVED
+======================================================================
+
+Direct removed:
+
+  github.com/qdrant/go-client v1.18.2
+
+Transitive dropped by `go mod tidy` (were Qdrant/gRPC graph; no remaining
+Go import in this repo):
+
+  google.golang.org/grpc v1.80.0
+  google.golang.org/protobuf v1.36.11
+  google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4
+  golang.org/x/net v0.53.0
+  golang.org/x/text v0.36.0
+  plus go.sum otel/xxhash/protobuf/gonum checksums that had no remaining
+  importer
+
+Direct hygiene correction (same version, already a real consumer):
+
+  modernc.org/sqlite v1.52.0   indirect → direct
+
+Indirect entries that appeared in go.mod after sqlite became the leaf
+(already in the sqlite module graph / go.sum neighborhood):
+
+  github.com/stretchr/testify v1.11.1
+  golang.org/x/tools v0.43.0
+
+`github.com/google/uuid` remains indirect (not a Qdrant-only leftover;
+still in the remaining graph).
+
+No manual extra pruning.
+
+======================================================================
+E. UNIQUE VALUE VERDICT
+======================================================================
+
+NOTHING_TO_EXTRACT
+
+HEAD did not change the audit conclusion. VectorizeCandles is unused
+percent-from-first-close. ReportSnapshot is obsolete Falcon/Jurik packing.
+No extraction.
+
+======================================================================
+F. CANONICAL ARCHITECTURE CHECK
+======================================================================
+
+Untouched (no source edits):
+
+  market/ replay, Frame, DumpFeatureTape*, FalconEngine, streaming Falcon lines
+  server/ history projection
+  brain3/
+  forecast/ (docs only: Forecast v1 deferred list no longer names Qdrant
+            as if it were planned Forecast machinery)
+  decision/, execution/
+  web/
+
+Canonical path remains:
+
+  /api/history → ReplayClosedBarsMasked → DAG → ColumnarStore
+
+No analogue-memory implementation.
+No SimilarityEngine / AnalogueMemory interface.
+
+======================================================================
+G. FUTURE ANALOGUE MEMORY STATUS
+======================================================================
+
+ANALOGUE-MEMORY-RESEARCH-1
+    PARKED / UNPROVEN
+
+Question: does causal nearest-neighbour information add predictive or
+explanatory value beyond certified facts already available to Brain3?
+
+Preferred sequence (not implemented):
+
+  microscope A first
+      exact/simple in-memory neighbours on a certified opportunity matrix
+      as-of: features AND outcomes knowable before T
+      walk-forward fold memory; never one giant all-time collection
+      ↓
+  if useful, derived feature experiment B
+      neighbour facts → Brain3 (one learner absorbs them)
+      ↓
+  if scale/latency later require it
+      choose retrieval infrastructure (Qdrant is one candidate, not a law)
+
+Not:
+
+  Qdrant veto → execution
+  second brain
+  keeping vector_db to make the later experiment easier
+
+Current course: one Brain3. Extra future learners are out of this chapter.
+
+======================================================================
+H. TEST RESULTS
+======================================================================
+
+  go build .
+      PASS
+
+  go test ./market/ -count=1
+      PASS (sandbox first failed: tapes "operation not permitted";
+            re-run with full FS: ok 16.092s)
+
+  go test ./server/ -count=1 -skip TestGoldenAudit
+      PASS (sandbox first failed: WAL unable to open db; re-run: ok 15.365s)
+
+  go test ./... -count=1 -skip 'TestGoldenAudit|GoldenAudit'
+      FAIL overall due to KNOWN unrelated items only:
+
+        cmd/repair_archive_gap unused `restored`
+            PREEXISTING COMPILE DEBT
+
+        indicators TestMarketRSXParityStage2/3Probe, TestStage4DataWindowBar
+            open /tmp/btcusdt_15m_*.csv
+            ENVIRONMENT / FIXTURE
+
+      Passing packages include: brain3, config, core, data, decision,
+      exchange, execution, forecast, market, server, server/wire.
+
+      No Binance Forbidden in this run.
+
+      No NEW failure attributable to vector_db deletion.
+      No `trading_bot/vector_db` package in the suite (gone).
+
+======================================================================
+I. POST-DELETE REFERENCE SWEEP
+======================================================================
+
+Active Go / go.mod / go.sum:
+
+  vector_db, github.com/qdrant, ReportSnapshot
+      ZERO
+
+Allowed doc survivors (current law, not a live owner):
+
+  docs/DECISIONS.md     QDRANT-REMOVE-1 ADR + ADR-004 annotation
+  docs/HISTORY.md       completed chapter + INDEX-FOREST leftover wording
+                        "do not mix into Qdrant" (historical hygiene note)
+  docs/OPEN_DEBTS.md    #8 closed ✅; ANALOGUE-MEMORY-RESEARCH-1 parked
+  MEMORY.md             NEXT pointer
+  research/cleanup/*    prior audits (some untracked) + this report
+
+README.md / docs/ARCHITECTURE.md package layout: vector_db line removed.
+
+Historical research/cleanup PRE-STRATEGY / INDEX-FOREST / ARTIFACT reports
+still mention Qdrant as then-future work. Left intact (historical).
+
+No active Qdrant owner.
+
+======================================================================
+J. GIT STATUS
+======================================================================
+
+Staged for this commit (explicit paths only):
+
+  D  vector_db/*.go (4 files)
+  M  go.mod go.sum
+  M  README.md
+  M  MEMORY.md
+  M  docs/ARCHITECTURE.md docs/DECISIONS.md docs/HISTORY.md docs/OPEN_DEBTS.md
+  A  research/cleanup/QDRANT-REMOVE-1.txt
+
+PREEXISTING_UNTRACKED_EVIDENCE (NOT staged):
+
+  research/cleanup/ARTIFACT-INDEX-AUDIT-1.txt
+  research/cleanup/QDRANT-CONSUMER-AUDIT-1.txt
+
+No git add -A.
+
+======================================================================
+K. FINAL VERDICT
+======================================================================
+
+QDRANT_REMOVE_GREEN
+
+HARD STOP. Do not continue to empty sockets / Marker / Falcon / Brain / Wozduh.
+======================================================================
