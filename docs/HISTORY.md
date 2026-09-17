@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## FALCON-HTF-OSC-DEAD-1 — delete unread HTF Falcon oscillators (Sep 2026)
+
+- Audit: `FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND` (`research/cleanup/FALCON-CONSUMER-MIGRATION-AUDIT-1.txt`).
+- Deleted `evaluateHTFOscillators` and `HTFState` RSX/Wozduh floats. Deleted `mtf_oscillators_test.go`.
+- Kept `BuildHTFNavigatorLayer`, tracker Update/Prefetch, Frame Falcon, `ApplyBacktestRSXConfig`.
+- Did not migrate values to DAG. Did not start Live orphan stream cleanup.
+- Artifact: `research/cleanup/FALCON-HTF-OSC-DEAD-1.txt`.
+
 ## FRACTAL-MARKER-SSOT-1 — retire unused RSX fractal scanner APIs (Sep 2026) GREEN / FROZEN
 
 - Production owner was already `FractalFactsAt` → `IndicatorFactEvent` → `Frame.rsxFractalFacts`.

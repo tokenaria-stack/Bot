@@ -1,0 +1,101 @@
+FALCON-HTF-OSC-DEAD-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent HEAD: 2674fdb (FRACTAL-MARKER-SSOT-1)
+Basis: FALCON-CONSUMER-MIGRATION-AUDIT-1 → FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND
+User approval: FALCON-HTF-OSC-DEAD-1 exact slice (do not merge Live orphan)
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Deleted unread HTF Falcon oscillator compute only.
+
+  evaluateHTFOscillators (NewFalconEngine over strictly-closed HTF bars)
+  HTFState.RSXValue / WozduhUp / WozduhDown
+  market/mtf_oscillators_test.go (only protected those dead floats)
+
+Kept:
+
+  BuildHTFNavigatorLayer
+  WalkForwardMTFTracker lifecycle (Prefetch, Update, step-function closes)
+  HTFState navigator TrendLines / Markers / CandleCount
+  Frame Falcon
+  ApplyBacktestRSXConfig
+  facts / chart / FeatureTape / Brain3
+
+No DAG migration. Nobody consumed those HTF oscillator outputs.
+
+======================================================================
+B. FINAL CONSUMER CHECK
+======================================================================
+
+Pre-delete on HEAD 2674fdb:
+
+  HTFState.RSXValue / WozduhUp / WozduhDown
+    writers: mtf_tracker.go Update
+    readers: mtf_oscillators_test.go only
+
+  evaluateHTFOscillators
+    callers: Update + that test
+
+Not FALCON_HTF_OSC_BLOCKED_NEW_CONSUMER.
+
+======================================================================
+C. WHAT WAS NOT TOUCHED
+======================================================================
+
+  market/falcon.go
+  Frame.falcon / Evaluate Live path
+  dag_shadow
+  ApplyBacktestRSXConfig
+  nativeRSXContext / FeatureTape2 HTF RSX
+  RSX facts / projector / chart
+  TV leftover scanRSXTVHits / RSXMarkerHit
+  marker debris
+  Wozduh product (WOZDUH-TRUTH-1)
+
+======================================================================
+D. TESTS
+======================================================================
+
+  go test ./market -count=1 -timeout 180s
+  PASS (unsandboxed; sandbox cannot read research/tapes).
+
+  Focused: TestNoBackendRSXPresentationFields, WalkForwardMTFTracker,
+  CollectWalkForwardMTFPeriods, SetCurrentMTFState. PASS.
+
+  Guard: TestNoBackendRSXPresentationFields now also forbids
+  RSXValue / WozduhUp / WozduhDown on HTFState.
+
+  Existing TestWalkForwardMTFTracker_StepFunctionNoLookAhead still
+  certifies navigator HTF close boundaries without oscillators.
+
+======================================================================
+E. NEXT
+======================================================================
+
+HARD STOP after this slice.
+
+Do not start FALCON-LIVE-ORPHAN-STREAM-1 until explicit approval.
+Do not merge HTF + Live because both look dead.
+
+Sequence remains:
+
+  FALCON-HTF-OSC-DEAD-1   (this)
+        ↓
+  FALCON-LIVE-ORPHAN-STREAM-1
+        ↓
+  FALCON-ORACLE-REPLACE-1
+        ↓
+  FALCON-FRAME-UNWIRE-1
+        ↓
+  FALCON-REMOVE-1
+
+======================================================================
+F. GIT
+======================================================================
+
+No commit in this write unless the user requests freeze/commit.
+
+END

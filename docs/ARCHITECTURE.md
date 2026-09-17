@@ -386,7 +386,7 @@ Remaining contracts:
 |-----------|------|------|
 | `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
 | `Frame` accessors | `market/` | State for future scoring |
-| Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF). ChartOnly skips `Evaluate`. Scoring island and Falcon-era backtest packing removed. |
+| Falcon bus | `market/falcon.go` | Numerical calculator (Live Frame). ChartOnly skips `Evaluate`. HTF isolated Falcon oscillators deleted (`FALCON-HTF-OSC-DEAD-1`). Scoring island and Falcon-era backtest packing removed. |
 
 **Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
@@ -851,4 +851,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **FRACTAL-MARKER-SSOT-1 GREEN / FROZEN.** Next cleanup: **FALCON-CONSUMER-MIGRATION-AUDIT-1** (read-only). Product: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **FALCON-HTF-OSC-DEAD-1** implemented (audit frozen `FALCON_AUDIT_GREEN_RETIREMENT_PATH_FOUND`). Next: **FALCON-LIVE-ORPHAN-STREAM-1**. Product later: **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).

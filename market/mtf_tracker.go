@@ -10,16 +10,14 @@ import (
 // MinHTFPrefetchBars is the minimum number of closed HTF bars loaded before walk-forward MTF.
 const MinHTFPrefetchBars = 100
 
-// HTFState holds walk-forward higher-TF navigator output at a simulation tick.
+// HTFState holds walk-forward higher-TF navigator geometry at a simulation tick.
+// Oscillator floats (Falcon RSX/Wozduh) were unused writers and were removed (FALCON-HTF-OSC-DEAD-1).
 type HTFState struct {
 	Interval      string
 	TrendLines    []NavigatorLineDTO
 	Markers       []NavigatorMarkerDTO
 	LastUpdateSec int64
 	CandleCount   int
-	RSXValue      float64
-	WozduhUp      float64 // HTF wt11 (RsiVolFast)
-	WozduhDown    float64 // HTF wt22 (RsiVolSlow)
 }
 
 // WalkForwardMTFTracker advances HTF navigator state only when an HTF bar closes.
@@ -126,16 +124,12 @@ func (t *WalkForwardMTFTracker) Update(currentTickSec int64, chartKlines []excha
 		}
 
 		layer := BuildHTFNavigatorLayer(t.navigatorUI, candles, tf, chartKlines)
-		rsx, wozUp, wozDown := evaluateHTFOscillators(candles)
 		t.states[tf] = &HTFState{
 			Interval:      tf,
 			TrendLines:    append([]NavigatorLineDTO(nil), layer.Lines...),
 			Markers:       append([]NavigatorMarkerDTO(nil), layer.Markers...),
 			LastUpdateSec: currentTickSec,
 			CandleCount:   len(candles),
-			RSXValue:      rsx,
-			WozduhUp:      wozUp,
-			WozduhDown:    wozDown,
 		}
 
 		intervalSec := exchange.ParseIntervalToSeconds(tf)
@@ -173,17 +167,4 @@ func (t *WalkForwardMTFTracker) States() map[string]*HTFState {
 		return nil
 	}
 	return t.states
-}
-
-// evaluateHTFOscillators runs an isolated FalconEngine over strictly-closed HTF candles.
-func evaluateHTFOscillators(candles []exchange.Kline) (rsx, wozUp, wozDown float64) {
-	if len(candles) == 0 {
-		return 0, 0, 0
-	}
-	falcon := NewFalconEngine()
-	var last FalconSignals
-	for _, c := range candles {
-		last = falcon.Evaluate(c.High, c.Low, c.Close, c.Volume)
-	}
-	return last.JurikRSX, last.RsiVolFast, last.RsiVolSlow
 }

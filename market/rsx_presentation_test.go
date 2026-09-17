@@ -9,7 +9,9 @@ func TestNoBackendRSXPresentationFields(t *testing.T) {
 	t.Parallel()
 
 	typ := reflect.TypeOf(HTFState{})
-	if _, ok := typ.FieldByName("RSXColor"); ok {
-		t.Fatalf("%s still carries RSXColor presentation state", typ.Name())
+	for _, name := range []string{"RSXColor", "RSXValue", "WozduhUp", "WozduhDown"} {
+		if _, ok := typ.FieldByName(name); ok {
+			t.Fatalf("%s still carries dead oscillator/presentation field %s", typ.Name(), name)
+		}
 	}
 }

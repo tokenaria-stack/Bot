@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## FALCON-HTF-OSC-DEAD-1 (Sep 2026)
+
+**Context:** FALCON-CONSUMER-MIGRATION-AUDIT-1. Isolated `evaluateHTFOscillators` ran `NewFalconEngine` over strictly-closed HTF candles and stored `HTFState.RSXValue` / `WozduhUp` / `WozduhDown`. Those fields had no production or research readers. Navigator geometry is `BuildHTFNavigatorLayer`. Research HTF RSX is `nativeRSXContext` (FeatureTape2), not this tracker.
+
+**Decision:** Delete the dead HTF Falcon oscillator writer. Keep tracker lifecycle, prefetch, step-function closes, and navigator lines/markers. Do not migrate the floats to DAG. Do not touch Frame Falcon, `ApplyBacktestRSXConfig`, facts, chart, FeatureTape, Live orphan stream, Wozduh product, or TV leftovers.
+
+**Rejected:**
+- Migrate HTF oscillators to DAG first — **Reason:** no consumer; migrate would invent a path.
+- Merge with Live Falcon orphan stream — **Reason:** HTF is writer-with-no-reader; Live has extra mutations and tests.
+- Rename/split `ApplyBacktestRSXConfig` — **Reason:** still a real RSX pin + DAG replay bridge.
+
+**Consequences:** Walk-forward MTF tracker is navigator-only. Falcon still exists on Live Frame. Next chapter is FALCON-LIVE-ORPHAN-STREAM-1.
+
+---
+
 ## FRACTAL-MARKER-SSOT-1 (Sep 2026)
 
 **Context:** MARKER-OWNERSHIP-AUDIT-1. Production fractal facts already live on `FractalFactsAt` → `IndicatorFactEvent` → `Frame.rsxFractalFacts`. `ScanRSXMarkers` / display-bar hit APIs had no production caller.
