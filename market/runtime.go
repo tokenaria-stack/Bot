@@ -31,8 +31,9 @@ const (
 )
 
 // Runtime routes market data: WS ticks → TFrames → chart callbacks →
-// persistence. All trading/scoring logic was purged in Core 5.0 Phase F;
-// strategies will plug back in through ScoreEngine contracts (score_types.go).
+// persistence. Trading/scoring engines were purged in Core 5.0 Phase F.
+// ScoreDecision telemetry is a zeroed wire fossil until SCORE-WIRE-1.
+// Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy.
 //
 // Timeline publish gate (thin; not an FSM):
 //

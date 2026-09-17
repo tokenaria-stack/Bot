@@ -1,0 +1,141 @@
+SOCKET-CLEAN-1
+IMPLEMENTATION
+Date: 2026-09-17
+Parent HEAD: 3da43d3 (QDRANT-REMOVE-1)
+Basis: SOCKET-CONSUMER-AUDIT-1 → SOCKET_AUDIT_GREEN_DELETE_CANDIDATES_FOUND
+User approval: SOCKET-CLEAN-1 exact slice
+
+======================================================================
+A. IMPLEMENTATION SUMMARY
+======================================================================
+
+Deleted the proven-dead socket set only:
+
+  execution/ entire package
+  decision.ScoreEngine
+  decision.DefaultScoreEngine
+  ScoreDecision.WinningScore
+  ScoreDecision.HasRawSignal
+  ScoreDecision.HasFinalSignal
+
+Kept:
+
+  DECISION-CONTRACT-1 (contract.go / apply.go / tests)
+  ScoreDecision / ScoreFactor / ActionType (wire until SCORE-WIRE-1)
+  strategy/doc.go
+  ui_config.ScoreComponents()
+  ingress Authority
+  Brain3, FeatureTape, Falcon, history/DAG
+
+Did NOT:
+  rename DirectionalIntent → TradeIntent
+  add ExecutionPolicy / TradeIntent / Learner registry
+  strip MarketState JSON score fields
+  delete ScoreDecisionForTelemetry
+  touch Marker / Falcon / Wozduh / analogue memory
+
+Frozen law in protocol + ADR:
+
+  Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy
+
+======================================================================
+B. CORRECTIONS VS THE IMPLEMENTATION PROMPT
+======================================================================
+
+1. Import DAG / Score canon in jeweler-protocol.mdc still said
+   `exchange → market → decision → execution` and
+   `ScoreEngine.Calculate → ScoreDecision`.
+   After deleting ScoreEngine, leaving that as P0 law would be a lie.
+   Updated DAG to `exchange → market → decision` and replaced Score canon
+   with ApplyDecision + wire-fossil note. Same one-line in
+   senior-quant-architect checklist, README, MEMORY, forecast/doc.go.
+
+2. main.go / market/runtime.go comments still promised a future ScoreEngine
+   plug-in. Corrected comments only (no behavior change).
+
+3. OPEN_DEBTS #36 claimed TradeIntent lives in score_types.go — type never
+   existed. Note updated. #38 notes RiskManager deleted.
+
+4. ATR section "Owner: execution" renamed "Owner: future ExecutionPolicy"
+   so it does not imply a Go package.
+
+These are SSOT truth-repairs required by the delete, not scope creep.
+
+======================================================================
+C. FILES
+======================================================================
+
+Deleted:
+  execution/risk.go
+  execution/risk_test.go
+  execution/ directory
+
+Modified:
+  decision/score_types.go
+  decision/doc.go
+  main.go (log string)
+  market/runtime.go (package comment)
+  forecast/doc.go (DAG comment)
+  README.md MEMORY.md
+  docs/ARCHITECTURE.md DECISIONS.md HISTORY.md OPEN_DEBTS.md
+  .cursor/rules/jeweler-protocol.mdc
+  .cursor/rules/senior-quant-architect.mdc
+
+Added:
+  research/cleanup/SOCKET-CLEAN-1.txt
+
+go.mod: unchanged (execution had no extra modules).
+
+======================================================================
+D. TESTS
+======================================================================
+
+  go build .
+      PASS
+
+  go test ./decision/ -count=1
+      PASS (0.017s) — ApplyDecision contract intact
+
+  go test ./market/ -count=1
+      PASS (15.783s)
+
+  go test ./server/ -count=1 -skip TestGoldenAudit
+      PASS (10.014s)
+
+  go test ./execution/
+      FAIL setup: directory not found
+      EXPECTED (package gone). Do not treat as a new product bug.
+
+Unrelated debt not touched:
+  cmd/repair_archive_gap unused `restored` — PREEXISTING COMPILE DEBT
+
+======================================================================
+E. KEEP / DELETE CHECK
+======================================================================
+
+ScoreDecision type still compiles for server JSON + Runtime telemetry.
+DefaultScoreEngine gone (grep: comments/docs/history only).
+No trading_bot/execution import remains.
+
+======================================================================
+F. GIT
+======================================================================
+
+Do not stage:
+  research/cleanup/ARTIFACT-INDEX-AUDIT-1.txt
+  research/cleanup/QDRANT-CONSUMER-AUDIT-1.txt
+  research/cleanup/SOCKET-CONSUMER-AUDIT-1.txt
+    PREEXISTING_UNTRACKED_EVIDENCE
+
+Stage SOCKET-CLEAN-1.txt with the code/docs.
+
+======================================================================
+G. VERDICT
+======================================================================
+
+SOCKET_CLEAN_GREEN
+
+HARD STOP. Next candidate: SCORE-WIRE-1 (not started).
+Then Marker, Falcon audit. WOZDUH-TRUTH-1 remains product-next after
+cleanup is thinner.
+======================================================================

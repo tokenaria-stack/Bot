@@ -25,10 +25,10 @@
 //
 // # Position in the import DAG
 //
-// The existing Jeweler DAG is exchange → market → decision → execution.
+// The existing Jeweler DAG is exchange → market → decision.
 // package forecast imports indicators for ATRSpec ownership (ATR-TRUTH-1)
 // and data.NextBarOpen / CurrentBarOpen for primary-gap continuity (calendar-safe).
-// It still imports NOTHING from exchange/market/decision/execution.
+// It still imports NOTHING from exchange/market/decision.
 //
 // # Governing law
 //

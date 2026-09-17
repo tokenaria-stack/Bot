@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **QDRANT-REMOVE-1 GREEN / FROZEN** — Falcon-era `vector_db/` + `github.com/qdrant/go-client` removed (no final consumer). **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **ARTIFACT-INDEX-AUDIT-1.txt** and **QDRANT-CONSUMER-AUDIT-1.txt** remain preexisting untracked evidence (Git policy later). Next CODE: remaining clean slices (empty sockets, Marker, Falcon), then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked — not next CODE, not a production socket.
+2. **SOCKET-CLEAN-1 GREEN / FROZEN** — deleted unused `execution/` and empty `ScoreEngine`. **QDRANT-REMOVE-1** / **INDEX-FOREST-1** frozen. Next CODE candidate: **SCORE-WIRE-1**, then Marker, Falcon audit, **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** parked. Untracked: ARTIFACT / QDRANT-CONSUMER / SOCKET-CONSUMER audits (Git policy later).
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -133,7 +133,7 @@ Same MarketKey+ATRSpec → eligible to share state; different spec → separate.
 
 Canonical ATR only. Feature ATRSpec is FeaturePlan identity → **does** invalidate FeatureTape. Distinct from TargetSpec ATR.
 
-### Owner: execution
+### Owner: future ExecutionPolicy
 
 May use canonical ATR for stops/sizing with a **different** ATRSpec than TargetSpec. Sharing is an optimization when spec+state match.
 
@@ -358,9 +358,9 @@ Live proof after MCP-off: `[WAL] checkpoint blocked` still every **5 minutes** (
 | # | Debt | Status | Notes |
 |---|------|--------|-------|
 | **35** | DAG → TradeManager wiring | ⏸ | Re-enable only with `ENGINE_MODE=live` + new strategies |
-| **36** | TradeIntent wire contract | ⏸ | `decision/score_types.go` |
+| **36** | TradeIntent wire contract | ⏸ | Type does not exist. `ScoreDecision` is a wire fossil (SCORE-WIRE-1), not TradeIntent. Do not rename `DirectionalIntent`. |
 | **37** | Execution gate `isClosed` only | ⏸ | TickLiveCh frozen in ChartOnly |
-| **38** | Risk/settings SSOT parity | ⏸ | Legacy matrix purged in Phase F; revisit with new strategies |
+| **38** | Risk/settings SSOT parity | ⏸ | `execution.RiskManager` deleted SOCKET-CLEAN-1; revisit with first real ExecutionPolicy consumer |
 
 ---
 

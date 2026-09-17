@@ -86,7 +86,7 @@ func main() {
 	market.SetEngineMode(engineMode)
 	log.Printf("[Init] EngineMode=%s (ENGINE_MODE)", engineMode)
 	if !market.EngineAllowsStrategies() {
-		log.Println("[Init] ChartOnly: strategy stack gated (ScoreEngine socket empty until Phase G+)")
+		log.Println("[Init] ChartOnly: trading stack not started (no ExecutionPolicy; ScoreEngine removed)")
 	}
 
 	// ── Boot FSM Phase 0: Connecting ──────────────────────────────────────────

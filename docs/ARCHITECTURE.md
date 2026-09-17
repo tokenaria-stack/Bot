@@ -150,8 +150,7 @@ Implementation may evolve (e.g. Primitive instead of an HTML guide; Phase D navi
 exchange/    transport + Ingress (Bar Source Seam, Authority, merge/validate)
 data/        SQLite archive + PersistenceQueue (single runtime writer)
 market/      Frame, Runtime, streaming/snapshot, Boot, MTF, falcon bus, chart replay
-decision/    ScoreDecision / ScoreFactor contracts (sockets; no live ScoreEngine)
-execution/   Position sizing sockets
+decision/    DECISION-CONTRACT-1 (ApplyDecision) + leftover ScoreDecision wire DTOs
 core/        DAG runner + nodes (RSX, Wozduh, divergence slots)
 server/      HTTP/WS projection (HistoryProvider, Projector, columnar wire)
 web/         DDR charts (boot.js composition root)
@@ -159,7 +158,7 @@ indicators/  Streaming math (no go-talib)
 strategy/    doc.go beacon only (Phase F purged legacy code)
 ```
 
-**Import DAG:** `exchange → market → decision → execution` (one-way).
+**Import DAG:** `exchange → market → decision` (one-way). Future ExecutionPolicy is not a package yet.
 
 ### Timestamp units (#83)
 
@@ -176,8 +175,7 @@ Navigator DTO times are ms until F3 `navigatorMsToChartSec`. Do not collapse cam
 | Package | Answers | Must not |
 |---------|---------|----------|
 | `market` | What is happening? | Decide trades; import `server` |
-| `decision` | What to do? | Import `market`; mutate frames |
-| `execution` | How much / how to place? | Analyze market |
+| `decision` | What to do? (research opinion today) | Import `market`; mutate frames; place orders |
 | `server` / `web` | How to project & paint? | Recompute indicator math |
 
 ---
@@ -384,10 +382,12 @@ Remaining contracts:
 
 | Component | Path | Role |
 |-----------|------|------|
-| `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Decision sockets |
+| `ApplyDecision` | `decision/apply.go` | DECISION-CONTRACT-1 research opinion (`DirectionalIntent`, not an order) |
+| `ScoreDecision` / `ScoreFactor` | `decision/score_types.go` | Wire fossils until SCORE-WIRE-1 (always zeroed on dashboard) |
 | `Frame` accessors | `market/` | State for future scoring |
 | Falcon bus | `market/falcon.go` | Numerical calculator (Live/HTF). ChartOnly skips `Evaluate`. Scoring island and Falcon-era backtest packing removed. |
-| Sizing | `execution/` | Quantity math socket |
+
+**Law:** Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. There is no `ScoreEngine` and no `execution/` package (SOCKET-CLEAN-1).
 
 Future strategies live under `decision/`. They consume market state without importing `market` into contract packages (pass snapshots / interfaces at the composition root).
 
@@ -831,7 +831,7 @@ Pipeline: **State → Projection → Transport → Paint**.
 | Frame / streaming | `market/frame.go`, `streaming.go`, `snapshot.go` |
 | Runtime / Boot | `market/runtime.go`, `boot_controller.go` |
 | Timeline publish gate | `market/kline_gap.go`, `exchange/ws.go` hooks, `web/boot.js` + `ws.js` |
-| Decision | `decision/score_types.go` |
+| Decision | `decision/apply.go`, `decision/contract.go`; `score_types.go` wire fossils until SCORE-WIRE-1 |
 | DAG | `core/runner.go`, `core/nodes/`, `market/dag_shadow.go` |
 | Falcon | `market/falcon.go` |
 | History delivery | `server/history_provider.go`, `server/columnar_history.go`, `server/wire/` |
@@ -850,4 +850,4 @@ go run .          # dashboard :8080, ChartOnly by default
 
 Important env: `ENGINE_MODE` (`ChartOnly` | `live`), `TRADING_SYMBOL`, `TRADING_TIMEFRAME`, Binance keys, `READ_ONLY`, `SANDBOX_MODE`.
 
-**NEXT:** see `docs/OPEN_DEBTS.md`. **QDRANT-REMOVE-1 GREEN / FROZEN.** **INDEX-FOREST-1 GREEN / FROZEN** (`1b03f00`). **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN.** **TIMELINE-RECOVERY-STATE-1 FROZEN.** Then remaining clean, then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).
+**NEXT:** see `docs/OPEN_DEBTS.md`. **SOCKET-CLEAN-1 GREEN / FROZEN.** **QDRANT-REMOVE-1 GREEN / FROZEN.** Then SCORE-WIRE-1 (candidate), Marker, Falcon audit, then **WOZDUH-TRUTH-1**. **ANALOGUE-MEMORY-RESEARCH-1** is parked (not next CODE).

@@ -10,6 +10,7 @@ const (
 )
 
 // ScoreFactor holds an isolated score contribution from one indicator or timeframe.
+// Wire fossil until SCORE-WIRE-1 (dashboard JSON zeros these maps).
 type ScoreFactor struct {
 	Name      string     `json:"name"`
 	Direction ActionType `json:"direction"`
@@ -17,7 +18,10 @@ type ScoreFactor struct {
 	Reason    string     `json:"reason,omitempty"`
 }
 
-// ScoreDecision is the per-bar verdict from ScoreEngine.
+// ScoreDecision is a Phase F dashboard/telemetry DTO.
+// It is not produced by a ScoreEngine (removed SOCKET-CLEAN-1).
+// It is not DECISION-CONTRACT-1 (see ApplyDecision).
+// It is not TradeIntent. Kept until SCORE-WIRE-1 because server JSON still embeds it.
 type ScoreDecision struct {
 	RawAction      ActionType             `json:"rawAction"`   // indicator math (BUY/SELL/WAIT)
 	FinalAction    ActionType             `json:"finalAction"` // after decision-layer vetoes
@@ -32,27 +36,3 @@ type ScoreDecision struct {
 	LotMod         float64                `json:"lotMod"`
 	StopDist       float64                `json:"stopDist"`
 }
-
-// WinningScore returns the higher of LongScore and ShortScore.
-func (d ScoreDecision) WinningScore() int {
-	if d.ShortScore > d.LongScore {
-		return d.ShortScore
-	}
-	return d.LongScore
-}
-
-// HasRawSignal reports whether indicators produced a directional raw signal.
-func (d ScoreDecision) HasRawSignal() bool {
-	return d.RawAction == BuyAction || d.RawAction == SellAction
-}
-
-// HasFinalSignal reports whether execution is allowed after vetoes.
-func (d ScoreDecision) HasFinalSignal() bool {
-	return d.FinalAction == BuyAction || d.FinalAction == SellAction
-}
-
-// ScoreEngine is a Phase F socket for future strategy engines (implementation purged).
-type ScoreEngine struct{}
-
-// DefaultScoreEngine is the shared scoring calculator socket.
-var DefaultScoreEngine = &ScoreEngine{}

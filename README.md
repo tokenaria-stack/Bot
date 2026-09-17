@@ -26,7 +26,7 @@ Default: `ENGINE_MODE=ChartOnly`.
 ```bash
 cp .env.example .env   # Futures keys
 go build ./...
-go test ./market/ ./server/ ./server/wire/ ./execution/ ./core/ ./indicators/ -count=1 -skip GoldenAudit
+go test ./market/ ./server/ ./server/wire/ ./core/ ./indicators/ -count=1 -skip GoldenAudit
 go run .               # dashboard :8080
 ```
 
@@ -36,8 +36,7 @@ go run .               # dashboard :8080
 exchange/     transport + Ingress (Authority, merge)
 data/         SQLite + PersistenceQueue
 market/       Frame, Runtime, streaming/snapshot, Boot, falcon bus
-decision/     ScoreDecision / ScoreFactor contracts
-execution/    position sizing
+decision/     DECISION-CONTRACT-1 + leftover ScoreDecision wire DTOs
 indicators/   streaming math (no go-talib)
 core/         DAG runner + nodes
 server/       HTTP/WS projection
@@ -45,7 +44,7 @@ web/          DDR charts (boot.js)
 strategy/     doc.go beacon only
 ```
 
-**Import DAG:** `exchange → market → decision → execution`
+**Import DAG:** `exchange → market → decision`
 
 ## Status
 

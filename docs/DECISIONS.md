@@ -7,6 +7,21 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SOCKET-CLEAN-1 (Sep 2026)
+
+**Context:** SOCKET-CONSUMER-AUDIT-1. `execution/` had no importer. `ScoreEngine` was an empty struct. `ApplyDecision` is the real research contract. `ScoreDecision` still sits on dashboard JSON.
+
+**Decision:** Delete `execution/` and `ScoreEngine` / `DefaultScoreEngine` / unused `ScoreDecision` methods. Keep `ApplyDecision`. Keep `ScoreDecision`/`ScoreFactor` until SCORE-WIRE-1. Keep `strategy/doc.go`. Do not rename `DirectionalIntent` → `TradeIntent`. Do not add ExecutionPolicy.
+
+**Rejected:**
+- Delete whole `decision/` — **Reason:** DECISION-CONTRACT-1 has research consumers.
+- Delete ScoreDecision in this slice — **Reason:** wire/schema chapter.
+- Replace execution with a placeholder interface — **Reason:** speculative socket.
+
+**Consequences:** Import DAG is `exchange → market → decision`. Law: Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy.
+
+---
+
 ## QDRANT-REMOVE-1 (Sep 2026)
 
 **Context:** `vector_db/` was a Falcon/Jurik 6-float Qdrant wrapper with no production, research, Brain3, FeatureTape, server, or startup consumer (`QDRANT-CONSUMER-AUDIT-1`). ADR-004 had kept it as a thin socket without an owner.
@@ -958,7 +973,7 @@ Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, d
 
 **Context:** Legacy ScoreEngine / trade FSM / matrix / risk settings blocked a clean decision layer and confused AI/humans.
 
-**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `execution/`, `falcon.go`). Default `ENGINE_MODE=ChartOnly`. *(Phase F also listed `vector_db/` as a keep; **QDRANT-REMOVE-1** later deleted it — no consumer, obsolete Falcon snapshot packing.)*
+**Decision:** Delete dead strategy code. Keep thin sockets (`decision/score_types.go`, `falcon.go`). Default `ENGINE_MODE=ChartOnly`. *(Phase F also listed `vector_db/` and `execution/` as keeps; **QDRANT-REMOVE-1** and **SOCKET-CLEAN-1** later deleted those unused packages.)*
 
 **Rejected:**
 - Rebranding legacy modules in place — **Reason:** keeps lie-names and dead paths; Delete > Deprecate.
@@ -972,7 +987,7 @@ Trusted ScoreNode inputs: RSX value, RSX signal value, HTF RSX numeric values, d
 
 **Context:** Names `Marker` / `MasterGeneral` / `Layer2` / `Analyst` lied about responsibilities and invited wrong imports.
 
-**Decision:** `Frame` + `Runtime` in `market/`; contracts in `decision/`; `strategy/` = `doc.go` beacon. Import DAG `exchange → market → decision → execution`.
+**Decision:** `Frame` + `Runtime` in `market/`; contracts in `decision/`; `strategy/` = `doc.go` beacon. Import DAG `exchange → market → decision` (execution package removed SOCKET-CLEAN-1).
 
 **Rejected:**
 - Keeping types in `strategy/` with new names only — **Reason:** package boundary still wrong; museum code invites revival.

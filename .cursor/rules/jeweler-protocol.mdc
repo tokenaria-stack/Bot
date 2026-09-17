@@ -32,17 +32,23 @@ Trading decisions are secondary and live only behind `decision/` + `ENGINE_MODE=
 ## Import DAG (MUST)
 
 ```
-exchange → market → decision → execution
+exchange → market → decision
 ```
 
 - `market` answers "what is happening?"
-- `decision` answers "what to do?" and MUST NOT import `market`
+- `decision` answers "what to do?" (research opinion contract today) and MUST NOT import `market`
 - `exchange` MUST NOT import `market` or `decision`
 - `strategy/` is a legacy beacon (`doc.go` only) — NEVER put new code there
+- There is no `execution/` package. Future **ExecutionPolicy** is built from the first real order-sizing consumer, not a placeholder.
 
-## Score canon
+## Decision canon
 
-`ScoreEngine.Calculate(frame, …)` → `ScoreDecision` (`decision/score_types.go`).
+Current research opinion contract: `ApplyDecision(ForecastEvidence, DecisionSpec) (DirectionalIntent, error)`.
+
+`ScoreDecision` / `ScoreFactor` are leftover wire DTOs until SCORE-WIRE-1. There is no `ScoreEngine`.
+
+Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy.
+
 See `docs/ARCHITECTURE.md`.
 
 ---
@@ -162,7 +168,7 @@ Example: future `TickBarBuilder` plugs into Ingress; it does not fork a second p
 6. Authority exists only inside ingress merge policy.
 7. Boot FSM owns startup order (WS first → load → reconcile → live).
 8. `decision` never mutates `market` state.
-9. `execution` never analyzes the market; it only sizes / places.
+9. Future ExecutionPolicy never analyzes the market; it only sizes / places. There is no `execution/` package (SOCKET-CLEAN-1).
 10. Projection (`server` / `web`) never recomputes indicator math; it packs slots → wire → paint.
 11. Frontend never owns history. It owns only a bounded viewport window over a server-owned
     time series. Enforce explicit bar budgets on writes; durable history stays on the server.

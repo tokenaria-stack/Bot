@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SOCKET-CLEAN-1 — delete unused execution package and ScoreEngine husk (Sep 2026) GREEN / FROZEN
+
+- Deleted `execution/` (`RiskManager` / sizing had no importer). Deleted `ScoreEngine`, `DefaultScoreEngine`, unused `ScoreDecision` methods.
+- Kept DECISION-CONTRACT-1 (`ApplyDecision`). Kept `ScoreDecision`/`ScoreFactor` on the wire until SCORE-WIRE-1. Kept `strategy/doc.go`.
+- Law: Decision contract ≠ Score engine ≠ Strategy Book ≠ ExecutionPolicy. Did not rename DirectionalIntent. Did not add ExecutionPolicy.
+- Artifact: `research/cleanup/SOCKET-CLEAN-1.txt`.
+
 ## QDRANT-REMOVE-1 — retire unused vector database subsystem (Sep 2026) GREEN / FROZEN
 
 - Deleted Falcon-era `vector_db/` (Qdrant client wrappers, `ReportSnapshot` 6-float packing, unused fractal/trade upsert). No final consumer.
