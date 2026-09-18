@@ -82,6 +82,72 @@
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
+  function expandShortHex(value) {
+    if (typeof value !== 'string') return null;
+    const m = value.trim().match(/^#([0-9A-Fa-f]{3})$/);
+    if (!m) return null;
+    const [a, b, c] = m[1];
+    return `#${a}${a}${b}${b}${c}${c}`.toUpperCase();
+  }
+
+  function rgbToHex(r, g, b) {
+    const h = (n) => Math.max(0, Math.min(255, Number(n) || 0)).toString(16).padStart(2, '0');
+    return `#${h(r)}${h(g)}${h(b)}`.toUpperCase();
+  }
+
+  function parseRgbTriple(value) {
+    if (typeof value !== 'string') return null;
+    const m = value.trim().match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2]), Number(m[3])];
+  }
+
+  /**
+   * Display-only #RRGGBB for <input type="color">. Not a factory SSOT.
+   * Named CSS goes through the browser computed style, never an app color table.
+   */
+  function toPickerHex(cssColor) {
+    if (typeof cssColor !== 'string') return null;
+    const s = cssColor.trim();
+    if (!s) return null;
+    const hex6 = normalizeHex(s);
+    if (hex6) return hex6;
+    const short = expandShortHex(s);
+    if (short) return short;
+    const rgb = parseRgbTriple(s);
+    if (rgb) return rgbToHex(rgb[0], rgb[1], rgb[2]);
+    try {
+      if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+        return null;
+      }
+      const el = document.createElement('span');
+      el.style.color = s;
+      const host = document.body || document.documentElement;
+      if (host && typeof host.appendChild === 'function') host.appendChild(el);
+      const computed = (typeof getComputedStyle === 'function')
+        ? getComputedStyle(el).color
+        : el.style.color;
+      if (el.remove) el.remove();
+      else if (el.parentNode && typeof el.parentNode.removeChild === 'function') {
+        el.parentNode.removeChild(el);
+      }
+      if (!computed || computed === s) return null;
+      const fromComputed = parseRgbTriple(computed) || normalizeHex(computed);
+      if (Array.isArray(fromComputed)) return rgbToHex(fromComputed[0], fromComputed[1], fromComputed[2]);
+      return fromComputed || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function pickerHexFor(kind, factoryColors, override, field) {
+    const ov = override && typeof override === 'object' ? override[field] : null;
+    const fromOverride = normalizeHex(ov);
+    if (fromOverride) return fromOverride;
+    const factory = factoryColors && typeof factoryColors === 'object' ? factoryColors[field] : null;
+    return toPickerHex(factory);
+  }
+
   function factoryColorFields(kind, renderOpts) {
     const opts = renderOpts && typeof renderOpts === 'object' ? renderOpts : {};
     if (String(kind || '').toLowerCase() === 'channel') {
@@ -216,6 +282,8 @@
     factoryColorFields,
     parseRgbaAlpha,
     fillRgbaFromHex,
+    toPickerHex,
+    pickerHexFor,
     loadMap,
     overrideFor,
     setColor,

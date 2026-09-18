@@ -140,6 +140,76 @@
   text-decoration: underline;
 }
 
+.wozduh-component-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--tv-text);
+}
+
+.wozduh-vis {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.wozduh-vis .wozduh-chk {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.wozduh-style-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: var(--tv-text);
+}
+
+.wozduh-style-row--nested {
+  margin-left: 22px;
+}
+
+.wozduh-style-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wozduh-style-color {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #363a45;
+  background: transparent;
+  cursor: pointer;
+}
+
+.wozduh-style-default {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid #363a45;
+  border-radius: 3px;
+  background: transparent;
+  color: #b2b5be;
+  font-family: inherit;
+  font-size: 0.65rem;
+  cursor: pointer;
+}
+
+.wozduh-style-default-all {
+  width: 100%;
+  margin: 6px 0 0;
+}
+
+.wozduh-style-channel {
+  margin-bottom: 8px;
+}
+
 /* ── Risk menu (header dropup) ── */
 .risk-menu-wrap {
   position: relative;

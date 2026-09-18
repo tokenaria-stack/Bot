@@ -141,6 +141,182 @@ const SettingsRenderer = (() => {
     return defaultVisibleFor(component);
   }
 
+  const WozduhColorPrefsApi = (typeof WozduhColorPrefs !== 'undefined')
+    ? WozduhColorPrefs
+    : (typeof require === 'function'
+      ? (() => { try { return require('../wozduh-color-prefs.js'); } catch { return null; } })()
+      : null);
+
+  function ddrFactory() {
+    return (typeof window !== 'undefined') ? window.DDRFactory : null;
+  }
+
+  function componentKind(component) {
+    return String(component.kind || 'line').toLowerCase();
+  }
+
+  function factoryColorsFor(component) {
+    if (!WozduhColorPrefsApi) return {};
+    return WozduhColorPrefsApi.factoryColorFields(
+      componentKind(component),
+      parseRenderOpts(component.renderOptions),
+    );
+  }
+
+  function pickerHex(component, field) {
+    if (!WozduhColorPrefsApi) return '#000000';
+    const hex = WozduhColorPrefsApi.pickerHexFor(
+      componentKind(component),
+      factoryColorsFor(component),
+      WozduhColorPrefsApi.overrideFor(component.id),
+      field,
+    );
+    return hex ? hex.toLowerCase() : '#000000';
+  }
+
+  function refreshColorInputs(root, components) {
+    if (!root || !Array.isArray(components)) return;
+    const byId = new Map(components.map((c) => [c.id, c]));
+    const inputs = typeof root.querySelectorAll === 'function'
+      ? root.querySelectorAll('input[type="color"]')
+      : [];
+    for (const input of inputs) {
+      const id = input.dataset && input.dataset.componentId;
+      const field = input.dataset && input.dataset.field;
+      const c = byId.get(id);
+      if (!c || !field) continue;
+      input.value = pickerHex(c, field);
+    }
+  }
+
+  function paintColor(component, field, hex) {
+    const factory = ddrFactory();
+    if (!factory || typeof factory.setWozduhColor !== 'function') return;
+    factory.setWozduhColor(component.id, field, hex);
+  }
+
+  function bindVisibilityCheckbox(input, component) {
+    input.addEventListener('change', () => {
+      const map = loadPrefsMap();
+      map[component.id] = input.checked;
+      savePrefsMap(map);
+      const factory = ddrFactory();
+      if (factory?.cutoverActive && typeof factory.setSeriesVisible === 'function') {
+        factory.setSeriesVisible(component.id, input.checked);
+      }
+    });
+  }
+
+  function visibilityCheckbox(component, prefs) {
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'wozduh-chk';
+    input.dataset.componentId = component.id;
+    input.checked = isChecked(prefs, component);
+    bindVisibilityCheckbox(input, component);
+    return input;
+  }
+
+  function nameSpan(c) {
+    const text = document.createElement('span');
+    text.className = c.id === 'woz_vol_rsi_ema5'
+      ? 'wozduh-style-label wozduh-pane-owner-label'
+      : 'wozduh-style-label';
+    text.textContent = labelFor(c);
+    return text;
+  }
+
+  function appendLineRow(menu, component, prefs) {
+    const name = labelFor(component);
+    const row = document.createElement('div');
+    row.className = 'wozduh-component-row';
+    row.dataset.componentId = component.id;
+    const vis = document.createElement('label');
+    vis.className = 'wozduh-vis';
+    vis.appendChild(visibilityCheckbox(component, prefs));
+    vis.appendChild(nameSpan(component));
+    row.appendChild(vis);
+    row.appendChild(colorInput(component, 'color', `${name} color`));
+    row.appendChild(defaultButton('Default', `Default ${name} color`, () => {
+      const factory = ddrFactory();
+      if (factory && typeof factory.resetWozduhColor === 'function') {
+        factory.resetWozduhColor(component.id, 'color');
+      }
+      const input = row.querySelector?.('input[type="color"]')
+        || [...(row.children || [])].find((c) => c.type === 'color');
+      if (input) input.value = pickerHex(component, 'color');
+    }));
+    menu.appendChild(row);
+  }
+
+  function appendChannelGroup(menu, component, prefs) {
+    const name = labelFor(component);
+    const wrap = document.createElement('div');
+    wrap.className = 'wozduh-style-channel';
+    wrap.dataset.componentId = component.id;
+    const header = document.createElement('div');
+    header.className = 'wozduh-component-row wozduh-component-row--channel-header';
+    const vis = document.createElement('label');
+    vis.className = 'wozduh-vis';
+    vis.appendChild(visibilityCheckbox(component, prefs));
+    vis.appendChild(nameSpan(component));
+    header.appendChild(vis);
+    header.appendChild(defaultButton('Default', `Default ${name} colors`, () => {
+      const factory = ddrFactory();
+      if (factory && typeof factory.resetWozduhComponentColors === 'function') {
+        factory.resetWozduhComponentColors(component.id);
+      }
+      refreshColorInputs(wrap, [component]);
+    }));
+    wrap.appendChild(header);
+    const fields = [
+      ['upperColor', 'Upper'],
+      ['midColor', 'Middle'],
+      ['lowerColor', 'Lower'],
+      ['fillColor', 'Fill'],
+    ];
+    for (const [field, fieldLabel] of fields) {
+      const row = document.createElement('div');
+      row.className = 'wozduh-style-row wozduh-style-row--nested';
+      const text = document.createElement('span');
+      text.className = 'wozduh-style-label';
+      text.textContent = fieldLabel;
+      row.appendChild(text);
+      row.appendChild(colorInput(component, field, `${name} ${fieldLabel.toLowerCase()} color`));
+      wrap.appendChild(row);
+    }
+    menu.appendChild(wrap);
+  }
+
+  function defaultButton(label, title, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'wozduh-style-default';
+    btn.textContent = label;
+    btn.title = title;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  function colorInput(component, field, accessibleName) {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.className = 'wozduh-style-color';
+    input.dataset.componentId = component.id;
+    input.dataset.field = field;
+    input.value = pickerHex(component, field);
+    input.title = accessibleName;
+    input.setAttribute?.('aria-label', accessibleName);
+    input.addEventListener('input', () => {
+      paintColor(component, field, input.value);
+    });
+    return input;
+  }
+
   function applyVisibility(components, prefs) {
     const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
     if (!factory?.cutoverActive || typeof factory.setSeriesVisible !== 'function') return;
@@ -160,31 +336,19 @@ const SettingsRenderer = (() => {
     menu.appendChild(handle);
 
     for (const c of components) {
-      const label = document.createElement('label');
-      label.className = 'menu-row';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.className = 'wozduh-chk';
-      input.dataset.componentId = c.id;
-      input.checked = isChecked(prefs, c);
-      input.addEventListener('change', () => {
-        const map = loadPrefsMap();
-        map[c.id] = input.checked;
-        savePrefsMap(map);
-        const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
-        if (factory?.cutoverActive && typeof factory.setSeriesVisible === 'function') {
-          factory.setSeriesVisible(c.id, input.checked);
-        }
-      });
-      label.appendChild(input);
-      const text = document.createElement('span');
-      text.textContent = ` ${labelFor(c)}`;
-      if (c.id === 'woz_vol_rsi_ema5') {
-        text.className = 'wozduh-pane-owner-label';
-      }
-      label.appendChild(text);
-      menu.appendChild(label);
+      if (componentKind(c) === 'channel') appendChannelGroup(menu, c, prefs);
+      else appendLineRow(menu, c, prefs);
     }
+
+    const allBtn = defaultButton('Default all colors', 'Default all Wozduh colors', () => {
+      const factory = ddrFactory();
+      if (factory && typeof factory.resetAllWozduhColors === 'function') {
+        factory.resetAllWozduhColors();
+      }
+      refreshColorInputs(menu, components);
+    });
+    allBtn.className = 'wozduh-style-default wozduh-style-default-all';
+    menu.appendChild(allBtn);
 
     const ok = document.createElement('button');
     ok.type = 'button';
@@ -197,7 +361,6 @@ const SettingsRenderer = (() => {
     });
     menu.appendChild(ok);
 
-    // Allow re-bind after replaceChildren wiped prior handle listeners.
     menu._dragBound = false;
     if (typeof FloatingMenu !== 'undefined') {
       FloatingMenu.initDrag(menu);
@@ -255,6 +418,7 @@ const SettingsRenderer = (() => {
     mountFromManifest,
     collectConfigurable,
     migrateLegacyPrefs,
+    rebuildMenu,
   };
 })();
 

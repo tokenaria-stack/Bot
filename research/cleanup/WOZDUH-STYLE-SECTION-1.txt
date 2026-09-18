@@ -1,0 +1,148 @@
+WOZDUH-STYLE-SECTION-1
+======================
+
+Verdict: WOZDUH_STYLE_SECTION_GREEN
+
+Baseline: 1c7ae3d WOZDUH-COLOR-OVERRIDES-1 (frozen, pushed)
+UI revision of unpushed e72ede1 (UX rejected duplicated Visibility+Style lists)
+
+GPT prompt corrections applied:
+
+1. Checkbox lives in a label that wraps ONLY the name, not the color
+   input or Default. Putting Default inside a checkbox <label> would
+   toggle visibility when restoring factory color.
+2. Unified list is still one collectConfigurable pass; no second catalog.
+3. Frozen color mechanism untouched.
+
+
+A. FINAL UNIFIED MENU
+---------------------
+
+⋮⋮⋮ Woz Settings
+[☑] line label              [color] Default
+[☑] channel label                   Default
+      Upper                 [color]
+      Middle                [color]
+      Lower                 [color]
+      Fill                  [color]
+Default all colors
+Ok
+
+No VISIBILITY / STYLE headings.
+
+
+B. REMOVAL OF DUPLICATED VISIBILITY/STYLE LISTS
+-----------------------------------------------
+
+The first UI listed every component twice. This revision renders each
+configurable component once.
+
+
+C. SINGLE collectConfigurable RENDER PASS
+-----------------------------------------
+
+rebuildMenu iterates collectConfigurable once:
+  kind=channel → appendChannelGroup
+  else → appendLineRow
+
+Manifest / Pine plot order preserved. Labels from renderOptions.title.
+
+
+D. SIMPLE LINE ROW
+------------------
+
+div.wozduh-component-row
+  label.wozduh-vis: checkbox + name
+  input type=color field=color
+  Default → resetWozduhColor(id, "color")
+
+
+E. CHANNEL GROUP
+----------------
+
+div.wozduh-style-channel
+  header: checkbox + name + Default (resetWozduhComponentColors)
+  nested Upper/Middle/Lower/Fill colors only
+  no nested visibility checkboxes
+
+
+F. VISIBILITY COMMAND PATH
+--------------------------
+
+bindVisibilityCheckbox → savePrefsMap(wozduh_visibility_prefs_live)
+→ setSeriesVisible (existing subscription/history). Unchanged.
+
+
+G. COLOR COMMAND PATH
+---------------------
+
+input event → setWozduhColor
+Default → resetWozduhColor / resetWozduhComponentColors
+Default all → resetAllWozduhColors
+Store: wozduh_color_prefs_v1 only. applyOptions only.
+
+
+H. COMMAND ISOLATION
+--------------------
+
+setSeriesVisible only in bindVisibilityCheckbox and applyVisibility.
+paintColor / Default never call it.
+Checkbox never writes color prefs.
+
+
+I. DEFAULT SEMANTICS
+--------------------
+
+Line Default: delete color override; factory string restored; checkbox
+unchanged.
+Channel Default: all four factory colors; visibility unchanged.
+
+
+J. DEFAULT ALL COLORS
+---------------------
+
+resetAllWozduhColors → removeItem color store. Visibility prefs untouched.
+
+
+K. EMA5 OWNER UNDERLINE
+-----------------------
+
+nameSpan: c.id === 'woz_vol_rsi_ema5' → wozduh-pane-owner-label on the
+unified name. Same identity as before.
+
+
+L. TEST RESULTS
+---------------
+
+node web/wozduh_style_section_test.js          PASS
+node web/wozduh_color_overrides_test.js        PASS
+node web/wozduh_prefs_migrate_test.js          PASS
+node web/wozduh_visual_test.js                 PASS
+node web/wozduh_owner_test.js                  PASS
+node web/wozduh_wire_test.js                   PASS
+node web/channel_paint_test.js                 PASS
+node web/hidden_render_skip_test.js            PASS
+
+No Go files changed.
+
+
+M. POST-SEARCH
+--------------
+
+No Style ID catalog. No new localStorage key. No named-color app table.
+Color UI has no setSeriesVisible / onSubscriptionChange / /api/history.
+Checkbox path still owns visibility machinery by design.
+
+
+N. GIT STATUS
+-------------
+
+Amended unpushed WOZDUH-STYLE-SECTION-1 (was e72ede1). Not pushed.
+
+
+O. FINAL VERDICT
+----------------
+
+WOZDUH_STYLE_SECTION_GREEN
+
+HARD STOP for visual review. Do not push, do not retune ui_config.
