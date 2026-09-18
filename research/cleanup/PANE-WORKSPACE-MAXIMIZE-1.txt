@@ -1,0 +1,259 @@
+PANE-WORKSPACE-MAXIMIZE-1
+=========================
+
+Verdict: PANE_WORKSPACE_MAXIMIZE_GREEN
+
+Baseline: HEAD a1c1ae2 (WOZDUH-STYLE-SECTION-1 freeze). Stacking workaround already
+absent from tree before this chapter.
+
+GPT prompt corrections applied (see section below).
+
+
+A. EXECUTIVE SUMMARY
+--------------------
+
+Viewport-fixed pane "fullscreen" is gone. `PaneLayout.fullscreenPaneId` still
+selects the owner. `LayoutController.applyStack` now expresses maximize as a
+one-track `#charts-stack` grid: `minmax(0, 1fr)`, one participating wrap, no
+splitters. Sibling panes are layout-hidden only. `state.visible` is not
+written. App chrome is untouched. LWC still follows host size via existing
+`forceChartResize`.
+
+
+B. OLD DUAL-GEOMETRY ROOT CAUSE
+-------------------------------
+
+Two geometries ran at once:
+
+  1. applyStack still built the normal multi-track grid (price 1fr + gutters +
+     footer px) and kept every visible wrap in that grid.
+  2. `.fullscreen-pane` then escaped with `position: fixed; top/left: 0;
+     width: 100vw; height: 100vh; z-index: 9999`.
+
+The overlay's containing block was the viewport. `#app-chrome` (z-index 40)
+sits above `#workspace-main` (z-index 1). Pane title / eye / gear painted at
+the top of the escaped wrap and were covered by the header. A later isolation /
+legend z-index patch fought that overlap and was reverted before this chapter.
+
+
+C. FINAL OWNERSHIP LAW
+----------------------
+
+  PaneLayout.fullscreenPaneId
+      ↓
+  applyStack
+      ↓
+  #charts-stack geometry
+
+`#charts-stack` is the entire world of a maximized pane.
+
+No pane measures `#app-chrome`. No header-height constant. No overlay
+containing block.
+
+
+D. NORMAL STACK BEHAVIOR
+------------------------
+
+Unchanged when `fullscreenPaneId` is null:
+
+  grid-template-rows = minmax(120px, 1fr) + 4px gutters + footer px
+  price participates in row 1
+  visible[] footers participate with splitters
+  hidden[] footers stay layout-hidden
+
+
+E. MAXIMIZED STACK BEHAVIOR
+---------------------------
+
+When `fullscreenPaneId` is set:
+
+  grid-template-rows = minmax(0, 1fr)   (exactly one track)
+  selected wrap shown at grid-row 1, display flex, position relative
+  every other wrap layout-hidden
+  no pane-splitter created
+  `.fullscreen-pane` class is a marker only (no geometry CSS)
+
+Footer stored heights are not consulted and are not mutated.
+
+
+F. LAYOUT PARTICIPATION VS VISIBILITY PREFS
+-------------------------------------------
+
+`participatesInStack(state, paneId)`:
+
+  if fullscreenPaneId set → pane.id === fullscreenPaneId
+  else → price always; footers iff in visible[]
+
+Maximize / restore does not call `setVisible` or `setSeriesVisible`.
+`syncLegendEyes` still reads `state.visible`.
+
+KEEP: eye-off of the maximized pane still clears `fullscreenPaneId`
+(`PaneLayout.setVisible`). Inverse remains forbidden.
+
+
+G. PRICE-PANE SUPPRESSION
+-------------------------
+
+Normal mode still places price in row 1.
+
+Maximize of Woz or RSX layout-hides `#price-wrap`. Price is not removed from
+prefs, subscriptions, or market state.
+
+Vol is not a HostID. Volume chrome (`#volume-label`) lives on the price wrap.
+"Vol fullscreen" = maximize `price`. Prompt item "test Vol as its own pane"
+is not a current architecture target (correction vs GPT).
+
+
+H. SPLITTER BEHAVIOR
+--------------------
+
+Maximize: `clearDynamicGutters` then return — no new gutters.
+Restore: existing visible[] / footerHeights rebuild splitters.
+`.charts-stack--fullscreen .pane-splitter { pointer-events: none }` kept as
+dead-gutter defense only.
+
+
+I. BOTTOM-TIME-AXIS OWNERSHIP
+-----------------------------
+
+Unchanged ADR-023: `resolveBottomTimeAxisHostId` prefers `fullscreenPaneId`,
+else last visible footer, else price. Layout-hidden price does not keep the
+axis while Woz/RSX owns the stack. Tests still pass.
+
+
+J. LOCAL PANE CHROME LAYERING
+-----------------------------
+
+Kept pre-existing local overlay z-index:
+
+  .chart-legend z-index 12
+  .pane-label z-index 5
+  .scale-controls z-index 16
+
+No `isolation: isolate`. No legend z-index escalation vs `#app-chrome`.
+
+
+K. VIEWPORT CSS REMOVAL
+-----------------------
+
+Deleted from `web/index.html`:
+
+  position: fixed
+  top/left: 0
+  width: 100vw / height: 100vh
+  z-index: 9999
+  grid-row: unset
+  flex: none / max-height: none / resize: none
+
+Remaining `100vh` is the app shell (`#app-container`). Remaining `z-index:
+9999` is `.tf-bar` dropdown stacking, not pane maximize. Remaining
+`position: fixed` is menus / popups, not panes.
+
+Empty `.fullscreen-pane {}` rule was not kept; the class remains a JS marker.
+
+
+L. RESIZE PATH
+--------------
+
+  fullscreenPaneId change → apply() → applyStack → scheduleResize (rAF)
+      → forceChartResize → host clientWidth/Height → chart.applyOptions
+
+Hidden wraps have 0 box and are skipped. LWC is not taught maximize.
+
+
+M. DOUBLE-CLICK / ESCAPE
+------------------------
+
+Unchanged owners:
+
+  LayoutController bindFullscreenToggle → paneLayout.toggleFullscreen
+  ToolbarController Escape → paneLayout.setFullscreen(null)
+
+
+N. GEOMETRY PROOF
+-----------------
+
+Node tests prove grid participation (one track, selected wrap grid-row 1,
+siblings display:none, no splitters, restore).
+
+Live pixel equality (`selectedPane ≈ chartsStack`, `pane.top >=
+appChrome.bottom`) is the manual review target (section 28). Production code
+does not measure chrome.
+
+Indicator-bar stays above `#charts-stack` inside workspace. Maximize fills
+the charts region, not the entire `#workspace-main`. That matches the
+ownership tree (correction vs any reading that maximize should cover the
+indicator bar).
+
+
+O. STATE ISOLATION
+------------------
+
+`toggleFullscreen` tests already snapshot order / visible / footerHeights.
+
+`web/ui/layout-controller.js` contains no `setVisible` / `setSeriesVisible`.
+No color-pref, subscription, history, camera, or Wozduh-demand writers on
+this path.
+
+
+P. TEST RESULTS
+---------------
+
+  node web/layout_controller_test.js     ALL PASS
+  node web/pane_layout_test.js           ALL PASS
+  node web/bottom_time_axis_test.js      ALL PASS
+
+No Go / market / indicator files changed.
+
+
+Q. POST-SEARCH
+--------------
+
+Active maximize geometry does not use:
+
+  position: fixed on .fullscreen-pane
+  100vw/100vh pane sizing
+  top: 82px
+  calc(100vh - 82px)
+  header getBoundingClientRect
+  z-index: 9999 on the pane
+  isolation: isolate
+
+Maximize path does not call visibility/subscription/history writers.
+
+
+R. GIT STATUS
+-------------
+
+Filled after commit in this chapter.
+
+
+S. FINAL VERDICT
+----------------
+
+PANE_WORKSPACE_MAXIMIZE_GREEN
+
+Manual visual review still required: Woz, RSX, price (Vol label), resize,
+dblclick, Escape.
+
+
+GPT PROMPT CORRECTIONS
+----------------------
+
+1. Vol is not a fullscreen HostID. It is price-pane chrome. Maximize price.
+
+2. Do not cover `.indicator-bar`. Containing block is `#charts-stack`, not
+   `#workspace-main`.
+
+3. Do not keep an empty `.fullscreen-pane { }` rule after deleting overlay
+   geometry. Class as JS marker is enough.
+
+4. `absolute; inset: 0` overlay was correctly rejected; not implemented.
+
+5. App shell flex was not converted to CSS grid.
+
+6. `participatesInStack` exported as a pure helper because it matches the
+   layout organization (same file as `buildGridTemplateRows`), not as a new
+   controller.
+
+HARD STOP. Wait for visual review. Do not push.

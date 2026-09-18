@@ -858,20 +858,6 @@
       position: relative;
     }
 
-    .fullscreen-pane {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 9999;
-      background: var(--tv-bg);
-      flex: none !important;
-      max-height: none !important;
-      resize: none !important;
-      grid-row: unset !important;
-    }
-
     .pane-label {
       position: absolute;
       top: 6px;
@@ -943,7 +929,7 @@
     }
 
     .charts-stack--fullscreen .pane-splitter {
-      /* Under fixed fullscreen overlay; keep hit-testing off while FS active */
+      /* Maximize creates no splitters; leftover gutters must not drag. */
       pointer-events: none;
     }
 

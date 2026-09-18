@@ -1,7 +1,9 @@
 /**
- * LayoutController — ADR-019 Phase 2–5: CSS Grid geometry driven by PaneLayout.
- * Price track is always 1fr; footers use footerHeights (px). Dynamic gutters only
- * between visible panes. Height drag + legend reorder + fullscreen from PaneLayout.
+ * LayoutController — ADR-019 Phase 2–5 + PANE-WORKSPACE-MAXIMIZE-1.
+ * CSS Grid geometry driven by PaneLayout. Price track is 1fr in split mode;
+ * maximize is one minmax(0, 1fr) track. Dynamic gutters only between
+ * participating (non-maximized) panes. Height drag + legend reorder +
+ * fullscreenPaneId from PaneLayout. Layout suppression ≠ visible[].
  * No setHostActive here.
  */
 (function (global) {
@@ -47,13 +49,37 @@
   };
 
   /**
+   * Pure: does this pane participate in #charts-stack for the given state?
+   * Maximize uses fullscreenPaneId only (does not read or write visible[]).
+   * @param {{ visible?: string[], fullscreenPaneId?: string|null }|null|undefined} state
+   * @param {string} paneId
+   * @returns {boolean}
+   */
+  function participatesInStack(state, paneId) {
+    const id = String(paneId || '').trim();
+    if (!id) return false;
+    const fs = state && state.fullscreenPaneId != null
+      ? String(state.fullscreenPaneId).trim()
+      : '';
+    if (fs) return id === fs;
+    if (id === 'price') return true;
+    const visible = new Set(Array.isArray(state && state.visible) ? state.visible : []);
+    return visible.has(id);
+  }
+
+  /**
    * Pure: build grid-template-rows from PaneLayout state.
-   * @param {{ visible: string[], order: string[], footerHeights: Record<string, number> }} state
+   * Maximize: exactly one minmax(0, 1fr) track — no footer px, no gutters, no price-min row.
+   * @param {{ visible: string[], order: string[], footerHeights: Record<string, number>, fullscreenPaneId?: string|null }} state
    * @param {number} [gutterPx]
    * @param {number} [priceMinPx]
    * @returns {string}
    */
   function buildGridTemplateRows(state, gutterPx = GUTTER_PX, priceMinPx = PRICE_MIN_PX) {
+    const fs = state && state.fullscreenPaneId != null
+      ? String(state.fullscreenPaneId).trim()
+      : '';
+    if (fs) return 'minmax(0, 1fr)';
     const rows = [`minmax(${priceMinPx}px, 1fr)`];
     if (!state || !Array.isArray(state.order)) return rows.join(' ');
     const visible = new Set(Array.isArray(state.visible) ? state.visible : []);
@@ -387,41 +413,69 @@
     });
   }
 
+  function wrapIdForHost(cfg, hostId) {
+    if (hostId === 'price') return cfg.priceId;
+    return cfg.hostWraps[hostId] || null;
+  }
+
+  function layoutHideWrap(wrap) {
+    wrap.hidden = true;
+    wrap.style.display = 'none';
+    wrap.style.gridRow = '';
+  }
+
+  function layoutShowWrap(wrap, gridRow) {
+    wrap.hidden = false;
+    wrap.style.display = 'flex';
+    wrap.style.gridRow = String(gridRow);
+  }
+
   function applyStack(context, state) {
     const cfg = STACKS[context];
     if (!cfg || typeof document === 'undefined') return;
     const stack = document.getElementById(cfg.stackId);
     if (!stack) return;
 
+    const fs = state && state.fullscreenPaneId != null
+      ? String(state.fullscreenPaneId).trim()
+      : '';
+    const maximized = fs !== '';
+
     stack.classList.add('charts-stack--grid');
-    stack.classList.toggle('charts-stack--fullscreen', !!state.fullscreenPaneId);
-    const footers = visibleHostIds(state, cfg.hostWraps);
+    stack.classList.toggle('charts-stack--fullscreen', maximized);
     stack.style.display = 'grid';
     stack.style.gridTemplateColumns = 'minmax(0, 1fr)';
-    stack.style.gridTemplateRows = buildGridTemplateRows(trackStateFor(state, cfg.hostWraps));
+    stack.style.gridTemplateRows = maximized
+      ? buildGridTemplateRows(state)
+      : buildGridTemplateRows(trackStateFor(state, cfg.hostWraps));
 
     const priceEl = document.getElementById(cfg.priceId);
     if (priceEl) {
-      priceEl.style.display = '';
-      priceEl.style.gridRow = '1';
-      priceEl.hidden = false;
-      priceEl.classList.toggle('fullscreen-pane', state.fullscreenPaneId === 'price');
+      priceEl.classList.toggle('fullscreen-pane', fs === 'price');
+      layoutHideWrap(priceEl);
     }
 
     for (const [hostId, wrapId] of Object.entries(cfg.hostWraps)) {
       const wrap = document.getElementById(wrapId);
       if (!wrap) continue;
       wrap.dataset.paneHost = hostId;
-      wrap.style.gridRow = '';
-      wrap.style.display = 'none';
-      wrap.hidden = true;
-      wrap.classList.toggle('fullscreen-pane', state.fullscreenPaneId === hostId);
+      wrap.classList.toggle('fullscreen-pane', fs === hostId);
+      layoutHideWrap(wrap);
     }
 
     clearDynamicGutters(stack);
 
+    if (maximized) {
+      const wrap = document.getElementById(wrapIdForHost(cfg, fs));
+      if (wrap) layoutShowWrap(wrap, 1);
+      bindFullscreenToggle(context);
+      return;
+    }
+
+    if (priceEl) layoutShowWrap(priceEl, 1);
+
     let row = 2;
-    for (const hostId of footers) {
+    for (const hostId of visibleHostIds(state, cfg.hostWraps)) {
       const wrap = document.getElementById(cfg.hostWraps[hostId]);
       if (!wrap) continue;
 
@@ -437,9 +491,7 @@
       wrap.parentNode.insertBefore(gutter, wrap);
       bindSplitterDrag(gutter, context, hostId);
 
-      wrap.hidden = false;
-      wrap.style.display = 'flex';
-      wrap.style.gridRow = String(row++);
+      layoutShowWrap(wrap, row++);
 
       const legend = wrap.querySelector('.chart-legend');
       if (legend) bindFooterReorder(context, hostId, legend);
@@ -546,6 +598,8 @@ const LayoutController = {
     apply,
     loadPaneHeights,
     buildGridTemplateRows,
+    participatesInStack,
+    applyStack,
     maxFooterHeightFor,
     GUTTER_PX,
     PRICE_MIN_PX,

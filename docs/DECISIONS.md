@@ -1387,6 +1387,8 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 
 **Phase 5 (fullscreen):** Dblclick empty LWC plot chrome → `toggleFullscreen(paneId)`. Ignore legends / scales / splitters / controls. Escape / second dblclick → `setFullscreen(null)`. LayoutController only toggles `.fullscreen-pane` from state; order/heights/visible untouched. One rAF resize after apply.
 
+**PANE-WORKSPACE-MAXIMIZE-1 amendment:** Viewport-fixed `.fullscreen-pane` (100vw/100vh overlay) is deleted. `applyStack` expresses `fullscreenPaneId` as a single-track `#charts-stack` grid (`minmax(0, 1fr)`, one participating wrap, no splitters). Sibling suppression is layout-only — never `setVisible` / `visible[]`. Price is not special in maximize mode. Bottom-axis fullscreen override (ADR-023) unchanged.
+
 **Rejected:** Weighted `fr` footers (squashes price); trusting localStorage without ∩ manifest; Ind HTML hardcodes; deep render pause in Phase 1; server layout FSM; static HTML splitters between fixed neighbors; DOM-owned fullscreen class without PaneLayout.
 
 **Consequences:** Debt **#90**. Modules: `web/ui/pane-layout.js`, `web/ui/layout-controller.js`. Regressions: `web/pane_layout_test.js`, `web/layout_controller_test.js`. Instance: `window.paneLayout` after DDR mount.
