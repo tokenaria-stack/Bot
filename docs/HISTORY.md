@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-COLOR-OVERRIDES-1 — sparse Wozduh color prefs (Sep 2026)
+
+- Factory colors stay in `ui_config`. User deviations in `wozduh_color_prefs_v1`.
+- Reset deletes the override; fill RGB keeps factory-parsed alpha (no hardcoded 0.12).
+- Paint via `applyOptions` only. No Style UI, no `setSeriesVisible`, no DAG/history.
+- Artifact: `research/cleanup/WOZDUH-COLOR-OVERRIDES-1.txt`. Audit: `INDICATOR-STYLE-OWNERSHIP-AUDIT-1.txt`.
+
 ## WOZDUH-VOLCROSS-REMOVE-1 — delete discrete Wozduh cross event (Sep 2026)
 
 - Deleted `SlotWozduhVolCross`, `detectVolCrossCode`, `WozduhBitVolCrossPair`, prev-cross Snapshot/Restore, `woz_vol_cross`.

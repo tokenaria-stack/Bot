@@ -12,6 +12,11 @@ const RsxStrokeColorApi = (typeof RsxStrokeColor !== 'undefined')
   : (typeof require === 'function'
     ? (() => { try { return require('./rsx-stroke-color.js'); } catch { return null; } })()
     : null);
+const WozduhColorPrefsApi = (typeof WozduhColorPrefs !== 'undefined')
+  ? WozduhColorPrefs
+  : (typeof require === 'function'
+    ? (() => { try { return require('./wozduh-color-prefs.js'); } catch { return null; } })()
+    : null);
 
 const LINE_RSX_ID = 'line_rsx';
 
@@ -540,14 +545,24 @@ class DDRFactory {
         const plots = renderOpts.plots && typeof renderOpts.plots === 'object' ? renderOpts.plots : null;
         if (!plots?.upper || !plots?.mid || !plots?.lower) return;
         series = chart.addCustomSeries(new ChannelCtor(), seriesOpts);
-        this.seriesMap.set(component.id, { chart, series, kind: 'channel', plots: {
-          upper: String(plots.upper),
-          mid: String(plots.mid),
-          lower: String(plots.lower),
-        } });
+        this.seriesMap.set(component.id, {
+          chart,
+          series,
+          kind: 'channel',
+          hostId: String(component.hostId || component.hostID || ''),
+          factoryColors: WozduhColorPrefsApi
+            ? WozduhColorPrefsApi.factoryColorFields('channel', renderOpts)
+            : {},
+          plots: {
+            upper: String(plots.upper),
+            mid: String(plots.mid),
+            lower: String(plots.lower),
+          },
+        });
         if (scaleMargins && priceScaleId !== '' && priceScaleId != null) {
           series.priceScale()?.applyOptions?.({ scaleMargins });
         }
+        this._applyWozduhColorOverride(component.id);
         return;
       }
       case 'line':
@@ -559,7 +574,100 @@ class DDRFactory {
     if (scaleMargins && priceScaleId !== '' && priceScaleId != null) {
       series.priceScale()?.applyOptions?.({ scaleMargins });
     }
-    this.seriesMap.set(component.id, { chart, series });
+    this.seriesMap.set(component.id, {
+      chart,
+      series,
+      kind: kind === 'area' || kind === 'histogram' ? kind : 'line',
+      hostId: String(component.hostId || component.hostID || ''),
+      factoryColors: WozduhColorPrefsApi
+        ? WozduhColorPrefsApi.factoryColorFields('line', renderOpts)
+        : {},
+    });
+    this._applyWozduhColorOverride(component.id);
+  }
+
+  _wozduhColorEntry(id) {
+    const entry = this.seriesMap.get(id);
+    if (!entry || entry.hostId !== 'wozduh') return null;
+    if (entry.kind !== 'channel' && entry.kind !== 'line') return null;
+    return entry;
+  }
+
+  _paintWozduhSeries(id, patch) {
+    if (!patch || typeof patch !== 'object' || !Object.keys(patch).length) return false;
+    const series = DDRFactory._seriesFromEntry(this.seriesMap.get(id));
+    if (!series || typeof series.applyOptions !== 'function') return false;
+    series.applyOptions(patch);
+    return true;
+  }
+
+  /**
+   * Apply sparse color overrides after mount. No-op when the store is empty
+   * for this id so factory strings from addLineSeries remain untouched.
+   * Must not call setSeriesVisible / onSubscriptionChange.
+   */
+  _applyWozduhColorOverride(id) {
+    if (!WozduhColorPrefsApi) return;
+    const entry = this._wozduhColorEntry(id);
+    if (!entry) return;
+    const kind = entry.kind === 'channel' ? 'channel' : 'line';
+    const patch = WozduhColorPrefsApi.paintPatch(
+      kind,
+      entry.factoryColors,
+      WozduhColorPrefsApi.overrideFor(id),
+    );
+    this._paintWozduhSeries(id, patch);
+  }
+
+  applyWozduhColorOverrides() {
+    for (const id of this.seriesMap.keys()) this._applyWozduhColorOverride(id);
+  }
+
+  setWozduhColor(id, field, hex) {
+    if (!WozduhColorPrefsApi) return false;
+    const entry = this._wozduhColorEntry(id);
+    if (!entry) return false;
+    const kind = entry.kind === 'channel' ? 'channel' : 'line';
+    if (!WozduhColorPrefsApi.fieldsForKind(kind).includes(field)) return false;
+    WozduhColorPrefsApi.setColor(id, field, hex);
+    const patch = WozduhColorPrefsApi.paintPatch(
+      kind,
+      entry.factoryColors,
+      { [field]: WozduhColorPrefsApi.overrideFor(id)[field] },
+    );
+    return this._paintWozduhSeries(id, patch);
+  }
+
+  resetWozduhColor(id, field) {
+    if (!WozduhColorPrefsApi) return false;
+    const entry = this._wozduhColorEntry(id);
+    if (!entry) return false;
+    const kind = entry.kind === 'channel' ? 'channel' : 'line';
+    if (!WozduhColorPrefsApi.fieldsForKind(kind).includes(field)) return false;
+    WozduhColorPrefsApi.resetProperty(id, field);
+    const patch = WozduhColorPrefsApi.factoryPatch(kind, entry.factoryColors, [field]);
+    return this._paintWozduhSeries(id, patch);
+  }
+
+  resetWozduhComponentColors(id) {
+    if (!WozduhColorPrefsApi) return false;
+    const entry = this._wozduhColorEntry(id);
+    if (!entry) return false;
+    const kind = entry.kind === 'channel' ? 'channel' : 'line';
+    WozduhColorPrefsApi.resetComponent(id);
+    const patch = WozduhColorPrefsApi.factoryPatch(kind, entry.factoryColors);
+    return this._paintWozduhSeries(id, patch);
+  }
+
+  resetAllWozduhColors() {
+    if (!WozduhColorPrefsApi) return;
+    WozduhColorPrefsApi.resetAll();
+    for (const id of this.seriesMap.keys()) {
+      const entry = this._wozduhColorEntry(id);
+      if (!entry) continue;
+      const kind = entry.kind === 'channel' ? 'channel' : 'line';
+      this._paintWozduhSeries(id, WozduhColorPrefsApi.factoryPatch(kind, entry.factoryColors));
+    }
   }
 
   static resolvePriceScaleId(component, chartEntry, renderOpts) {

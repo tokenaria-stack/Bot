@@ -1,0 +1,131 @@
+WOZDUH-COLOR-OVERRIDES-1
+========================
+
+Verdict: WOZDUH_COLOR_OVERRIDES_GREEN
+
+Baseline: HEAD b7202ab WOZDUH-VOLCROSS-REMOVE-1
+Branch: 2026-07-06-puvo
+Audit frozen: INDICATOR-STYLE-OWNERSHIP-AUDIT-1 (STYLE_AUDIT_GREEN_FRONTEND_ONLY)
+
+No Style UI in this chapter. GREEN freeze: commit + push.
+
+
+A. IMPLEMENTATION SUMMARY
+-------------------------
+
+Sparse frontend color overrides for Wozduh only.
+
+    ui_config factory (manifest renderOptions)
+        +
+    optional wozduh_color_prefs_v1
+        →
+    applyOptions color keys only
+
+Empty prefs do not rewrite series create options. Factory CSS names
+(blue, maroon, …) stay on addLineSeries / addCustomSeries.
+
+Reset deletes the override, then applyOptions the current factory
+strings from the mount-time renderOptions copy (not a snapshot written
+into localStorage).
+
+
+B. FILES
+--------
+
+web/wozduh-color-prefs.js          sparse store + paintPatch / factoryPatch
+web/series-factory.js              mount apply; command methods
+web/index.html                     load prefs script before DDRFactory
+web/wozduh_color_overrides_test.js node tests
+docs/OPEN_DEBTS.md                 NEXT pointer (VISUAL-TUNE retired)
+
+Not touched: DAG, WozduhNode, history API, visibility prefs, SettingsRenderer,
+channel-series geometry, RSX stroke, ui_config colors.
+
+
+C. STORE
+--------
+
+Key: wozduh_color_prefs_v1
+
+Shape (sparse, canonical IDs only):
+
+    {
+      "woz_vol_rsi_ema12": { "color": "#C58EAC" },
+      "woz_rsi_close_chan": {
+        "upperColor": "#55739A",
+        "midColor": "#800000",
+        "lowerColor": "#55739A",
+        "fillColor": "#8A7058"
+      }
+    }
+
+Storage format: #RRGGBB (normalized uppercase).
+Named CSS / rgba / #RGB rejected.
+Unknown IDs and unknown fields ignored on apply.
+Empty map → removeItem (no copied defaults).
+
+
+D. COMMAND API (DDRFactory)
+---------------------------
+
+setWozduhColor(id, field, hex)
+resetWozduhColor(id, field)
+resetWozduhComponentColors(id)
+resetAllWozduhColors()
+applyWozduhColorOverrides()
+
+hostId must be wozduh. kind line | channel.
+Does not call setSeriesVisible or onSubscriptionChange.
+
+
+E. FILL
+-------
+
+Store fillColor as #RRGGBB.
+Apply as rgba(r,g,b, alpha) where alpha is parsed from the factory
+manifest fillColor string. No hardcoded 0.12 in the override module.
+Unparseable factory fill → skip fill paint (fail closed).
+Reset fill restores the factory rgba string.
+
+
+F. TESTS (node web/wozduh_color_overrides_test.js)
+--------------------------------------------------
+
+A empty prefs → factory strings; no color applyOptions; no subscribe/history
+B override line → applyOptions {color}; create still factory; plot ids unchanged
+C reset line → factory string; key gone
+D channel four fields; fill rgba keeps 0.12
+E reset component / reset all
+F visibility localStorage untouched; setSeriesVisible still notifies; color does not
+G remount reapplies override; hydrate setData does not require history
+H stale woz_fast / RSX host / extra fields ignored
+I invalid hex rejected; resetAll removeItem
+
+Also still pass: wozduh_wire_test, channel_paint_test, wozduh_owner_test,
+hidden_render_skip_test, scale_contribution_test.
+
+
+G. OUT OF THIS CHAPTER
+----------------------
+
+Style section / color picker UI
+opacity / width / gradient
+RSX dynamic stroke
+server persistence
+Go StyleConfig types
+
+
+H. NEXT
+-------
+
+WOZDUH-STYLE-SECTION-1 — Style heading in the existing Woz settings menu.
+Swatch + Default per component. Default all colors. Color only.
+
+Do not start until this chapter is reviewed / frozen.
+
+
+I. GIT
+------
+
+Frozen and pushed on this chapter commit.
+Unrelated prior audit reports left untracked.

@@ -1,0 +1,433 @@
+INDICATOR-STYLE-OWNERSHIP-AUDIT-1
+=================================
+
+READ-ONLY. No product/test/doc edits except this file.
+HEAD: b7202ab WOZDUH-VOLCROSS-REMOVE-1
+Branch: 2026-07-06-puvo (in sync with origin)
+
+
+A. EXECUTIVE VERDICT
+--------------------
+
+STYLE_AUDIT_GREEN_FRONTEND_ONLY
+
+Wozduh factory colors live in ui_config/wozduh_layout.go RenderOpts (served
+as /api/ui/manifest). Series are LWC LineSeries or one custom ChannelSeries.
+Both accept ISeriesApi.applyOptions. Color override can stay entirely in the
+frontend: sparse localStorage + applyOptions. No DAG, demand, history, or
+Go market-engine change is required.
+
+GPT corrections (this audit):
+
+1. Do NOT add Go "editable capabilities" to the manifest for v1. Infer
+   fields from kind + existing renderOptions keys (line.color vs channel
+   upper/mid/lower/fill). Extra Go types would be a power plant.
+
+2. Name the store `wozduh_color_prefs_v1`, not `indicator_style_prefs_v1`.
+   Visibility is already Wozduh-scoped (`wozduh_visibility_prefs_live`).
+   A generic indicator key pretends we have a second consumer. We do not.
+
+3. ChannelSeries.defaultOptions AND ChannelRenderer.draw fallbacks are
+   SECOND default layers. They must not become a competing SSOT. Mount
+   always passes ui_config colors; draw fallbacks only fire if options
+   omit a key.
+
+4. ChartTheme.wozduhVolRsiEma12 / wozduhVolRsiEma5 are STALE (defined,
+   never read). Do not wire overrides through ChartTheme.
+
+5. Extreme bands (wozduh-extreme-bands.js) are pane chrome, not DDR
+   Wozduh lines. Out of v1.
+
+6. Visibility setSeriesVisible → onSubscriptionChange → wsSubscribeTf
+   + optional /api/history fetch. Color apply MUST NOT call that path.
+   That is the main architecture trap, not a renderer limitation.
+
+7. Skip a standalone STYLE-CONTRACT-1 Go chapter. First product code can
+   be FE resolver + tests that empty prefs leave factory appearance, then
+   the Style tab. Collapse, do not scaffold unused types.
+
+8. Settings menu has NO tabs today. Style is a new sibling section in
+   the same floating menu, not a second floating menu and not a backend
+   config panel.
+
+9. Fill is a single rgba on the composed renderer (not a separate fill
+   series). There is no fillLowerColor (that experiment was reverted).
+
+
+B. WOZDUH DRAWABLE OWNERSHIP TABLE
+---------------------------------
+
+COMPONENT ID              LABEL                      RENDERER     FACTORY OWNER              DEFAULT COLOR FIELD(S)                         SERIES CREATE           RUNTIME UPDATE              VISIBILITY OWNER                         FUTURE OVERRIDE FIELDS                         RESET                         NOTES
+------------------------  -------------------------  -----------  -------------------------  ---------------------------------------------  ----------------------  --------------------------  ---------------------------------------  ---------------------------------------------  ----------------------------  -----
+woz_rsi_ad                RSI AD                     LWC line     ui_config/wozduh_layout.go color=maroon                                  DDRFactory._mountComponent  series.applyOptions({color})  SettingsRenderer / wozduh_visibility_prefs_live  color                                          delete override                defaultVisible=false; lineWidth 1 (not v1)
+woz_rsi_hl2               RSI HL2                    LWC line     ui_config/wozduh_layout.go color=purple                                  same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=true
+woz_vol_rsi_ema5          Volume RSI EMA5            LWC line     ui_config/wozduh_layout.go color=aqua                                    same                      applyOptions({color})        same                                     color                                          delete override                bounded Auto/crosshair owner; defaultVisible=true
+woz_vol_rsi_ema12         Volume RSI EMA12           LWC line     ui_config/wozduh_layout.go color=blue                                    same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=true
+woz_rsi_hl2_vwema         RSI VWEMA(HL2)             LWC line     ui_config/wozduh_layout.go color=navy                                    same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=false; lineWidth 1
+woz_rsi_close             RSI close                  LWC line     ui_config/wozduh_layout.go color=#f23645                                 same                      applyOptions({color})        same                                     color                                          delete override                only factory hex today
+woz_rsi_rsi_close         RSI of RSI(close)          LWC line     ui_config/wozduh_layout.go color=orange                                  same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=false
+woz_macd_rsi_close        MACD RSI(close)+50         LWC line     ui_config/wozduh_layout.go color=black                                   same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=false
+woz_rsi_close_ema7        RSI close EMA7             LWC line     ui_config/wozduh_layout.go color=green                                   same                      applyOptions({color})        same                                     color                                          delete override                defaultVisible=false; user asked to leave green as factory
+woz_vol_rsi_ema5_chan     Volume RSI EMA5 channel    ChannelSeries ui_config/wozduh_layout.go upperColor=blue midColor=orange lowerColor=blue fillColor=rgba(0,136,255,0.12)  addCustomSeries  applyOptions({upperColor,midColor,lowerColor,fillColor})  same  upperColor midColor lowerColor fillColor  delete those keys / object  composed; plots not mounted
+woz_rsi_close_chan        RSI close channel          ChannelSeries ui_config/wozduh_layout.go upperColor=blue midColor=maroon lowerColor=blue fillColor=rgba(128,0,0,0.12)     addCustomSeries  applyOptions(same four)       same                                     same four                                      same                          composed; plots not mounted
+
+NOT DRAWABLE (no color / not in Style tab):
+
+woz_vol_rsi_ema5_chan_{up,mid,dn}   kind=plot  projector columns only
+woz_rsi_close_chan_{up,mid,dn}      kind=plot  projector columns only
+
+NOT WOZDUH SERIES STYLE (out of v1):
+
+WozduhExtremeBands  web/wozduh-extreme-bands.js  private primitive  yellow/green/red chrome
+line_rsx            ui_config/rsx_layout.go + rsx-stroke-color.js  per-point dynamic stroke
+
+
+C. FACTORY COLOR SSOT
+---------------------
+
+Yes: ui_config/wozduh_layout.go is the factory-style SSOT for Wozduh DDR
+components. Served to the client as JSON via DashboardServer.handleUIManifest
+← ui_config.BuildUIRegistry ← WozduhComponents().
+
+This is a presentation manifest in Go, not market/indicator config.
+Changing those strings does not replay WozduhNode.
+
+Competing / stale layers (must not become SSOT):
+
+- ChannelSeries.defaultOptions() duplicates blue/orange/fill rgba
+- ChannelRenderer.draw uses opts.X || hardcoded fallback
+- ChartTheme.wozduhVolRsiEma12='blue', wozduhVolRsiEma5='aqua' — unused
+- Named CSS vs hex mix is factory-only; overrides should still be hex
+
+Precedence to implement:
+
+    user override (sparse)
+        → ui_config factory (manifest renderOptions)
+            → ChannelSeries.defaultOptions / draw fallback (safety net only)
+
+
+D. RENDERER TYPE MAP
+--------------------
+
+1) LWC LineSeries
+   create: chart.addLineSeries(seriesOpts) in DDRFactory._mountComponent
+   initial: renderOptions.color (and lineWidth, lastValueVisible, …)
+   mutate: series.applyOptions({ color })
+   recreate: not required for color
+   verdict: IN_PLACE_SAFE
+
+2) ChannelSeries (web/channel-series.js) via chart.addCustomSeries
+   one primitive draws fill + upper + mid + lower
+   boundaries are NOT separate LineSeries
+   fill is NOT a second series
+   create: seriesOpts includes upperColor, midColor, lowerColor, fillColor
+   mutate: ISeriesApi.applyOptions on the custom series; ChannelSeries.update
+           stores options; draw() reads them
+   recreate: not required if LWC forwards custom option keys (expected;
+             STYLE-OVERRIDES-1 must prove with a test)
+   verdict: IN_PLACE_SAFE (verify applyOptions custom keys)
+
+3) Plot kind
+   not mounted; no renderer; no Style row
+
+Wozduh has no area/histogram components.
+
+
+E. CHANNEL COLOR / FILL OWNERSHIP
+---------------------------------
+
+Both channel families: one composed ChannelSeries.
+
+Stored in ui_config channel RenderOpts:
+  upperColor, midColor, lowerColor, fillColor
+  lineWidth, midLineWidth, upperLineStyle, lowerLineStyle  (not v1)
+
+Applied at mount as custom series options. Runtime: applyOptions of those
+keys independently — yes, if LWC merges options.
+
+Fill format today: rgba(R,G,B,A) with factory alpha 0.12.
+User v1 is COLOR only — do not add an opacity slider.
+When the user picks a fill swatch, replace RGB and KEEP factory alpha
+(0.12) unless they Reset fill (then full factory rgba returns).
+
+No gradient on channels. Extreme-band gradients are unrelated chrome.
+
+
+F. CURRENT SETTINGS MENU OWNERSHIP
+----------------------------------
+
+Built in web/ui/settings-renderer.js rebuildMenu().
+Opened by web/ui/wozduh-controller.js (gear on #osc-wrap).
+DOM: .wozduh-settings-menu in web/index.html.
+No tabs. One list of visibility checkboxes + Ok.
+Labels from renderOptions.title; IDs from component.id.
+collectConfigurable: hostId=wozduh, configurable=true, skip plot/marker.
+
+Style tab insertion: SAME menu, sibling of the checkbox list
+(e.g. "Visibility" / "Style" or a Style section above Ok).
+Owner: SettingsRenderer (or a tiny helper it calls). It already walks
+the Wozduh configurable list.
+
+Must NOT own Style:
+  core/nodes/wozduh.go, market.Frame, /api/history, Wozduh demand
+  ChartAdapter as SSOT
+  WozduhController legacy backtest checkbox path (live path already
+  delegated to SettingsRenderer)
+
+WozduhController.init still exists for menu open/close; keep that.
+
+
+G. VISIBILITY PREFS OWNERSHIP
+-----------------------------
+
+Keys: wozduh_visibility_prefs_live (active)
+      wozduh_visibility_prefs (legacy fallback read)
+
+Shape: { [componentId]: boolean } plus one-shot Falcon/old-ID remap
+in migrateLegacyPrefs.
+
+Command: checkbox change → savePrefsMap → DDRFactory.setSeriesVisible
+→ applyOptions({visible}) AND _notifySubscription →
+  liveColumnarStore.dropPlotsNotIn
+  wsSubscribeTf
+  enable path may fetchPlotColumns → /api/history
+
+Color prefs MUST be a different key and MUST NOT call setSeriesVisible
+or _notifySubscription.
+
+
+H. PROPOSED STYLE OVERRIDE STORE
+--------------------------------
+
+Key: wozduh_color_prefs_v1
+
+Sparse JSON only. No defaults copied in. No visibility. No periods.
+
+{
+  "woz_vol_rsi_ema12": { "color": "#C58EAC" },
+  "woz_rsi_close_chan": {
+    "upperColor": "#55739A",
+    "midColor": "#800000",
+    "lowerColor": "#55739A",
+    "fillColor": "#8A7058"
+  }
+}
+
+Unknown IDs / unknown fields: ignore.
+Retired IDs: ignore (do not build a second migrate framework unless a
+rename chapter actually moves IDs again).
+
+fillColor in storage: #RRGGBB. Effective fill rgba uses factory alpha.
+
+
+I. RESET / DEFAULT SEMANTICS
+----------------------------
+
+A. Reset one property: delete that field on the component object;
+   delete the object if empty.
+B. Reset one component: delete the component key.
+C. Reset all Wozduh style: removeItem('wozduh_color_prefs_v1')
+   (store is Wozduh-only in v1).
+
+Then applyOptions with factory values from the current manifest
+renderOptions (not from a snapshot taken at override time).
+
+Never write factory colors into localStorage.
+Never mutate ui_config from the client.
+
+
+J. COMMAND FLOW
+---------------
+
+Style tab (command owner)
+  → WozduhColorPrefs.set(id, field, hex) | delete
+  → persist sparse JSON
+  → EffectiveColor = override ?? manifest.renderOptions
+  → DDRFactory.getSeries(id).applyOptions(patch)
+
+No LWC → prefs echo.
+No setSeriesVisible.
+No onSubscriptionChange.
+
+Chart is observation/paint only for color.
+
+
+K. INITIAL LOAD / REHYDRATION
+-----------------------------
+
+Current mount: _mountComponent copies manifest renderOptions into
+addLineSeries / addCustomSeries. _mountComponent no-ops if the id
+already exists. TF switch hydrates data; it does not remount series
+(boot.js calls buildPanes once in mountDDRLiveCutover).
+
+Cleanest v1:
+
+  create with factory renderOptions (unchanged appearance if no prefs)
+  immediately applyEffectiveColors() from sparse store
+  on Style change: applyOptions only
+  on SettingsRenderer.refreshFromManifest (visibility remount of menu):
+    re-apply colors if series still exist (idempotent)
+
+If series are ever cleared/rebuilt, applyEffectiveColors after
+buildPanes. Color store is independent of TF and of visibility.
+
+Hidden series: applyOptions({color}) still valid; no data fetch.
+
+
+L. LIVE APPLY PATH
+------------------
+
+Lines: IN_PLACE_SAFE — applyOptions({ color })
+Channels: IN_PLACE_SAFE — applyOptions({ upperColor, midColor,
+  lowerColor, fillColor })  [prove LWC custom option merge in tests]
+
+No history reload if command path is applyOptions-only.
+
+Architecture debt if Style reuses setSeriesVisible:
+  would fire WS subscribe + possible /api/history + demand mask change.
+  Do not reuse that function.
+
+
+M. THEME INTERACTION
+--------------------
+
+Wozduh line/channel colors are fixed strings in the manifest, not CSS
+variables and not ChartTheme lookups.
+
+ChartTheme.applyCssVariables retints chrome (bg/grid/text), not Wozduh
+series.
+
+Dark/light switch today does not change Wozduh factory colors.
+Sparse overrides stay until Reset. No theme-sync in v1.
+
+Stale ChartTheme Wozduh tokens: leave unused; do not revive.
+
+
+N. COLOR FORMAT
+---------------
+
+Factory mix: CSS names (blue, aqua, maroon, …) and one hex (#f23645)
+and rgba fills.
+
+Override storage: #RRGGBB (stable, picker-native).
+
+Apply:
+  lines → applyOptions({ color: "#RRGGBB" })
+  channel strokes → same hex
+  fill → rgba(r,g,b, factoryAlpha) where factoryAlpha is parsed from
+         manifest fillColor (0.12 both channels today)
+
+No opacity control in the UI.
+
+
+O. RSX SPECIAL-PAINT BOUNDARY
+-----------------------------
+
+Owner: web/rsx-stroke-color.js + DDRFactory.withRsxStrokeColors /
+updateTick per-point {time,value,color} for id line_rsx only.
+
+Zones: value>70 green #0ebb23, value<30 red #ff0000, else MID #512DA8
+(same as layout default).
+
+This is value-driven paint on each point, not a series-level color.
+User Style on line_rsx would fight per-point updates.
+
+OUT OF V1. line_rsx_signal is a static layout color but lives on the
+RSX host, not Wozduh — also out of first consumer.
+
+
+P. BACKEND / MARKET ENGINE IMPACT
+---------------------------------
+
+None required.
+
+/api/ui/manifest is presentation metadata (ui_config), already fetched.
+Do not add color to that payload for v1 (client already has factory
+colors on the mounted series / manifest).
+
+No /api color endpoint.
+No history.db.
+No OnConfigChange.
+No Wozduh mask change.
+
+
+Q. MINIMUM STYLE CONTRACT
+-------------------------
+
+No new Go types.
+
+FE only:
+
+  factoryColors(component) from parseRenderOpts
+    line → { color }
+    channel → { upperColor, midColor, lowerColor, fillColor }
+
+  overrides[id] sparse
+
+  effective = { ...factory, ...overrides[id] }
+
+  apply patch of color keys only
+
+
+R. TEST PLAN
+------------
+
+Proposal only (do not implement in this audit):
+
+- empty prefs: series options match ui_config factory strings
+- override one line color; applyOptions called; no fetchPlotColumns
+- reset line: factory color reapplied; key gone from store
+- override channel four colors; fill keeps factory alpha
+- reset component / reset all Wozduh
+- visibility prefs unchanged when color changes
+- TF hydrate does not wipe applied color (series not remounted)
+- unknown override id ignored
+- setSeriesVisible not invoked by color command
+- requestedPlotIds unchanged by color command
+
+
+S. PROPOSED IMPLEMENTATION SEQUENCE
+-----------------------------------
+
+Collapse to two chapters (not three):
+
+1. WOZDUH-COLOR-OVERRIDES-1
+   sparse wozduh_color_prefs_v1
+   effective resolver
+   applyOptions helper on DDRFactory (no Style UI yet)
+   tests: default unchanged; override; reset; no subscription notify
+
+2. WOZDUH-STYLE-TAB-1
+   Style section in existing Woz Settings menu
+   color swatch + hex (minimum picker)
+   Reset property / component / all Wozduh
+   color only
+
+Defer: opacity, width, gradients, RSX, server sync, generic registry.
+
+Do not implement in this audit.
+
+
+T. GIT STATUS
+-------------
+
+HEAD     b7202ab
+branch   2026-07-06-puvo
+origin   in sync
+tracked  clean
+untracked (not staged):
+  this report INDICATOR-STYLE-OWNERSHIP-AUDIT-1.txt
+  prior cleanup audits (ARTIFACT, FALCON-CONSUMER, MARKER, QDRANT,
+  SCORE-WIRE, SOCKET, WOZDUH-FACT-VOCAB, WOZDUH-NUMERIC-SEMANTICS)
+
+
+U. FINAL RECOMMENDATION
+-----------------------
+
+v1 is strictly: Wozduh + color + reset, frontend-only.
+
+Factory stays in ui_config. Prefs store only deviations. Reset deletes
+them. Style tab is a sibling of visibility in SettingsRenderer. Never
+route color through setSeriesVisible.
+
+HARD STOP. Review before any implementation.
