@@ -205,16 +205,16 @@ plotshape(piv ? na : shrt ? (pivotl ? min_rsi - 3 : na) : na, location=location.
 | Pine variable | Default | Go field / const |
 |---------------|---------|------------------|
 | `lenvol` | 24 | `wozduhLenVol`, `wozduhChannelPeriod` |
-| `lencena` | 14 | RSI(close) → `RsiPrice` / `RedLine` |
-| `lenn` | 14 | RSI(HL2) → `RsiHl2` / `RedLine` legacy |
-| `lenOR` | 14 | RSI(RSI) → `RsiRsi` |
-| `ll` | 7 | EMA(RSI) → `EmaRsi` / `GreenLine` |
-| `oo1` / `oo2` | 12 / 5 | `wozduhWt11Period` / `wozduhWt22Period` → `RsiVolFast` / `RsiVolSlow` |
+| `lencena` | 14 | RSI(close) → `SlotWozduhRsiClose` / `woz_rsi_close` |
+| `lenn` | 14 | RSI(HL2) → `SlotWozduhRsiHl2` / `woz_rsi_hl2` |
+| `lenOR` | 14 | RSI(RSI(close)) → `SlotWozduhRsiRsiClose` / `woz_rsi_rsi_close` |
+| `ll` | 7 | EMA7(RSI(close)) → `SlotWozduhRsiCloseEma7` / `woz_rsi_close_ema7` |
+| `oo1` / `oo2` | 12 / 5 | `wozduhVolRsiEma12Period` / `wozduhVolRsiEma5Period` → `woz_vol_rsi_ema12` / `woz_vol_rsi_ema5` (historical Pine `wt11`/`wt22`) |
 | `cek` | 0.6 | inner channel (не портирован в UI) |
 | `ko3` | 3 | HL2 smoothed range (chl3) — частично |
-| `mrsi`, `m1`, `m2`, `mmn` | 24/7/24/1 | MACD(RSI)+50 → `MacdRsi` / `BlackLine` |
+| `mrsi`, `m1`, `m2`, `mmn` | 24/7/24/1 | MACD(RSI(close))+50 → `SlotWozduhMacdRsiClose` / `woz_macd_rsi_close` |
 | Channel φ | `1.6185 * stdev` | `wozduhChannelPhi` |
-| `cross(wt11, wt22)` | circles | `VolCrossMarker` lime/red |
+| `cross(wt11, wt22)` | circles | `SlotWozduhVolCross` / `woz_vol_cross` (legacy; deletion chapter next) |
 
 ### Полный исходник Pine Script v3
 

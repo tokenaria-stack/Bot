@@ -99,8 +99,8 @@ func dagOscillatorsFromHistory(hist *core.HistoryBus, times []int64) []ChartOsci
 		out[i].Jurik = finiteOrZero(hist.Get(core.SlotJurikRSX, lookback))
 		out[i].RSX = out[i].Jurik
 		out[i].RSXSignal = finiteOrZero(hist.Get(core.SlotJurikSignal, lookback))
-		fast := finiteOrZero(hist.Get(core.SlotWozduhFast, lookback))
-		slow := finiteOrZero(hist.Get(core.SlotWozduhSlow, lookback))
+		fast := finiteOrZero(hist.Get(core.SlotWozduhVolRsiEma12, lookback))
+		slow := finiteOrZero(hist.Get(core.SlotWozduhVolRsiEma5, lookback))
 		out[i].Blue = fast
 		out[i].RsiVolFast = fast
 		out[i].RsiVolSlow = slow

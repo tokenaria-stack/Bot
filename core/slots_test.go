@@ -4,8 +4,8 @@ import "testing"
 
 func TestSlotLayout_CountAndIndependence(t *testing.T) {
 	t.Parallel()
-	if SlotAO != SlotWozduhSlow+1 {
-		t.Fatalf("SlotAO=%d want SlotWozduhSlow+1=%d", SlotAO, SlotWozduhSlow+1)
+	if SlotAO != SlotWozduhVolRsiEma5+1 {
+		t.Fatalf("SlotAO=%d want SlotWozduhVolRsiEma5+1=%d", SlotAO, SlotWozduhVolRsiEma5+1)
 	}
 	if SlotCount != SlotWozduhVolCross+1 {
 		t.Fatalf("SlotCount=%d want last live+1=%d", SlotCount, SlotWozduhVolCross+1)

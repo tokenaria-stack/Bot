@@ -42,24 +42,24 @@ func TestBuildTickJSONFiltered_OnlyRequested(t *testing.T) {
 	frame := &core.TickFrame{}
 	frame.Set(core.SlotJurikRSX, 55)
 	frame.Set(core.SlotJurikSignal, 44)
-	frame.Set(core.SlotWozduhFast, 11)
-	frame.Set(core.SlotWozduhSlow, 22)
+	frame.Set(core.SlotWozduhVolRsiEma12, 11)
+	frame.Set(core.SlotWozduhVolRsiEma5, 22)
 
 	all := p.BuildTickJSON(frame)
-	if _, ok := all["woz_fast"]; !ok {
-		t.Fatal("unfiltered tick must include woz_fast")
+	if _, ok := all["woz_vol_rsi_ema12"]; !ok {
+		t.Fatal("unfiltered tick must include woz_vol_rsi_ema12")
 	}
-	filtered := p.BuildTickJSONFiltered(frame, []string{"line_rsx", "woz_slow"})
-	if _, ok := filtered["woz_fast"]; ok {
-		t.Fatal("hidden woz_fast must be omitted from filtered tick")
+	filtered := p.BuildTickJSONFiltered(frame, []string{"line_rsx", "woz_vol_rsi_ema5"})
+	if _, ok := filtered["woz_vol_rsi_ema12"]; ok {
+		t.Fatal("hidden woz_vol_rsi_ema12 must be omitted from filtered tick")
 	}
-	if filtered["line_rsx"] != 55 || filtered["woz_slow"] != 22 {
+	if filtered["line_rsx"] != 55 || filtered["woz_vol_rsi_ema5"] != 22 {
 		t.Fatalf("filtered=%v", filtered)
 	}
-	if _, ok := filtered["woz_vol_chan"]; ok {
+	if _, ok := filtered["woz_vol_rsi_ema5_chan"]; ok {
 		t.Fatal("compose id must not be packed as a scalar")
 	}
-	if FilterPlotMap(all, nil)["woz_fast"] != 11 {
+	if FilterPlotMap(all, nil)["woz_vol_rsi_ema12"] != 11 {
 		t.Fatal("empty filter must keep plots")
 	}
 	for id, v := range filtered {

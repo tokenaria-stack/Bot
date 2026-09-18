@@ -21,7 +21,7 @@ func TestRSXDemand_WSFactsTriStateAndUnion(t *testing.T) {
 	tv := []string{"rsx_tv_div"}
 	fr := []string{"rsx_fractal_pivot"}
 	a := &WSClient{plotIDs: []string{"line_rsx"}, facts: &tv}
-	b := &WSClient{plotIDs: []string{"woz_slow"}, facts: &fr}
+	b := &WSClient{plotIDs: []string{"woz_vol_rsi_ema5"}, facts: &fr}
 	d.clients[a] = true
 	d.clients[b] = true
 	d.clientTF[a] = "1m"
@@ -39,7 +39,7 @@ func TestRSXDemand_WSFactsTriStateAndUnion(t *testing.T) {
 		t.Fatalf("unused 15s %#b want 0", m15)
 	}
 
-	legacy := &WSClient{plotIDs: []string{"woz_fast"}} // facts omitted → all families
+	legacy := &WSClient{plotIDs: []string{"woz_vol_rsi_ema12"}} // facts omitted → all families
 	d.clients[legacy] = true
 	d.clientTF[legacy] = "1m"
 	d.recomputeAnalyticalDemand("1m")
@@ -59,7 +59,7 @@ func TestRSXDemand_WSFactsTriStateAndUnion(t *testing.T) {
 	}
 
 	unk := []string{"nope"}
-	d.setClientSubscribe(empty, "15s", []string{"woz_fast"}, &unk)
+	d.setClientSubscribe(empty, "15s", []string{"woz_vol_rsi_ema12"}, &unk)
 	mUnk, _, _, _, _, _, _, _ := f15.RSXLiveStats()
 	if mUnk != 0 {
 		t.Fatalf("unknown source must add zero bits, got %#b", mUnk)
@@ -125,12 +125,12 @@ func TestRSXDemand_TFChangeMovesRSX(t *testing.T) {
 	tv := []string{"rsx_tv_div"}
 	c := &WSClient{}
 	d.clients[c] = true
-	d.setClientSubscribe(c, "1m", []string{"woz_fast"}, &tv)
+	d.setClientSubscribe(c, "1m", []string{"woz_vol_rsi_ema12"}, &tv)
 	m1, _, _, _, _, _, _, _ := f1m.RSXLiveStats()
 	if m1 != nodes.NeedRSXCore|nodes.NeedRSTV {
 		t.Fatalf("1m %#b", m1)
 	}
-	d.setClientSubscribe(c, "15s", []string{"woz_fast"}, &tv)
+	d.setClientSubscribe(c, "15s", []string{"woz_vol_rsi_ema12"}, &tv)
 	m1, _, _, _, _, _, _, _ = f1m.RSXLiveStats()
 	m15, _, _, _, _, _, _, _ := f15.RSXLiveStats()
 	if m1 != 0 {

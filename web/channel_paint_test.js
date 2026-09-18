@@ -65,39 +65,39 @@ test('full paint: one setData per channel; plot columns stay source ids', () => 
     { wozduh: { chart: fakeChart } },
     {
       pane_osc: [
-        { id: 'woz_fast', hostId: 'wozduh', kind: 'line', renderOptions: { scaleContribution: { type: 'bounded', min: -5, max: 105 } } },
-        { id: 'woz_vol_chan_up', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
-        { id: 'woz_vol_chan_mid', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
-        { id: 'woz_vol_chan_dn', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
+        { id: 'woz_vol_rsi_ema12', hostId: 'wozduh', kind: 'line', renderOptions: { scaleContribution: { type: 'bounded', min: -5, max: 105 } } },
+        { id: 'woz_vol_rsi_ema5_chan_up', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
+        { id: 'woz_vol_rsi_ema5_chan_mid', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
+        { id: 'woz_vol_rsi_ema5_chan_dn', hostId: 'wozduh', kind: 'plot', dataMode: 'scalar' },
         {
-          id: 'woz_vol_chan',
+          id: 'woz_vol_rsi_ema5_chan',
           hostId: 'wozduh',
           kind: 'channel',
           dataMode: 'compose',
           renderOptions: {
             scaleContribution: { type: 'ignore' },
-            plots: { upper: 'woz_vol_chan_up', mid: 'woz_vol_chan_mid', lower: 'woz_vol_chan_dn' },
+            plots: { upper: 'woz_vol_rsi_ema5_chan_up', mid: 'woz_vol_rsi_ema5_chan_mid', lower: 'woz_vol_rsi_ema5_chan_dn' },
           },
         },
       ],
     },
   );
-  assert.strictEqual(factory.seriesMap.has('woz_vol_chan'), true);
-  assert.strictEqual(factory.seriesMap.has('woz_vol_chan_up'), false);
-  assert.strictEqual(factory.seriesMap.has('woz_vol_chan_mid'), false);
-  assert.strictEqual(factory.seriesMap.has('woz_vol_chan_dn'), false);
+  assert.strictEqual(factory.seriesMap.has('woz_vol_rsi_ema5_chan'), true);
+  assert.strictEqual(factory.seriesMap.has('woz_vol_rsi_ema5_chan_up'), false);
+  assert.strictEqual(factory.seriesMap.has('woz_vol_rsi_ema5_chan_mid'), false);
+  assert.strictEqual(factory.seriesMap.has('woz_vol_rsi_ema5_chan_dn'), false);
   assert.deepStrictEqual(factory.requestedPlotIds().sort(), [
-    'woz_fast', 'woz_vol_chan_dn', 'woz_vol_chan_mid', 'woz_vol_chan_up',
+    'woz_vol_rsi_ema12', 'woz_vol_rsi_ema5_chan_dn', 'woz_vol_rsi_ema5_chan_mid', 'woz_vol_rsi_ema5_chan_up',
   ].sort());
 
   factory.hydrateFromColumnar({
     times: [100, 101],
     sentinel: DDRFactory.HISTORY_ABSENT,
     plots: {
-      woz_fast: [40, 41],
-      woz_vol_chan_up: [80, 81],
-      woz_vol_chan_mid: [50, 51],
-      woz_vol_chan_dn: [20, 21],
+      woz_vol_rsi_ema12: [40, 41],
+      woz_vol_rsi_ema5_chan_up: [80, 81],
+      woz_vol_rsi_ema5_chan_mid: [50, 51],
+      woz_vol_rsi_ema5_chan_dn: [20, 21],
     },
   });
   factory.applyHydratedData();
@@ -134,21 +134,21 @@ test('LIVE: one update {time,upper,mid,lower}; no phantom Up/Mid/Dn updates', ()
     {
       pane_osc: [
         {
-          id: 'woz_vol_chan',
+          id: 'woz_vol_rsi_ema5_chan',
           hostId: 'wozduh',
           kind: 'channel',
           renderOptions: {
             scaleContribution: { type: 'ignore' },
-            plots: { upper: 'woz_vol_chan_up', mid: 'woz_vol_chan_mid', lower: 'woz_vol_chan_dn' },
+            plots: { upper: 'woz_vol_rsi_ema5_chan_up', mid: 'woz_vol_rsi_ema5_chan_mid', lower: 'woz_vol_rsi_ema5_chan_dn' },
           },
         },
       ],
     },
   );
   factory.updateTick(50, {
-    woz_vol_chan_up: 80,
-    woz_vol_chan_mid: 50,
-    woz_vol_chan_dn: 20,
+    woz_vol_rsi_ema5_chan_up: 80,
+    woz_vol_rsi_ema5_chan_mid: 50,
+    woz_vol_rsi_ema5_chan_dn: 20,
   });
   assert.strictEqual(updates.length, 1);
   assert.strictEqual(updates[0].id, 'channel');
@@ -172,20 +172,20 @@ test('LIVE: any missing column → whitespace update, not interpolated band', ()
     { wozduh: { chart: fakeChart } },
     {
       pane_osc: [{
-        id: 'woz_price_chan',
+        id: 'woz_rsi_close_chan',
         hostId: 'wozduh',
         kind: 'channel',
         renderOptions: {
           scaleContribution: { type: 'ignore' },
-          plots: { upper: 'woz_price_chan_up', mid: 'woz_price_chan_mid', lower: 'woz_price_chan_dn' },
+          plots: { upper: 'woz_rsi_close_chan_up', mid: 'woz_rsi_close_chan_mid', lower: 'woz_rsi_close_chan_dn' },
         },
       }],
     },
   );
   factory.updateTick(9, {
-    woz_price_chan_up: 70,
-    woz_price_chan_mid: DDRFactory.HISTORY_ABSENT,
-    woz_price_chan_dn: 30,
+    woz_rsi_close_chan_up: 70,
+    woz_rsi_close_chan_mid: DDRFactory.HISTORY_ABSENT,
+    woz_rsi_close_chan_dn: 30,
   });
   assert.strictEqual(updates.length, 1);
   assert.deepStrictEqual(updates[0], { time: 9 });
@@ -210,7 +210,7 @@ test('channel autoscaleInfoProvider is ignore (null)', () => {
     { wozduh: { chart: fakeChart } },
     {
       pane_osc: [{
-        id: 'woz_vol_chan',
+        id: 'woz_vol_rsi_ema5_chan',
         hostId: 'wozduh',
         kind: 'channel',
         renderOptions: {

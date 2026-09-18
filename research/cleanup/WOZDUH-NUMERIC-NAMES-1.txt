@@ -1,0 +1,261 @@
+WOZDUH-NUMERIC-NAMES-1
+======================
+
+Verdict: WOZDUH_NUMERIC_NAMES_GREEN
+
+Baseline: HEAD 92cabcf (FALCON_REMOVE_GREEN), origin in sync at start of chapter.
+
+GPT prompt corrections applied (see section R).
+
+
+A. IMPLEMENTATION SUMMARY
+-------------------------
+
+Wozduh numeric outputs keep the same formulas, slot indexes, demand-bit
+positions, Snapshot/Restore behavior, and paint colors/widths.
+
+Canonical names now describe the math (volume-RSI EMA12/EMA5, RSI close, …)
+instead of Pine wt11/wt22, color, or misleading fast/slow labels.
+
+Active wire plot IDs moved in one shot. Visibility prefs remap old keys onto
+new IDs and drop the retired plot keys. Bounded Auto/crosshair owner is
+woz_vol_rsi_ema5 (same series as former woz_slow).
+
+VolCross is unchanged and still temporary. No new slots. No tapes/facts.
+No color picker.
+
+
+B. BASELINE / PRE-RENAME STATUS
+-------------------------------
+
+HEAD 92cabcf. Tracked tree clean except untracked prior audit reports
+(left unstaged). Wozduh still used SlotWozduhFast/Slow, woz_fast/woz_slow,
+WozduhBitWt11/Wt22, and color-era field names.
+
+
+C. FINAL CANONICAL NAME TABLE
+-----------------------------
+
+Old slot / plot ID                         New
+-----------------------------------------  --------------------------------
+SlotWozduhFast / woz_fast                  SlotWozduhVolRsiEma12 / woz_vol_rsi_ema12
+SlotWozduhSlow / woz_slow                  SlotWozduhVolRsiEma5 / woz_vol_rsi_ema5
+SlotWozduhRsiPrice / woz_rsi_price         SlotWozduhRsiClose / woz_rsi_close
+SlotWozduhEmaRsi / woz_ema_rsi             SlotWozduhRsiCloseEma7 / woz_rsi_close_ema7
+SlotWozduhRsiRsi / woz_rsi_rsi             SlotWozduhRsiRsiClose / woz_rsi_rsi_close
+SlotWozduhMacdRsi / woz_macd_rsi           SlotWozduhMacdRsiClose / woz_macd_rsi_close
+SlotWozduhRsiHl2Vol / woz_rsi_hl2_vol      SlotWozduhRsiHl2Vwema / woz_rsi_hl2_vwema
+PriceChan * / woz_price_chan*              RsiCloseChan * / woz_rsi_close_chan*
+VolChan * / woz_vol_chan*                  VolRsiEma5Chan * / woz_vol_rsi_ema5_chan*
+SlotWozduhRsiHl2 / woz_rsi_hl2             unchanged IDs
+SlotWozduhRsiAd / woz_rsi_ad               unchanged IDs
+SlotWozduhVolCross / woz_vol_cross         unchanged (legacy)
+
+Unpublished internals still unpublished:
+  VWEMA24(close, volume), RSI24(VWEMA24(close, volume))
+
+
+D. GO SLOT / FIELD RENAMES
+--------------------------
+
+Iota block renamed in place. SlotAO still follows SlotWozduhVolRsiEma5.
+SlotCount still last-live+1 (SlotWozduhVolCross+1). SlotOrangeRSI (Chaos
+reservation) was not touched.
+
+Fields: rsiClose, rsiCloseEma7, rsiHl2, volRsiEma12/5, volVwema,
+rsiHl2Vwema*, *ChanSMA/StDev, prevVolRsiEma12/5 (VolCross prev-state).
+
+Test hooks: RsiClosePtr, VolRsiEma12Ptr, VolRsiEma12Value.
+
+
+E. ACTIVE WIRE ID MIGRATION
+---------------------------
+
+Updated together: ui_config/wozduh_layout.go, wozduhPlotBits,
+WozduhDefaultVisibleMask, WS/history tests, series-factory, chart-core,
+ColumnarStore tests, projector filter tests. No old-ID runtime aliases
+in the plot map.
+
+
+F. VISIBILITY PREFS ONE-SHOT MIGRATION
+--------------------------------------
+
+web/ui/settings-renderer.js migrateLegacyPrefs:
+
+  1. Remap retired woz_* IDs → canonical IDs; delete old keys from the map.
+  2. rsiVol fills both EMA lines only if the new keys are still unset
+     (same Falcon pattern as rsiVol → former woz_fast/slow).
+  3. Other Falcon keys (rsiPrice, emaRsi, …) land on new IDs.
+  4. Channel compose collapse still accepts old plot-part keys.
+
+Not a general migration framework. Test: web/wozduh_prefs_migrate_test.js.
+
+
+G. CROSSHAIR / AUTO OWNER MIGRATION
+-----------------------------------
+
+DDRFactory._CROSSHAIR_ANCHORS: woz_vol_rsi_ema5 + line_rsx.
+chart-core getSeries / anchor id updated.
+ADR-022 current wire line records the new ID (notes historical woz_slow).
+Scale types unchanged: ema5 bounded(-5,105); peers ignore.
+
+
+H. CHANNEL NAME MIGRATION
+-------------------------
+
+RSI-close channel: SMA24(RSI14(close)) ± 1.6185 * StDev24.
+Volume-RSI EMA5 channel: SMA24(EMA5) ± 1.6185 * StDev24.
+Compose IDs: woz_rsi_close_chan, woz_vol_rsi_ema5_chan.
+Not added to any tape.
+
+
+I. UI LABEL CHANGES
+-------------------
+
+Titles now name math. Paint JSON color/width/fill strings unchanged
+(including aqua/blue line colors and channel upperColor/fillColor).
+
+
+J. NUMERICAL IDENTITY PROOF
+---------------------------
+
+Frozen bar-20 fixture values unchanged (identifiers only):
+  RsiClose 100
+  RsiCloseEma7 99.682878806106601
+  VolRsiEma12 96.460135347262565
+  VolRsiEma5 99.969927134017837
+  RsiHl2 98.772388121028527
+  MacdRsiClose 68.552211722386232
+  VolCross 0
+
+Periods/phi in wozduh.go unchanged. git diff on constructors is rename-only.
+core/nodes and core tests PASS (twin + snapshot poison path).
+
+
+K. DEMAND-BIT IDENTITY PROOF
+----------------------------
+
+Iota order unchanged. Color/Pine bit names also moved because they were
+the compute-mask identity, not paint:
+
+  WozduhBitOrangeBase  → WozduhBitRsiClose
+  WozduhBitGreenEMA    → WozduhBitRsiCloseEma7
+  WozduhBitPriceChannel→ WozduhBitRsiCloseChan
+  WozduhBitWt11        → WozduhBitVolRsiEma12
+  WozduhBitWt22        → WozduhBitVolRsiEma5
+  WozduhBitVolChannel  → WozduhBitVolRsiEma5Chan
+  WozduhBitRedRSI      → WozduhBitRsiHl2
+  WozduhBitBlackMACD   → WozduhBitMacdRsiClose
+  WozduhBitNavyRSI     → WozduhBitRsiHl2Vwema
+  WozduhBitADRSI       → WozduhBitRsiAd
+
+WozduhBitVolBase, WozduhBitRsiOfRsi, WozduhBitVolCrossPair kept.
+Wake/prereq graph identical. Default-visible closure still
+hl2 + ema5 + ema12 + rsi close.
+
+
+L. VOLCROSS SAFETY
+------------------
+
+Unchanged identity: SlotWozduhVolCross, detectVolCrossCode,
+WozduhBitVolCrossPair, prev-pair Snapshot/Restore, woz_vol_cross.
+Locals now use volRsiEma12/5. Not renamed into a new event.
+Next chapter: WOZDUH-VOLCROSS-REMOVE-1.
+
+
+M. FEATURETAPE / BRAIN3 SAFETY
+------------------------------
+
+forecast/, FEATURE-SPEC-2, FeatureTape2, Brain3, OOF, nativeRSXContext
+not modified. No Wozduh tape or facts added.
+
+
+N. OLD-NAME POST-SEARCH
+-----------------------
+
+Active Go/JS architecture: zero SlotWozduhFast/Slow, WozduhBitWt11/Wt22,
+wt11/wt22 fields, orangeRsi, woz_fast/woz_slow as live IDs.
+
+Remaining by design:
+  settings-renderer.js remap source keys
+  web/wozduh_prefs_migrate_test.js
+  docs/HISTORY.md historical chapters
+  ADR-022 parenthetical historical woz_slow
+  Pine source listings in docs/PINE_INDICATOR_SOURCES.md
+  wozduhMacdFast/wozduhMacdSlow (MACD 7/24 periods, not plot speed names)
+  layout paint strings "aqua"/"blue"/"navy"/…
+
+Layout comment still says historical Pine mount order.
+
+
+O. TEST RESULTS
+---------------
+
+go test ./core/nodes/ -count=1                         PASS
+go test ./core/ -count=1                               PASS
+go test ./ui_config/ -count=1                          PASS
+go test ./market/ -count=1                             PASS
+go test ./server/ -count=1 -skip TestGoldenAudit       PASS
+go build .                                             PASS
+
+Frontend (existing node tests):
+  wozduh_owner_test.js
+  wozduh_wire_test.js
+  wozduh_visual_test.js
+  wozduh_extreme_bands_test.js
+  wozduh_prefs_migrate_test.js
+  hidden_render_skip_test.js
+  channel_paint_test.js
+  pane_layout_test.js
+  rsx_stroke_color_test.js
+  scale_contribution_test.js
+all PASS.
+
+Known unrelated repo/environment debts not in scope.
+
+
+P. GIT STATUS
+-------------
+
+See post-commit status in the user-facing freeze report.
+This chapter's tracked files are the rename + SSOT + report.
+Unrelated untracked audit reports were not staged.
+
+
+Q. FINAL VERDICT
+----------------
+
+WOZDUH_NUMERIC_NAMES_GREEN
+
+
+R. GPT PROMPT CORRECTIONS
+-------------------------
+
+1. Color-named compute bits were also renamed (not only Wt11/Wt22). Leaving
+   WozduhBitOrangeBase as a live math identity would fail the chapter's own
+   "no color in mathematical identity" success condition. Bit values/order
+   unchanged.
+
+2. MACD period identifiers wozduhMacdFast / wozduhMacdSlow were kept. They
+   are standard MACD 7/24 names, not the retired Wozduh plot pair.
+
+3. SlotOrangeRSI is a reserved Chaos slot, not Wozduh RSI-close. Untouched.
+
+4. Internal volVwap → volVwema names the existing VolumeWeightedEMA. No new
+   published VWEMA/RSI24(VWEMA) slots (GPT correctly forbade those).
+
+5. Prefs: delete retired woz_* keys after copy so localStorage does not keep
+   a dual vocabulary. Falcon rsiVol remains as the existing source key.
+
+6. migrateLegacyPrefs is exported only so the existing node-test style can
+   lock the remap. Not a migration framework.
+
+7. Unused ChartTheme wozduhFast/wozduhSlow keys renamed; values still
+   'blue'/'aqua'. Layout paint is still the SSOT for line colors.
+
+8. Navigator return name wozSlow → wozVolRsiEma5 (same SlotWozduhVolRsiEma5
+   series). Callers already used a generic woz variable.
+
+HARD STOP. Next after freeze+push: WOZDUH-VOLCROSS-REMOVE-1.
+Then ask the user which Wozduh lines/channels to retune visually
+(WOZDUH-VISUAL-TUNE-1, hardcoded paint only).

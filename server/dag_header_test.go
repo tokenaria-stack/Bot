@@ -16,7 +16,7 @@ func TestDagHeaderFromFrame(t *testing.T) {
 	frame := &core.TickFrame{}
 	frame.Set(core.SlotJurikRSX, 55.5)
 	frame.Set(core.SlotJurikSignal, 50.1)
-	frame.Set(core.SlotWozduhFast, 40.0)
+	frame.Set(core.SlotWozduhVolRsiEma12, 40.0)
 
 	h := dagHeaderFromFrame(frame)
 	if h.Jurik != 55.5 || h.RSX != 55.5 {

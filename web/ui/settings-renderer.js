@@ -65,28 +65,44 @@ const SettingsRenderer = (() => {
   }
 
   /**
-   * Migrate legacy Falcon-menu keys (rsiVol, rsiPrice, …) onto component.id keys.
-   * Pure data map — no hard-coded apply to series beyond known legacy aliases.
+   * One-shot remap of legacy Falcon keys and retired Wozduh plot IDs onto
+   * canonical component.id keys. Old IDs are not kept as runtime aliases.
    */
   function migrateLegacyPrefs(prefs, components) {
     const next = { ...prefs };
-    // Legacy single toggle for both wt lines.
+    const remap = (oldId, newId) => {
+      if (oldId === newId) return;
+      if (typeof next[newId] !== 'boolean' && typeof prefs[oldId] === 'boolean') {
+        next[newId] = prefs[oldId];
+      }
+      delete next[oldId];
+    };
+    remap('woz_fast', 'woz_vol_rsi_ema12');
+    remap('woz_slow', 'woz_vol_rsi_ema5');
+    remap('woz_rsi_price', 'woz_rsi_close');
+    remap('woz_ema_rsi', 'woz_rsi_close_ema7');
+    remap('woz_rsi_rsi', 'woz_rsi_rsi_close');
+    remap('woz_macd_rsi', 'woz_macd_rsi_close');
+    remap('woz_rsi_hl2_vol', 'woz_rsi_hl2_vwema');
+    remap('woz_vol_chan', 'woz_vol_rsi_ema5_chan');
+    remap('woz_price_chan', 'woz_rsi_close_chan');
+    // Legacy Falcon single toggle for both volume-RSI EMA lines.
     if (typeof prefs.rsiVol === 'boolean') {
-      if (next.woz_fast === undefined) next.woz_fast = prefs.rsiVol;
-      if (next.woz_slow === undefined) next.woz_slow = prefs.rsiVol;
+      if (typeof next.woz_vol_rsi_ema12 !== 'boolean') next.woz_vol_rsi_ema12 = prefs.rsiVol;
+      if (typeof next.woz_vol_rsi_ema5 !== 'boolean') next.woz_vol_rsi_ema5 = prefs.rsiVol;
     }
     const legacyToId = {
-      rsiPrice: 'woz_rsi_price',
-      emaRsi: 'woz_ema_rsi',
-      rsiRsi: 'woz_rsi_rsi',
+      rsiPrice: 'woz_rsi_close',
+      emaRsi: 'woz_rsi_close_ema7',
+      rsiRsi: 'woz_rsi_rsi_close',
       rsiHl2: 'woz_rsi_hl2',
-      macdRsi: 'woz_macd_rsi',
+      macdRsi: 'woz_macd_rsi_close',
       rsiAd: 'woz_rsi_ad',
-      rsiHl2Vol: 'woz_rsi_hl2_vol',
-      priceChan: 'woz_price_chan',
+      rsiHl2Vol: 'woz_rsi_hl2_vwema',
+      priceChan: 'woz_rsi_close_chan',
     };
     for (const [legacy, id] of Object.entries(legacyToId)) {
-      if (typeof prefs[legacy] === 'boolean' && next[id] === undefined) {
+      if (typeof prefs[legacy] === 'boolean' && typeof next[id] !== 'boolean') {
         next[id] = prefs[legacy];
       }
     }
@@ -96,8 +112,14 @@ const SettingsRenderer = (() => {
       if (!flags.length) return;
       next[newId] = flags.some(Boolean);
     };
-    collapse('woz_vol_chan', ['woz_vol_chan_mid', 'woz_vol_chan_up', 'woz_vol_chan_dn']);
-    collapse('woz_price_chan', ['woz_price_chan_mid', 'woz_price_chan_up', 'woz_price_chan_dn']);
+    collapse('woz_vol_rsi_ema5_chan', [
+      'woz_vol_rsi_ema5_chan_mid', 'woz_vol_rsi_ema5_chan_up', 'woz_vol_rsi_ema5_chan_dn',
+      'woz_vol_chan_mid', 'woz_vol_chan_up', 'woz_vol_chan_dn',
+    ]);
+    collapse('woz_rsi_close_chan', [
+      'woz_rsi_close_chan_mid', 'woz_rsi_close_chan_up', 'woz_rsi_close_chan_dn',
+      'woz_price_chan_mid', 'woz_price_chan_up', 'woz_price_chan_dn',
+    ]);
     for (const c of components) {
       if (typeof next[c.id] !== 'boolean') {
         next[c.id] = defaultVisibleFor(c);
@@ -157,7 +179,7 @@ const SettingsRenderer = (() => {
       label.appendChild(input);
       const text = document.createElement('span');
       text.textContent = ` ${labelFor(c)}`;
-      if (c.id === 'woz_slow') {
+      if (c.id === 'woz_vol_rsi_ema5') {
         text.className = 'wozduh-pane-owner-label';
       }
       label.appendChild(text);
@@ -232,6 +254,7 @@ const SettingsRenderer = (() => {
     setToggleVisible,
     mountFromManifest,
     collectConfigurable,
+    migrateLegacyPrefs,
   };
 })();
 

@@ -7,26 +7,26 @@ import (
 	"trading_bot/indicators"
 )
 
-// Wozduh Pine periods — SSOT for WozduhNode (RSIVol_2graf.02).
+// Wozduh periods — SSOT for WozduhNode (historical Pine RSIVol_2graf.02 values, unchanged).
 const (
-	wozduhChannelPeriod = 24
-	wozduhChannelPhi    = 1.6185
-	wozduhLenVol        = 24 // lenvol — RSI(volume-weighted close)
-	wozduhWt11Period    = 12 // oo1 — EMA smoothing for wt11 (blue)
-	wozduhWt22Period    = 5  // oo2 — EMA smoothing for wt22 (aqua)
-	wozduhGreenEma      = 7  // ll — EMA(RSI close)
-	wozduhRsiPeriod     = 14
-	wozduhMacdFast      = 7
-	wozduhMacdSlow      = wozduhLenVol
-	wozduhMacdSignal    = 9
+	wozduhChannelPeriod     = 24
+	wozduhChannelPhi        = 1.6185
+	wozduhLenVol            = 24 // RSI length on volume-weighted close / HL2 VWEMA
+	wozduhVolRsiEma12Period = 12 // EMA of RSI24(VWEMA24(close, volume))
+	wozduhVolRsiEma5Period  = 5  // EMA of the same RSI24(VWEMA24(close, volume))
+	wozduhRsiCloseEma7      = 7  // EMA(RSI14(close))
+	wozduhRsiPeriod         = 14
+	wozduhMacdFast          = 7
+	wozduhMacdSlow          = wozduhLenVol
+	wozduhMacdSignal        = 9
 
-	// SlotWozduhVolCross encoding (bus is float64-only).
+	// SlotWozduhVolCross encoding (bus is float64-only). Legacy event until VOLCROSS-REMOVE.
 	wozduhVolCrossNone = 0.0
 	wozduhVolCrossLime = 1.0
 	wozduhVolCrossRed  = -1.0
 )
 
-// WozduhNode computes the full Wozduh / Wozdux Pine atom set into the data bus.
+// WozduhNode computes the Wozduh numeric atom set into the data bus.
 // Jurik RSX lives in RSXNode — not duplicated here.
 type WozduhNode struct {
 	bus  *core.Bus
@@ -35,36 +35,36 @@ type WozduhNode struct {
 	streamUpdates int
 	wakeInstalls  int
 
-	redRsi    *indicators.RSI // RSI(HL2)
-	orangeRsi *indicators.RSI // RSI(close)
-	greenEma  *indicators.EMA // EMA(RSI close)
-	rsiOfRsi  *indicators.RSI // RSI(RSI close)
-	blackRsi  *indicators.RSI // RSI(close) feed for MACD
-	blackMacd *indicators.MACD
+	rsiHl2         *indicators.RSI // RSI14(HL2)
+	rsiClose       *indicators.RSI // RSI14(close)
+	rsiCloseEma7   *indicators.EMA // EMA7(RSI14(close))
+	rsiOfRsi       *indicators.RSI // RSI14(RSI14(close))
+	macdRsiClose   *indicators.RSI // RSI24(close) feed for MACD
+	macdOnRsiClose *indicators.MACD
 
-	volVwap *indicators.VolumeWeightedEMA
-	volRsi  *indicators.RSI
-	wt11Ema *indicators.EMA
-	wt22Ema *indicators.EMA
+	volVwema    *indicators.VolumeWeightedEMA
+	volRsi      *indicators.RSI
+	volRsiEma12 *indicators.EMA
+	volRsiEma5  *indicators.EMA
 
-	navyVwp *indicators.VolumeWeightedEMA
-	navyRsi *indicators.RSI
+	rsiHl2Vwema    *indicators.VolumeWeightedEMA
+	rsiHl2VwemaRsi *indicators.RSI
 
-	wt22SMA    *indicators.SMA
-	wt22Stdev  *indicators.RollingStDev
-	priceSMA   *indicators.SMA
-	priceStdev *indicators.RollingStDev
+	volRsiEma5ChanSMA   *indicators.SMA
+	volRsiEma5ChanStDev *indicators.RollingStDev
+	rsiCloseChanSMA     *indicators.SMA
+	rsiCloseChanStDev   *indicators.RollingStDev
 
 	ad    *indicators.AD
 	adRsi *indicators.RSI
 
-	prevWt11    float64
-	prevWt22    float64
-	prevWtReady bool
+	prevVolRsiEma12    float64
+	prevVolRsiEma5     float64
+	prevVolRsiEmaReady bool
 
-	snapPrevWt11    float64
-	snapPrevWt22    float64
-	snapPrevWtReady bool
+	snapPrevVolRsiEma12    float64
+	snapPrevVolRsiEma5     float64
+	snapPrevVolRsiEmaReady bool
 }
 
 // NewWozduhNode creates a full Wozduh atom pipeline (explicit compute-all mask).
@@ -76,25 +76,25 @@ func NewWozduhNode() *WozduhNode {
 // Zero means no streams run. ApplyMask may change the mask later (live Frame demand).
 func NewWozduhNodeMasked(mask WozduhMask) *WozduhNode {
 	return &WozduhNode{
-		mask:       mask,
-		redRsi:     indicators.NewRSI(wozduhRsiPeriod),
-		orangeRsi:  indicators.NewRSI(wozduhRsiPeriod),
-		greenEma:   indicators.NewEMA(wozduhGreenEma),
-		rsiOfRsi:   indicators.NewRSI(wozduhRsiPeriod),
-		blackRsi:   indicators.NewRSI(wozduhLenVol),
-		blackMacd:  indicators.NewMACD(wozduhMacdFast, wozduhMacdSlow, wozduhMacdSignal),
-		volVwap:    indicators.NewVolumeWeightedEMA(wozduhLenVol),
-		volRsi:     indicators.NewRSI(wozduhLenVol),
-		wt11Ema:    indicators.NewEMA(wozduhWt11Period),
-		wt22Ema:    indicators.NewEMA(wozduhWt22Period),
-		navyVwp:    indicators.NewVolumeWeightedEMA(wozduhLenVol),
-		navyRsi:    indicators.NewRSI(wozduhLenVol),
-		wt22SMA:    indicators.NewSMA(wozduhChannelPeriod),
-		wt22Stdev:  indicators.NewRollingStDev(wozduhChannelPeriod),
-		priceSMA:   indicators.NewSMA(wozduhChannelPeriod),
-		priceStdev: indicators.NewRollingStDev(wozduhChannelPeriod),
-		ad:         indicators.NewAD(),
-		adRsi:      indicators.NewRSI(wozduhRsiPeriod),
+		mask:                mask,
+		rsiHl2:              indicators.NewRSI(wozduhRsiPeriod),
+		rsiClose:            indicators.NewRSI(wozduhRsiPeriod),
+		rsiCloseEma7:        indicators.NewEMA(wozduhRsiCloseEma7),
+		rsiOfRsi:            indicators.NewRSI(wozduhRsiPeriod),
+		macdRsiClose:        indicators.NewRSI(wozduhLenVol),
+		macdOnRsiClose:      indicators.NewMACD(wozduhMacdFast, wozduhMacdSlow, wozduhMacdSignal),
+		volVwema:            indicators.NewVolumeWeightedEMA(wozduhLenVol),
+		volRsi:              indicators.NewRSI(wozduhLenVol),
+		volRsiEma12:         indicators.NewEMA(wozduhVolRsiEma12Period),
+		volRsiEma5:          indicators.NewEMA(wozduhVolRsiEma5Period),
+		rsiHl2Vwema:         indicators.NewVolumeWeightedEMA(wozduhLenVol),
+		rsiHl2VwemaRsi:      indicators.NewRSI(wozduhLenVol),
+		volRsiEma5ChanSMA:   indicators.NewSMA(wozduhChannelPeriod),
+		volRsiEma5ChanStDev: indicators.NewRollingStDev(wozduhChannelPeriod),
+		rsiCloseChanSMA:     indicators.NewSMA(wozduhChannelPeriod),
+		rsiCloseChanStDev:   indicators.NewRollingStDev(wozduhChannelPeriod),
+		ad:                  indicators.NewAD(),
+		adRsi:               indicators.NewRSI(wozduhRsiPeriod),
 	}
 }
 
@@ -113,83 +113,83 @@ func (n *WozduhNode) Update() {
 	volume := cur.Get(core.SlotVolume)
 	hl2 := (high + low) / 2
 
-	if n.mask&WozduhBitOrangeBase != 0 {
-		rsiPrice := n.orangeRsi.Update(close)
+	if n.mask&WozduhBitRsiClose != 0 {
+		rsiClose := n.rsiClose.Update(close)
 		n.noteStream()
-		cur.Set(core.SlotWozduhRsiPrice, rsiPrice)
-		if n.mask&WozduhBitGreenEMA != 0 {
-			cur.Set(core.SlotWozduhEmaRsi, n.greenEma.Update(rsiPrice))
+		cur.Set(core.SlotWozduhRsiClose, rsiClose)
+		if n.mask&WozduhBitRsiCloseEma7 != 0 {
+			cur.Set(core.SlotWozduhRsiCloseEma7, n.rsiCloseEma7.Update(rsiClose))
 			n.noteStream()
 		}
 		if n.mask&WozduhBitRsiOfRsi != 0 {
-			cur.Set(core.SlotWozduhRsiRsi, n.rsiOfRsi.Update(rsiPrice))
+			cur.Set(core.SlotWozduhRsiRsiClose, n.rsiOfRsi.Update(rsiClose))
 			n.noteStream()
 		}
-		if n.mask&WozduhBitPriceChannel != 0 {
-			priceChanMid := n.priceSMA.Update(rsiPrice)
+		if n.mask&WozduhBitRsiCloseChan != 0 {
+			rsiCloseChanMid := n.rsiCloseChanSMA.Update(rsiClose)
 			n.noteStream()
-			priceOffs := wozduhChannelPhi * n.priceStdev.Update(rsiPrice)
+			rsiCloseChanOffs := wozduhChannelPhi * n.rsiCloseChanStDev.Update(rsiClose)
 			n.noteStream()
-			cur.Set(core.SlotWozduhPriceChanMid, priceChanMid)
-			cur.Set(core.SlotWozduhPriceChanUp, priceChanMid+priceOffs)
-			cur.Set(core.SlotWozduhPriceChanDn, priceChanMid-priceOffs)
+			cur.Set(core.SlotWozduhRsiCloseChanMid, rsiCloseChanMid)
+			cur.Set(core.SlotWozduhRsiCloseChanUp, rsiCloseChanMid+rsiCloseChanOffs)
+			cur.Set(core.SlotWozduhRsiCloseChanDn, rsiCloseChanMid-rsiCloseChanOffs)
 		}
 	}
 
-	if n.mask&WozduhBitRedRSI != 0 {
-		cur.Set(core.SlotWozduhRsiHl2, n.redRsi.Update(hl2))
+	if n.mask&WozduhBitRsiHl2 != 0 {
+		cur.Set(core.SlotWozduhRsiHl2, n.rsiHl2.Update(hl2))
 		n.noteStream()
 	}
 
-	if n.mask&WozduhBitBlackMACD != 0 {
-		rsiForMacd := n.blackRsi.Update(close)
+	if n.mask&WozduhBitMacdRsiClose != 0 {
+		rsiForMacd := n.macdRsiClose.Update(close)
 		n.noteStream()
-		cur.Set(core.SlotWozduhMacdRsi, n.blackMacd.Update(rsiForMacd)+50.0)
+		cur.Set(core.SlotWozduhMacdRsiClose, n.macdOnRsiClose.Update(rsiForMacd)+50.0)
 		n.noteStream()
 	}
 
 	if n.mask&WozduhBitVolBase != 0 {
-		volPrice := n.volVwap.Update(close, volume)
+		volPrice := n.volVwema.Update(close, volume)
 		n.noteStream()
-		rsi11 := n.volRsi.Update(volPrice)
+		volRsi := n.volRsi.Update(volPrice)
 		n.noteStream()
-		var wt11, wt22 float64
-		if n.mask&WozduhBitWt11 != 0 {
-			wt11 = n.wt11Ema.Update(rsi11)
+		var volRsiEma12, volRsiEma5 float64
+		if n.mask&WozduhBitVolRsiEma12 != 0 {
+			volRsiEma12 = n.volRsiEma12.Update(volRsi)
 			n.noteStream()
-			cur.Set(core.SlotWozduhFast, wt11)
+			cur.Set(core.SlotWozduhVolRsiEma12, volRsiEma12)
 		}
-		if n.mask&WozduhBitWt22 != 0 {
-			wt22 = n.wt22Ema.Update(rsi11)
+		if n.mask&WozduhBitVolRsiEma5 != 0 {
+			volRsiEma5 = n.volRsiEma5.Update(volRsi)
 			n.noteStream()
-			cur.Set(core.SlotWozduhSlow, wt22)
-			if n.mask&WozduhBitVolChannel != 0 {
-				volChanMid := n.wt22SMA.Update(wt22)
+			cur.Set(core.SlotWozduhVolRsiEma5, volRsiEma5)
+			if n.mask&WozduhBitVolRsiEma5Chan != 0 {
+				volChanMid := n.volRsiEma5ChanSMA.Update(volRsiEma5)
 				n.noteStream()
-				volOffs := wozduhChannelPhi * n.wt22Stdev.Update(wt22)
+				volOffs := wozduhChannelPhi * n.volRsiEma5ChanStDev.Update(volRsiEma5)
 				n.noteStream()
-				cur.Set(core.SlotWozduhVolChanMid, volChanMid)
-				cur.Set(core.SlotWozduhVolChanUp, volChanMid+volOffs)
-				cur.Set(core.SlotWozduhVolChanDn, volChanMid-volOffs)
+				cur.Set(core.SlotWozduhVolRsiEma5ChanMid, volChanMid)
+				cur.Set(core.SlotWozduhVolRsiEma5ChanUp, volChanMid+volOffs)
+				cur.Set(core.SlotWozduhVolRsiEma5ChanDn, volChanMid-volOffs)
 			}
 		}
 		if n.mask&WozduhBitVolCrossPair != 0 {
-			volCross := detectVolCrossCode(n.prevWt11, n.prevWt22, wt11, wt22, n.prevWtReady)
-			n.prevWt11 = wt11
-			n.prevWt22 = wt22
-			n.prevWtReady = true
+			volCross := detectVolCrossCode(n.prevVolRsiEma12, n.prevVolRsiEma5, volRsiEma12, volRsiEma5, n.prevVolRsiEmaReady)
+			n.prevVolRsiEma12 = volRsiEma12
+			n.prevVolRsiEma5 = volRsiEma5
+			n.prevVolRsiEmaReady = true
 			cur.Set(core.SlotWozduhVolCross, volCross)
 		}
 	}
 
-	if n.mask&WozduhBitNavyRSI != 0 {
-		aaacc := n.navyVwp.Update(hl2, volume)
+	if n.mask&WozduhBitRsiHl2Vwema != 0 {
+		vwemaHl2 := n.rsiHl2Vwema.Update(hl2, volume)
 		n.noteStream()
-		cur.Set(core.SlotWozduhRsiHl2Vol, n.navyRsi.Update(aaacc))
+		cur.Set(core.SlotWozduhRsiHl2Vwema, n.rsiHl2VwemaRsi.Update(vwemaHl2))
 		n.noteStream()
 	}
 
-	if n.mask&WozduhBitADRSI != 0 {
+	if n.mask&WozduhBitRsiAd != 0 {
 		adVal := n.ad.UpdateCandle(high, low, close)
 		n.noteStream()
 		cur.Set(core.SlotWozduhRsiAd, n.adRsi.Update(adVal))
@@ -227,44 +227,44 @@ func (n *WozduhNode) Slot(slot core.Slot) float64 {
 
 func (n *WozduhNode) failClosedInactive(cur *core.TickFrame) {
 	nan := math.NaN()
-	if n.mask&WozduhBitOrangeBase == 0 {
-		cur.Set(core.SlotWozduhRsiPrice, nan)
+	if n.mask&WozduhBitRsiClose == 0 {
+		cur.Set(core.SlotWozduhRsiClose, nan)
 	}
-	if n.mask&WozduhBitGreenEMA == 0 {
-		cur.Set(core.SlotWozduhEmaRsi, nan)
+	if n.mask&WozduhBitRsiCloseEma7 == 0 {
+		cur.Set(core.SlotWozduhRsiCloseEma7, nan)
 	}
 	if n.mask&WozduhBitRsiOfRsi == 0 {
-		cur.Set(core.SlotWozduhRsiRsi, nan)
+		cur.Set(core.SlotWozduhRsiRsiClose, nan)
 	}
-	if n.mask&WozduhBitPriceChannel == 0 {
-		cur.Set(core.SlotWozduhPriceChanMid, nan)
-		cur.Set(core.SlotWozduhPriceChanUp, nan)
-		cur.Set(core.SlotWozduhPriceChanDn, nan)
+	if n.mask&WozduhBitRsiCloseChan == 0 {
+		cur.Set(core.SlotWozduhRsiCloseChanMid, nan)
+		cur.Set(core.SlotWozduhRsiCloseChanUp, nan)
+		cur.Set(core.SlotWozduhRsiCloseChanDn, nan)
 	}
-	if n.mask&WozduhBitWt11 == 0 {
-		cur.Set(core.SlotWozduhFast, nan)
+	if n.mask&WozduhBitVolRsiEma12 == 0 {
+		cur.Set(core.SlotWozduhVolRsiEma12, nan)
 	}
-	if n.mask&WozduhBitWt22 == 0 {
-		cur.Set(core.SlotWozduhSlow, nan)
+	if n.mask&WozduhBitVolRsiEma5 == 0 {
+		cur.Set(core.SlotWozduhVolRsiEma5, nan)
 	}
-	if n.mask&WozduhBitVolChannel == 0 {
-		cur.Set(core.SlotWozduhVolChanMid, nan)
-		cur.Set(core.SlotWozduhVolChanUp, nan)
-		cur.Set(core.SlotWozduhVolChanDn, nan)
+	if n.mask&WozduhBitVolRsiEma5Chan == 0 {
+		cur.Set(core.SlotWozduhVolRsiEma5ChanMid, nan)
+		cur.Set(core.SlotWozduhVolRsiEma5ChanUp, nan)
+		cur.Set(core.SlotWozduhVolRsiEma5ChanDn, nan)
 	}
 	if n.mask&WozduhBitVolCrossPair == 0 {
 		cur.Set(core.SlotWozduhVolCross, nan)
 	}
-	if n.mask&WozduhBitRedRSI == 0 {
+	if n.mask&WozduhBitRsiHl2 == 0 {
 		cur.Set(core.SlotWozduhRsiHl2, nan)
 	}
-	if n.mask&WozduhBitBlackMACD == 0 {
-		cur.Set(core.SlotWozduhMacdRsi, nan)
+	if n.mask&WozduhBitMacdRsiClose == 0 {
+		cur.Set(core.SlotWozduhMacdRsiClose, nan)
 	}
-	if n.mask&WozduhBitNavyRSI == 0 {
-		cur.Set(core.SlotWozduhRsiHl2Vol, nan)
+	if n.mask&WozduhBitRsiHl2Vwema == 0 {
+		cur.Set(core.SlotWozduhRsiHl2Vwema, nan)
 	}
-	if n.mask&WozduhBitADRSI == 0 {
+	if n.mask&WozduhBitRsiAd == 0 {
 		cur.Set(core.SlotWozduhRsiAd, nan)
 	}
 }
@@ -285,50 +285,50 @@ func (n *WozduhNode) InstallWokenFields(src *WozduhNode, wake WozduhMask) {
 	if n == nil || src == nil || wake == 0 {
 		return
 	}
-	if wake&WozduhBitOrangeBase != 0 {
-		n.orangeRsi = src.orangeRsi
+	if wake&WozduhBitRsiClose != 0 {
+		n.rsiClose = src.rsiClose
 	}
-	if wake&WozduhBitGreenEMA != 0 {
-		n.greenEma = src.greenEma
+	if wake&WozduhBitRsiCloseEma7 != 0 {
+		n.rsiCloseEma7 = src.rsiCloseEma7
 	}
 	if wake&WozduhBitRsiOfRsi != 0 {
 		n.rsiOfRsi = src.rsiOfRsi
 	}
-	if wake&WozduhBitPriceChannel != 0 {
-		n.priceSMA = src.priceSMA
-		n.priceStdev = src.priceStdev
+	if wake&WozduhBitRsiCloseChan != 0 {
+		n.rsiCloseChanSMA = src.rsiCloseChanSMA
+		n.rsiCloseChanStDev = src.rsiCloseChanStDev
 	}
 	if wake&WozduhBitVolBase != 0 {
-		n.volVwap = src.volVwap
+		n.volVwema = src.volVwema
 		n.volRsi = src.volRsi
 	}
-	if wake&WozduhBitWt11 != 0 {
-		n.wt11Ema = src.wt11Ema
+	if wake&WozduhBitVolRsiEma12 != 0 {
+		n.volRsiEma12 = src.volRsiEma12
 	}
-	if wake&WozduhBitWt22 != 0 {
-		n.wt22Ema = src.wt22Ema
+	if wake&WozduhBitVolRsiEma5 != 0 {
+		n.volRsiEma5 = src.volRsiEma5
 	}
-	if wake&WozduhBitVolChannel != 0 {
-		n.wt22SMA = src.wt22SMA
-		n.wt22Stdev = src.wt22Stdev
+	if wake&WozduhBitVolRsiEma5Chan != 0 {
+		n.volRsiEma5ChanSMA = src.volRsiEma5ChanSMA
+		n.volRsiEma5ChanStDev = src.volRsiEma5ChanStDev
 	}
 	if wake&WozduhBitVolCrossPair != 0 {
-		n.prevWt11 = src.prevWt11
-		n.prevWt22 = src.prevWt22
-		n.prevWtReady = src.prevWtReady
+		n.prevVolRsiEma12 = src.prevVolRsiEma12
+		n.prevVolRsiEma5 = src.prevVolRsiEma5
+		n.prevVolRsiEmaReady = src.prevVolRsiEmaReady
 	}
-	if wake&WozduhBitRedRSI != 0 {
-		n.redRsi = src.redRsi
+	if wake&WozduhBitRsiHl2 != 0 {
+		n.rsiHl2 = src.rsiHl2
 	}
-	if wake&WozduhBitBlackMACD != 0 {
-		n.blackRsi = src.blackRsi
-		n.blackMacd = src.blackMacd
+	if wake&WozduhBitMacdRsiClose != 0 {
+		n.macdRsiClose = src.macdRsiClose
+		n.macdOnRsiClose = src.macdOnRsiClose
 	}
-	if wake&WozduhBitNavyRSI != 0 {
-		n.navyVwp = src.navyVwp
-		n.navyRsi = src.navyRsi
+	if wake&WozduhBitRsiHl2Vwema != 0 {
+		n.rsiHl2Vwema = src.rsiHl2Vwema
+		n.rsiHl2VwemaRsi = src.rsiHl2VwemaRsi
 	}
-	if wake&WozduhBitADRSI != 0 {
+	if wake&WozduhBitRsiAd != 0 {
 		n.ad = src.ad
 		n.adRsi = src.adRsi
 	}
@@ -343,30 +343,30 @@ func (n *WozduhNode) WakeInstalls() int {
 	return n.wakeInstalls
 }
 
-// OrangeRsiPtr exposes the orange RSI object for shared-base identity tests.
-func (n *WozduhNode) OrangeRsiPtr() *indicators.RSI {
+// RsiClosePtr exposes the RSI(close) object for shared-base identity tests.
+func (n *WozduhNode) RsiClosePtr() *indicators.RSI {
 	if n == nil {
 		return nil
 	}
-	return n.orangeRsi
+	return n.rsiClose
 }
 
-// Wt11EmaPtr exposes wt11 for shared-base identity tests.
-func (n *WozduhNode) Wt11EmaPtr() *indicators.EMA {
+// VolRsiEma12Ptr exposes volume-RSI EMA12 for shared-base identity tests.
+func (n *WozduhNode) VolRsiEma12Ptr() *indicators.EMA {
 	if n == nil {
 		return nil
 	}
-	return n.wt11Ema
+	return n.volRsiEma12
 }
 
-func detectVolCrossCode(prevWt11, prevWt22, wt11, wt22 float64, ready bool) float64 {
+func detectVolCrossCode(prevVolRsiEma12, prevVolRsiEma5, volRsiEma12, volRsiEma5 float64, ready bool) float64 {
 	if !ready {
 		return wozduhVolCrossNone
 	}
-	if prevWt11 <= prevWt22 && wt11 > wt22 {
+	if prevVolRsiEma12 <= prevVolRsiEma5 && volRsiEma12 > volRsiEma5 {
 		return wozduhVolCrossLime
 	}
-	if prevWt11 >= prevWt22 && wt11 < wt22 {
+	if prevVolRsiEma12 >= prevVolRsiEma5 && volRsiEma12 < volRsiEma5 {
 		return wozduhVolCrossRed
 	}
 	return wozduhVolCrossNone
@@ -376,62 +376,62 @@ func (n *WozduhNode) SaveState() {
 	if n == nil {
 		return
 	}
-	n.redRsi.SaveState()
-	n.orangeRsi.SaveState()
-	n.greenEma.SaveState()
+	n.rsiHl2.SaveState()
+	n.rsiClose.SaveState()
+	n.rsiCloseEma7.SaveState()
 	n.rsiOfRsi.SaveState()
-	n.blackRsi.SaveState()
-	n.blackMacd.SaveState()
-	n.volVwap.SaveState()
+	n.macdRsiClose.SaveState()
+	n.macdOnRsiClose.SaveState()
+	n.volVwema.SaveState()
 	n.volRsi.SaveState()
-	n.wt11Ema.SaveState()
-	n.wt22Ema.SaveState()
-	n.navyVwp.SaveState()
-	n.navyRsi.SaveState()
-	n.wt22SMA.SaveState()
-	n.wt22Stdev.SaveState()
-	n.priceSMA.SaveState()
-	n.priceStdev.SaveState()
+	n.volRsiEma12.SaveState()
+	n.volRsiEma5.SaveState()
+	n.rsiHl2Vwema.SaveState()
+	n.rsiHl2VwemaRsi.SaveState()
+	n.volRsiEma5ChanSMA.SaveState()
+	n.volRsiEma5ChanStDev.SaveState()
+	n.rsiCloseChanSMA.SaveState()
+	n.rsiCloseChanStDev.SaveState()
 	n.ad.SaveState()
 	n.adRsi.SaveState()
-	n.snapPrevWt11 = n.prevWt11
-	n.snapPrevWt22 = n.prevWt22
-	n.snapPrevWtReady = n.prevWtReady
+	n.snapPrevVolRsiEma12 = n.prevVolRsiEma12
+	n.snapPrevVolRsiEma5 = n.prevVolRsiEma5
+	n.snapPrevVolRsiEmaReady = n.prevVolRsiEmaReady
 }
 
 func (n *WozduhNode) RestoreState() {
 	if n == nil {
 		return
 	}
-	n.redRsi.RestoreState()
-	n.orangeRsi.RestoreState()
-	n.greenEma.RestoreState()
+	n.rsiHl2.RestoreState()
+	n.rsiClose.RestoreState()
+	n.rsiCloseEma7.RestoreState()
 	n.rsiOfRsi.RestoreState()
-	n.blackRsi.RestoreState()
-	n.blackMacd.RestoreState()
-	n.volVwap.RestoreState()
+	n.macdRsiClose.RestoreState()
+	n.macdOnRsiClose.RestoreState()
+	n.volVwema.RestoreState()
 	n.volRsi.RestoreState()
-	n.wt11Ema.RestoreState()
-	n.wt22Ema.RestoreState()
-	n.navyVwp.RestoreState()
-	n.navyRsi.RestoreState()
-	n.wt22SMA.RestoreState()
-	n.wt22Stdev.RestoreState()
-	n.priceSMA.RestoreState()
-	n.priceStdev.RestoreState()
+	n.volRsiEma12.RestoreState()
+	n.volRsiEma5.RestoreState()
+	n.rsiHl2Vwema.RestoreState()
+	n.rsiHl2VwemaRsi.RestoreState()
+	n.volRsiEma5ChanSMA.RestoreState()
+	n.volRsiEma5ChanStDev.RestoreState()
+	n.rsiCloseChanSMA.RestoreState()
+	n.rsiCloseChanStDev.RestoreState()
 	n.ad.RestoreState()
 	n.adRsi.RestoreState()
-	n.prevWt11 = n.snapPrevWt11
-	n.prevWt22 = n.snapPrevWt22
-	n.prevWtReady = n.snapPrevWtReady
+	n.prevVolRsiEma12 = n.snapPrevVolRsiEma12
+	n.prevVolRsiEma5 = n.snapPrevVolRsiEma5
+	n.prevVolRsiEmaReady = n.snapPrevVolRsiEmaReady
 }
 
 func (n *WozduhNode) OnConfigChange(any) error { return nil }
 
-// Wt11Value exposes the wt11 EMA state (shadow validation / tests).
-func (n *WozduhNode) Wt11Value() float64 {
-	if n.wt11Ema == nil {
+// VolRsiEma12Value exposes the volume-RSI EMA12 state (shadow validation / tests).
+func (n *WozduhNode) VolRsiEma12Value() float64 {
+	if n.volRsiEma12 == nil {
 		return 0
 	}
-	return n.wt11Ema.Value()
+	return n.volRsiEma12.Value()
 }

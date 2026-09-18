@@ -1,5 +1,5 @@
 /**
- * WOZDUH-OWNER-1 — pane owner is woz_slow (wt22 Aqua), not woz_fast (wt11 Blue).
+ * WOZDUH-OWNER-1 — pane owner is woz_vol_rsi_ema5, not woz_vol_rsi_ema12.
  * Run: node web/wozduh_owner_test.js
  */
 'use strict';
@@ -23,7 +23,7 @@ function fakeLine(events, id) {
   };
 }
 
-test('B. Wozduh crosshair anchor is woz_slow; RSX remains line_rsx', () => {
+test('B. Wozduh crosshair anchor is woz_vol_rsi_ema5; RSX remains line_rsx', () => {
   const src = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
   const seriesFn = src.slice(
     src.indexOf('function crosshairSeriesForChart'),
@@ -33,29 +33,29 @@ test('B. Wozduh crosshair anchor is woz_slow; RSX remains line_rsx', () => {
     src.indexOf('function crosshairAnchorId'),
     src.indexOf('function hydratedValueAtTime'),
   );
-  assert.ok(seriesFn.includes("getSeries('woz_slow')"));
-  assert.ok(!seriesFn.includes("getSeries('woz_fast')"));
+  assert.ok(seriesFn.includes("getSeries('woz_vol_rsi_ema5')"));
+  assert.ok(!seriesFn.includes("getSeries('woz_vol_rsi_ema12')"));
   assert.ok(seriesFn.includes("getSeries('line_rsx')"));
-  assert.ok(anchorFn.includes("return 'woz_slow'"));
-  assert.ok(!anchorFn.includes("return 'woz_fast'"));
+  assert.ok(anchorFn.includes("return 'woz_vol_rsi_ema5'"));
+  assert.ok(!anchorFn.includes("return 'woz_vol_rsi_ema12'"));
   assert.ok(anchorFn.includes("return 'line_rsx'"));
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_slow'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_fast'), false);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema5'), true);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema12'), false);
   assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('line_rsx'), true);
 });
 
-test('C. hidden woz_fast skips; hidden woz_slow still fed', () => {
+test('C. hidden woz_vol_rsi_ema12 skips; hidden woz_vol_rsi_ema5 still fed', () => {
   const events = [];
-  const order = ['woz_fast', 'woz_slow'];
+  const order = ['woz_vol_rsi_ema12', 'woz_vol_rsi_ema5'];
   let i = 0;
   const factory = new DDRFactory();
   factory.buildPanes(
     { wozduh: { chart: { addLineSeries() { return fakeLine(events, order[i++]); } } } },
     {
       pane_osc: [
-        { id: 'woz_fast', hostId: 'wozduh', kind: 'line', renderOptions: { defaultVisible: false } },
+        { id: 'woz_vol_rsi_ema12', hostId: 'wozduh', kind: 'line', renderOptions: { defaultVisible: false } },
         {
-          id: 'woz_slow',
+          id: 'woz_vol_rsi_ema5',
           hostId: 'wozduh',
           kind: 'line',
           renderOptions: { defaultVisible: false, scaleContribution: { type: 'bounded', min: -5, max: 105 } },
@@ -63,20 +63,20 @@ test('C. hidden woz_fast skips; hidden woz_slow still fed', () => {
       ],
     },
   );
-  factory.setSeriesVisible('woz_fast', false);
-  factory.setSeriesVisible('woz_slow', false);
-  factory.hydrateFromColumnar({ times: [1], plots: { woz_fast: [10], woz_slow: [40] } });
+  factory.setSeriesVisible('woz_vol_rsi_ema12', false);
+  factory.setSeriesVisible('woz_vol_rsi_ema5', false);
+  factory.hydrateFromColumnar({ times: [1], plots: { woz_vol_rsi_ema12: [10], woz_vol_rsi_ema5: [40] } });
   factory.applyHydratedData();
-  factory.updateTick(2, { woz_fast: 11, woz_slow: 41 });
-  assert.ok(!events.some((e) => e.id === 'woz_fast' && (e.op === 'setData' || e.op === 'update')));
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_slow'));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_slow' && e.pt.value === 41));
+  factory.updateTick(2, { woz_vol_rsi_ema12: 11, woz_vol_rsi_ema5: 41 });
+  assert.ok(!events.some((e) => e.id === 'woz_vol_rsi_ema12' && (e.op === 'setData' || e.op === 'update')));
+  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5'));
+  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5' && e.pt.value === 41));
 });
 
-test('D. wt22 checked, wt11 unchecked: enabled peers still get LWC data; slow owns bounded Auto', () => {
+test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; ema5 owns bounded Auto', () => {
   const events = [];
   const captured = [];
-  const order = ['woz_fast', 'woz_slow', 'woz_rsi_price'];
+  const order = ['woz_vol_rsi_ema12', 'woz_vol_rsi_ema5', 'woz_rsi_close'];
   let i = 0;
   const factory = new DDRFactory();
   factory.buildPanes(
@@ -93,19 +93,19 @@ test('D. wt22 checked, wt11 unchecked: enabled peers still get LWC data; slow ow
     {
       pane_osc: [
         {
-          id: 'woz_fast',
+          id: 'woz_vol_rsi_ema12',
           hostId: 'wozduh',
           kind: 'line',
           renderOptions: { defaultVisible: false, scaleContribution: { type: 'ignore' } },
         },
         {
-          id: 'woz_slow',
+          id: 'woz_vol_rsi_ema5',
           hostId: 'wozduh',
           kind: 'line',
           renderOptions: { defaultVisible: true, scaleContribution: { type: 'bounded', min: -5, max: 105 } },
         },
         {
-          id: 'woz_rsi_price',
+          id: 'woz_rsi_close',
           hostId: 'wozduh',
           kind: 'line',
           renderOptions: { defaultVisible: true, scaleContribution: { type: 'ignore' } },
@@ -113,9 +113,9 @@ test('D. wt22 checked, wt11 unchecked: enabled peers still get LWC data; slow ow
       ],
     },
   );
-  const slow = captured.find((c) => c.id === 'woz_slow');
-  const fast = captured.find((c) => c.id === 'woz_fast');
-  const peer = captured.find((c) => c.id === 'woz_rsi_price');
+  const slow = captured.find((c) => c.id === 'woz_vol_rsi_ema5');
+  const fast = captured.find((c) => c.id === 'woz_vol_rsi_ema12');
+  const peer = captured.find((c) => c.id === 'woz_rsi_close');
   assert.deepStrictEqual(slow.opts.autoscaleInfoProvider(), {
     priceRange: { minValue: -5, maxValue: 105 },
   });
@@ -128,44 +128,44 @@ test('D. wt22 checked, wt11 unchecked: enabled peers still get LWC data; slow ow
     return info && info.priceRange;
   });
   assert.strictEqual(boundedOwners.length, 1);
-  assert.strictEqual(boundedOwners[0].id, 'woz_slow');
+  assert.strictEqual(boundedOwners[0].id, 'woz_vol_rsi_ema5');
 
-  factory.setSeriesVisible('woz_fast', false);
+  factory.setSeriesVisible('woz_vol_rsi_ema12', false);
   events.length = 0;
   factory.hydrateFromColumnar({
     times: [1, 2],
-    plots: { woz_fast: [10, 11], woz_slow: [40, 41], woz_rsi_price: [70, 71] },
+    plots: { woz_vol_rsi_ema12: [10, 11], woz_vol_rsi_ema5: [40, 41], woz_rsi_close: [70, 71] },
   });
   factory.applyHydratedData();
-  assert.ok(!events.some((e) => e.id === 'woz_fast' && e.op === 'setData'));
+  assert.ok(!events.some((e) => e.id === 'woz_vol_rsi_ema12' && e.op === 'setData'));
   assert.deepStrictEqual(
-    events.find((e) => e.op === 'setData' && e.id === 'woz_slow').points,
+    events.find((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5').points,
     [{ time: 1, value: 40 }, { time: 2, value: 41 }],
   );
   assert.deepStrictEqual(
-    events.find((e) => e.op === 'setData' && e.id === 'woz_rsi_price').points,
+    events.find((e) => e.op === 'setData' && e.id === 'woz_rsi_close').points,
     [{ time: 1, value: 70 }, { time: 2, value: 71 }],
   );
 });
 
 test('E. both checked: values unchanged; both receive setData', () => {
   const events = [];
-  const order = ['woz_fast', 'woz_slow'];
+  const order = ['woz_vol_rsi_ema12', 'woz_vol_rsi_ema5'];
   let i = 0;
   const factory = new DDRFactory();
   factory.buildPanes(
     { wozduh: { chart: { addLineSeries() { return fakeLine(events, order[i++]); } } } },
     {
       pane_osc: [
-        { id: 'woz_fast', hostId: 'wozduh', kind: 'line', renderOptions: {} },
-        { id: 'woz_slow', hostId: 'wozduh', kind: 'line', renderOptions: {} },
+        { id: 'woz_vol_rsi_ema12', hostId: 'wozduh', kind: 'line', renderOptions: {} },
+        { id: 'woz_vol_rsi_ema5', hostId: 'wozduh', kind: 'line', renderOptions: {} },
       ],
     },
   );
-  factory.hydrateFromColumnar({ times: [5], plots: { woz_fast: [12.5], woz_slow: [44.5] } });
+  factory.hydrateFromColumnar({ times: [5], plots: { woz_vol_rsi_ema12: [12.5], woz_vol_rsi_ema5: [44.5] } });
   factory.applyHydratedData();
-  const fast = events.find((e) => e.op === 'setData' && e.id === 'woz_fast');
-  const slow = events.find((e) => e.op === 'setData' && e.id === 'woz_slow');
+  const fast = events.find((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema12');
+  const slow = events.find((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5');
   assert.deepStrictEqual(fast.points, [{ time: 5, value: 12.5 }]);
   assert.deepStrictEqual(slow.points, [{ time: 5, value: 44.5 }]);
 });

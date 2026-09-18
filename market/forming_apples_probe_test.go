@@ -28,9 +28,9 @@ const (
 var formingApplesSlots = []core.Slot{
 	core.SlotJurikRSX,
 	core.SlotJurikSignal,
-	core.SlotWozduhRsiPrice,
-	core.SlotWozduhFast,
-	core.SlotWozduhSlow,
+	core.SlotWozduhRsiClose,
+	core.SlotWozduhVolRsiEma12,
+	core.SlotWozduhVolRsiEma5,
 }
 
 type formingTickOHLC struct {
@@ -105,11 +105,11 @@ func slotLabel(s core.Slot) string {
 		return "JurikRSX"
 	case core.SlotJurikSignal:
 		return "JurikSignal"
-	case core.SlotWozduhRsiPrice:
+	case core.SlotWozduhRsiClose:
 		return "WozduhRsiPrice"
-	case core.SlotWozduhFast:
+	case core.SlotWozduhVolRsiEma12:
 		return "WozduhFast"
-	case core.SlotWozduhSlow:
+	case core.SlotWozduhVolRsiEma5:
 		return "WozduhSlow"
 	default:
 		return fmt.Sprintf("Slot(%d)", s)

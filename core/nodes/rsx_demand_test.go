@@ -11,7 +11,7 @@ func TestRSXWorkClosure(t *testing.T) {
 	if RSXWorkFromPlots([]string{"line_rsx_signal"}) != NeedRSXCore {
 		t.Fatal("signal → Core")
 	}
-	if RSXWorkFromPlots([]string{"woz_fast"}) != 0 {
+	if RSXWorkFromPlots([]string{"woz_vol_rsi_ema12"}) != 0 {
 		t.Fatal("woz plot is not RSX core")
 	}
 	if got := RSXWorkFromFactSources([]string{"rsx_tv_div"}); got != NeedRSXCore|NeedRSTV {
@@ -40,7 +40,7 @@ func TestRSXWorkFromClientTriState(t *testing.T) {
 		t.Fatal("explicit [] facts → no families")
 	}
 	one := []string{"rsx_fractal_div"}
-	if got := RSXWorkFromClient([]string{"woz_fast"}, &one); got != NeedRSXCore|NeedRSFractal {
+	if got := RSXWorkFromClient([]string{"woz_vol_rsi_ema12"}, &one); got != NeedRSXCore|NeedRSFractal {
 		t.Fatalf("fractal-only %#b", got)
 	}
 }
@@ -50,7 +50,7 @@ func TestRSXWorkUnion(t *testing.T) {
 	fr := []string{"rsx_fractal_pivot"}
 	got := RSXWorkFromClientSubscriptions([]RSXClientDemand{
 		{Plots: []string{"line_rsx"}, Facts: &tv},
-		{Plots: []string{"woz_slow"}, Facts: &fr},
+		{Plots: []string{"woz_vol_rsi_ema5"}, Facts: &fr},
 	})
 	want := NeedRSXCore | NeedRSTV | NeedRSFractal
 	if got != want {

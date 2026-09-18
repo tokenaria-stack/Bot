@@ -8,7 +8,7 @@ import (
 )
 
 func wozduhInternalMask() nodes.WozduhMask {
-	// Live no longer forces wt11/wt22 for Falcon DAG-shadow reads.
+	// Live no longer forces volume-RSI EMAs for Falcon DAG-shadow reads.
 	return 0
 }
 
@@ -110,8 +110,8 @@ func (a *Frame) WozduhLiveStats() (mask nodes.WozduhMask, streams, wakes int) {
 	return woz.Mask(), woz.StreamUpdates(), woz.WakeInstalls()
 }
 
-// WozduhOrangePtr is a test hook for shared-base identity.
-func (a *Frame) WozduhOrangePtr() *indicators.RSI {
+// WozduhRsiClosePtr is a test hook for shared-base identity.
+func (a *Frame) WozduhRsiClosePtr() *indicators.RSI {
 	if a == nil {
 		return nil
 	}
@@ -121,11 +121,11 @@ func (a *Frame) WozduhOrangePtr() *indicators.RSI {
 	if woz == nil {
 		return nil
 	}
-	return woz.OrangeRsiPtr()
+	return woz.RsiClosePtr()
 }
 
-// WozduhWt11Ptr is a test hook for vol-base identity.
-func (a *Frame) WozduhWt11Ptr() *indicators.EMA {
+// WozduhVolRsiEma12Ptr is a test hook for vol-base identity.
+func (a *Frame) WozduhVolRsiEma12Ptr() *indicators.EMA {
 	if a == nil {
 		return nil
 	}
@@ -135,7 +135,7 @@ func (a *Frame) WozduhWt11Ptr() *indicators.EMA {
 	if woz == nil {
 		return nil
 	}
-	return woz.Wt11EmaPtr()
+	return woz.VolRsiEma12Ptr()
 }
 
 // WozduhSlot is a test hook for current TickFrame Wozduh values.

@@ -8,6 +8,15 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-NUMERIC-NAMES-1 — mathematical Wozduh vocabulary (Sep 2026)
+
+- Replaced Pine/color/speed names with math identities (`woz_vol_rsi_ema12` / `woz_vol_rsi_ema5`, …).
+- Slot indexes, demand bits, formulas, and paint colors/widths unchanged.
+- One-shot visibility pref remap; no permanent old-ID aliases.
+- Legacy `VolCross` kept for **WOZDUH-VOLCROSS-REMOVE-1**.
+- Artifact: `research/cleanup/WOZDUH-NUMERIC-NAMES-1.txt`.
+
+
 ## FALCON-REMOVE-1 — retire Falcon engine (Sep 2026)
 
 - Deleted ownerless `market/falcon.go` (FalconEngine, DetectVolCross, duplicate Wozduh).

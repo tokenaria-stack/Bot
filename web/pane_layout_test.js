@@ -30,7 +30,7 @@ function sampleManifest() {
       pane_osc: [
         { id: 'line_rsx', hostId: 'rsx', renderOptions: { title: 'RSX' } },
         { id: 'line_rsx_signal', hostId: 'rsx', renderOptions: { title: 'RSX Signal' } },
-        { id: 'woz_fast', hostId: 'wozduh', renderOptions: { title: 'wt11 (Blue)' } },
+        { id: 'woz_vol_rsi_ema12', hostId: 'wozduh', renderOptions: { title: 'Volume RSI EMA12' } },
       ],
     },
   };

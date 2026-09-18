@@ -42,10 +42,10 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 
 	const bars = 150
 	slots := []core.Slot{
-		core.SlotWozduhRsiPrice, core.SlotWozduhEmaRsi, core.SlotWozduhRsiRsi, core.SlotWozduhRsiHl2,
-		core.SlotWozduhMacdRsi, core.SlotWozduhFast, core.SlotWozduhSlow, core.SlotWozduhRsiAd,
-		core.SlotWozduhRsiHl2Vol, core.SlotWozduhVolChanMid, core.SlotWozduhVolChanUp, core.SlotWozduhVolChanDn,
-		core.SlotWozduhPriceChanMid, core.SlotWozduhPriceChanUp, core.SlotWozduhPriceChanDn, core.SlotWozduhVolCross,
+		core.SlotWozduhRsiClose, core.SlotWozduhRsiCloseEma7, core.SlotWozduhRsiRsiClose, core.SlotWozduhRsiHl2,
+		core.SlotWozduhMacdRsiClose, core.SlotWozduhVolRsiEma12, core.SlotWozduhVolRsiEma5, core.SlotWozduhRsiAd,
+		core.SlotWozduhRsiHl2Vwema, core.SlotWozduhVolRsiEma5ChanMid, core.SlotWozduhVolRsiEma5ChanUp, core.SlotWozduhVolRsiEma5ChanDn,
+		core.SlotWozduhRsiCloseChanMid, core.SlotWozduhRsiCloseChanUp, core.SlotWozduhRsiCloseChanDn, core.SlotWozduhVolCross,
 	}
 	for i := 0; i < bars; i++ {
 		tickWozduh(a, aBus, i)
@@ -56,9 +56,9 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 				t.Fatalf("bar %d slot %v twin drift got=%v want=%v", i, slot, got, want)
 			}
 		}
-		rsi := aBus.Cur.Get(core.SlotWozduhRsiPrice)
+		rsi := aBus.Cur.Get(core.SlotWozduhRsiClose)
 		if !math.IsNaN(rsi) && (rsi < 0 || rsi > 100) {
-			t.Fatalf("bar %d RsiPrice %v out of [0,100]", i, rsi)
+			t.Fatalf("bar %d RsiClose %v out of [0,100]", i, rsi)
 		}
 		cross := aBus.Cur.Get(core.SlotWozduhVolCross)
 		if !math.IsNaN(cross) && cross != 0 && cross != 1 && cross != -1 {
@@ -79,12 +79,12 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 		got  float64
 		want float64
 	}{
-		{"RsiPrice", cur.Get(core.SlotWozduhRsiPrice), 100},
-		{"EmaRsi", cur.Get(core.SlotWozduhEmaRsi), 99.682878806106601},
-		{"wt11", cur.Get(core.SlotWozduhFast), 96.460135347262565},
-		{"wt22", cur.Get(core.SlotWozduhSlow), 99.969927134017837},
+		{"RsiClose", cur.Get(core.SlotWozduhRsiClose), 100},
+		{"RsiCloseEma7", cur.Get(core.SlotWozduhRsiCloseEma7), 99.682878806106601},
+		{"VolRsiEma12", cur.Get(core.SlotWozduhVolRsiEma12), 96.460135347262565},
+		{"VolRsiEma5", cur.Get(core.SlotWozduhVolRsiEma5), 99.969927134017837},
 		{"RsiHl2", cur.Get(core.SlotWozduhRsiHl2), 98.772388121028527},
-		{"MacdRsi", cur.Get(core.SlotWozduhMacdRsi), 68.552211722386232},
+		{"MacdRsiClose", cur.Get(core.SlotWozduhMacdRsiClose), 68.552211722386232},
 		{"VolCross", cur.Get(core.SlotWozduhVolCross), 0},
 	}
 	for _, c := range gold {

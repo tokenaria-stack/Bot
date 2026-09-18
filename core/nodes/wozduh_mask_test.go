@@ -14,22 +14,22 @@ func TestWozduhMaskForPlots_Closure(t *testing.T) {
 		id   string
 		want nodes.WozduhMask
 	}{
-		{"woz_rsi_price", nodes.WozduhBitOrangeBase},
-		{"woz_ema_rsi", nodes.WozduhBitOrangeBase | nodes.WozduhBitGreenEMA},
-		{"woz_rsi_rsi", nodes.WozduhBitOrangeBase | nodes.WozduhBitRsiOfRsi},
-		{"woz_price_chan_up", nodes.WozduhBitOrangeBase | nodes.WozduhBitPriceChannel},
-		{"woz_price_chan_mid", nodes.WozduhBitOrangeBase | nodes.WozduhBitPriceChannel},
-		{"woz_price_chan_dn", nodes.WozduhBitOrangeBase | nodes.WozduhBitPriceChannel},
-		{"woz_fast", nodes.WozduhBitVolBase | nodes.WozduhBitWt11},
-		{"woz_slow", nodes.WozduhBitVolBase | nodes.WozduhBitWt22},
-		{"woz_vol_chan_up", nodes.WozduhBitVolBase | nodes.WozduhBitWt22 | nodes.WozduhBitVolChannel},
-		{"woz_vol_chan_mid", nodes.WozduhBitVolBase | nodes.WozduhBitWt22 | nodes.WozduhBitVolChannel},
-		{"woz_vol_chan_dn", nodes.WozduhBitVolBase | nodes.WozduhBitWt22 | nodes.WozduhBitVolChannel},
-		{"woz_vol_cross", nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22 | nodes.WozduhBitVolCrossPair},
-		{"woz_rsi_hl2", nodes.WozduhBitRedRSI},
-		{"woz_macd_rsi", nodes.WozduhBitBlackMACD},
-		{"woz_rsi_hl2_vol", nodes.WozduhBitNavyRSI},
-		{"woz_rsi_ad", nodes.WozduhBitADRSI},
+		{"woz_rsi_close", nodes.WozduhBitRsiClose},
+		{"woz_rsi_close_ema7", nodes.WozduhBitRsiClose | nodes.WozduhBitRsiCloseEma7},
+		{"woz_rsi_rsi_close", nodes.WozduhBitRsiClose | nodes.WozduhBitRsiOfRsi},
+		{"woz_rsi_close_chan_up", nodes.WozduhBitRsiClose | nodes.WozduhBitRsiCloseChan},
+		{"woz_rsi_close_chan_mid", nodes.WozduhBitRsiClose | nodes.WozduhBitRsiCloseChan},
+		{"woz_rsi_close_chan_dn", nodes.WozduhBitRsiClose | nodes.WozduhBitRsiCloseChan},
+		{"woz_vol_rsi_ema12", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma12},
+		{"woz_vol_rsi_ema5", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5},
+		{"woz_vol_rsi_ema5_chan_up", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
+		{"woz_vol_rsi_ema5_chan_mid", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
+		{"woz_vol_rsi_ema5_chan_dn", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
+		{"woz_vol_cross", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma12 | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolCrossPair},
+		{"woz_rsi_hl2", nodes.WozduhBitRsiHl2},
+		{"woz_macd_rsi_close", nodes.WozduhBitMacdRsiClose},
+		{"woz_rsi_hl2_vwema", nodes.WozduhBitRsiHl2Vwema},
+		{"woz_rsi_ad", nodes.WozduhBitRsiAd},
 	}
 	for _, c := range cases {
 		got := nodes.WozduhMaskForPlots([]string{c.id})
@@ -41,7 +41,7 @@ func TestWozduhMaskForPlots_Closure(t *testing.T) {
 
 func TestWozduhMaskForPlots_UnknownAndNonWozduh(t *testing.T) {
 	t.Parallel()
-	if got := nodes.WozduhMaskForPlots([]string{"line_rsx", "line_rsx_signal", "nope", "woz_vol_chan"}); got != 0 {
+	if got := nodes.WozduhMaskForPlots([]string{"line_rsx", "line_rsx_signal", "nope", "woz_vol_rsi_ema5_chan"}); got != 0 {
 		t.Fatalf("non-wozduh/unknown/compose must be 0, got %#b", got)
 	}
 	if nodes.WozduhMaskForPlots(nil) != 0 {
@@ -51,7 +51,7 @@ func TestWozduhMaskForPlots_UnknownAndNonWozduh(t *testing.T) {
 
 func TestWozduhDefaultVisibleMask(t *testing.T) {
 	t.Parallel()
-	want := nodes.WozduhBitOrangeBase | nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22 | nodes.WozduhBitRedRSI
+	want := nodes.WozduhBitRsiClose | nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma12 | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitRsiHl2
 	if got := nodes.WozduhDefaultVisibleMask(); got != want {
 		t.Fatalf("default visible %#b want %#b", got, want)
 	}
@@ -68,11 +68,11 @@ func TestWozduhMaskFromClientSubscriptions(t *testing.T) {
 	if nodes.WozduhMaskFromClientSubscriptions([][]string{{}}) != nodes.WozduhMaskAll {
 		t.Fatal("empty slots must be all")
 	}
-	a := nodes.WozduhMaskForPlots([]string{"woz_fast"})
-	b := nodes.WozduhMaskForPlots([]string{"woz_price_chan_up"})
+	a := nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12"})
+	b := nodes.WozduhMaskForPlots([]string{"woz_rsi_close_chan_up"})
 	got := nodes.WozduhMaskFromClientSubscriptions([][]string{
-		{"woz_fast"},
-		{"woz_price_chan_up"},
+		{"woz_vol_rsi_ema12"},
+		{"woz_rsi_close_chan_up"},
 	})
 	if got != a|b {
 		t.Fatalf("union %#b want %#b", got, a|b)
@@ -110,18 +110,18 @@ func feedWoz(t *testing.T, node *nodes.WozduhNode, bars int) {
 func TestWozduhMasked_SharedBaseOnce(t *testing.T) {
 	t.Parallel()
 	const bars = 80
-	orangeGreen := nodes.WozduhMaskForPlots([]string{"woz_rsi_price", "woz_ema_rsi"})
-	n := nodes.NewWozduhNodeMasked(orangeGreen)
+	rsiCloseEma7 := nodes.WozduhMaskForPlots([]string{"woz_rsi_close", "woz_rsi_close_ema7"})
+	n := nodes.NewWozduhNodeMasked(rsiCloseEma7)
 	feedWoz(t, n, bars)
-	// orange RSI + green EMA once per bar (not doubled).
+	// RSI(close) + EMA7 once per bar (not doubled).
 	if n.StreamUpdates() != 2*bars {
-		t.Fatalf("orange+green streams=%d want %d", n.StreamUpdates(), 2*bars)
+		t.Fatalf("rsiClose+ema7 streams=%d want %d", n.StreamUpdates(), 2*bars)
 	}
 
-	volPair := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"})
+	volPair := nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"})
 	n2 := nodes.NewWozduhNodeMasked(volPair)
 	feedWoz(t, n2, bars)
-	// volVwap + volRsi + wt11 + wt22
+	// volVwema + volRsi + ema12 + ema5
 	if n2.StreamUpdates() != 4*bars {
 		t.Fatalf("vol shared streams=%d want %d", n2.StreamUpdates(), 4*bars)
 	}
@@ -129,7 +129,7 @@ func TestWozduhMasked_SharedBaseOnce(t *testing.T) {
 
 func TestWozduhMasked_FailClosedNaN(t *testing.T) {
 	t.Parallel()
-	n := nodes.NewWozduhNodeMasked(nodes.WozduhMaskForPlots([]string{"woz_fast"}))
+	n := nodes.NewWozduhNodeMasked(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12"}))
 	bus := core.NewBus(64)
 	n.Init(bus)
 	bus.Cur.Set(core.SlotPriceHigh, 101)
@@ -138,10 +138,10 @@ func TestWozduhMasked_FailClosedNaN(t *testing.T) {
 	bus.Cur.Set(core.SlotVolume, 10)
 	n.Update()
 	inactive := []core.Slot{
-		core.SlotWozduhRsiPrice, core.SlotWozduhEmaRsi, core.SlotWozduhRsiRsi,
-		core.SlotWozduhRsiHl2, core.SlotWozduhMacdRsi, core.SlotWozduhSlow,
-		core.SlotWozduhRsiAd, core.SlotWozduhRsiHl2Vol,
-		core.SlotWozduhVolChanMid, core.SlotWozduhPriceChanMid, core.SlotWozduhVolCross,
+		core.SlotWozduhRsiClose, core.SlotWozduhRsiCloseEma7, core.SlotWozduhRsiRsiClose,
+		core.SlotWozduhRsiHl2, core.SlotWozduhMacdRsiClose, core.SlotWozduhVolRsiEma5,
+		core.SlotWozduhRsiAd, core.SlotWozduhRsiHl2Vwema,
+		core.SlotWozduhVolRsiEma5ChanMid, core.SlotWozduhRsiCloseChanMid, core.SlotWozduhVolCross,
 	}
 	for _, s := range inactive {
 		v := bus.Cur.Get(s)
@@ -167,17 +167,17 @@ func TestWozduhMasked_ParityVsAll(t *testing.T) {
 		id   string
 		slot core.Slot
 	}{
-		{"woz_rsi_price", core.SlotWozduhRsiPrice},
-		{"woz_ema_rsi", core.SlotWozduhEmaRsi},
-		{"woz_rsi_rsi", core.SlotWozduhRsiRsi},
-		{"woz_fast", core.SlotWozduhFast},
-		{"woz_slow", core.SlotWozduhSlow},
+		{"woz_rsi_close", core.SlotWozduhRsiClose},
+		{"woz_rsi_close_ema7", core.SlotWozduhRsiCloseEma7},
+		{"woz_rsi_rsi_close", core.SlotWozduhRsiRsiClose},
+		{"woz_vol_rsi_ema12", core.SlotWozduhVolRsiEma12},
+		{"woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5},
 		{"woz_rsi_hl2", core.SlotWozduhRsiHl2},
-		{"woz_macd_rsi", core.SlotWozduhMacdRsi},
-		{"woz_rsi_hl2_vol", core.SlotWozduhRsiHl2Vol},
+		{"woz_macd_rsi_close", core.SlotWozduhMacdRsiClose},
+		{"woz_rsi_hl2_vwema", core.SlotWozduhRsiHl2Vwema},
 		{"woz_rsi_ad", core.SlotWozduhRsiAd},
-		{"woz_price_chan_up", core.SlotWozduhPriceChanUp},
-		{"woz_vol_chan_mid", core.SlotWozduhVolChanMid},
+		{"woz_rsi_close_chan_up", core.SlotWozduhRsiCloseChanUp},
+		{"woz_vol_rsi_ema5_chan_mid", core.SlotWozduhVolRsiEma5ChanMid},
 		{"woz_vol_cross", core.SlotWozduhVolCross},
 	}
 
@@ -251,7 +251,7 @@ func TestWozduhBitVolBase_IsComputeMaskNotBinanceTakerBuyV(t *testing.T) {
 	if nodes.WozduhBitVolBase == 0 {
 		t.Fatal("mask bit")
 	}
-	if nodes.WozduhMaskForPlots([]string{"woz_slow"})&nodes.WozduhBitVolBase == 0 {
-		t.Fatal("woz_slow needs VolBase compute")
+	if nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema5"})&nodes.WozduhBitVolBase == 0 {
+		t.Fatal("woz_vol_rsi_ema5 needs VolBase compute")
 	}
 }

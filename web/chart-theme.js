@@ -60,8 +60,8 @@ const ChartTheme = {
   volumeDown: 'rgba(242,54,69,0.55)',
 
   // ── Wozduh legacy line defaults (DDR manifest overrides at runtime) ─────────
-  wozduhFast: 'blue',
-  wozduhSlow: 'aqua',
+  wozduhVolRsiEma12: 'blue',
+  wozduhVolRsiEma5: 'aqua',
 
   // ── MTF period accents (navigator overlays) ─────────────────────────────────
   mtfPeriodColors: {

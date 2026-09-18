@@ -41,8 +41,8 @@ func TestWozduhDemand_WSUnionDisconnectAndTFChange(t *testing.T) {
 	f15 := demandFrame("15s")
 	d := NewDashboardServer(map[string]*market.Frame{"1m": f1m, "15s": f15}, nil, "BTCUSDT", nil, false, false, "1m")
 
-	a := &WSClient{plotIDs: []string{"woz_fast"}}
-	b := &WSClient{plotIDs: []string{"woz_rsi_price"}}
+	a := &WSClient{plotIDs: []string{"woz_vol_rsi_ema12"}}
+	b := &WSClient{plotIDs: []string{"woz_rsi_close"}}
 	d.clients[a] = true
 	d.clients[b] = true
 	d.clientTF[a] = "1m"
@@ -50,7 +50,7 @@ func TestWozduhDemand_WSUnionDisconnectAndTFChange(t *testing.T) {
 	d.recomputeWozduhDemand("1m")
 	d.recomputeWozduhDemand("15s")
 
-	want1m := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_rsi_price"})
+	want1m := nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_rsi_close"})
 	m1, _, _ := f1m.WozduhLiveStats()
 	if m1 != want1m {
 		t.Fatalf("1m union %#b want %#b", m1, want1m)
@@ -76,13 +76,13 @@ func TestWozduhDemand_WSUnionDisconnectAndTFChange(t *testing.T) {
 	}
 
 	d.dropWSClient(a)
-	wantB := nodes.WozduhMaskForPlots([]string{"woz_rsi_price"})
+	wantB := nodes.WozduhMaskForPlots([]string{"woz_rsi_close"})
 	m1, _, _ = f1m.WozduhLiveStats()
 	if m1 != wantB {
 		t.Fatalf("after A disconnect %#b want %#b", m1, wantB)
 	}
 
-	d.setClientSubscribe(b, "15s", []string{"woz_rsi_price"}, nil)
+	d.setClientSubscribe(b, "15s", []string{"woz_rsi_close"}, nil)
 	m1, _, _ = f1m.WozduhLiveStats()
 	if m1 != 0 {
 		t.Fatalf("old TF must drop B demand, got %#b", m1)

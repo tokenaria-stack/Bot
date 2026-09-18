@@ -7,14 +7,14 @@ import (
 
 func TestMergeScaleContribution(t *testing.T) {
 	raw := mergeScaleContribution(
-		`{"color":"blue","lineWidth":2,"title":"wt11 (Blue)"}`,
+		`{"color":"blue","lineWidth":2,"title":"Volume RSI EMA12"}`,
 		`{"type":"bounded","min":-5,"max":105}`,
 	)
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["title"] != "wt11 (Blue)" {
+	if m["title"] != "Volume RSI EMA12" {
 		t.Fatalf("title lost: %v", m["title"])
 	}
 	sc, ok := m["scaleContribution"].(map[string]any)
@@ -69,9 +69,9 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	}
 }
 
-func TestWozduhSlowBoundedPeersIgnore(t *testing.T) {
+func TestWozduhVolRsiEma5BoundedPeersIgnore(t *testing.T) {
 	comps := WozduhComponents()
-	var slowType string
+	var ownerType string
 	boundedCount := 0
 	ignoreCount := 0
 	for _, c := range comps {
@@ -84,11 +84,11 @@ func TestWozduhSlowBoundedPeersIgnore(t *testing.T) {
 			t.Fatalf("%s missing scaleContribution", c.ID)
 		}
 		typ, _ := sc["type"].(string)
-		if c.ID == "woz_slow" {
-			slowType = typ
+		if c.ID == "woz_vol_rsi_ema5" {
+			ownerType = typ
 			boundedCount++
 			if sc["min"].(float64) != -5 || sc["max"].(float64) != 105 {
-				t.Fatalf("woz_slow bounds=%v", sc)
+				t.Fatalf("woz_vol_rsi_ema5 bounds=%v", sc)
 			}
 			continue
 		}
@@ -97,8 +97,8 @@ func TestWozduhSlowBoundedPeersIgnore(t *testing.T) {
 		}
 		ignoreCount++
 	}
-	if slowType != "bounded" {
-		t.Fatalf("woz_slow type=%q", slowType)
+	if ownerType != "bounded" {
+		t.Fatalf("woz_vol_rsi_ema5 type=%q", ownerType)
 	}
 	if boundedCount != 1 {
 		t.Fatalf("expected exactly one bounded Wozduh owner, got %d", boundedCount)
@@ -117,14 +117,14 @@ func TestWozduhChannelPaintComponents(t *testing.T) {
 		mode[c.ID] = c.DataMode
 	}
 	for _, id := range []string{
-		"woz_vol_chan_mid", "woz_vol_chan_up", "woz_vol_chan_dn",
-		"woz_price_chan_mid", "woz_price_chan_up", "woz_price_chan_dn",
+		"woz_vol_rsi_ema5_chan_mid", "woz_vol_rsi_ema5_chan_up", "woz_vol_rsi_ema5_chan_dn",
+		"woz_rsi_close_chan_mid", "woz_rsi_close_chan_up", "woz_rsi_close_chan_dn",
 	} {
 		if kind[id] != "plot" || mode[id] != "scalar" {
 			t.Fatalf("%s kind=%s mode=%s", id, kind[id], mode[id])
 		}
 	}
-	for _, id := range []string{"woz_vol_chan", "woz_price_chan"} {
+	for _, id := range []string{"woz_vol_rsi_ema5_chan", "woz_rsi_close_chan"} {
 		if kind[id] != "channel" || mode[id] != "compose" {
 			t.Fatalf("%s kind=%s mode=%s", id, kind[id], mode[id])
 		}
@@ -146,15 +146,15 @@ func TestWozduhPineRenderMountOrder(t *testing.T) {
 	want := []string{
 		"woz_rsi_ad",
 		"woz_rsi_hl2",
-		"woz_slow",
-		"woz_fast",
-		"woz_vol_chan",
-		"woz_rsi_hl2_vol",
-		"woz_rsi_price",
-		"woz_price_chan",
-		"woz_rsi_rsi",
-		"woz_macd_rsi",
-		"woz_ema_rsi",
+		"woz_vol_rsi_ema5",
+		"woz_vol_rsi_ema12",
+		"woz_vol_rsi_ema5_chan",
+		"woz_rsi_hl2_vwema",
+		"woz_rsi_close",
+		"woz_rsi_close_chan",
+		"woz_rsi_rsi_close",
+		"woz_macd_rsi_close",
+		"woz_rsi_close_ema7",
 	}
 	if len(mounted) != len(want) {
 		t.Fatalf("mounted=%v want=%v", mounted, want)
@@ -177,19 +177,46 @@ func TestWozduhMenuTitlesAndSolidChannelBounds(t *testing.T) {
 		if title, ok := m["title"].(string); ok {
 			titles[c.ID] = title
 		}
-		if c.ID == "woz_vol_chan" || c.ID == "woz_price_chan" {
+		if c.ID == "woz_vol_rsi_ema5_chan" || c.ID == "woz_rsi_close_chan" {
 			if m["upperLineStyle"] != float64(0) || m["lowerLineStyle"] != float64(0) {
 				t.Fatalf("%s line styles=%v %v", c.ID, m["upperLineStyle"], m["lowerLineStyle"])
 			}
 		}
 	}
-	if titles["woz_fast"] != "Woz fast (Blue)" {
-		t.Fatalf("woz_fast title=%q", titles["woz_fast"])
+	if titles["woz_vol_rsi_ema12"] != "Volume RSI EMA12" {
+		t.Fatalf("woz_vol_rsi_ema12 title=%q", titles["woz_vol_rsi_ema12"])
 	}
-	if titles["woz_slow"] != "Woz slow (Aqua)" {
-		t.Fatalf("woz_slow title=%q", titles["woz_slow"])
+	if titles["woz_vol_rsi_ema5"] != "Volume RSI EMA5" {
+		t.Fatalf("woz_vol_rsi_ema5 title=%q", titles["woz_vol_rsi_ema5"])
 	}
-	if titles["woz_fast"] == titles["woz_slow"] {
+	if titles["woz_rsi_close"] != "RSI close" {
+		t.Fatalf("woz_rsi_close title=%q", titles["woz_rsi_close"])
+	}
+	if titles["woz_rsi_close_ema7"] != "RSI close EMA7" {
+		t.Fatalf("woz_rsi_close_ema7 title=%q", titles["woz_rsi_close_ema7"])
+	}
+	if titles["woz_rsi_rsi_close"] != "RSI of RSI(close)" {
+		t.Fatalf("woz_rsi_rsi_close title=%q", titles["woz_rsi_rsi_close"])
+	}
+	if titles["woz_rsi_close_chan"] != "RSI close channel" {
+		t.Fatalf("woz_rsi_close_chan title=%q", titles["woz_rsi_close_chan"])
+	}
+	if titles["woz_macd_rsi_close"] != "MACD RSI(close)+50" {
+		t.Fatalf("woz_macd_rsi_close title=%q", titles["woz_macd_rsi_close"])
+	}
+	if titles["woz_vol_rsi_ema5_chan"] != "Volume RSI EMA5 channel" {
+		t.Fatalf("woz_vol_rsi_ema5_chan title=%q", titles["woz_vol_rsi_ema5_chan"])
+	}
+	if titles["woz_rsi_hl2_vwema"] != "RSI VWEMA(HL2)" {
+		t.Fatalf("woz_rsi_hl2_vwema title=%q", titles["woz_rsi_hl2_vwema"])
+	}
+	if titles["woz_rsi_hl2"] != "RSI HL2" {
+		t.Fatalf("woz_rsi_hl2 title=%q", titles["woz_rsi_hl2"])
+	}
+	if titles["woz_rsi_ad"] != "RSI AD" {
+		t.Fatalf("woz_rsi_ad title=%q", titles["woz_rsi_ad"])
+	}
+	if titles["woz_vol_rsi_ema12"] == titles["woz_vol_rsi_ema5"] {
 		t.Fatal("titles must stay distinct")
 	}
 }

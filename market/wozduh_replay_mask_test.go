@@ -14,9 +14,9 @@ func TestReplayClosedBarsMasked_ParityAndRSX(t *testing.T) {
 	rsx := NormalizeRSXSettings(RSXSettings{Length: 14, SignalLength: 9, Source: "hlc3"})
 	full := ReplayClosedBars(klines, rsx)
 	masked := ReplayClosedBarsMasked(klines, rsx, nodes.WozduhMaskForPlots([]string{
-		"woz_rsi_price", "woz_ema_rsi", "woz_rsi_rsi", "woz_fast", "woz_slow",
-		"woz_rsi_hl2", "woz_macd_rsi", "woz_rsi_hl2_vol", "woz_rsi_ad",
-		"woz_price_chan_up", "woz_vol_chan_mid",
+		"woz_rsi_close", "woz_rsi_close_ema7", "woz_rsi_rsi_close", "woz_vol_rsi_ema12", "woz_vol_rsi_ema5",
+		"woz_rsi_hl2", "woz_macd_rsi_close", "woz_rsi_hl2_vwema", "woz_rsi_ad",
+		"woz_rsi_close_chan_up", "woz_vol_rsi_ema5_chan_mid",
 	}))
 	if full.Hist == nil || masked.Hist == nil {
 		t.Fatal("hist missing")
@@ -27,10 +27,10 @@ func TestReplayClosedBarsMasked_ParityAndRSX(t *testing.T) {
 	n := full.Hist.Count()
 	slots := []core.Slot{
 		core.SlotJurikRSX, core.SlotJurikSignal,
-		core.SlotWozduhRsiPrice, core.SlotWozduhEmaRsi, core.SlotWozduhRsiRsi,
-		core.SlotWozduhFast, core.SlotWozduhSlow, core.SlotWozduhRsiHl2,
-		core.SlotWozduhMacdRsi, core.SlotWozduhRsiHl2Vol, core.SlotWozduhRsiAd,
-		core.SlotWozduhPriceChanUp, core.SlotWozduhVolChanMid,
+		core.SlotWozduhRsiClose, core.SlotWozduhRsiCloseEma7, core.SlotWozduhRsiRsiClose,
+		core.SlotWozduhVolRsiEma12, core.SlotWozduhVolRsiEma5, core.SlotWozduhRsiHl2,
+		core.SlotWozduhMacdRsiClose, core.SlotWozduhRsiHl2Vwema, core.SlotWozduhRsiAd,
+		core.SlotWozduhRsiCloseChanUp, core.SlotWozduhVolRsiEma5ChanMid,
 	}
 	for lookback := 1; lookback <= n; lookback++ {
 		for _, s := range slots {
@@ -59,9 +59,9 @@ func TestReplayClosedBarsMasked_ZeroWozduh(t *testing.T) {
 		if a != b && !(math.IsNaN(a) && math.IsNaN(b)) {
 			t.Fatalf("RSX lookback %d: full=%v zero=%v", lookback, a, b)
 		}
-		woz := zero.Hist.Get(core.SlotWozduhFast, lookback)
+		woz := zero.Hist.Get(core.SlotWozduhVolRsiEma12, lookback)
 		if !math.IsNaN(woz) {
-			t.Fatalf("zero-mask woz_fast lookback %d = %v want NaN", lookback, woz)
+			t.Fatalf("zero-mask woz_vol_rsi_ema12 lookback %d = %v want NaN", lookback, woz)
 		}
 	}
 	if len(full.ZZFacts) != len(zero.ZZFacts) {
@@ -77,8 +77,8 @@ func TestReplayClosedBars_DefaultComputeAll(t *testing.T) {
 	b := ReplayClosedBarsMasked(klines, rsx, nodes.WozduhMaskAll)
 	n := a.Hist.Count()
 	for lookback := 1; lookback <= n; lookback++ {
-		x := a.Hist.Get(core.SlotWozduhMacdRsi, lookback)
-		y := b.Hist.Get(core.SlotWozduhMacdRsi, lookback)
+		x := a.Hist.Get(core.SlotWozduhMacdRsiClose, lookback)
+		y := b.Hist.Get(core.SlotWozduhMacdRsiClose, lookback)
 		if x != y && !(math.IsNaN(x) && math.IsNaN(y)) {
 			t.Fatalf("compute-all mismatch lookback %d %v vs %v", lookback, x, y)
 		}

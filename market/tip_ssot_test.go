@@ -29,7 +29,7 @@ func tipSlots3FromHist(hist *core.HistoryBus) (rsx, sig, woz float64) {
 	if hist == nil || hist.Count() < 1 {
 		return math.NaN(), math.NaN(), math.NaN()
 	}
-	return hist.Get(core.SlotJurikRSX, 1), hist.Get(core.SlotJurikSignal, 1), hist.Get(core.SlotWozduhRsiPrice, 1)
+	return hist.Get(core.SlotJurikRSX, 1), hist.Get(core.SlotJurikSignal, 1), hist.Get(core.SlotWozduhRsiClose, 1)
 }
 
 func replayTip3(klines []exchange.Kline, rsx RSXSettings) (rsxTip, sigTip, wozTip float64) {
@@ -44,7 +44,7 @@ func frameTip3(frame *Frame) (rsx, sig, woz float64) {
 	if dag == nil {
 		return math.NaN(), math.NaN(), math.NaN()
 	}
-	return dag.Get(core.SlotJurikRSX), dag.Get(core.SlotJurikSignal), dag.Get(core.SlotWozduhRsiPrice)
+	return dag.Get(core.SlotJurikRSX), dag.Get(core.SlotJurikSignal), dag.Get(core.SlotWozduhRsiClose)
 }
 
 func newFrameWithRSX(klines []exchange.Kline, rsx RSXSettings) *Frame {
@@ -96,7 +96,7 @@ func TestTipSSOT_WarmupTrap_Replay400vs3000(t *testing.T) {
 	histShallow := ReplayDAGKlines(shallow, rsxCfg)
 	maxRSX50 := maxAbsLookbackDelta(histDeep, histShallow, core.SlotJurikRSX, tipSSOTTailCompare)
 	maxSig50 := maxAbsLookbackDelta(histDeep, histShallow, core.SlotJurikSignal, tipSSOTTailCompare)
-	maxWoz50 := maxAbsLookbackDelta(histDeep, histShallow, core.SlotWozduhRsiPrice, tipSSOTTailCompare)
+	maxWoz50 := maxAbsLookbackDelta(histDeep, histShallow, core.SlotWozduhRsiClose, tipSSOTTailCompare)
 
 	fmt.Printf("\n=== #67 PHASE1 WARMUP TRAP: Replay(%d) vs Replay(%d) ===\n", tipSSOTDeepBars, tipSSOTShallowBars)
 	fmt.Printf("tip OHLC Close=%.6f OpenTime=%d\n", full[len(full)-1].Close, full[len(full)-1].OpenTime)

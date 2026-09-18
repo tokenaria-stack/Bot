@@ -13,8 +13,8 @@ const (
 
 	SlotJurikRSX
 	SlotJurikSignal
-	SlotWozduhFast
-	SlotWozduhSlow
+	SlotWozduhVolRsiEma12
+	SlotWozduhVolRsiEma5
 
 	// Chaos atoms (Layer 2) — DDR debt: slots reserved; DAG node wiring TBD.
 	SlotAO
@@ -22,20 +22,20 @@ const (
 	SlotStoch
 	SlotOrangeRSI
 
-	// Wozduh Pine atoms (Great Purge Stage 2) — writers land in Stage 3 WozduhNode.
-	SlotWozduhRsiPrice
-	SlotWozduhEmaRsi
-	SlotWozduhRsiRsi
+	// Wozduh numeric atoms — writers live in WozduhNode. Iota order is frozen.
+	SlotWozduhRsiClose
+	SlotWozduhRsiCloseEma7
+	SlotWozduhRsiRsiClose
 	SlotWozduhRsiHl2
-	SlotWozduhMacdRsi
+	SlotWozduhMacdRsiClose
 	SlotWozduhRsiAd
-	SlotWozduhRsiHl2Vol
-	SlotWozduhVolChanMid
-	SlotWozduhVolChanUp
-	SlotWozduhVolChanDn
-	SlotWozduhPriceChanMid
-	SlotWozduhPriceChanUp
-	SlotWozduhPriceChanDn
+	SlotWozduhRsiHl2Vwema
+	SlotWozduhVolRsiEma5ChanMid
+	SlotWozduhVolRsiEma5ChanUp
+	SlotWozduhVolRsiEma5ChanDn
+	SlotWozduhRsiCloseChanMid
+	SlotWozduhRsiCloseChanUp
+	SlotWozduhRsiCloseChanDn
 	SlotWozduhVolCross
 
 	// SlotCount is the number of defined slots (valid indices: 0 .. SlotCount-1).

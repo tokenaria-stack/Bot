@@ -142,7 +142,7 @@ func TestTimelineHeal_TipMatchesReplayAfterLoadHistorical(t *testing.T) {
 		t.Fatal("DAGTickFrame nil after LoadHistoricalKlines")
 	}
 	liveRSX := dag.Get(core.SlotJurikRSX)
-	liveWoz := dag.Get(core.SlotWozduhRsiPrice)
+	liveWoz := dag.Get(core.SlotWozduhRsiClose)
 	repRSX, repWoz := replayTip(full, rsxCfg)
 
 	const eps = 1e-9

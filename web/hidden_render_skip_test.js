@@ -35,10 +35,10 @@ test('A. hidden LineSeries: no extraction/setData/update', () => {
   const factory = new DDRFactory();
   factory.buildPanes(
     { wozduh: { chart: {
-      addLineSeries() { return fakeLine(events, 'woz_ema_rsi'); },
+      addLineSeries() { return fakeLine(events, 'woz_rsi_close_ema7'); },
     } } },
     { pane_osc: [{
-      id: 'woz_ema_rsi',
+      id: 'woz_rsi_close_ema7',
       hostId: 'wozduh',
       kind: 'line',
       renderOptions: { defaultVisible: false, scaleContribution: { type: 'ignore' } },
@@ -46,11 +46,11 @@ test('A. hidden LineSeries: no extraction/setData/update', () => {
   );
   factory.hydrateFromColumnar({
     times: [1, 2],
-    plots: { woz_ema_rsi: [10, 11], woz_fast: [40, 41] },
+    plots: { woz_rsi_close_ema7: [10, 11], woz_vol_rsi_ema12: [40, 41] },
   });
   factory.applyHydratedData();
-  factory.updateTick(3, { woz_ema_rsi: 12, woz_fast: 42 });
-  assert.strictEqual(factory.hydratedData.has('woz_ema_rsi'), false);
+  factory.updateTick(3, { woz_rsi_close_ema7: 12, woz_vol_rsi_ema12: 42 });
+  assert.strictEqual(factory.hydratedData.has('woz_rsi_close_ema7'), false);
   assert.ok(!events.some((e) => e.op === 'setData'));
   assert.ok(!events.some((e) => e.op === 'update'));
 });
@@ -59,12 +59,12 @@ test('B. visible LineSeries still setData/update', () => {
   const events = [];
   const factory = new DDRFactory();
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_slow'); } } } },
-    { pane_osc: [{ id: 'woz_slow', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
+    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_vol_rsi_ema5'); } } } },
+    { pane_osc: [{ id: 'woz_vol_rsi_ema5', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
   );
-  factory.hydrateFromColumnar({ times: [1], plots: { woz_slow: [50] } });
+  factory.hydrateFromColumnar({ times: [1], plots: { woz_vol_rsi_ema5: [50] } });
   factory.applyHydratedData();
-  factory.updateTick(2, { woz_slow: 51 });
+  factory.updateTick(2, { woz_vol_rsi_ema5: 51 });
   assert.ok(events.some((e) => e.op === 'setData'));
   assert.ok(events.some((e) => e.op === 'update' && e.pt.value === 51));
 });
@@ -80,35 +80,35 @@ test('C. hidden ChannelSeries: no zip, no setData, no live compose', () => {
   try {
     const factory = new DDRFactory();
     factory.buildPanes(
-      { wozduh: { chart: { addCustomSeries() { return fakeChannel(events, 'woz_price_chan'); } } } },
+      { wozduh: { chart: { addCustomSeries() { return fakeChannel(events, 'woz_rsi_close_chan'); } } } },
       { pane_osc: [{
-        id: 'woz_price_chan',
+        id: 'woz_rsi_close_chan',
         hostId: 'wozduh',
         kind: 'channel',
         renderOptions: {
           defaultVisible: false,
           scaleContribution: { type: 'ignore' },
-          plots: { upper: 'woz_price_chan_up', mid: 'woz_price_chan_mid', lower: 'woz_price_chan_dn' },
+          plots: { upper: 'woz_rsi_close_chan_up', mid: 'woz_rsi_close_chan_mid', lower: 'woz_rsi_close_chan_dn' },
         },
       }] },
     );
     factory.hydrateFromColumnar({
       times: [1, 2],
       plots: {
-        woz_price_chan_up: [80, 81],
-        woz_price_chan_mid: [50, 51],
-        woz_price_chan_dn: [20, 21],
+        woz_rsi_close_chan_up: [80, 81],
+        woz_rsi_close_chan_mid: [50, 51],
+        woz_rsi_close_chan_dn: [20, 21],
       },
     });
     factory.applyHydratedData();
     factory.updateTick(3, {
-      woz_price_chan_up: 82,
-      woz_price_chan_mid: 52,
-      woz_price_chan_dn: 22,
+      woz_rsi_close_chan_up: 82,
+      woz_rsi_close_chan_mid: 52,
+      woz_rsi_close_chan_dn: 22,
     });
     assert.strictEqual(zipCalls, 0);
     assert.ok(!events.some((e) => e.op === 'setData' || e.op === 'update'));
-    assert.strictEqual(factory.hydratedData.has('woz_price_chan_up'), false);
+    assert.strictEqual(factory.hydratedData.has('woz_rsi_close_chan_up'), false);
   } finally {
     DDRFactory.zipChannelFromHydrated = orig;
   }
@@ -119,19 +119,19 @@ test('D. hidden → visible LineSeries hydrates CURRENT store then reveals', () 
   const factory = new DDRFactory({
     getColumnarSnapshot: () => ({
       times: [10, 11],
-      plots: { woz_ema_rsi: [7, 8] },
+      plots: { woz_rsi_close_ema7: [7, 8] },
     }),
   });
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_ema_rsi'); } } } },
+    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_rsi_close_ema7'); } } } },
     { pane_osc: [{
-      id: 'woz_ema_rsi',
+      id: 'woz_rsi_close_ema7',
       hostId: 'wozduh',
       kind: 'line',
       renderOptions: { defaultVisible: false },
     }] },
   );
-  factory.setSeriesVisible('woz_ema_rsi', true);
+  factory.setSeriesVisible('woz_rsi_close_ema7', true);
   const set = events.filter((e) => e.op === 'setData');
   const vis = events.filter((e) => e.op === 'visible');
   assert.strictEqual(set.length, 1);
@@ -148,25 +148,25 @@ test('E. hidden → visible ChannelSeries zips CURRENT three columns once then r
     getColumnarSnapshot: () => ({
       times: [5],
       plots: {
-        woz_vol_chan_up: [90],
-        woz_vol_chan_mid: [60],
-        woz_vol_chan_dn: [30],
+        woz_vol_rsi_ema5_chan_up: [90],
+        woz_vol_rsi_ema5_chan_mid: [60],
+        woz_vol_rsi_ema5_chan_dn: [30],
       },
     }),
   });
   factory.buildPanes(
-    { wozduh: { chart: { addCustomSeries() { return fakeChannel(events, 'woz_vol_chan'); } } } },
+    { wozduh: { chart: { addCustomSeries() { return fakeChannel(events, 'woz_vol_rsi_ema5_chan'); } } } },
     { pane_osc: [{
-      id: 'woz_vol_chan',
+      id: 'woz_vol_rsi_ema5_chan',
       hostId: 'wozduh',
       kind: 'channel',
       renderOptions: {
         defaultVisible: false,
-        plots: { upper: 'woz_vol_chan_up', mid: 'woz_vol_chan_mid', lower: 'woz_vol_chan_dn' },
+        plots: { upper: 'woz_vol_rsi_ema5_chan_up', mid: 'woz_vol_rsi_ema5_chan_mid', lower: 'woz_vol_rsi_ema5_chan_dn' },
       },
     }] },
   );
-  factory.setSeriesVisible('woz_vol_chan', true);
+  factory.setSeriesVisible('woz_vol_rsi_ema5_chan', true);
   const set = events.filter((e) => e.op === 'setData');
   assert.strictEqual(set.length, 1);
   assert.deepStrictEqual(set[0].points, [{ time: 5, upper: 90, mid: 60, lower: 30 }]);
@@ -178,40 +178,40 @@ test('F. TF switch while hidden: enable gets TF B, never TF A', () => {
   let tf = 'A';
   const factory = new DDRFactory({
     getColumnarSnapshot: () => (tf === 'A'
-      ? { times: [1], plots: { woz_ema_rsi: [100] } }
-      : { times: [9], plots: { woz_ema_rsi: [200] } }),
+      ? { times: [1], plots: { woz_rsi_close_ema7: [100] } }
+      : { times: [9], plots: { woz_rsi_close_ema7: [200] } }),
   });
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_ema_rsi'); } } } },
+    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_rsi_close_ema7'); } } } },
     { pane_osc: [{
-      id: 'woz_ema_rsi',
+      id: 'woz_rsi_close_ema7',
       hostId: 'wozduh',
       kind: 'line',
       renderOptions: { defaultVisible: false },
     }] },
   );
-  factory.hydrateFromColumnar({ times: [1], plots: { woz_ema_rsi: [100] } });
+  factory.hydrateFromColumnar({ times: [1], plots: { woz_rsi_close_ema7: [100] } });
   factory.applyHydratedData();
   tf = 'B';
-  factory.hydrateFromColumnar({ times: [9], plots: { woz_ema_rsi: [200] } });
+  factory.hydrateFromColumnar({ times: [9], plots: { woz_rsi_close_ema7: [200] } });
   factory.applyHydratedData();
-  factory.setSeriesVisible('woz_ema_rsi', true);
+  factory.setSeriesVisible('woz_rsi_close_ema7', true);
   const set = events.filter((e) => e.op === 'setData');
   assert.strictEqual(set.length, 1);
   assert.deepStrictEqual(set[0].points, [{ time: 9, value: 200 }]);
 });
 
-test('G. hidden woz_slow and line_rsx still receive full/live data', () => {
+test('G. hidden woz_vol_rsi_ema5 and line_rsx still receive full/live data', () => {
   const events = [];
   const factory = new DDRFactory();
   factory.buildPanes(
     {
-      wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_slow'); } } },
+      wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_vol_rsi_ema5'); } } },
       rsx: { chart: { addLineSeries() { return fakeLine(events, 'line_rsx'); } } },
     },
     {
       pane_osc: [{
-        id: 'woz_slow',
+        id: 'woz_vol_rsi_ema5',
         hostId: 'wozduh',
         kind: 'line',
         renderOptions: { defaultVisible: false, scaleContribution: { type: 'bounded', min: -5, max: 105 } },
@@ -224,17 +224,17 @@ test('G. hidden woz_slow and line_rsx still receive full/live data', () => {
       }],
     },
   );
-  factory.setSeriesVisible('woz_slow', false);
+  factory.setSeriesVisible('woz_vol_rsi_ema5', false);
   factory.setSeriesVisible('line_rsx', false);
   factory.hydrateFromColumnar({
     times: [1],
-    plots: { woz_slow: [40], line_rsx: [55], woz_fast: [10] },
+    plots: { woz_vol_rsi_ema5: [40], line_rsx: [55], woz_vol_rsi_ema12: [10] },
   });
   factory.applyHydratedData();
-  factory.updateTick(2, { woz_slow: 41, line_rsx: 56, woz_fast: 11 });
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_slow'));
+  factory.updateTick(2, { woz_vol_rsi_ema5: 41, line_rsx: 56, woz_vol_rsi_ema12: 11 });
+  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5'));
   assert.ok(events.some((e) => e.op === 'setData' && e.id === 'line_rsx'));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_slow' && e.pt.value === 41));
+  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5' && e.pt.value === 41));
   assert.ok(events.some((e) => e.op === 'update' && e.id === 'line_rsx' && e.pt.value === 56));
 });
 
@@ -242,33 +242,33 @@ test('H. hidden non-anchor Wozduh receives no LWC data work', () => {
   const events = [];
   const factory = new DDRFactory();
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_rsi_rsi'); } } } },
+    { wozduh: { chart: { addLineSeries() { return fakeLine(events, 'woz_rsi_rsi_close'); } } } },
     { pane_osc: [{
-      id: 'woz_rsi_rsi',
+      id: 'woz_rsi_rsi_close',
       hostId: 'wozduh',
       kind: 'line',
       renderOptions: { defaultVisible: false, scaleContribution: { type: 'ignore' } },
     }] },
   );
-  factory.hydrateFromColumnar({ times: [1], plots: { woz_rsi_rsi: [33] } });
+  factory.hydrateFromColumnar({ times: [1], plots: { woz_rsi_rsi_close: [33] } });
   factory.applyHydratedData();
-  factory.updateTick(2, { woz_rsi_rsi: 34 });
+  factory.updateTick(2, { woz_rsi_rsi_close: 34 });
   assert.ok(!events.some((e) => e.op === 'setData' || e.op === 'update'));
 });
 
 test('I. setSeriesVisible remains the visibility SSOT (no extra FSM)', () => {
   const factory = new DDRFactory();
   factory.buildPanes(
-    { wozduh: { chart: { addLineSeries() { return fakeLine([], 'woz_fast'); } } } },
-    { pane_osc: [{ id: 'woz_fast', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
+    { wozduh: { chart: { addLineSeries() { return fakeLine([], 'woz_vol_rsi_ema12'); } } } },
+    { pane_osc: [{ id: 'woz_vol_rsi_ema12', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
   );
-  assert.strictEqual(factory.needsLwcData('woz_fast'), true);
-  factory.setSeriesVisible('woz_fast', false);
-  assert.strictEqual(factory.needsLwcData('woz_fast'), false);
-  factory.setSeriesVisible('woz_fast', true);
-  assert.strictEqual(factory.needsLwcData('woz_fast'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_slow'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_fast'), false);
+  assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema12'), true);
+  factory.setSeriesVisible('woz_vol_rsi_ema12', false);
+  assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema12'), false);
+  factory.setSeriesVisible('woz_vol_rsi_ema12', true);
+  assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema12'), true);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema5'), true);
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema12'), false);
 });
 
 console.log('hidden_render_skip_test: ALL PASS');

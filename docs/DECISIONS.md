@@ -745,7 +745,7 @@ Canonical result identity binds matrix + ModelSpec + ExecutionProfile + resolved
 
 **Context:** Paint already skipped hidden Wozduh series. Projector still packed every Wozduh scalar on history and live ticks.
 
-**Decision:** Derive subscription from existing visibility + mandatory `woz_slow`. Filter at the wire boundary per WS client `slots`. Enable hydrates the current store window before reveal. Do not change Wozduh math.
+**Decision:** Derive subscription from existing visibility + mandatory `woz_vol_rsi_ema5`. Filter at the wire boundary per WS client `slots`. Enable hydrates the current store window before reveal. Do not change Wozduh math.
 
 **Rejected:**
 - Second Subscribe UI — **Reason:** visibility is the chart subscription.
@@ -1450,7 +1450,7 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 **Wire:**
 
 - `line_rsx` → `bounded(-5,105)`; `line_rsx_signal` → `ignore`.
-- `woz_slow` → `bounded(-5,105)`; other Wozduh lines → `ignore`.
+- `woz_vol_rsi_ema5` → `bounded(-5,105)` (same series as historical `woz_slow`); other Wozduh lines → `ignore`.
 
 **Rejected:** ScaleController range freeze; `hostId === "rsx"`; `isPrimaryLine`; parallel `INDICATORS_CONFIG`.
 

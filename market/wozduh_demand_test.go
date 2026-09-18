@@ -59,8 +59,8 @@ func TestWozduhDemand_ChartOnlyZero(t *testing.T) {
 	if wakes != 0 {
 		t.Fatalf("wakes=%d", wakes)
 	}
-	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhFast)) {
-		t.Fatal("unused woz_fast must be NaN")
+	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolRsiEma12)) {
+		t.Fatal("unused woz_vol_rsi_ema12 must be NaN")
 	}
 	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolCross)) {
 		t.Fatal("VolCross must not be mandatory")
@@ -80,8 +80,8 @@ func TestWozduhDemand_LiveUnusedZero(t *testing.T) {
 	if wakes != 0 {
 		t.Fatalf("wakes=%d", wakes)
 	}
-	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhFast)) {
-		t.Fatal("unused Live woz_fast must be NaN")
+	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolRsiEma12)) {
+		t.Fatal("unused Live woz_vol_rsi_ema12 must be NaN")
 	}
 }
 
@@ -98,7 +98,7 @@ func TestWozduhDemand_SleepStopsAndNaNs(t *testing.T) {
 		t.Fatalf("expected live streams to grow, before=%d after=%d", streams0, streams1)
 	}
 	f.SetWozduhDemand(0)
-	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhFast)) {
+	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolRsiEma12)) {
 		t.Fatal("sleep must NaN immediately")
 	}
 	_, mid, _ := f.WozduhLiveStats()
@@ -127,19 +127,19 @@ func TestWozduhDemand_RepeatedDemandNoWake(t *testing.T) {
 func TestWozduhDemand_SharedBasePreserved(t *testing.T) {
 	withEngineMode(t, EngineModeChartOnly)
 	f := testDemandFrame(t, 120)
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price"}))
-	ptr := f.WozduhOrangePtr()
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close"}))
+	ptr := f.WozduhRsiClosePtr()
 	if ptr == nil {
-		t.Fatal("orange pointer")
+		t.Fatal("rsiClose pointer")
 	}
 	for i := 120; i < 200; i++ {
 		appendClosedBar(f, i)
 	}
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price", "woz_ema_rsi"}))
-	if f.WozduhOrangePtr() != ptr {
-		t.Fatal("live orangeRsi must not be replaced when GreenEMA wakes")
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close", "woz_rsi_close_ema7"}))
+	if f.WozduhRsiClosePtr() != ptr {
+		t.Fatal("live rsiClose must not be replaced when RSI-close EMA7 wakes")
 	}
-	if math.IsNaN(f.WozduhSlot(core.SlotWozduhEmaRsi)) {
+	if math.IsNaN(f.WozduhSlot(core.SlotWozduhRsiCloseEma7)) {
 		t.Fatal("woken ema must be finite")
 	}
 }
@@ -147,20 +147,20 @@ func TestWozduhDemand_SharedBasePreserved(t *testing.T) {
 func TestWozduhDemand_SharedVolBasePreserved(t *testing.T) {
 	withEngineMode(t, EngineModeChartOnly)
 	f := testDemandFrame(t, 120)
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_fast"}))
-	ptr := f.WozduhWt11Ptr()
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12"}))
+	ptr := f.WozduhVolRsiEma12Ptr()
 	if ptr == nil {
-		t.Fatal("wt11 pointer")
+		t.Fatal("volRsiEma12 pointer")
 	}
 	for i := 120; i < 180; i++ {
 		appendClosedBar(f, i)
 	}
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"}))
-	if f.WozduhWt11Ptr() != ptr {
-		t.Fatal("live wt11 must not be replaced when Wt22 wakes")
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"}))
+	if f.WozduhVolRsiEma12Ptr() != ptr {
+		t.Fatal("live volRsiEma12 must not be replaced when EMA5 wakes")
 	}
-	if math.IsNaN(f.WozduhSlot(core.SlotWozduhSlow)) {
-		t.Fatal("woken woz_slow must be finite")
+	if math.IsNaN(f.WozduhSlot(core.SlotWozduhVolRsiEma5)) {
+		t.Fatal("woken woz_vol_rsi_ema5 must be finite")
 	}
 }
 
@@ -168,19 +168,19 @@ func TestWozduhDemand_WakeMatchesFreshReplay(t *testing.T) {
 	withEngineMode(t, EngineModeChartOnly)
 	klines := syntheticKlines(180)
 	f := NewFrame(klines, "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price"}))
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close"}))
 	for i := 180; i < 280; i++ {
 		appendClosedBar(f, i)
 	}
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price", "woz_ema_rsi"}))
-	got := f.WozduhSlot(core.SlotWozduhEmaRsi)
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close", "woz_rsi_close_ema7"}))
+	got := f.WozduhSlot(core.SlotWozduhRsiCloseEma7)
 	closed := f.GetKlines()
 	if n := len(closed); n > 0 && f.LastCommittedOpenTime() != closed[n-1].OpenTime {
 		closed = closed[:n-1]
 	}
-	ref := nodes.NewWozduhNodeMasked(nodes.WozduhBitOrangeBase | nodes.WozduhBitGreenEMA)
+	ref := nodes.NewWozduhNodeMasked(nodes.WozduhBitRsiClose | nodes.WozduhBitRsiCloseEma7)
 	replayWozduhClosedBars(ref, closed)
-	want := ref.Slot(core.SlotWozduhEmaRsi)
+	want := ref.Slot(core.SlotWozduhRsiCloseEma7)
 	if got != want && !(math.IsNaN(got) && math.IsNaN(want)) {
 		t.Fatalf("wake vs fresh replay: got %v want %v", got, want)
 	}
@@ -189,16 +189,16 @@ func TestWozduhDemand_WakeMatchesFreshReplay(t *testing.T) {
 func TestWozduhDemand_WakeVsAlwaysOnEpsilon(t *testing.T) {
 	n := dagHistoryCap + 80
 	withEngineMode(t, EngineModeChartOnly)
-	demand := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"})
+	demand := nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"})
 	always := NewFrame(syntheticKlines(n), "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	always.SetWozduhDemand(demand)
-	want := always.WozduhSlot(core.SlotWozduhFast)
+	want := always.WozduhSlot(core.SlotWozduhVolRsiEma12)
 
 	woken := NewFrame(syntheticKlines(n), "1m", ChaosConfig{AOFastPeriod: 5, AOSlowPeriod: 34})
 	woken.SetWozduhDemand(demand)
-	got := woken.WozduhSlot(core.SlotWozduhFast)
+	got := woken.WozduhSlot(core.SlotWozduhVolRsiEma12)
 	if math.IsNaN(got) || math.IsNaN(want) {
-		t.Fatal("woz_fast must be finite")
+		t.Fatal("woz_vol_rsi_ema12 must be finite")
 	}
 	if math.Abs(got-want) > dagShadowEpsilon {
 		t.Fatalf("wake vs always-on |Δ|=%g > dagShadowEpsilon", math.Abs(got-want))
@@ -206,9 +206,9 @@ func TestWozduhDemand_WakeVsAlwaysOnEpsilon(t *testing.T) {
 }
 
 func TestWozduhDemand_InternalMaskZero(t *testing.T) {
-	want := nodes.WozduhBitVolBase | nodes.WozduhBitWt11 | nodes.WozduhBitWt22
-	if got := nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"}); got != want {
-		t.Fatalf("woz_fast/slow closure %#b want %#b", got, want)
+	want := nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma12 | nodes.WozduhBitVolRsiEma5
+	if got := nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"}); got != want {
+		t.Fatalf("woz_vol_rsi_ema12/ema5 closure %#b want %#b", got, want)
 	}
 	withEngineMode(t, EngineModeChartOnly)
 	if wozduhInternalMask() != 0 {
@@ -221,7 +221,7 @@ func TestWozduhDemand_InternalMaskZero(t *testing.T) {
 }
 
 func TestWozduhDemand_NilSlotsAll(t *testing.T) {
-	if nodes.WozduhMaskFromClientSubscriptions([][]string{nil, {"woz_fast"}}) != nodes.WozduhMaskAll {
+	if nodes.WozduhMaskFromClientSubscriptions([][]string{nil, {"woz_vol_rsi_ema12"}}) != nodes.WozduhMaskAll {
 		t.Fatal("any unfiltered client forces all")
 	}
 	if nodes.WozduhMaskFromClientSubscriptions([][]string{{"nope"}}) != 0 {
@@ -232,11 +232,11 @@ func TestWozduhDemand_NilSlotsAll(t *testing.T) {
 func TestWozduhDemand_VolCrossWakesCoherentPrev(t *testing.T) {
 	withEngineMode(t, EngineModeChartOnly)
 	f := testDemandFrame(t, 120)
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow"}))
-	wt := f.WozduhWt11Ptr()
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_fast", "woz_slow", "woz_vol_cross"}))
-	if f.WozduhWt11Ptr() != wt {
-		t.Fatal("VolCross wake must not replace live wt11")
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"}))
+	wt := f.WozduhVolRsiEma12Ptr()
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5", "woz_vol_cross"}))
+	if f.WozduhVolRsiEma12Ptr() != wt {
+		t.Fatal("VolCross wake must not replace live volRsiEma12")
 	}
 	cross := f.WozduhSlot(core.SlotWozduhVolCross)
 	if math.IsNaN(cross) {
@@ -247,19 +247,19 @@ func TestWozduhDemand_VolCrossWakesCoherentPrev(t *testing.T) {
 func TestWozduhDemand_FormingWakeUsesClosedBaseline(t *testing.T) {
 	withEngineMode(t, EngineModeChartOnly)
 	f := testDemandFrame(t, 80)
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price"}))
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close"}))
 	f.UpdateKlineTick(formingBar(80, 101.2), false)
 	_, _, w0 := f.WozduhLiveStats()
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_price", "woz_ema_rsi"}))
+	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_rsi_close", "woz_rsi_close_ema7"}))
 	_, _, w1 := f.WozduhLiveStats()
 	if w1 != w0+1 {
 		t.Fatalf("forming wake rebuilds=%d want 1", w1-w0)
 	}
-	if math.IsNaN(f.WozduhSlot(core.SlotWozduhEmaRsi)) {
+	if math.IsNaN(f.WozduhSlot(core.SlotWozduhRsiCloseEma7)) {
 		t.Fatal("wake must install closed baseline before the next tick")
 	}
 	f.UpdateKlineTick(formingBar(80, 101.4), false)
-	if math.IsNaN(f.WozduhSlot(core.SlotWozduhEmaRsi)) {
+	if math.IsNaN(f.WozduhSlot(core.SlotWozduhRsiCloseEma7)) {
 		t.Fatal("next forming tick must evaluate woken ema")
 	}
 }

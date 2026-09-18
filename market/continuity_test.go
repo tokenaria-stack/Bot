@@ -44,7 +44,7 @@ func tipSlotsFromHist(hist *core.HistoryBus) (rsx, woz float64) {
 	if hist == nil || hist.Count() < 1 {
 		return math.NaN(), math.NaN()
 	}
-	return hist.Get(core.SlotJurikRSX, 1), hist.Get(core.SlotWozduhRsiPrice, 1)
+	return hist.Get(core.SlotJurikRSX, 1), hist.Get(core.SlotWozduhRsiClose, 1)
 }
 
 func replayTip(klines []exchange.Kline, rsx RSXSettings) (rsxTip, wozTip float64) {
@@ -87,7 +87,7 @@ func TestStateContinuity_HistoryVsLiveBootDepth(t *testing.T) {
 	fmt.Printf("History depth=%d | Live Boot depth=%d (FrameBootKlineLimit)\n", histBars, bootBars)
 	fmt.Printf("---\n")
 	fmt.Printf("RSX  History=%.8f  LiveBoot=%.8f  Δ=%+.8f  |Δ|=%.8f\n", rsxHist, rsxBoot, dRSX, absRSX)
-	fmt.Printf("Woz  History=%.8f  LiveBoot=%.8f  Δ=%+.8f  |Δ|=%.8f  (SlotWozduhRsiPrice)\n", wozHist, wozBoot, dWoz, absWoz)
+	fmt.Printf("Woz  History=%.8f  LiveBoot=%.8f  Δ=%+.8f  |Δ|=%.8f  (SlotWozduhRsiClose)\n", wozHist, wozBoot, dWoz, absWoz)
 	fmt.Printf("---\n")
 	const threshold = 0.5
 	if absRSX > threshold {
@@ -162,7 +162,7 @@ func TestStateContinuity_FormingOpenTickSemantics(t *testing.T) {
 	}
 	runClosed.TickUpdate(tip.Open, tip.High, tip.Low, tip.Close, tip.Volume, n-1, true)
 	rsxClosed := runClosed.Bus().Cur.Get(core.SlotJurikRSX)
-	wozClosed := runClosed.Bus().Cur.Get(core.SlotWozduhRsiPrice)
+	wozClosed := runClosed.Bus().Cur.Get(core.SlotWozduhRsiClose)
 
 	runOpen := newDAGRunner(n, rsxCfg)
 	for i, k := range prefix {
@@ -170,7 +170,7 @@ func TestStateContinuity_FormingOpenTickSemantics(t *testing.T) {
 	}
 	runOpen.TickUpdate(tip.Open, tip.High, tip.Low, tip.Close, tip.Volume, n-1, false)
 	rsxOpen := runOpen.Bus().Cur.Get(core.SlotJurikRSX)
-	wozOpen := runOpen.Bus().Cur.Get(core.SlotWozduhRsiPrice)
+	wozOpen := runOpen.Bus().Cur.Get(core.SlotWozduhRsiClose)
 
 	dRSX := math.Abs(rsxClosed - rsxOpen)
 	dWoz := math.Abs(wozClosed - wozOpen)
@@ -214,7 +214,7 @@ func TestStateContinuity_IntraBarMutation(t *testing.T) {
 	preCloseRSX := live.Bus().Cur.Get(core.SlotJurikRSX)
 	live.TickUpdate(final.Open, final.High, final.Low, final.Close, final.Volume, n-1, true)
 	endRSX := live.Bus().Cur.Get(core.SlotJurikRSX)
-	endWoz := live.Bus().Cur.Get(core.SlotWozduhRsiPrice)
+	endWoz := live.Bus().Cur.Get(core.SlotWozduhRsiClose)
 
 	fmt.Printf("\n=== INTRA-BAR MUTATION (live forming vs history final) ===\n")
 	fmt.Printf("History closed tip   RSX=%.8f  Woz=%.8f\n", histRSX, histWoz)

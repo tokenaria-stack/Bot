@@ -73,7 +73,7 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 		50,
 		market.IndicatorWarmupBars,
 		market.GetRSXSettings(),
-		[]string{"line_rsx", "woz_fast"},
+		[]string{"line_rsx", "woz_vol_rsi_ema12"},
 		false,
 		false,
 		"1m",
@@ -112,8 +112,8 @@ func TestBuildColumnarHistoryPayload_lenInvariant(t *testing.T) {
 	if _, ok := resp.Plots["line_rsx"]; !ok {
 		t.Fatal("expected line_rsx plot")
 	}
-	if _, ok := resp.Plots["woz_fast"]; !ok {
-		t.Fatal("expected woz_fast plot")
+	if _, ok := resp.Plots["woz_vol_rsi_ema12"]; !ok {
+		t.Fatal("expected woz_vol_rsi_ema12 plot")
 	}
 }
 

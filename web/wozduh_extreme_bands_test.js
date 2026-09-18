@@ -46,7 +46,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   const factory = new DDRFactory();
   factory.buildPanes(
     { wozduh: { chart: { addLineSeries() { return { setData() {}, applyOptions() {}, priceScale() { return { applyOptions() {} }; } }; } } } },
-    { pane_osc: [{ id: 'woz_slow', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
+    { pane_osc: [{ id: 'woz_vol_rsi_ema5', hostId: 'wozduh', kind: 'line', renderOptions: {} }] },
   );
   assert.ok(!factory.seriesMap.has('__wozduh_extreme_bands__'));
   assert.ok(!factory.requestedPlotIds().includes('__wozduh_extreme_bands__'));
@@ -59,7 +59,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(!keys.includes('update'));
 });
 
-test('B. private host autoscale is null; woz_slow stays bounded owner in layout', () => {
+test('B. private host autoscale is null; woz_vol_rsi_ema5 stays bounded owner in layout', () => {
   const opts = WozduhExtremeBands._hostSeriesOptionsForTests();
   assert.strictEqual(opts.title, '');
   assert.strictEqual(typeof opts.autoscaleInfoProvider, 'function');
@@ -69,8 +69,8 @@ test('B. private host autoscale is null; woz_slow stays bounded owner in layout'
   assert.strictEqual(opts.lastValueVisible, false);
   assert.strictEqual(opts.priceScaleId, 'right');
   const layout = fs.readFileSync(path.join(__dirname, '../ui_config/wozduh_layout.go'), 'utf8');
-  assert.ok(layout.includes('wozLine("woz_slow", core.SlotWozduhSlow, scaleBoundedOsc'));
-  assert.ok(layout.includes('wozLine("woz_fast", core.SlotWozduhFast, scaleIgnore'));
+  assert.ok(layout.includes('wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleBoundedOsc'));
+  assert.ok(layout.includes('wozLine("woz_vol_rsi_ema12", core.SlotWozduhVolRsiEma12, scaleIgnore'));
 });
 
 test('C. primitive constants: yellow extremes + 27/30/50/67/70', () => {

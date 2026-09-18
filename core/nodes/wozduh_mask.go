@@ -5,56 +5,56 @@ package nodes
 type WozduhMask uint32
 
 const (
-	WozduhBitOrangeBase WozduhMask = 1 << iota
-	WozduhBitGreenEMA
+	WozduhBitRsiClose WozduhMask = 1 << iota
+	WozduhBitRsiCloseEma7
 	WozduhBitRsiOfRsi
-	WozduhBitPriceChannel
+	WozduhBitRsiCloseChan
 	// WozduhBitVolBase is a DAG compute-mask bit: volume-RSI / Wozduh volume
 	// streams must run. It is NOT Binance kline field "V" (taker-buy base).
 	WozduhBitVolBase
-	WozduhBitWt11
-	WozduhBitWt22
-	WozduhBitVolChannel
+	WozduhBitVolRsiEma12
+	WozduhBitVolRsiEma5
+	WozduhBitVolRsiEma5Chan
 	WozduhBitVolCrossPair
-	WozduhBitRedRSI
-	WozduhBitBlackMACD
-	WozduhBitNavyRSI
-	WozduhBitADRSI
+	WozduhBitRsiHl2
+	WozduhBitMacdRsiClose
+	WozduhBitRsiHl2Vwema
+	WozduhBitRsiAd
 )
 
 // WozduhMaskAll enables every Wozduh compute branch (default ReplayClosedBars / live Frame).
-const WozduhMaskAll = WozduhBitOrangeBase |
-	WozduhBitGreenEMA |
+const WozduhMaskAll = WozduhBitRsiClose |
+	WozduhBitRsiCloseEma7 |
 	WozduhBitRsiOfRsi |
-	WozduhBitPriceChannel |
+	WozduhBitRsiCloseChan |
 	WozduhBitVolBase |
-	WozduhBitWt11 |
-	WozduhBitWt22 |
-	WozduhBitVolChannel |
+	WozduhBitVolRsiEma12 |
+	WozduhBitVolRsiEma5 |
+	WozduhBitVolRsiEma5Chan |
 	WozduhBitVolCrossPair |
-	WozduhBitRedRSI |
-	WozduhBitBlackMACD |
-	WozduhBitNavyRSI |
-	WozduhBitADRSI
+	WozduhBitRsiHl2 |
+	WozduhBitMacdRsiClose |
+	WozduhBitRsiHl2Vwema |
+	WozduhBitRsiAd
 
 // Plot → required compute bits. Compose/render IDs are not keys.
 var wozduhPlotBits = map[string]WozduhMask{
-	"woz_rsi_price":      WozduhBitOrangeBase,
-	"woz_ema_rsi":        WozduhBitOrangeBase | WozduhBitGreenEMA,
-	"woz_rsi_rsi":        WozduhBitOrangeBase | WozduhBitRsiOfRsi,
-	"woz_price_chan_up":  WozduhBitOrangeBase | WozduhBitPriceChannel,
-	"woz_price_chan_mid": WozduhBitOrangeBase | WozduhBitPriceChannel,
-	"woz_price_chan_dn":  WozduhBitOrangeBase | WozduhBitPriceChannel,
-	"woz_fast":           WozduhBitVolBase | WozduhBitWt11,
-	"woz_slow":           WozduhBitVolBase | WozduhBitWt22,
-	"woz_vol_chan_up":    WozduhBitVolBase | WozduhBitWt22 | WozduhBitVolChannel,
-	"woz_vol_chan_mid":   WozduhBitVolBase | WozduhBitWt22 | WozduhBitVolChannel,
-	"woz_vol_chan_dn":    WozduhBitVolBase | WozduhBitWt22 | WozduhBitVolChannel,
-	"woz_vol_cross":      WozduhBitVolBase | WozduhBitWt11 | WozduhBitWt22 | WozduhBitVolCrossPair,
-	"woz_rsi_hl2":        WozduhBitRedRSI,
-	"woz_macd_rsi":       WozduhBitBlackMACD,
-	"woz_rsi_hl2_vol":    WozduhBitNavyRSI,
-	"woz_rsi_ad":         WozduhBitADRSI,
+	"woz_rsi_close":             WozduhBitRsiClose,
+	"woz_rsi_close_ema7":        WozduhBitRsiClose | WozduhBitRsiCloseEma7,
+	"woz_rsi_rsi_close":         WozduhBitRsiClose | WozduhBitRsiOfRsi,
+	"woz_rsi_close_chan_up":     WozduhBitRsiClose | WozduhBitRsiCloseChan,
+	"woz_rsi_close_chan_mid":    WozduhBitRsiClose | WozduhBitRsiCloseChan,
+	"woz_rsi_close_chan_dn":     WozduhBitRsiClose | WozduhBitRsiCloseChan,
+	"woz_vol_rsi_ema12":         WozduhBitVolBase | WozduhBitVolRsiEma12,
+	"woz_vol_rsi_ema5":          WozduhBitVolBase | WozduhBitVolRsiEma5,
+	"woz_vol_rsi_ema5_chan_up":  WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
+	"woz_vol_rsi_ema5_chan_mid": WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
+	"woz_vol_rsi_ema5_chan_dn":  WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
+	"woz_vol_cross":             WozduhBitVolBase | WozduhBitVolRsiEma12 | WozduhBitVolRsiEma5 | WozduhBitVolCrossPair,
+	"woz_rsi_hl2":               WozduhBitRsiHl2,
+	"woz_macd_rsi_close":        WozduhBitMacdRsiClose,
+	"woz_rsi_hl2_vwema":         WozduhBitRsiHl2Vwema,
+	"woz_rsi_ad":                WozduhBitRsiAd,
 }
 
 // WozduhMaskForPlots unions compute bits for requested scalar plot IDs.
@@ -70,9 +70,9 @@ func WozduhMaskForPlots(ids []string) WozduhMask {
 }
 
 // WozduhDefaultVisibleMask is the compute closure of the current default-visible lines:
-// woz_rsi_hl2, woz_slow, woz_fast, woz_rsi_price.
+// woz_rsi_hl2, woz_vol_rsi_ema5, woz_vol_rsi_ema12, woz_rsi_close.
 func WozduhDefaultVisibleMask() WozduhMask {
-	return WozduhMaskForPlots([]string{"woz_rsi_hl2", "woz_slow", "woz_fast", "woz_rsi_price"})
+	return WozduhMaskForPlots([]string{"woz_rsi_hl2", "woz_vol_rsi_ema5", "woz_vol_rsi_ema12", "woz_rsi_close"})
 }
 
 // WozduhWakeReplayMask is the temp-node mask for a 0→1 transition: waking bits plus
@@ -80,17 +80,17 @@ func WozduhDefaultVisibleMask() WozduhMask {
 // copies only wake bits, not already-active shared bases.
 func WozduhWakeReplayMask(wake WozduhMask) WozduhMask {
 	m := wake
-	if wake&(WozduhBitGreenEMA|WozduhBitRsiOfRsi|WozduhBitPriceChannel) != 0 {
-		m |= WozduhBitOrangeBase
+	if wake&(WozduhBitRsiCloseEma7|WozduhBitRsiOfRsi|WozduhBitRsiCloseChan) != 0 {
+		m |= WozduhBitRsiClose
 	}
-	if wake&(WozduhBitWt11|WozduhBitWt22|WozduhBitVolChannel|WozduhBitVolCrossPair) != 0 {
+	if wake&(WozduhBitVolRsiEma12|WozduhBitVolRsiEma5|WozduhBitVolRsiEma5Chan|WozduhBitVolCrossPair) != 0 {
 		m |= WozduhBitVolBase
 	}
-	if wake&WozduhBitVolChannel != 0 {
-		m |= WozduhBitWt22
+	if wake&WozduhBitVolRsiEma5Chan != 0 {
+		m |= WozduhBitVolRsiEma5
 	}
 	if wake&WozduhBitVolCrossPair != 0 {
-		m |= WozduhBitWt11 | WozduhBitWt22
+		m |= WozduhBitVolRsiEma12 | WozduhBitVolRsiEma5
 	}
 	return m
 }

@@ -111,7 +111,7 @@ test('D. live update includes color for line_rsx only', () => {
 test('E. isolation: signal and Wozduh do not get RSX colors', () => {
   const events = [];
   let n = 0;
-  const ids = ['line_rsx', 'line_rsx_signal', 'woz_slow'];
+  const ids = ['line_rsx', 'line_rsx_signal', 'woz_vol_rsi_ema5'];
   const factory = new DDRFactory();
   factory.buildPanes(
     {
@@ -123,24 +123,24 @@ test('E. isolation: signal and Wozduh do not get RSX colors', () => {
         { id: 'line_rsx', hostId: 'rsx', kind: 'line', renderOptions: {} },
         { id: 'line_rsx_signal', hostId: 'rsx', kind: 'line', renderOptions: {} },
       ],
-      pane_woz: [{ id: 'woz_slow', hostId: 'wozduh', kind: 'line', renderOptions: {} }],
+      pane_woz: [{ id: 'woz_vol_rsi_ema5', hostId: 'wozduh', kind: 'line', renderOptions: {} }],
     },
   );
   factory.hydrateFromColumnar({
     times: [1],
-    plots: { line_rsx: [80], line_rsx_signal: [80], woz_slow: [80] },
+    plots: { line_rsx: [80], line_rsx_signal: [80], woz_vol_rsi_ema5: [80] },
   });
   factory.applyHydratedData();
-  factory.updateTick(2, { line_rsx: 20, line_rsx_signal: 20, woz_slow: 20 });
+  factory.updateTick(2, { line_rsx: 20, line_rsx_signal: 20, woz_vol_rsi_ema5: 20 });
   const rsxSet = events.find((e) => e.op === 'setData' && e.id === 'line_rsx').points[0];
   const sigSet = events.find((e) => e.op === 'setData' && e.id === 'line_rsx_signal').points[0];
-  const wozSet = events.find((e) => e.op === 'setData' && e.id === 'woz_slow').points[0];
+  const wozSet = events.find((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5').points[0];
   assert.strictEqual(rsxSet.color, GREEN);
   assert.strictEqual(sigSet.color, undefined);
   assert.deepStrictEqual(sigSet, { time: 1, value: 80 });
   assert.deepStrictEqual(wozSet, { time: 1, value: 80 });
   const sigUpd = events.find((e) => e.op === 'update' && e.id === 'line_rsx_signal');
-  const wozUpd = events.find((e) => e.op === 'update' && e.id === 'woz_slow');
+  const wozUpd = events.find((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5');
   const rsxUpd = events.find((e) => e.op === 'update' && e.id === 'line_rsx');
   assert.deepStrictEqual(sigUpd.pt, { time: 2, value: 20 });
   assert.deepStrictEqual(wozUpd.pt, { time: 2, value: 20 });

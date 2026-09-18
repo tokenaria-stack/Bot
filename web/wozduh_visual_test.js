@@ -13,13 +13,13 @@ function test(name, fn) {
   console.log('OK', name);
 }
 
-test('settings renderer underlines woz_slow label only; titles stay plain text', () => {
+test('settings renderer underlines woz_vol_rsi_ema5 label only; titles stay plain text', () => {
   const src = fs.readFileSync(path.join(__dirname, 'ui/settings-renderer.js'), 'utf8');
-  assert.ok(src.includes("c.id === 'woz_slow'"));
+  assert.ok(src.includes("c.id === 'woz_vol_rsi_ema5'"));
   assert.ok(src.includes('wozduh-pane-owner-label'));
   assert.ok(src.includes('textContent'));
   assert.ok(!src.includes('<u>'));
-  assert.ok(!src.includes('woz_fast') || src.includes("c.id === 'woz_slow'"));
+  assert.ok(!src.includes('woz_vol_rsi_ema12') || src.includes("c.id === 'woz_vol_rsi_ema5'"));
 });
 
 test('channel-series defaults and dashForStyle treat 0 as solid', () => {

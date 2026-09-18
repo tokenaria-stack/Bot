@@ -583,7 +583,7 @@ class DDRFactory {
   }
 }
 
-DDRFactory._CROSSHAIR_ANCHORS = new Set(['woz_slow', 'line_rsx']);
+DDRFactory._CROSSHAIR_ANCHORS = new Set(['woz_vol_rsi_ema5', 'line_rsx']);
 
 if (typeof window !== 'undefined') {
   window.DDRFactory = DDRFactory;
