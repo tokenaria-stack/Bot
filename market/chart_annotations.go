@@ -45,7 +45,7 @@ func (a *Frame) ExportAllAnnotations(fromBar, toBar int) []ChartAnnotation {
 	return out
 }
 
-// exportWozduhAnnotationsLocked is a stub for future VolCross / spike markers on the wozduh pane.
+// exportWozduhAnnotationsLocked is a stub: the wozduh pane has no native marker producer.
 func (a *Frame) exportWozduhAnnotationsLocked(fromBar, toBar int) []ChartAnnotation {
 	_ = fromBar
 	_ = toBar

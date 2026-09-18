@@ -1,0 +1,90 @@
+WOZDUH-VOLCROSS-REMOVE-1
+========================
+
+Verdict: WOZDUH_VOLCROSS_REMOVE_GREEN
+
+Baseline: 4cb5bdc WOZDUH-NUMERIC-NAMES-1 pushed to origin.
+
+
+A. IMPLEMENTATION SUMMARY
+-------------------------
+
+Deleted the discrete Wozduh volume-RSI EMA cross event. No replacement
+clock, fact, tape label, or "better" cross detector.
+
+Remaining Wozduh numeric formulas, paint, and plot IDs are unchanged
+except the last DAG slot / last compute bit that existed only for VolCross.
+
+
+B. CONSUMER PROOF
+-----------------
+
+Production chart never mounted woz_vol_cross (no DDR component).
+Projector/history only packed it if that plot ID was requested; default
+visible mask did not include it. Live unused Frames did not force it.
+
+Header ChartOscillator.VolCrossMarker was never assigned from
+SlotWozduhVolCross (audits + grep: no `VolCrossMarker:` writers).
+FE volCrossMarker readers and buildWozduhMarkersFromGrid had no live
+producer. Those sockets were deleted as exact VolCross wire debris.
+
+Left untouched (separate debt): volumeSpike* JSON, redLineCrossGreen*,
+wozduxVolumeSpike*, Falcon-era ChartOscillator color/speed field names.
+
+
+C. DELETED
+----------
+
+Go:
+  SlotWozduhVolCross (last iota entry; SlotCount = SlotWozduhRsiCloseChanDn+1)
+  detectVolCrossCode + lime/red/none encodings
+  WozduhBitVolCrossPair (removed from iota; later bits shift by 1.
+    Masks are recomputed from plot IDs; not persisted.)
+  prevVolRsiEma* Snapshot/Restore / wake copy
+  wozduhPlotBits["woz_vol_cross"]
+  core/nodes/wozduh_cross_test.go
+  TestWozduhDemand_VolCrossWakesCoherentPrev
+  golden VolCross fixture row
+
+Wire/FE:
+  ChartOscillator.VolCrossMarker
+  mappers volCrossMarker + buildWozduhMarkersFromGrid
+  store.js / columnar-store.js volCrossMarker ingest
+
+Retired ID woz_vol_cross now contributes 0 (unknown), same as any other
+non-plot. No alias.
+
+
+D. PRESERVED
+------------
+
+All remaining Wozduh numeric slots and formulas.
+Default-visible compute closure.
+ReplayClosedBars compute-all of remaining bits.
+Snapshot/Restore of remaining engines.
+FeatureTape2 / Brain3 / FEATURE-SPEC-2 untouched.
+No new Wozduh facts.
+
+
+E. TESTS
+--------
+
+go test ./core/nodes/ ./core/ ./ui_config/ ./market/ ./server/ -skip TestGoldenAudit
+go build .
+Frontend: wozduh_* + hidden_render_skip + channel_paint + pane_layout
+(see section O in chat after run).
+
+
+F. GIT
+------
+
+Commit of this chapter only. Unrelated audit reports unstaged.
+
+
+G. VERDICT
+----------
+
+WOZDUH_VOLCROSS_REMOVE_GREEN
+
+Next after freeze+push: HARD STOP and ask the user which Wozduh
+lines/channels to retune (WOZDUH-VISUAL-TUNE-1, hardcoded paint only).

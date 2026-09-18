@@ -277,7 +277,6 @@ function normalizeOscPoint(p) {
   ['rsiHl2', p.rsiHl2],
   ['rsiVolFast', p.rsiVolFast],
   ['rsiVolSlow', p.rsiVolSlow],
-  ['volCrossMarker', p.volCrossMarker],
   ['color', p.color],
   ['marker', p.marker],
   ['volumeSpikeUp', p.volumeSpikeUp],
@@ -300,7 +299,6 @@ function chartPointsToOsc(points) {
       rsiHl2: p.rsiHl2 ?? p.RsiHl2,
       rsiVolFast: p.rsiVolFast ?? p.wozduh_up ?? p.RsiVolFast,
       rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down ?? p.RsiVolSlow,
-      volCrossMarker: p.volCrossMarker ?? p.VolCrossMarker,
       color: p.color ?? p.Color,
       marker: p.marker ?? p.Marker,
       volumeSpikeUp: p.volumeSpikeUp ?? p.VolumeSpikeUp,
@@ -488,22 +486,6 @@ function buildSpikeMarkersFromGrid(annotationMap, { showSpike = true } = {}) {
   return markers.sort((a, b) => a.time - b.time);
 }
 
-function buildWozduhMarkersFromGrid(annotationMap) {
-  if (!annotationMap) return [];
-  const markers = [];
-  annotationMap.forEach((ann, ms) => {
-    if (!ann.volCross) return;
-    markers.push({
-      time: ChartDataStore.msToChartSec(ms),
-      position: 'inBar',
-      color: ann.volCross,
-      shape: 'circle',
-      size: 1,
-    });
-  });
-  return markers.sort((a, b) => a.time - b.time);
-}
-
 /** @deprecated Use buildSpikeMarkersFromGrid — kept for callers passing annotation Map. */
 function buildSpikeMarkers(annotationMapOrOsc) {
   if (annotationMapOrOsc instanceof Map) {
@@ -564,7 +546,6 @@ if (typeof window !== 'undefined') {
     normalizeTradeRow,
     buildSpikeMarkers,
     buildSpikeMarkersFromGrid,
-    buildWozduhMarkersFromGrid,
   };
 }
 

@@ -15,7 +15,6 @@ const (
 	WozduhBitVolRsiEma12
 	WozduhBitVolRsiEma5
 	WozduhBitVolRsiEma5Chan
-	WozduhBitVolCrossPair
 	WozduhBitRsiHl2
 	WozduhBitMacdRsiClose
 	WozduhBitRsiHl2Vwema
@@ -31,7 +30,6 @@ const WozduhMaskAll = WozduhBitRsiClose |
 	WozduhBitVolRsiEma12 |
 	WozduhBitVolRsiEma5 |
 	WozduhBitVolRsiEma5Chan |
-	WozduhBitVolCrossPair |
 	WozduhBitRsiHl2 |
 	WozduhBitMacdRsiClose |
 	WozduhBitRsiHl2Vwema |
@@ -50,7 +48,6 @@ var wozduhPlotBits = map[string]WozduhMask{
 	"woz_vol_rsi_ema5_chan_up":  WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
 	"woz_vol_rsi_ema5_chan_mid": WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
 	"woz_vol_rsi_ema5_chan_dn":  WozduhBitVolBase | WozduhBitVolRsiEma5 | WozduhBitVolRsiEma5Chan,
-	"woz_vol_cross":             WozduhBitVolBase | WozduhBitVolRsiEma12 | WozduhBitVolRsiEma5 | WozduhBitVolCrossPair,
 	"woz_rsi_hl2":               WozduhBitRsiHl2,
 	"woz_macd_rsi_close":        WozduhBitMacdRsiClose,
 	"woz_rsi_hl2_vwema":         WozduhBitRsiHl2Vwema,
@@ -83,14 +80,11 @@ func WozduhWakeReplayMask(wake WozduhMask) WozduhMask {
 	if wake&(WozduhBitRsiCloseEma7|WozduhBitRsiOfRsi|WozduhBitRsiCloseChan) != 0 {
 		m |= WozduhBitRsiClose
 	}
-	if wake&(WozduhBitVolRsiEma12|WozduhBitVolRsiEma5|WozduhBitVolRsiEma5Chan|WozduhBitVolCrossPair) != 0 {
+	if wake&(WozduhBitVolRsiEma12|WozduhBitVolRsiEma5|WozduhBitVolRsiEma5Chan) != 0 {
 		m |= WozduhBitVolBase
 	}
 	if wake&WozduhBitVolRsiEma5Chan != 0 {
 		m |= WozduhBitVolRsiEma5
-	}
-	if wake&WozduhBitVolCrossPair != 0 {
-		m |= WozduhBitVolRsiEma12 | WozduhBitVolRsiEma5
 	}
 	return m
 }

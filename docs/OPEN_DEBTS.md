@@ -30,7 +30,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 implemented** — next **WOZDUH-VOLCROSS-REMOVE-1**. Falcon retirement chapters frozen.
+2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1 implemented.** Next after freeze+push: **WOZDUH-VISUAL-TUNE-1** (ask user for colors). Falcon retirement chapters frozen.
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -57,7 +57,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of **presentation** (not of compute demand). Visibility not in RSX fingerprint. Do **not** reopen.
 
-**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|VolRsiEma12|VolRsiEma5). ChartOnly unused Frames are mask 0. **WOZDUH-NUMERIC-NAMES-1:** identities name the math; numbers unchanged. Next Wozduh chapter: **WOZDUH-VOLCROSS-REMOVE-1**. Do **not** reopen Wozduh compute.
+**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|VolRsiEma12|VolRsiEma5). ChartOnly unused Frames are mask 0. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1:** discrete cross event deleted. Do **not** mint a replacement Wozduh fact. Next: **WOZDUH-VISUAL-TUNE-1** after user color choices.
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 
@@ -73,7 +73,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 |----|------|-----------|
 | **VOLUME-INGEST-1** | Semantic fixtures + census. Not broadly V-poisoned. | Consumed by VOLUME-TRUTH-RECOVERY-1. |
 | **VOLUME-TRUTH-RECOVERY-1** | **FROZEN.** Producer green. 1265 assigned. | Do not extend. |
-| **VOLUME-SOURCE-ARBITRATION-1** | **FROZEN STEP 2. Verdict VOLUME_SSOT_GREEN_V1.** REST-family SSOT + 1m additive integrity. 18 REST_15M_PARENT + 2 REST_1M_RECONSTRUCTION. Identity `volume-truth:futures-base-v1`. 1m/3m/spot SOURCE_CONFLICT still quarantined. Report `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`. | Next: **WOZDUH-VOLCROSS-REMOVE-1**. Do not silently refresh v1 from future Binance history. |
+| **VOLUME-SOURCE-ARBITRATION-1** | **FROZEN STEP 2. Verdict VOLUME_SSOT_GREEN_V1.** REST-family SSOT + 1m additive integrity. 18 REST_15M_PARENT + 2 REST_1M_RECONSTRUCTION. Identity `volume-truth:futures-base-v1`. 1m/3m/spot SOURCE_CONFLICT still quarantined. Report `research/volume/VOLUME-SOURCE-ARBITRATION-1.txt`. | Next: **WOZDUH-VISUAL-TUNE-1** after user color choices. Do not silently refresh v1 from future Binance history. |
 | **FRACTAL-MARKER-SSOT-1** | Unused ScanRSXMarkers / display-bar fractal scanner APIs | ✅ GREEN / FROZEN. Production owner was already `FractalFactsAt`. `RSXMarkerHit` kept for `scanRSXTVHits` TV parity. Do not reopen detector math. |
 | **ATR-VALUES-FRAME-1** | `market/frame.go` still hydrates via `indicators.ATRValues` (legacy batch). ATR-TRUTH-1 left `ATRSeries` as canonical. | ATR leftover, not TV facts. |
 | **ANALOGUE-MEMORY-RESEARCH-1** | Does causal nearest-neighbour information add predictive/explanatory value beyond certified facts Brain3 already has? Microscope first; neighbour-derived features only if OOF lift; retrieval infra (possibly Qdrant) only if scale/latency require it. As-of law: memory at T may use only examples whose features **and** outcomes were knowable before T. | Parked until Wozduh / opportunity vocabulary / Brain3 maturity. No socket in HEAD. First experiment: in-memory kNN on a certified matrix — not Qdrant. |

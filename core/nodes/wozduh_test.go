@@ -45,7 +45,7 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 		core.SlotWozduhRsiClose, core.SlotWozduhRsiCloseEma7, core.SlotWozduhRsiRsiClose, core.SlotWozduhRsiHl2,
 		core.SlotWozduhMacdRsiClose, core.SlotWozduhVolRsiEma12, core.SlotWozduhVolRsiEma5, core.SlotWozduhRsiAd,
 		core.SlotWozduhRsiHl2Vwema, core.SlotWozduhVolRsiEma5ChanMid, core.SlotWozduhVolRsiEma5ChanUp, core.SlotWozduhVolRsiEma5ChanDn,
-		core.SlotWozduhRsiCloseChanMid, core.SlotWozduhRsiCloseChanUp, core.SlotWozduhRsiCloseChanDn, core.SlotWozduhVolCross,
+		core.SlotWozduhRsiCloseChanMid, core.SlotWozduhRsiCloseChanUp, core.SlotWozduhRsiCloseChanDn,
 	}
 	for i := 0; i < bars; i++ {
 		tickWozduh(a, aBus, i)
@@ -59,10 +59,6 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 		rsi := aBus.Cur.Get(core.SlotWozduhRsiClose)
 		if !math.IsNaN(rsi) && (rsi < 0 || rsi > 100) {
 			t.Fatalf("bar %d RsiClose %v out of [0,100]", i, rsi)
-		}
-		cross := aBus.Cur.Get(core.SlotWozduhVolCross)
-		if !math.IsNaN(cross) && cross != 0 && cross != 1 && cross != -1 {
-			t.Fatalf("bar %d VolCross %v want -1/0/1", i, cross)
 		}
 	}
 
@@ -85,7 +81,6 @@ func TestWozduh_DeterministicTwinAndFrozenBar20(t *testing.T) {
 		{"VolRsiEma5", cur.Get(core.SlotWozduhVolRsiEma5), 99.969927134017837},
 		{"RsiHl2", cur.Get(core.SlotWozduhRsiHl2), 98.772388121028527},
 		{"MacdRsiClose", cur.Get(core.SlotWozduhMacdRsiClose), 68.552211722386232},
-		{"VolCross", cur.Get(core.SlotWozduhVolCross), 0},
 	}
 	for _, c := range gold {
 		if math.Abs(c.got-c.want) > 1e-9 {

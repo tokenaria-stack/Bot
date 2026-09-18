@@ -168,7 +168,6 @@ type ChartOscillator struct {
 	MacdRsi         float64 `json:"macdRsi"`
 	RsiAd           float64 `json:"rsiAd"`
 	RsiHl2Vol       float64 `json:"rsiHl2Vol"`
-	VolCrossMarker  string  `json:"volCrossMarker,omitempty"`
 	VolChanMid      float64 `json:"volChanMid"`
 	VolChanUp       float64 `json:"volChanUp"`
 	VolChanDn       float64 `json:"volChanDn"`

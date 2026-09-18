@@ -33,7 +33,7 @@ class ColumnarStore {
     this._plots = {};
     /** @type {object[]} wire-format annotations for full paint */
     this._annotations = [];
-    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, volCross, rsxLabel, ... } */
+    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, rsxLabel, ... } */
     this._annotationMap = new Map();
     /** Authoritative annotation data generation. Not a paint fingerprint. */
     this._annotationRevision = 0;
@@ -463,7 +463,6 @@ class ColumnarStore {
     if (ann?.shape) props.shape = ann.shape;
     if (ann?.spikeUp) props.spikeUp = true;
     if (ann?.spikeDown) props.spikeDown = true;
-    if (ann?.volCross) props.volCross = ann.volCross;
     return props;
   }
 
@@ -472,8 +471,6 @@ class ColumnarStore {
     const props = {};
     if (tick.volumeSpikeUp || tick.VolumeSpikeUp) props.spikeUp = true;
     if (tick.volumeSpikeDown || tick.VolumeSpikeDown) props.spikeDown = true;
-    const volCross = tick.volCrossMarker ?? tick.VolCrossMarker;
-    if (volCross) props.volCross = volCross;
     // Phase F: tick.marker L/LL/S/SS no longer published to the chart store.
     return Object.keys(props).length ? props : null;
   }

@@ -25,7 +25,6 @@ func TestWozduhMaskForPlots_Closure(t *testing.T) {
 		{"woz_vol_rsi_ema5_chan_up", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
 		{"woz_vol_rsi_ema5_chan_mid", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
 		{"woz_vol_rsi_ema5_chan_dn", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolRsiEma5Chan},
-		{"woz_vol_cross", nodes.WozduhBitVolBase | nodes.WozduhBitVolRsiEma12 | nodes.WozduhBitVolRsiEma5 | nodes.WozduhBitVolCrossPair},
 		{"woz_rsi_hl2", nodes.WozduhBitRsiHl2},
 		{"woz_macd_rsi_close", nodes.WozduhBitMacdRsiClose},
 		{"woz_rsi_hl2_vwema", nodes.WozduhBitRsiHl2Vwema},
@@ -41,7 +40,7 @@ func TestWozduhMaskForPlots_Closure(t *testing.T) {
 
 func TestWozduhMaskForPlots_UnknownAndNonWozduh(t *testing.T) {
 	t.Parallel()
-	if got := nodes.WozduhMaskForPlots([]string{"line_rsx", "line_rsx_signal", "nope", "woz_vol_rsi_ema5_chan"}); got != 0 {
+	if got := nodes.WozduhMaskForPlots([]string{"line_rsx", "line_rsx_signal", "nope", "woz_vol_rsi_ema5_chan", "woz_vol_cross"}); got != 0 {
 		t.Fatalf("non-wozduh/unknown/compose must be 0, got %#b", got)
 	}
 	if nodes.WozduhMaskForPlots(nil) != 0 {
@@ -141,7 +140,7 @@ func TestWozduhMasked_FailClosedNaN(t *testing.T) {
 		core.SlotWozduhRsiClose, core.SlotWozduhRsiCloseEma7, core.SlotWozduhRsiRsiClose,
 		core.SlotWozduhRsiHl2, core.SlotWozduhMacdRsiClose, core.SlotWozduhVolRsiEma5,
 		core.SlotWozduhRsiAd, core.SlotWozduhRsiHl2Vwema,
-		core.SlotWozduhVolRsiEma5ChanMid, core.SlotWozduhRsiCloseChanMid, core.SlotWozduhVolCross,
+		core.SlotWozduhVolRsiEma5ChanMid, core.SlotWozduhRsiCloseChanMid,
 	}
 	for _, s := range inactive {
 		v := bus.Cur.Get(s)
@@ -178,7 +177,6 @@ func TestWozduhMasked_ParityVsAll(t *testing.T) {
 		{"woz_rsi_ad", core.SlotWozduhRsiAd},
 		{"woz_rsi_close_chan_up", core.SlotWozduhRsiCloseChanUp},
 		{"woz_vol_rsi_ema5_chan_mid", core.SlotWozduhVolRsiEma5ChanMid},
-		{"woz_vol_cross", core.SlotWozduhVolCross},
 	}
 
 	fullBus := core.NewBus(256)

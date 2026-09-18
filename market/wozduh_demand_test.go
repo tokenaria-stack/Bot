@@ -62,9 +62,6 @@ func TestWozduhDemand_ChartOnlyZero(t *testing.T) {
 	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolRsiEma12)) {
 		t.Fatal("unused woz_vol_rsi_ema12 must be NaN")
 	}
-	if !math.IsNaN(f.WozduhSlot(core.SlotWozduhVolCross)) {
-		t.Fatal("VolCross must not be mandatory")
-	}
 }
 
 func TestWozduhDemand_LiveUnusedZero(t *testing.T) {
@@ -226,21 +223,6 @@ func TestWozduhDemand_NilSlotsAll(t *testing.T) {
 	}
 	if nodes.WozduhMaskFromClientSubscriptions([][]string{{"nope"}}) != 0 {
 		t.Fatal("unknown IDs contribute 0")
-	}
-}
-
-func TestWozduhDemand_VolCrossWakesCoherentPrev(t *testing.T) {
-	withEngineMode(t, EngineModeChartOnly)
-	f := testDemandFrame(t, 120)
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5"}))
-	wt := f.WozduhVolRsiEma12Ptr()
-	f.SetWozduhDemand(nodes.WozduhMaskForPlots([]string{"woz_vol_rsi_ema12", "woz_vol_rsi_ema5", "woz_vol_cross"}))
-	if f.WozduhVolRsiEma12Ptr() != wt {
-		t.Fatal("VolCross wake must not replace live volRsiEma12")
-	}
-	cross := f.WozduhSlot(core.SlotWozduhVolCross)
-	if math.IsNaN(cross) {
-		t.Fatal("woken VolCross must be finite (0/-1/1)")
 	}
 }
 

@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-VOLCROSS-REMOVE-1 — delete discrete Wozduh cross event (Sep 2026)
+
+- Deleted `SlotWozduhVolCross`, `detectVolCrossCode`, `WozduhBitVolCrossPair`, prev-cross Snapshot/Restore, `woz_vol_cross`.
+- Removed dead `volCrossMarker` JSON readers (never filled from the DAG slot).
+- No replacement event or Wozduh tape/fact.
+- Artifact: `research/cleanup/WOZDUH-VOLCROSS-REMOVE-1.txt`.
+
 ## WOZDUH-NUMERIC-NAMES-1 — mathematical Wozduh vocabulary (Sep 2026)
 
 - Replaced Pine/color/speed names with math identities (`woz_vol_rsi_ema12` / `woz_vol_rsi_ema5`, …).

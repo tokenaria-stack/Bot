@@ -214,7 +214,7 @@ plotshape(piv ? na : shrt ? (pivotl ? min_rsi - 3 : na) : na, location=location.
 | `ko3` | 3 | HL2 smoothed range (chl3) — частично |
 | `mrsi`, `m1`, `m2`, `mmn` | 24/7/24/1 | MACD(RSI(close))+50 → `SlotWozduhMacdRsiClose` / `woz_macd_rsi_close` |
 | Channel φ | `1.6185 * stdev` | `wozduhChannelPhi` |
-| `cross(wt11, wt22)` | circles | `SlotWozduhVolCross` / `woz_vol_cross` (legacy; deletion chapter next) |
+| `cross(wt11, wt22)` | circles | historical Pine only — Go `SlotWozduhVolCross` deleted in WOZDUH-VOLCROSS-REMOVE-1 |
 
 ### Полный исходник Pine Script v3
 

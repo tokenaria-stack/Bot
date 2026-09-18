@@ -19,11 +19,6 @@ const (
 	wozduhMacdFast          = 7
 	wozduhMacdSlow          = wozduhLenVol
 	wozduhMacdSignal        = 9
-
-	// SlotWozduhVolCross encoding (bus is float64-only). Legacy event until VOLCROSS-REMOVE.
-	wozduhVolCrossNone = 0.0
-	wozduhVolCrossLime = 1.0
-	wozduhVolCrossRed  = -1.0
 )
 
 // WozduhNode computes the Wozduh numeric atom set into the data bus.
@@ -57,14 +52,6 @@ type WozduhNode struct {
 
 	ad    *indicators.AD
 	adRsi *indicators.RSI
-
-	prevVolRsiEma12    float64
-	prevVolRsiEma5     float64
-	prevVolRsiEmaReady bool
-
-	snapPrevVolRsiEma12    float64
-	snapPrevVolRsiEma5     float64
-	snapPrevVolRsiEmaReady bool
 }
 
 // NewWozduhNode creates a full Wozduh atom pipeline (explicit compute-all mask).
@@ -173,13 +160,6 @@ func (n *WozduhNode) Update() {
 				cur.Set(core.SlotWozduhVolRsiEma5ChanDn, volChanMid-volOffs)
 			}
 		}
-		if n.mask&WozduhBitVolCrossPair != 0 {
-			volCross := detectVolCrossCode(n.prevVolRsiEma12, n.prevVolRsiEma5, volRsiEma12, volRsiEma5, n.prevVolRsiEmaReady)
-			n.prevVolRsiEma12 = volRsiEma12
-			n.prevVolRsiEma5 = volRsiEma5
-			n.prevVolRsiEmaReady = true
-			cur.Set(core.SlotWozduhVolCross, volCross)
-		}
 	}
 
 	if n.mask&WozduhBitRsiHl2Vwema != 0 {
@@ -252,9 +232,6 @@ func (n *WozduhNode) failClosedInactive(cur *core.TickFrame) {
 		cur.Set(core.SlotWozduhVolRsiEma5ChanUp, nan)
 		cur.Set(core.SlotWozduhVolRsiEma5ChanDn, nan)
 	}
-	if n.mask&WozduhBitVolCrossPair == 0 {
-		cur.Set(core.SlotWozduhVolCross, nan)
-	}
 	if n.mask&WozduhBitRsiHl2 == 0 {
 		cur.Set(core.SlotWozduhRsiHl2, nan)
 	}
@@ -312,11 +289,6 @@ func (n *WozduhNode) InstallWokenFields(src *WozduhNode, wake WozduhMask) {
 		n.volRsiEma5ChanSMA = src.volRsiEma5ChanSMA
 		n.volRsiEma5ChanStDev = src.volRsiEma5ChanStDev
 	}
-	if wake&WozduhBitVolCrossPair != 0 {
-		n.prevVolRsiEma12 = src.prevVolRsiEma12
-		n.prevVolRsiEma5 = src.prevVolRsiEma5
-		n.prevVolRsiEmaReady = src.prevVolRsiEmaReady
-	}
 	if wake&WozduhBitRsiHl2 != 0 {
 		n.rsiHl2 = src.rsiHl2
 	}
@@ -359,19 +331,6 @@ func (n *WozduhNode) VolRsiEma12Ptr() *indicators.EMA {
 	return n.volRsiEma12
 }
 
-func detectVolCrossCode(prevVolRsiEma12, prevVolRsiEma5, volRsiEma12, volRsiEma5 float64, ready bool) float64 {
-	if !ready {
-		return wozduhVolCrossNone
-	}
-	if prevVolRsiEma12 <= prevVolRsiEma5 && volRsiEma12 > volRsiEma5 {
-		return wozduhVolCrossLime
-	}
-	if prevVolRsiEma12 >= prevVolRsiEma5 && volRsiEma12 < volRsiEma5 {
-		return wozduhVolCrossRed
-	}
-	return wozduhVolCrossNone
-}
-
 func (n *WozduhNode) SaveState() {
 	if n == nil {
 		return
@@ -394,9 +353,6 @@ func (n *WozduhNode) SaveState() {
 	n.rsiCloseChanStDev.SaveState()
 	n.ad.SaveState()
 	n.adRsi.SaveState()
-	n.snapPrevVolRsiEma12 = n.prevVolRsiEma12
-	n.snapPrevVolRsiEma5 = n.prevVolRsiEma5
-	n.snapPrevVolRsiEmaReady = n.prevVolRsiEmaReady
 }
 
 func (n *WozduhNode) RestoreState() {
@@ -421,9 +377,6 @@ func (n *WozduhNode) RestoreState() {
 	n.rsiCloseChanStDev.RestoreState()
 	n.ad.RestoreState()
 	n.adRsi.RestoreState()
-	n.prevVolRsiEma12 = n.snapPrevVolRsiEma12
-	n.prevVolRsiEma5 = n.snapPrevVolRsiEma5
-	n.prevVolRsiEmaReady = n.snapPrevVolRsiEmaReady
 }
 
 func (n *WozduhNode) OnConfigChange(any) error { return nil }

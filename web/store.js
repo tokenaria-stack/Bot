@@ -7,7 +7,7 @@ class ChartDataStore {
     this.context = context;
     this.candles = new Map();
     this.osc = new Map();
-    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, volCross, rsxLabel, ... } */
+    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, rsxLabel, ... } */
     this.annotations = new Map();
     this._dirtyMs = null;
     this._dirtyIsNewBar = false;
@@ -140,7 +140,6 @@ class ChartDataStore {
     const props = {};
     if (snapped.volumeSpikeUp) props.spikeUp = true;
     if (snapped.volumeSpikeDown) props.spikeDown = true;
-    if (snapped.volCrossMarker) props.volCross = snapped.volCrossMarker;
     // Phase F: snapped.marker L/LL/S/SS not stored.
     return Object.keys(props).length ? props : null;
   }

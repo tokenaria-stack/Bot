@@ -36,7 +36,6 @@ const (
 	SlotWozduhRsiCloseChanMid
 	SlotWozduhRsiCloseChanUp
 	SlotWozduhRsiCloseChanDn
-	SlotWozduhVolCross
 
 	// SlotCount is the number of defined slots (valid indices: 0 .. SlotCount-1).
 	SlotCount
