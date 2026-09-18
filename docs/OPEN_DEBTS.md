@@ -23,6 +23,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **TIMELINE-RECOVERY-STATE-1 ✅ frozen** (live 2026-09-16 16:26 +08). Current Master bool + snapshot replace. Do not reopen browser reconnect / dense `gapDetected` recovery / native gap heal except a real regression.
 
+**PANE-WORKSPACE-MAXIMIZE-1 ✅ frozen** (`51272a9`). Maximize = one `#charts-stack` track. Do not reopen viewport-fixed pane fullscreen, header-height offsets, or z-index wars vs `#app-chrome`. Layout suppression ≠ `visible[]`.
+
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.

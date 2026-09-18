@@ -225,7 +225,7 @@ Maximize path does not call visibility/subscription/history writers.
 R. GIT STATUS
 -------------
 
-Filled after commit in this chapter.
+Product freeze: 51272a9. Pushed. Freeze SSOT follows in docs commit.
 
 
 S. FINAL VERDICT
@@ -233,8 +233,8 @@ S. FINAL VERDICT
 
 PANE_WORKSPACE_MAXIMIZE_GREEN
 
-Manual visual review still required: Woz, RSX, price (Vol label), resize,
-dblclick, Escape.
+Frozen. Do not reopen viewport-fixed pane fullscreen, header offsets, or
+z-index wars vs #app-chrome.
 
 
 GPT PROMPT CORRECTIONS
@@ -256,4 +256,4 @@ GPT PROMPT CORRECTIONS
    layout organization (same file as `buildGridTemplateRows`), not as a new
    controller.
 
-HARD STOP. Wait for visual review. Do not push.
+Frozen at 51272a9. Do not reopen this chapter.

@@ -12,7 +12,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 - Deleted viewport-fixed `.fullscreen-pane` overlay (`100vw`/`100vh` / `z-index: 9999`).
 - `applyStack` maximize = one `minmax(0, 1fr)` track, one participating wrap, no splitters.
-- Layout suppression ≠ `visible[]`. Artifact: `research/cleanup/PANE-WORKSPACE-MAXIMIZE-1.txt`.
+- Layout suppression ≠ `visible[]`. Frozen at `51272a9`. Artifact: `research/cleanup/PANE-WORKSPACE-MAXIMIZE-1.txt`.
 
 ## WOZDUH-STYLE-SECTION-1 — unify Wozduh visibility and color controls (Sep 2026)
 
