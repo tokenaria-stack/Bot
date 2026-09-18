@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-STYLE-SECTION-1 — unify Wozduh visibility and color controls (Sep 2026)
+
+- One `collectConfigurable` list: checkbox + color on the same row; owners stay separate.
+- Channel checkbox on the composed title; nested Upper/Middle/Lower/Fill are paint-only.
+- Frozen at `b55b64f`. Artifact: `research/cleanup/WOZDUH-STYLE-SECTION-1.txt`.
+
 ## WOZDUH-COLOR-OVERRIDES-1 — sparse Wozduh color prefs (Sep 2026)
 
 - Factory colors stay in `ui_config`. User deviations in `wozduh_color_prefs_v1`.

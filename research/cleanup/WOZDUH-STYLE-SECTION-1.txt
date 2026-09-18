@@ -137,12 +137,11 @@ Checkbox path still owns visibility machinery by design.
 N. GIT STATUS
 -------------
 
-Amended unpushed WOZDUH-STYLE-SECTION-1 (was e72ede1). Not pushed.
-
+Product freeze: b55b64f (unified menu). Pushed with freeze SSOT.
 
 O. FINAL VERDICT
 ----------------
 
 WOZDUH_STYLE_SECTION_GREEN
 
-HARD STOP for visual review. Do not push, do not retune ui_config.
+Frozen. User tunes Wozduh colors live. Do not retune ui_config until asked.
