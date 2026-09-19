@@ -76,11 +76,23 @@ function panes() {
         kind: 'channel',
         renderOptions: {
           defaultVisible: false,
-          upperColor: 'blue',
+          boundColor: 'blue',
           midColor: 'maroon',
-          lowerColor: 'blue',
-          fillColor: 'rgba(128,0,0,0.12)',
+          upperFillColor: 'rgba(128,0,0,0.10)',
+          lowerFillColor: 'rgba(128,0,0,0.18)',
           plots: { upper: 'woz_rsi_close_chan_up', mid: 'woz_rsi_close_chan_mid', lower: 'woz_rsi_close_chan_dn' },
+        },
+      },
+      {
+        id: 'woz_vol_rsi_ema5_chan',
+        hostId: 'wozduh',
+        kind: 'channel',
+        renderOptions: {
+          defaultVisible: false,
+          boundColor: 'blue',
+          midColor: 'orange',
+          fillColor: 'rgba(0,136,255,0.12)',
+          plots: { upper: 'woz_vol_rsi_ema5_chan_up', mid: 'woz_vol_rsi_ema5_chan_mid', lower: 'woz_vol_rsi_ema5_chan_dn' },
         },
       },
     ],
@@ -131,7 +143,10 @@ function colorApplies(events) {
     || 'upperColor' in (e.opts || {})
     || 'midColor' in (e.opts || {})
     || 'lowerColor' in (e.opts || {})
+    || 'boundColor' in (e.opts || {})
     || 'fillColor' in (e.opts || {})
+    || 'upperFillColor' in (e.opts || {})
+    || 'lowerFillColor' in (e.opts || {})
   ));
 }
 
@@ -149,10 +164,18 @@ async function run() {
     assert.ok(line, 'factory blue must be passed to addLineSeries');
     const aqua = creates.find((c) => c.kind === 'line' && c.opts.color === 'aqua');
     assert.ok(aqua);
-    const chan = creates.find((c) => c.kind === 'channel');
-    assert.strictEqual(chan.opts.upperColor, 'blue');
+    const chan = creates.find((c) => c.kind === 'channel' && c.opts.midColor === 'maroon');
+    assert.strictEqual(chan.opts.boundColor, 'blue');
     assert.strictEqual(chan.opts.midColor, 'maroon');
-    assert.strictEqual(chan.opts.fillColor, 'rgba(128,0,0,0.12)');
+    assert.ok(!Object.prototype.hasOwnProperty.call(chan.opts, 'fillColor'));
+    assert.ok(!Object.prototype.hasOwnProperty.call(chan.opts, 'upperColor'));
+    assert.strictEqual(chan.opts.upperFillColor, 'rgba(128,0,0,0.10)');
+    assert.strictEqual(chan.opts.lowerFillColor, 'rgba(128,0,0,0.18)');
+    const vol = creates.find((c) => c.kind === 'channel' && c.opts.fillColor);
+    assert.strictEqual(vol.opts.fillColor, 'rgba(0,136,255,0.12)');
+    assert.strictEqual(vol.opts.boundColor, 'blue');
+    assert.ok(!Object.prototype.hasOwnProperty.call(vol.opts, 'upperColor'));
+    assert.ok(!Object.prototype.hasOwnProperty.call(vol.opts, 'upperFillColor'));
     assert.strictEqual(colorApplies(events).length, 0);
     assert.ok(!events.some((e) => e.op === 'subscribe'));
     assert.ok(!events.some((e) => e.op === 'history'));
@@ -204,7 +227,7 @@ async function run() {
     assert.ok(!events.some((e) => e.op === 'subscribe'));
   });
 
-  await test('D. channel four fields; fill keeps factory alpha', () => {
+  await test('D. split fills keep own factory alpha; stale fillColor is inert', () => {
     WozduhColorPrefs.setStorage(memStorage());
     const events = [];
     const factory = new DDRFactory({
@@ -212,15 +235,29 @@ async function run() {
       fetchPlotColumns() { events.push({ op: 'history' }); return Promise.resolve(null); },
     });
     mount(factory, events);
-    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'upperColor', '#55739A'));
+    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'boundColor', '#55739A'));
     assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'midColor', '#800000'));
-    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'lowerColor', '#55739A'));
-    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'fillColor', '#8A7058'));
+    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'upperFillColor', '#8A7058'));
+    assert.ok(factory.setWozduhColor('woz_rsi_close_chan', 'lowerFillColor', '#AABBCC'));
     const row = WozduhColorPrefs.loadMap().woz_rsi_close_chan;
-    assert.strictEqual(row.fillColor, '#8A7058');
-    const fills = events.filter((e) => e.op === 'applyOptions' && e.opts.fillColor);
-    assert.strictEqual(fills.length, 1);
-    assert.strictEqual(fills[0].opts.fillColor, 'rgba(138,112,88,0.12)');
+    assert.strictEqual(row.boundColor, '#55739A');
+    assert.ok(!row.upperColor && !row.lowerColor);
+    assert.strictEqual(row.upperFillColor, '#8A7058');
+    assert.strictEqual(row.lowerFillColor, '#AABBCC');
+    const bound = events.filter((e) => e.op === 'applyOptions' && e.opts.boundColor);
+    const up = events.filter((e) => e.op === 'applyOptions' && e.opts.upperFillColor);
+    const dn = events.filter((e) => e.op === 'applyOptions' && e.opts.lowerFillColor);
+    assert.strictEqual(bound[0].opts.boundColor, '#55739A');
+    assert.strictEqual(up[0].opts.upperFillColor, 'rgba(138,112,88,0.1)');
+    assert.strictEqual(dn[0].opts.lowerFillColor, 'rgba(170,187,204,0.18)');
+    events.length = 0;
+    factory.setWozduhColor('woz_rsi_close_chan', 'fillColor', '#8A7058');
+    const stale = events.filter((e) => e.op === 'applyOptions' && e.opts.fillColor);
+    assert.strictEqual(stale.length, 0);
+    assert.strictEqual(WozduhColorPrefs.loadMap().woz_rsi_close_chan.fillColor, '#8A7058');
+    events.length = 0;
+    WozduhColorPrefs.setColor('woz_rsi_close_chan', 'upperOuterFillColor', '#112233');
+    assert.ok(!WozduhColorPrefs.loadMap().woz_rsi_close_chan.upperOuterFillColor);
     assert.ok(!events.some((e) => e.op === 'subscribe' || e.op === 'history'));
     assert.strictEqual(
       WozduhColorPrefs.fillRgbaFromHex('#8A7058', 'rgba(128,0,0,0.18)'),
@@ -233,20 +270,42 @@ async function run() {
     assert.ok(!prefsSrc.includes('0.12'), 'override module must not hardcode fill alpha');
   });
 
+  await test('D2. Volume fillColor override still uses factory interior alpha', () => {
+    WozduhColorPrefs.setStorage(memStorage());
+    const events = [];
+    const factory = new DDRFactory();
+    mount(factory, events);
+    assert.ok(factory.setWozduhColor('woz_vol_rsi_ema5_chan', 'fillColor', '#8A7058'));
+    const fills = events.filter((e) => e.op === 'applyOptions' && e.opts.fillColor);
+    assert.strictEqual(fills[0].opts.fillColor, 'rgba(138,112,88,0.12)');
+    events.length = 0;
+    assert.ok(factory.setWozduhColor('woz_vol_rsi_ema5_chan', 'boundColor', '#55739A'));
+    const bounds = events.filter((e) => e.op === 'applyOptions' && e.opts.boundColor);
+    assert.strictEqual(bounds[0].opts.boundColor, '#55739A');
+    assert.ok(!('upperColor' in bounds[0].opts));
+    assert.ok(!('lowerColor' in bounds[0].opts));
+    const row = WozduhColorPrefs.loadMap().woz_vol_rsi_ema5_chan;
+    assert.strictEqual(row.boundColor, '#55739A');
+    assert.ok(!row.upperColor && !row.lowerColor);
+  });
+
   await test('E. reset component / reset all restore factory channel rgba', () => {
     WozduhColorPrefs.setStorage(memStorage());
     const events = [];
     const factory = new DDRFactory();
     mount(factory, events);
     factory.setWozduhColor('woz_vol_rsi_ema12', 'color', '#111111');
-    factory.setWozduhColor('woz_rsi_close_chan', 'fillColor', '#8A7058');
+    factory.setWozduhColor('woz_rsi_close_chan', 'upperFillColor', '#8A7058');
     events.length = 0;
     factory.resetWozduhComponentColors('woz_rsi_close_chan');
     assert.ok(!WozduhColorPrefs.loadMap().woz_rsi_close_chan);
     assert.ok(WozduhColorPrefs.loadMap().woz_vol_rsi_ema12);
     const chanReset = colorApplies(events).pop();
-    assert.strictEqual(chanReset.opts.fillColor, 'rgba(128,0,0,0.12)');
-    assert.strictEqual(chanReset.opts.upperColor, 'blue');
+    assert.strictEqual(chanReset.opts.upperFillColor, 'rgba(128,0,0,0.10)');
+    assert.strictEqual(chanReset.opts.lowerFillColor, 'rgba(128,0,0,0.18)');
+    assert.strictEqual(chanReset.opts.boundColor, 'blue');
+    assert.ok(!('fillColor' in chanReset.opts));
+    assert.ok(!('upperColor' in chanReset.opts));
     events.length = 0;
     factory.resetAllWozduhColors();
     assert.deepStrictEqual(WozduhColorPrefs.loadMap(), {});

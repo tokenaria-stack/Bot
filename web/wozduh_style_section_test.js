@@ -191,11 +191,25 @@ function panes() {
         renderOptions: {
           title: 'RSI close channel',
           defaultVisible: false,
-          upperColor: 'blue',
+          boundColor: 'blue',
           midColor: 'maroon',
-          lowerColor: 'blue',
-          fillColor: 'rgba(128,0,0,0.12)',
+          upperFillColor: 'rgba(128,0,0,0.12)',
+          lowerFillColor: 'rgba(128,0,0,0.12)',
           plots: { upper: 'woz_rsi_close_chan_up', mid: 'woz_rsi_close_chan_mid', lower: 'woz_rsi_close_chan_dn' },
+        },
+      },
+      {
+        id: 'woz_vol_rsi_ema5_chan',
+        hostId: 'wozduh',
+        kind: 'channel',
+        configurable: true,
+        renderOptions: {
+          title: 'Volume RSI EMA5 channel',
+          defaultVisible: false,
+          boundColor: 'blue',
+          midColor: 'orange',
+          fillColor: 'rgba(0,136,255,0.12)',
+          plots: { upper: 'woz_vol_rsi_ema5_chan_up', mid: 'woz_vol_rsi_ema5_chan_mid', lower: 'woz_vol_rsi_ema5_chan_dn' },
         },
       },
     ],
@@ -340,8 +354,10 @@ async function run() {
     const comps = SettingsRenderer.collectConfigurable({ panes: panes() });
     SettingsRenderer.rebuildMenu(menu, comps, {});
     assert.strictEqual(findColor(menu, 'woz_vol_rsi_ema12', 'color').value, '#0000ff');
-    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'fillColor').value, '#800000');
-    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'midColor').value, '#800000');
+    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'upperFillColor').value, '#800000');
+    assert.ok(!findColor(menu, 'woz_rsi_close_chan', 'fillColor'));
+    assert.ok(!findColor(menu, 'woz_rsi_close_chan', 'upperColor'));
+    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'boundColor').value, '#0000ff');
     assert.deepStrictEqual(WozduhColorPrefs.loadMap(), {});
     const creates = events.filter((e) => e.op === 'addLineSeries' || e.opts?.color === 'blue');
     assert.ok(events.some((e) => e.op === 'applyOptions' && e.opts && e.opts.visible !== undefined) || true);
@@ -399,34 +415,59 @@ async function run() {
     const menu = createEl('div');
     SettingsRenderer.rebuildMenu(menu, SettingsRenderer.collectConfigurable({ panes: panes() }), {});
     events.length = 0;
-    const fill = findColor(menu, 'woz_rsi_close_chan', 'fillColor');
+    const fill = findColor(menu, 'woz_rsi_close_chan', 'upperFillColor');
     fill.value = '#8a7058';
     fill.dispatch('input');
-    findColor(menu, 'woz_rsi_close_chan', 'upperColor').value = '#55739a';
-    findColor(menu, 'woz_rsi_close_chan', 'upperColor').dispatch('input');
+    findColor(menu, 'woz_rsi_close_chan', 'boundColor').value = '#55739a';
+    findColor(menu, 'woz_rsi_close_chan', 'boundColor').dispatch('input');
     const row = WozduhColorPrefs.loadMap().woz_rsi_close_chan;
-    assert.strictEqual(row.fillColor, '#8A7058');
-    assert.strictEqual(row.upperColor, '#55739A');
-    const fillPaint = events.filter((e) => e.op === 'applyOptions' && e.opts.fillColor);
-    assert.strictEqual(fillPaint[0].opts.fillColor, 'rgba(138,112,88,0.12)');
+    assert.strictEqual(row.upperFillColor, '#8A7058');
+    assert.strictEqual(row.boundColor, '#55739A');
+    assert.ok(!row.upperColor);
+    assert.ok(!row.lowerColor);
+    const fillPaint = events.filter((e) => e.op === 'applyOptions' && e.opts.upperFillColor);
+    assert.strictEqual(fillPaint[0].opts.upperFillColor, 'rgba(138,112,88,0.12)');
     const uiSrc = fs.readFileSync(path.join(__dirname, 'ui/settings-renderer.js'), 'utf8');
     assert.ok(!/parseRgbaAlpha|fillRgbaFromHex|0\.12/.test(uiSrc));
   });
 
-  await test('G. channel Default resets all four factory colors', () => {
+  await test('G. channel Default restores advertised factory colors', () => {
     WozduhColorPrefs.setStorage(memStorage());
     const events = [];
     mountFactory(events);
     const menu = createEl('div');
     SettingsRenderer.rebuildMenu(menu, SettingsRenderer.collectConfigurable({ panes: panes() }), {});
-    findColor(menu, 'woz_rsi_close_chan', 'fillColor').value = '#8a7058';
-    findColor(menu, 'woz_rsi_close_chan', 'fillColor').dispatch('input');
+    findColor(menu, 'woz_rsi_close_chan', 'upperFillColor').value = '#8a7058';
+    findColor(menu, 'woz_rsi_close_chan', 'upperFillColor').dispatch('input');
     events.length = 0;
     findDefault(menu, 'woz_rsi_close_chan').dispatch('click');
     assert.ok(!WozduhColorPrefs.loadMap().woz_rsi_close_chan);
-    const restored = events.filter((e) => e.op === 'applyOptions' && e.opts.fillColor);
-    assert.strictEqual(restored[0].opts.fillColor, 'rgba(128,0,0,0.12)');
-    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'fillColor').value, '#800000');
+    const restored = events.filter((e) => e.op === 'applyOptions' && e.opts.upperFillColor);
+    assert.strictEqual(restored[0].opts.upperFillColor, 'rgba(128,0,0,0.12)');
+    assert.strictEqual(findColor(menu, 'woz_rsi_close_chan', 'upperFillColor').value, '#800000');
+  });
+
+  await test('capability rows: RSI split fills; Volume interior Fill only', () => {
+    WozduhColorPrefs.setStorage(memStorage());
+    const menu = createEl('div');
+    SettingsRenderer.rebuildMenu(menu, SettingsRenderer.collectConfigurable({ panes: panes() }), {});
+    const rsiFields = menu.querySelectorAll('input[type="color"]')
+      .filter((el) => el.dataset.componentId === 'woz_rsi_close_chan')
+      .map((el) => el.dataset.field);
+    assert.deepStrictEqual(rsiFields, [
+      'boundColor',
+      'upperFillColor',
+      'midColor',
+      'lowerFillColor',
+    ]);
+    const volFields = menu.querySelectorAll('input[type="color"]')
+      .filter((el) => el.dataset.componentId === 'woz_vol_rsi_ema5_chan')
+      .map((el) => el.dataset.field);
+    assert.deepStrictEqual(volFields, [
+      'boundColor',
+      'midColor',
+      'fillColor',
+    ]);
   });
 
   await test('H. Default all colors removes the store', () => {

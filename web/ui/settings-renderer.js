@@ -269,13 +269,22 @@ const SettingsRenderer = (() => {
       refreshColorInputs(wrap, [component]);
     }));
     wrap.appendChild(header);
+    const factory = factoryColorsFor(component);
     const fields = [
+      ['boundColor', 'Boundary'],
       ['upperColor', 'Upper'],
+      ['upperFillColor', 'Upper fill'],
       ['midColor', 'Middle'],
+      ['lowerFillColor', 'Lower fill'],
       ['lowerColor', 'Lower'],
       ['fillColor', 'Fill'],
     ];
     for (const [field, fieldLabel] of fields) {
+      if (WozduhColorPrefsApi && typeof WozduhColorPrefsApi.hasFactoryColor === 'function') {
+        if (!WozduhColorPrefsApi.hasFactoryColor(factory, field)) continue;
+      } else if (!factory[field]) {
+        continue;
+      }
       const row = document.createElement('div');
       row.className = 'wozduh-style-row wozduh-style-row--nested';
       const text = document.createElement('span');

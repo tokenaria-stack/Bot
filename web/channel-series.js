@@ -1,5 +1,7 @@
 /**
- * CHANNEL-PAINT-1 — LWC 4.2 custom series: one {time, upper, mid, lower} channel.
+ * CHANNEL-PAINT-1 + CHANNEL-SPLIT-FILLS-1
+ * LWC 4.2 custom series: one {time, upper, mid, lower} channel.
+ * Optional fills/strokes are capability-from-options only.
  * Visible-range renderer only. Does not own history or indicator math.
  */
 (function (global) {
@@ -17,6 +19,29 @@
     if (n === 1) return [2, 2];
     if (n === 2) return [6, 4];
     return [];
+  }
+
+  /** Non-empty CSS string = draw that region. Missing/blank = skip. */
+  function presentPaint(opts, field) {
+    if (!opts || typeof opts !== 'object') return '';
+    const v = opts[field];
+    if (typeof v !== 'string') return '';
+    const s = v.trim();
+    return s || '';
+  }
+
+  function fillModelConflict(opts) {
+    const whole = !!presentPaint(opts, 'fillColor');
+    const split = !!presentPaint(opts, 'upperFillColor')
+      || !!presentPaint(opts, 'lowerFillColor');
+    return whole && split;
+  }
+
+  function strokeModelConflict(opts) {
+    const bound = !!presentPaint(opts, 'boundColor');
+    const edges = !!presentPaint(opts, 'upperColor')
+      || !!presentPaint(opts, 'lowerColor');
+    return bound && edges;
   }
 
   class ChannelRenderer {
@@ -74,10 +99,14 @@
         }
         flush();
 
-        const fill = opts.fillColor || 'rgba(0, 136, 255, 0.12)';
-        const upperColor = opts.upperColor || 'blue';
-        const lowerColor = opts.lowerColor || 'blue';
-        const midColor = opts.midColor || 'orange';
+        const conflictFills = fillModelConflict(opts);
+        const upperFill = conflictFills ? '' : presentPaint(opts, 'upperFillColor');
+        const lowerFill = conflictFills ? '' : presentPaint(opts, 'lowerFillColor');
+        const interior = conflictFills ? '' : presentPaint(opts, 'fillColor');
+        const bound = presentPaint(opts, 'boundColor');
+        const upperColor = bound || presentPaint(opts, 'upperColor') || 'blue';
+        const lowerColor = bound || presentPaint(opts, 'lowerColor') || 'blue';
+        const midColor = presentPaint(opts, 'midColor') || 'orange';
         const lineWidth = Number(opts.lineWidth) > 0 ? Number(opts.lineWidth) : 1;
         const midWidth = Number(opts.midLineWidth) > 0 ? Number(opts.midLineWidth) : lineWidth;
         const upperDash = dashForStyle(opts.upperLineStyle);
@@ -86,13 +115,33 @@
         for (let s = 0; s < segments.length; s++) {
           const pts = segments[s];
           if (pts.length >= 2) {
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].yu);
-            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].yu);
-            for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].yl);
-            ctx.closePath();
-            ctx.fillStyle = fill;
-            ctx.fill();
+            if (upperFill) {
+              ctx.beginPath();
+              ctx.moveTo(pts[0].x, pts[0].yu);
+              for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].yu);
+              for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].ym);
+              ctx.closePath();
+              ctx.fillStyle = upperFill;
+              ctx.fill();
+            }
+            if (lowerFill) {
+              ctx.beginPath();
+              ctx.moveTo(pts[0].x, pts[0].ym);
+              for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].ym);
+              for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].yl);
+              ctx.closePath();
+              ctx.fillStyle = lowerFill;
+              ctx.fill();
+            }
+            if (interior) {
+              ctx.beginPath();
+              ctx.moveTo(pts[0].x, pts[0].yu);
+              for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].yu);
+              for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].yl);
+              ctx.closePath();
+              ctx.fillStyle = interior;
+              ctx.fill();
+            }
           }
           ctx.lineWidth = lineWidth;
           ctx.setLineDash(upperDash);
@@ -134,10 +183,6 @@
         lastValueVisible: false,
         priceLineVisible: false,
         crosshairMarkerVisible: false,
-        upperColor: 'blue',
-        midColor: 'orange',
-        lowerColor: 'blue',
-        fillColor: 'rgba(0, 136, 255, 0.12)',
         lineWidth: 1,
         midLineWidth: 1,
         upperLineStyle: 0,
@@ -165,7 +210,13 @@
     destroy() {}
   }
 
-  const api = { ChannelSeries, isChannelPoint };
+  const api = {
+    ChannelSeries,
+    isChannelPoint,
+    presentPaint,
+    fillModelConflict,
+    strokeModelConflict,
+  };
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

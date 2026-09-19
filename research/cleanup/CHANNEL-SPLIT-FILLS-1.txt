@@ -1,0 +1,198 @@
+CHANNEL-SPLIT-FILLS-1
+=====================
+
+Verdict: CHANNEL_SPLIT_FILLS_GREEN
+
+Revises unpushed b32a06c (CHANNEL-OUTER-FILLS-1). That chapter was GREEN as
+code and WRONG as product. Not pushed. This file replaces
+CHANNEL-OUTER-FILLS-1.txt.
+
+
+A. REJECTED OUTER-FILL SEMANTICS
+--------------------------------
+
+Pane-edge bands (pane top→upper, lower→pane bottom) washed the Wozduh pane.
+User intent is interior split at the middle line, not outside the envelope.
+
+Deleted: upperOuterFillColor, lowerOuterFillColor, pane bitmap fill geometry.
+No migration of those keys onto split fills.
+
+
+B. FINAL SPLIT-FILL SEMANTICS
+-----------------------------
+
+    upper ↔ mid     upperFillColor
+    mid ↔ lower     lowerFillColor
+
+No fill above upper. No fill below lower.
+
+Whole-band fillColor (upper↔lower) remains for Volume only.
+
+
+C. CHANNELSERIES OWNERSHIP
+--------------------------
+
+web/channel-series.js. One {time, upper, mid, lower}. No Wozduh id branch.
+
+
+D. MUTUAL EXCLUSION LAW
+-----------------------
+
+fillColor XOR (upperFillColor and/or lowerFillColor).
+boundColor XOR (upperColor and/or lowerColor).
+
+Go TestWozduhChannelFillCapabilities fails if a factory component mixes
+models. Renderer fillModelConflict skips ALL fills if mixed (no blend).
+
+
+E. SHARED BOUNDARY COLOR
+------------------------
+
+boundColor drives both edge strokes. Prefs store one hex, not a synced pair.
+
+
+F. RSI CLOSE CONTRACT
+---------------------
+
+boundColor, midColor, upperFillColor, lowerFillColor.
+Factory split fills reuse maroon rgba(128,0,0,0.12) as a temporary look,
+not a math identity.
+
+
+G. VOLUME CONTRACT
+------------------
+
+boundColor (same factory "blue" both edges used before), midColor orange,
+fillColor rgba(0,136,255,0.12). No upperColor/lowerColor. No split fills.
+
+Both channels now share boundary-stroke semantics; fill models stay different.
+
+
+H. RENDER GEOMETRY
+------------------
+
+Upper: upper forward, mid reverse.
+Lower: mid forward, lower reverse.
+Whole: upper forward, lower reverse (unchanged).
+
+
+I. PAINT ORDER
+--------------
+
+1 upperFill  2 lowerFill  3 fillColor
+4 upper stroke  5 lower stroke  6 mid stroke
+
+Mid last so the seam stays on top.
+
+
+J. GAP HANDLING
+---------------
+
+Same flush as CHANNEL-PAINT-1. isChannelPoint still requires all three
+values, so a missing mid also drops the whole bar (upper and lower fills
+flush together). Documented: we did not split the point predicate into
+upper+mid vs mid+lower, because ChannelSeries data is still one triple.
+
+
+K. DEFAULTOPTIONS
+-----------------
+
+No fillColor, split fills, boundColor, upperColor, or lowerColor.
+Stroke fallbacks exist only in draw() when a color string is absent.
+
+
+L. AUTOSCALE ISOLATION
+----------------------
+
+priceValueBuilder still [lower, upper, mid].
+
+
+M. PREFS
+--------
+
+wozduh_color_prefs_v1. FILL_FIELDS = fillColor, upperFillColor, lowerFillColor.
+Each fill uses its own factory alpha. Stale outer keys are not in ALL_FIELDS
+(ignored). Stale RSI fillColor is inert because factory omits fillColor.
+
+
+N. STYLE MENU
+-------------
+
+Closed row order: Boundary, Upper, Upper fill, Middle, Lower fill, Lower, Fill.
+Presence-only. RSI: Boundary / Upper fill / Middle / Lower fill.
+Volume: Boundary / Middle / Fill.
+
+
+O. VOLUME REGRESSION
+--------------------
+
+Whole-band fill unchanged. Edge strokes still factory blue, now one
+boundColor instead of two identical upperColor/lowerColor keys. No split
+fills. No renderer change for this Volume revision.
+
+
+P. TEST RESULTS
+---------------
+
+  node web/channel_paint_test.js          ALL PASS
+  node web/channel_split_fills_test.js    ALL PASS
+  node web/wozduh_color_overrides_test.js passed
+  node web/wozduh_style_section_test.js   passed
+  node web/hidden_render_skip_test.js     ALL PASS
+  go test ./ui_config                     ok
+
+
+Q. POST-SEARCH
+--------------
+
+No active upperOuterFillColor / lowerOuterFillColor in product JS/Go
+(tests may name them as forbidden keys).
+No renderer branch on woz_rsi_close_chan or woz_vol_rsi_ema5_chan.
+Volume factory/UI no longer owns upperColor/lowerColor.
+No twin-pref copy from upper to lower.
+
+
+R. GIT STATUS
+-------------
+
+Amended unpushed chapter on 2026-07-06-puvo (ahead 1). Not pushed.
+Untracked research/cleanup/*AUDIT* files left unstaged.
+
+
+S. FINAL VERDICT
+----------------
+
+CHANNEL_SPLIT_FILLS_GREEN
+
+HARD STOP. Visual review. Do not push.
+
+
+GPT PROMPT CORRECTIONS
+----------------------
+
+1. isChannelPoint still requires upper+mid+lower together. A bar missing
+   only lower still flushes the upper band. Splitting the predicate would
+   be a different data law; not done here.
+
+2. If fillColor and split fills are both on the live options object, the
+   renderer draws no fills (refuse blend). Factory tests catch this first.
+
+3. If boundColor is present, draw uses it for both edges even if stray
+   upperColor exists (bound mode wins at paint so a defaultOptions leak
+   cannot desync edges). Factory still forbids advertising both.
+
+4. defaultOptions dropped upperColor/lowerColor so LWC merge cannot put
+   RSI close into dual stroke mode.
+
+5. Volume factory uses boundColor:"blue" — same named CSS both edges already
+   used. No palette change.
+
+6. No renderer edit in the Volume-boundary revision; ChannelSeries already
+   applied boundColor to both strokes.
+
+7. GPT asked to ignore/remove stale Volume upperColor/lowerColor prefs.
+   Existing sparse-pref cleanup already ignores keys the factory does not
+   advertise. No extra migration. After Default, those keys are gone if
+   they were on the same component override object; orphan keys on a
+   removed field are inert because paintPatch only copies factory-present
+   fields.

@@ -220,3 +220,54 @@ func TestWozduhMenuTitlesAndSolidChannelBounds(t *testing.T) {
 		t.Fatal("titles must stay distinct")
 	}
 }
+
+func TestWozduhChannelFillCapabilities(t *testing.T) {
+	comps := WozduhComponents()
+	byID := map[string]map[string]any{}
+	for _, c := range comps {
+		var m map[string]any
+		if err := json.Unmarshal(c.RenderOpts, &m); err != nil {
+			t.Fatal(c.ID, err)
+		}
+		byID[c.ID] = m
+		_, whole := m["fillColor"]
+		_, upSplit := m["upperFillColor"]
+		_, dnSplit := m["lowerFillColor"]
+		if whole && (upSplit || dnSplit) {
+			t.Fatalf("%s advertises fillColor together with split fills", c.ID)
+		}
+		_, bound := m["boundColor"]
+		_, up := m["upperColor"]
+		_, dn := m["lowerColor"]
+		if bound && (up || dn) {
+			t.Fatalf("%s advertises boundColor together with edge colors", c.ID)
+		}
+	}
+	rsi := byID["woz_rsi_close_chan"]
+	if rsi["boundColor"] != "blue" {
+		t.Fatalf("rsi boundColor=%v", rsi["boundColor"])
+	}
+	if rsi["upperFillColor"] != "rgba(128,0,0,0.12)" || rsi["lowerFillColor"] != "rgba(128,0,0,0.12)" {
+		t.Fatalf("rsi split fills=%v %v", rsi["upperFillColor"], rsi["lowerFillColor"])
+	}
+	for _, k := range []string{"fillColor", "upperColor", "lowerColor", "upperOuterFillColor", "lowerOuterFillColor"} {
+		if _, ok := rsi[k]; ok {
+			t.Fatalf("woz_rsi_close_chan must omit %s", k)
+		}
+	}
+	vol := byID["woz_vol_rsi_ema5_chan"]
+	if vol["boundColor"] != "blue" {
+		t.Fatalf("vol boundColor=%v", vol["boundColor"])
+	}
+	if vol["fillColor"] != "rgba(0,136,255,0.12)" {
+		t.Fatalf("vol fillColor=%v", vol["fillColor"])
+	}
+	if vol["midColor"] != "orange" {
+		t.Fatalf("vol midColor=%v", vol["midColor"])
+	}
+	for _, k := range []string{"upperColor", "lowerColor", "upperFillColor", "lowerFillColor", "upperOuterFillColor", "lowerOuterFillColor"} {
+		if _, ok := vol[k]; ok {
+			t.Fatalf("volume channel must omit %s", k)
+		}
+	}
+}

@@ -8,7 +8,16 @@
 
   const STORAGE_KEY = 'wozduh_color_prefs_v1';
   const LINE_FIELDS = ['color'];
-  const CHANNEL_FIELDS = ['upperColor', 'midColor', 'lowerColor', 'fillColor'];
+  const CHANNEL_FIELDS = [
+    'upperColor',
+    'midColor',
+    'lowerColor',
+    'boundColor',
+    'fillColor',
+    'upperFillColor',
+    'lowerFillColor',
+  ];
+  const FILL_FIELDS = new Set(['fillColor', 'upperFillColor', 'lowerFillColor']);
   const ALL_FIELDS = new Set([...LINE_FIELDS, ...CHANNEL_FIELDS]);
 
   const memoryStore = createMemoryStorage();
@@ -148,17 +157,22 @@
     return toPickerHex(factory);
   }
 
+  function hasFactoryColor(factoryColors, field) {
+    if (!factoryColors || typeof factoryColors !== 'object') return false;
+    const v = factoryColors[field];
+    return typeof v === 'string' && v.trim() !== '';
+  }
+
   function factoryColorFields(kind, renderOpts) {
     const opts = renderOpts && typeof renderOpts === 'object' ? renderOpts : {};
-    if (String(kind || '').toLowerCase() === 'channel') {
-      return {
-        upperColor: opts.upperColor,
-        midColor: opts.midColor,
-        lowerColor: opts.lowerColor,
-        fillColor: opts.fillColor,
-      };
+    const out = {};
+    const fields = fieldsForKind(kind);
+    for (const field of fields) {
+      if (!Object.prototype.hasOwnProperty.call(opts, field)) continue;
+      if (typeof opts[field] !== 'string' || opts[field].trim() === '') continue;
+      out[field] = opts[field];
     }
-    return { color: opts.color };
+    return out;
   }
 
   function loadMap() {
@@ -246,11 +260,12 @@
     const factory = factoryColors && typeof factoryColors === 'object' ? factoryColors : {};
     const out = {};
     for (const field of fields) {
+      if (!hasFactoryColor(factory, field)) continue;
       const hex = normalizeHex(src[field]);
       if (!hex) continue;
-      if (field === 'fillColor') {
-        const rgba = fillRgbaFromHex(hex, factory.fillColor);
-        if (rgba) out.fillColor = rgba;
+      if (FILL_FIELDS.has(field)) {
+        const rgba = fillRgbaFromHex(hex, factory[field]);
+        if (rgba) out[field] = rgba;
       } else {
         out[field] = hex;
       }
@@ -266,7 +281,7 @@
     const out = {};
     for (const field of want) {
       if (!allowed.includes(field)) continue;
-      if (factory[field] == null || factory[field] === '') continue;
+      if (!hasFactoryColor(factory, field)) continue;
       out[field] = factory[field];
     }
     return out;
@@ -276,6 +291,8 @@
     STORAGE_KEY,
     LINE_FIELDS,
     CHANNEL_FIELDS,
+    FILL_FIELDS,
+    hasFactoryColor,
     setStorage,
     normalizeHex,
     fieldsForKind,

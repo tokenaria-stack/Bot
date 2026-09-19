@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## CHANNEL-SPLIT-FILLS-1 — split interior channel fills + shared boundary (Sep 2026)
+
+- Rejected unpushed outer-fill (pane-edge) model. RSI close fills are upper↔mid and mid↔lower.
+- One `boundColor` for both edge strokes on RSI close and Volume EMA5 channel. Volume keeps whole-band `fillColor`; RSI close keeps split fills.
+- Artifact: `research/cleanup/CHANNEL-SPLIT-FILLS-1.txt`.
+
 ## PANE-WORKSPACE-MAXIMIZE-1 — maximize panes inside #charts-stack (Sep 2026)
 
 - Deleted viewport-fixed `.fullscreen-pane` overlay (`100vw`/`100vh` / `z-index: 9999`).
