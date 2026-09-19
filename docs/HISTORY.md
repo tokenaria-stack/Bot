@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-PANE-AUTOSCALE-OWNER-1 — pane-owned Wozduh Auto domain (Sep 2026)
+
+- Bounded `[-5,105]` moved from hideable `woz_vol_rsi_ema5` to the Extreme Bands private host.
+- All DDR Wozduh plots/channels are `ignore`. ScaleController unchanged. Artifact: `research/cleanup/WOZDUH-PANE-AUTOSCALE-OWNER-1.txt`.
+
 ## CHANNEL-SPLIT-FILLS-1 — split interior channel fills + shared boundary (Sep 2026)
 
 - Rejected unpushed outer-fill (pane-edge) model. RSI close fills are upper↔mid and mid↔lower.

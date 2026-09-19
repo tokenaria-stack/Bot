@@ -1,8 +1,11 @@
 /**
- * WOZDUH-SCALE-1 — Pine urvol extreme bands as Wozduh pane chrome.
+ * WOZDUH-SCALE-1 + WOZDUH-PANE-AUTOSCALE-OWNER-1
+ * Pine urvol extreme bands as Wozduh pane chrome.
  * Private host + ISeriesPrimitive. Not DDR, not store, not settings.
  *
- * Public: attach / refresh / dispose. refresh() seeds one priced host point.
+ * The host also owns the pane Auto domain (bounded [-5, 105]). Plot visibility
+ * must not remove that contributor. Public: attach / refresh / dispose.
+ * refresh() seeds one priced host point for priceToCoordinate.
  */
 (function (global) {
   'use strict';
@@ -20,7 +23,10 @@
     highOuter: 92,
   });
 
-  /** Inert Y on the Wozduh domain; host does not contribute to Auto. */
+  /** Wozduh pane Auto domain. Same box as RSX. Not a per-plot contribution. */
+  const PANE_DOMAIN = Object.freeze({ type: 'bounded', min: -5, max: 105 });
+
+  /** Seed for priceToCoordinate of band chrome. Autoscale uses PANE_DOMAIN, not this value. */
   const HOST_VALUE = 50;
 
   const FILL_YELLOW = 'rgba(255, 255, 0, 0.2)';
@@ -32,6 +38,17 @@
   const STROKE = 'rgba(120, 123, 134, 0.85)';
   const DOTTED_DASH = [1, 2];
 
+  function paneDomainProvider() {
+    const api = global.ScaleContribution;
+    if (api && typeof api.createAutoscaleProvider === 'function') {
+      const p = api.createAutoscaleProvider(PANE_DOMAIN);
+      if (typeof p === 'function') return p;
+    }
+    return () => ({
+      priceRange: { minValue: PANE_DOMAIN.min, maxValue: PANE_DOMAIN.max },
+    });
+  }
+
   function hostSeriesOptions() {
     return {
       title: '',
@@ -42,7 +59,7 @@
       priceLineVisible: false,
       crosshairMarkerVisible: false,
       priceScaleId: 'right',
-      autoscaleInfoProvider: () => null,
+      autoscaleInfoProvider: paneDomainProvider(),
     };
   }
 
@@ -266,6 +283,7 @@
     refresh,
     dispose,
     LEVELS,
+    PANE_DOMAIN,
     HOST_VALUE,
     FILL_YELLOW,
     STROKE,

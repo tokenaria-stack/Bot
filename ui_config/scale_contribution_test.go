@@ -69,10 +69,11 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	}
 }
 
-func TestWozduhVolRsiEma5BoundedPeersIgnore(t *testing.T) {
+func TestWozduhDdrPlotsAllIgnore(t *testing.T) {
 	comps := WozduhComponents()
-	var ownerType string
-	boundedCount := 0
+	if len(comps) == 0 {
+		t.Fatal("no Wozduh components")
+	}
 	ignoreCount := 0
 	for _, c := range comps {
 		var m map[string]any
@@ -83,28 +84,13 @@ func TestWozduhVolRsiEma5BoundedPeersIgnore(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing scaleContribution", c.ID)
 		}
-		typ, _ := sc["type"].(string)
-		if c.ID == "woz_vol_rsi_ema5" {
-			ownerType = typ
-			boundedCount++
-			if sc["min"].(float64) != -5 || sc["max"].(float64) != 105 {
-				t.Fatalf("woz_vol_rsi_ema5 bounds=%v", sc)
-			}
-			continue
-		}
-		if typ != "ignore" {
-			t.Fatalf("%s want ignore, got %v", c.ID, typ)
+		if sc["type"] != "ignore" {
+			t.Fatalf("%s want ignore (pane host owns Auto), got %v", c.ID, sc)
 		}
 		ignoreCount++
 	}
-	if ownerType != "bounded" {
-		t.Fatalf("woz_vol_rsi_ema5 type=%q", ownerType)
-	}
-	if boundedCount != 1 {
-		t.Fatalf("expected exactly one bounded Wozduh owner, got %d", boundedCount)
-	}
 	if ignoreCount < 10 {
-		t.Fatalf("expected many ignore peers, got %d", ignoreCount)
+		t.Fatalf("expected many ignore DDR plots, got %d", ignoreCount)
 	}
 }
 

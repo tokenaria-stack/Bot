@@ -7,6 +7,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+require('./ui/scale-contribution.js');
 const WozduhExtremeBands = require('./wozduh-extreme-bands.js');
 const { DDRFactory } = require('./series-factory.js');
 
@@ -59,17 +60,21 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(!keys.includes('update'));
 });
 
-test('B. private host autoscale is null; woz_vol_rsi_ema5 stays bounded owner in layout', () => {
+test('B. private host owns pane Auto domain; DDR ema5 is ignore', () => {
   const opts = WozduhExtremeBands._hostSeriesOptionsForTests();
   assert.strictEqual(opts.title, '');
   assert.strictEqual(typeof opts.autoscaleInfoProvider, 'function');
-  assert.strictEqual(opts.autoscaleInfoProvider(), null);
+  assert.deepStrictEqual(opts.autoscaleInfoProvider(), {
+    priceRange: { minValue: -5, maxValue: 105 },
+  });
+  assert.deepStrictEqual(WozduhExtremeBands.PANE_DOMAIN, { type: 'bounded', min: -5, max: 105 });
   assert.strictEqual(opts.lineVisible, false);
   assert.strictEqual(opts.priceLineVisible, false);
   assert.strictEqual(opts.lastValueVisible, false);
   assert.strictEqual(opts.priceScaleId, 'right');
   const layout = fs.readFileSync(path.join(__dirname, '../ui_config/wozduh_layout.go'), 'utf8');
-  assert.ok(layout.includes('wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleBoundedOsc'));
+  assert.ok(layout.includes('wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleIgnore'));
+  assert.ok(!layout.includes('scaleBoundedOsc'));
   assert.ok(layout.includes('wozLine("woz_vol_rsi_ema12", core.SlotWozduhVolRsiEma12, scaleIgnore'));
 });
 

@@ -73,7 +73,7 @@ test('C. hidden woz_vol_rsi_ema12 skips; hidden woz_vol_rsi_ema5 still fed', () 
   assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5' && e.pt.value === 41));
 });
 
-test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; ema5 owns bounded Auto', () => {
+test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; DDR plots ignore Auto', () => {
   const events = [];
   const captured = [];
   const order = ['woz_vol_rsi_ema12', 'woz_vol_rsi_ema5', 'woz_rsi_close'];
@@ -102,7 +102,7 @@ test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; ema5 o
           id: 'woz_vol_rsi_ema5',
           hostId: 'wozduh',
           kind: 'line',
-          renderOptions: { defaultVisible: true, scaleContribution: { type: 'bounded', min: -5, max: 105 } },
+          renderOptions: { defaultVisible: true, scaleContribution: { type: 'ignore' } },
         },
         {
           id: 'woz_rsi_close',
@@ -116,9 +116,7 @@ test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; ema5 o
   const slow = captured.find((c) => c.id === 'woz_vol_rsi_ema5');
   const fast = captured.find((c) => c.id === 'woz_vol_rsi_ema12');
   const peer = captured.find((c) => c.id === 'woz_rsi_close');
-  assert.deepStrictEqual(slow.opts.autoscaleInfoProvider(), {
-    priceRange: { minValue: -5, maxValue: 105 },
-  });
+  assert.strictEqual(slow.opts.autoscaleInfoProvider(), null);
   assert.strictEqual(fast.opts.autoscaleInfoProvider(), null);
   assert.strictEqual(peer.opts.autoscaleInfoProvider(), null);
   const boundedOwners = captured.filter((c) => {
@@ -127,8 +125,7 @@ test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; ema5 o
     const info = p();
     return info && info.priceRange;
   });
-  assert.strictEqual(boundedOwners.length, 1);
-  assert.strictEqual(boundedOwners[0].id, 'woz_vol_rsi_ema5');
+  assert.strictEqual(boundedOwners.length, 0);
 
   factory.setSeriesVisible('woz_vol_rsi_ema12', false);
   events.length = 0;

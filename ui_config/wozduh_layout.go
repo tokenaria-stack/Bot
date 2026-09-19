@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	scaleBoundedOsc = `{"type":"bounded","min":-5,"max":105}`
-	scaleIgnore     = `{"type":"ignore"}`
+	scaleIgnore = `{"type":"ignore"}`
 )
 
 // WozduhComponents returns DDR bindings for the Wozduh numeric atom set.
 // Visibility toggles are driven by Configurable + SettingsRenderer (no FE line hardcode).
-// ADR-022: woz_vol_rsi_ema5 is the bounded Auto anchor; peers declare ignore (no heuristics).
+// WOZDUH-PANE-AUTOSCALE-OWNER-1: every DDR plot/channel is ignore. Pane Auto domain
+// [-5,105] lives on the Extreme Bands private host, not on a hideable line.
 //
 // Mount order = historical Pine plot() back→front (docs/PINE_INDICATOR_SOURCES.md RSIVolume_2graf.02).
 // Later LWC series paint on top. Projector-only plots are not mounted.
@@ -24,7 +24,7 @@ func WozduhComponents() []core.UIComponent {
 			`{"color":"maroon","lineWidth":1,"title":"RSI AD","defaultVisible":false,"lastValueVisible":false,"priceLineVisible":false}`),
 		wozLine("woz_rsi_hl2", core.SlotWozduhRsiHl2, scaleIgnore,
 			`{"color":"purple","lineWidth":2,"title":"RSI HL2","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),
-		wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleBoundedOsc,
+		wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleIgnore,
 			`{"color":"aqua","lineWidth":2,"title":"Volume RSI EMA5","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),
 		wozLine("woz_vol_rsi_ema12", core.SlotWozduhVolRsiEma12, scaleIgnore,
 			`{"color":"blue","lineWidth":2,"title":"Volume RSI EMA12","defaultVisible":true,"lastValueVisible":false,"priceLineVisible":false}`),

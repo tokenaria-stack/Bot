@@ -1,0 +1,173 @@
+WOZDUH-PANE-AUTOSCALE-OWNER-1
+=============================
+
+Verdict: WOZDUH_PANE_AUTOSCALE_OWNER_GREEN
+
+(Implementation + focused tests. Live EMA5-hidden Auto check is the
+user gate before PUSH / FREEZE.)
+
+
+A. ROOT CAUSE
+-------------
+
+ScaleController Auto is generic and was not broken.
+
+Wozduh Auto domain was attached to hideable DDR plot woz_vol_rsi_ema5
+(bounded [-5,105]). Other plots/channels ignore. Hiding EMA5 removed
+the only LWC autoscale contributor. autoScale=true then merged nothing.
+
+
+B. OLD OWNERSHIP
+----------------
+
+    woz_vol_rsi_ema5          bounded(-5, 105)
+    all other DDR Wozduh      ignore
+    Extreme Bands host        autoscaleInfoProvider → null
+
+
+C. FINAL OWNERSHIP
+------------------
+
+    Extreme Bands private host    bounded(-5, 105)
+    all DDR Wozduh plots/channels ignore  (including woz_vol_rsi_ema5)
+
+RSX unchanged: line_rsx bounded. Price unchanged.
+
+
+D. WOZDUH SCALE CONTRIBUTION MAP
+--------------------------------
+
+DDR (ui_config/wozduh_layout.go), all ignore:
+
+    woz_rsi_ad
+    woz_rsi_hl2
+    woz_vol_rsi_ema5
+    woz_vol_rsi_ema12
+    woz_vol_rsi_ema5_chan
+    woz_rsi_hl2_vwema
+    woz_rsi_close
+    woz_rsi_close_chan
+    woz_rsi_rsi_close
+    woz_macd_rsi_close
+    woz_rsi_close_ema7
+    (plot-only channel columns also ignore)
+
+Pane host (web/wozduh-extreme-bands.js):
+
+    PANE_DOMAIN { type: bounded, min: -5, max: 105 }
+    → ScaleContribution.createAutoscaleProvider
+    → autoscaleInfoProvider priceRange minValue -5 maxValue 105
+
+One bounded Wozduh contributor. Not a DDR component. Not in Style.
+
+
+E. EXTREME BANDS HOST ROLE
+--------------------------
+
+Always mounted while the Wozduh chart exists (chart-core attach).
+Not a Style/visibility row. Not Wozduh math.
+
+Band LEVELS / colors / geometry / zOrder / refresh seed HOST_VALUE=50
+unchanged. HOST_VALUE remains priceToCoordinate seed only.
+
+Comment reversal: host is no longer "inert for Auto"; it owns the pane
+domain.
+
+
+F. EMA5 VISIBILITY INDEPENDENCE
+-------------------------------
+
+setSeriesVisible('woz_vol_rsi_ema5', false) does not dispose the host
+and does not change PANE_DOMAIN.
+
+WOZDUH-OWNER-1 still feeds hidden ema5 (crosshair anchor). That is
+wire/feed, not scale ownership, not force-visible. Unchanged here.
+
+
+G. SCALECONTROLLER NON-CHANGE
+-----------------------------
+
+No ScaleController edit.
+No setVisibleRange.
+No hostId === "wozduh".
+Auto remains applyOptions({ autoScale }).
+
+
+H. RSX / PRICE REGRESSION
+-------------------------
+
+RSX layout still line_rsx bounded [-5,105]; signal ignore.
+RsxScaleLines host still ignore (null).
+Price path untouched.
+
+
+I. TEST RESULTS
+---------------
+
+  node web/wozduh_pane_autoscale_owner_test.js   ALL PASS
+  node web/wozduh_extreme_bands_test.js          ALL PASS
+  node web/wozduh_owner_test.js                  ALL PASS
+  node web/scale_contribution_test.js            ALL PASS
+  node web/scale_controller_test.js              ALL PASS
+  node web/scale_paint_ownership_test.js         ALL PASS
+  node web/rsx_scale_lines_test.js               ALL PASS
+  go test ./ui_config                            ok
+
+No market/indicator numerical files changed.
+
+
+J. LIVE CHECK
+-------------
+
+Pending user:
+
+  A. EMA5 shown, Y-drag, Auto
+  B. EMA5 hidden, Y-drag, Auto → [-5,105]
+  C. other Wozduh plots/channels hidden, Auto still the pane domain
+  D. RSX Auto
+  E. price Auto
+
+Do not PUSH until accepted.
+
+
+K. POST-SEARCH
+--------------
+
+No scaleBoundedOsc in Go.
+No DDR Wozduh bounded.
+No setVisibleRange in ScaleController or Extreme Bands.
+No hostId === "wozduh" in ScaleController.
+No force-visible EMA5 for autoscale.
+
+
+L. GIT STATUS
+-------------
+
+Local commit only. Not pushed. Untracked *AUDIT* files unstaged.
+
+
+M. FINAL VERDICT
+----------------
+
+WOZDUH_PANE_AUTOSCALE_OWNER_GREEN
+
+HARD STOP for live verify. Then PUSH + FREEZE.
+
+
+GPT PROMPT CORRECTIONS
+----------------------
+
+1. The pane host is not a DDR scaleContribution JSON field. It is an
+   LWC series option. The translator is reused: createAutoscaleProvider
+   (fallback inline only if ScaleContribution is not loaded).
+
+2. Deleted unused Go scaleBoundedOsc. Leaving a dead DDR constant would
+   invite putting bounded back on a plot.
+
+3. Did not change WOZDUH-OWNER-1 hidden-ema5 feed. Crosshair anchor ≠
+   Auto domain.
+
+4. Auto toggle-vs-reset UX not mixed in.
+
+5. Unit tests cannot perform a real LWC Y-drag. Ownership + Auto command
+   path are proven; range snap is the live gate.
