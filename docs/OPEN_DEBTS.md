@@ -27,6 +27,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **CHANNEL-SPLIT-FILLS-1 ✅ frozen** (`a02aa98`). Shared `boundColor` on both Wozduh channels; RSI close split fills; Volume whole-band `fillColor`. Do not reopen pane-edge outer fills or twin Volume `upperColor`/`lowerColor`.
 
+**WOZDUH-PANE-AUTOSCALE-OWNER-1 ✅ frozen** (`1a409e9`). Wozduh Auto domain is the Extreme Bands host (`[-5,105]`). Do not put bounded autoscale back on hideable `woz_vol_rsi_ema5`. ScaleController stays generic.
+
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
@@ -34,7 +36,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1 frozen.** **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). Next: user tunes Wozduh colors live; do **not** retune `ui_config` until they ask. Falcon retirement chapters frozen.
+2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1 frozen.** **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). **WOZDUH-PANE-AUTOSCALE-OWNER-1 frozen** (`1a409e9`). Next: user tunes Wozduh colors live; do **not** retune `ui_config` until they ask. Falcon retirement chapters frozen.
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  
@@ -61,7 +63,7 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **RSX-VISIBILITY-1 ✅ frozen** (`749912f`). Five FE visibility flags; `div_method` / `show_pivots` deleted. Facts independent of **presentation** (not of compute demand). Visibility not in RSX fingerprint. Do **not** reopen.
 
-**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|VolRsiEma12|VolRsiEma5). ChartOnly unused Frames are mask 0. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1:** discrete cross event deleted. Do **not** mint a replacement Wozduh fact. **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). User palette next; no factory retune until asked.
+**WOZDUH-ACTIVE-1B ✅ frozen** (`1b724ef`). Persistent Frame Wozduh mask = per-TF WS union OR proven internal (`Live`: VolBase|VolRsiEma12|VolRsiEma5). ChartOnly unused Frames are mask 0. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1:** discrete cross event deleted. Do **not** mint a replacement Wozduh fact. **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). **WOZDUH-PANE-AUTOSCALE-OWNER-1 frozen** (`1a409e9`). User palette next; no factory retune until asked.
 
 **DAG-DEMAND-1 ✅ frozen** (`0837c77`). Per-TF RSX analytical demand. ChartOnly unused: Core/TV/Fractal/DAG-ZZ/ZZ collector = 0. Live internal: Core only. Facts `*[]string` tri-state. One coherent RSX series per wake. HTTP history independent. Frame `a.zigzag` untouched.
 

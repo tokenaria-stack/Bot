@@ -1472,7 +1472,7 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 
 **Consequences:** Debt **#68** closed. Modules: `web/ui/scale-contribution.js`, `web/series-factory.js`, `ui_config/rsx_layout.go`, `ui_config/wozduh_layout.go`. Tests: `web/scale_contribution_test.js`, `ui_config/scale_contribution_test.go`.
 
-**WOZDUH-PANE-AUTOSCALE-OWNER-1 amendment:** Wozduh bounded `[-5,105]` is pane-owned on the Extreme Bands private host (`autoscaleInfoProvider` via `ScaleContribution.createAutoscaleProvider`). All DDR Wozduh plots including `woz_vol_rsi_ema5` are `ignore`. Plot visibility must not remove the pane Auto domain. RSX wire unchanged (`line_rsx` bounded). No ScaleController / `setVisibleRange` / `hostId === "wozduh"` branch.
+**WOZDUH-PANE-AUTOSCALE-OWNER-1 amendment (frozen `1a409e9`):** Wozduh bounded `[-5,105]` is pane-owned on the Extreme Bands private host (`autoscaleInfoProvider` via `ScaleContribution.createAutoscaleProvider`). All DDR Wozduh plots including `woz_vol_rsi_ema5` are `ignore`. Plot visibility must not remove the pane Auto domain. RSX wire unchanged (`line_rsx` bounded). No ScaleController / `setVisibleRange` / `hostId === "wozduh"` branch.
 
 ---
 

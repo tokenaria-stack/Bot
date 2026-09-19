@@ -1,10 +1,9 @@
 WOZDUH-PANE-AUTOSCALE-OWNER-1
 =============================
 
-Verdict: WOZDUH_PANE_AUTOSCALE_OWNER_GREEN
+Verdict: WOZDUH_PANE_AUTOSCALE_OWNER_GREEN frozen `1a409e9`
 
-(Implementation + focused tests. Live EMA5-hidden Auto check is the
-user gate before PUSH / FREEZE.)
+(Implementation + focused tests. Live accepted 2026-09-19.)
 
 
 A. ROOT CAUSE
@@ -119,15 +118,8 @@ No market/indicator numerical files changed.
 J. LIVE CHECK
 -------------
 
-Pending user:
-
-  A. EMA5 shown, Y-drag, Auto
-  B. EMA5 hidden, Y-drag, Auto → [-5,105]
-  C. other Wozduh plots/channels hidden, Auto still the pane domain
-  D. RSX Auto
-  E. price Auto
-
-Do not PUSH until accepted.
+Accepted 2026-09-19: EMA5 hidden → Y-drag → Auto restores pane domain.
+RSX / price Auto unchanged.
 
 
 K. POST-SEARCH
@@ -143,15 +135,13 @@ No force-visible EMA5 for autoscale.
 L. GIT STATUS
 -------------
 
-Local commit only. Not pushed. Untracked *AUDIT* files unstaged.
+Product `1a409e9` frozen. Docs freeze follows. Audit files stay unstaged.
 
 
 M. FINAL VERDICT
 ----------------
 
-WOZDUH_PANE_AUTOSCALE_OWNER_GREEN
-
-HARD STOP for live verify. Then PUSH + FREEZE.
+WOZDUH_PANE_AUTOSCALE_OWNER_GREEN frozen `1a409e9`. Do not reopen.
 
 
 GPT PROMPT CORRECTIONS
