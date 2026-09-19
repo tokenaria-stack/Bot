@@ -12,7 +12,7 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 - Rejected unpushed outer-fill (pane-edge) model. RSI close fills are upper↔mid and mid↔lower.
 - One `boundColor` for both edge strokes on RSI close and Volume EMA5 channel. Volume keeps whole-band `fillColor`; RSI close keeps split fills.
-- Artifact: `research/cleanup/CHANNEL-SPLIT-FILLS-1.txt`.
+- Frozen at `a02aa98`. Artifact: `research/cleanup/CHANNEL-SPLIT-FILLS-1.txt`.
 
 ## PANE-WORKSPACE-MAXIMIZE-1 — maximize panes inside #charts-stack (Sep 2026)
 

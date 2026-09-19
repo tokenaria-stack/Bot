@@ -1,7 +1,7 @@
 CHANNEL-SPLIT-FILLS-1
 =====================
 
-Verdict: CHANNEL_SPLIT_FILLS_GREEN
+Verdict: CHANNEL_SPLIT_FILLS_GREEN frozen `a02aa98`
 
 Revises unpushed b32a06c (CHANNEL-OUTER-FILLS-1). That chapter was GREEN as
 code and WRONG as product. Not pushed. This file replaces
@@ -155,16 +155,13 @@ No twin-pref copy from upper to lower.
 R. GIT STATUS
 -------------
 
-Amended unpushed chapter on 2026-07-06-puvo (ahead 1). Not pushed.
-Untracked research/cleanup/*AUDIT* files left unstaged.
+Product commit `a02aa98` frozen. Docs freeze follows. Audit files stay unstaged.
 
 
 S. FINAL VERDICT
 ----------------
 
-CHANNEL_SPLIT_FILLS_GREEN
-
-HARD STOP. Visual review. Do not push.
+CHANNEL_SPLIT_FILLS_GREEN frozen `a02aa98`. Visual accepted. Do not reopen.
 
 
 GPT PROMPT CORRECTIONS

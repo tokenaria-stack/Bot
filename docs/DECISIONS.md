@@ -7,6 +7,20 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## CHANNEL-SPLIT-FILLS-1 (Sep 2026)
+
+**Context:** RSI close needed independent interior fill colors. First unpushed attempt painted pane-edge outer fills (pane top→upper, lower→pane bottom). User rejected that geometry. Volume then still advertised two identical edge stroke prefs.
+
+**Decision:** Split fills at mid (`upperFillColor` = upper↔mid, `lowerFillColor` = mid↔lower). One `boundColor` owns both envelope strokes on RSI close and Volume EMA5 channel. Volume keeps whole-band `fillColor`. Fill models are XOR; stroke models are XOR. Style menu is presence-driven. Frozen at `a02aa98`.
+
+**Rejected:**
+- Pane-edge outer fills — **Reason:** washed the Wozduh pane; not the interior envelope.
+- Twin Volume `upperColor`/`lowerColor` with copy-sync — **Reason:** one user concept; one field.
+
+**Consequences:** Do not reopen outer fills, Volume dual-edge prefs, or mixed fill/stroke advertisements. No factory palette retune until asked.
+
+---
+
 ## FALCON-REMOVE-1 (Sep 2026)
 
 **Context:** After FRAME-UNWIRE-1, FalconEngine had no HTF, Live Evaluate, oracle, Frame, or FeatureTape owner. `market/falcon.go` was dead code in `market`.
