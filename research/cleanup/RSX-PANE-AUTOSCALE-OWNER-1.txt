@@ -1,0 +1,141 @@
+RSX-PANE-AUTOSCALE-OWNER-1
+GREEN. Frozen. Product SHA filled in docs freeze. Operator live GREEN.
+
+GPT prompt followed. Corrections in section X.
+
+======================================================================
+A. EXECUTIVE
+======================================================================
+
+Scoped tests GREEN. Live pane check is operator-owned (no MCP).
+Provider console dump is not acceptance.
+
+Old Auto owner:
+    line_rsx DDR  → bounded [-5,105]
+
+New Auto owner:
+    RsxScaleLines private host → existing autoscaleInfoProvider → [-5,105]
+    line_rsx DDR              → ignore (values + stroke only)
+
+HOST_VALUE remains 50. No primitive autoscaleInfo(). No fake history series.
+No RSX values copied onto chrome. Markers still getSeries('line_rsx').
+
+Post-DDR seed:
+    ChartCompositor _flushFull / _flushPrepend / _flushIndicators
+        → after _applyDdrPlots
+        → ChartAdapter.refreshOscillatorPaneChrome()
+        → RsxScaleLines.refresh(_lastRealCandleTime)
+
+_flushDelta / updateCandle do not refresh the host.
+
+======================================================================
+B. FILES CHANGED
+======================================================================
+
+Product:
+    web/rsx-scale-lines.js          (PANE_DOMAIN + host autoscaleInfoProvider)
+    ui_config/rsx_layout.go         (line_rsx ignore)
+    web/chart-core.js               (refreshOscillatorPaneChrome; paintCandles
+                                     still has the original early refresh)
+    web/chart-compositor.js         (refresh after DDR setData)
+    web/index.html                  (cache-bust)
+
+Tests:
+    web/rsx_pane_autoscale_owner_test.js   (new)
+    web/rsx_scale_lines_test.js
+    web/wozduh_pane_autoscale_owner_test.js
+    ui_config/scale_contribution_test.go
+
+Not changed:
+    ScaleController, Wozduh Extreme Bands, crosshair sockets, hydration,
+    series-factory, ChannelSeries, markers, applyLiveAnnotationLayer,
+    RSX math/stroke.
+
+======================================================================
+C. FIRSTVALUE / LIFECYCLE
+======================================================================
+
+LWC 4.2.1 PriceScale skips a source when firstValue() === null, before
+autoscaleInfoProvider is consulted.
+
+paintCandles still calls RsxScaleLines.refresh(tip) before compositor
+DDR setData. That early seed can miss the indexed RSX timeline.
+
+The consuming seed is the existing compositor post-DDR hook:
+
+    attach chrome
+    applyFullData / paintCandles   (early refresh; may still be null)
+    _applyDdrPlots                 (line_rsx setData — indexed timeline)
+    refreshOscillatorPaneChrome    (host setData([{time: tip, value: 50}]))
+
+Proof in tests:
+    D. attach → DDR setData → refresh(30) → host.data [{time:30,value:50}]
+    C. _flushFull chrome call is after _applyDdrPlots
+    C. _flushDelta has no refreshOscillatorPaneChrome
+    K. primitive has no autoscaleInfo method
+
+If live Auto still ignores the host after this order: HARD STOP.
+Do not add primitive autoscaleInfo or a history-length fake series.
+
+======================================================================
+D. TESTS
+======================================================================
+
+    node web/rsx_pane_autoscale_owner_test.js     PASS
+    node web/rsx_scale_lines_test.js              PASS
+    node web/wozduh_pane_autoscale_owner_test.js  PASS
+    node web/wozduh_extreme_bands_test.js         PASS
+    node web/crosshair_pane_host_test.js          PASS
+    node web/scale_paint_ownership_test.js        PASS
+    node web/scale_contribution_test.js           PASS
+    node web/scale_controller_test.js             PASS
+    node web/hidden_render_skip_test.js           PASS
+    go test ./ui_config/                          PASS
+
+======================================================================
+E. LIVE (OPERATOR)
+======================================================================
+
+Reboot the bot so rsx_layout.go ignore is served. Hard-reload so these
+query strings load (stale HTML keeps old compositor/core/scale-lines):
+
+    chart-compositor.js?v=4.36.1-rsx-pane-autoscale-1
+    rsx-scale-lines.js?v=1.2.2-pane-autoscale-owner-1
+    chart-core.js?v=4.28.2-rsx-pane-autoscale-1
+
+Then: RSX visible → axis [-5,105] with 30/50/70; hide line_rsx → same
+box; show again → no jump; hidden historical crosshair; TF away/back
+and hide/show again.
+
+Acceptance is the live pane, not autoscaleInfoProvider() alone.
+
+Operator GREEN. Do not add a second autoscale mechanism.
+
+======================================================================
+X. GPT CORRECTIONS
+======================================================================
+
+1. Primitive autoscaleInfo() was briefly added after the first live RED.
+   That is a second autoscale mechanism. Removed. Host provider only.
+
+2. Console PANE_DOMAIN / provider() is not live Auto proof. LWC
+   firstValue() gate can skip the host while the module still returns
+   [-5,105] in isolation.
+
+3. Wozduh live GREEN did not prove the Extreme Bands host was winning
+   Auto. Wozduh plots already span ~0–100. Wozduh left frozen; this
+   chapter does not "fix" it.
+
+4. Dual seed: paintCandles still refreshes RSX (and Wozduh) as before.
+   The ownership fix is the extra post-DDR RSX-only refresh via the
+   existing compositor full/prepend/indicators flushes — not a new
+   lifecycle abstraction, not per-tick.
+
+5. Layout comment must not use the JS identifier RsxScaleLines
+   ("not a DDR identity" test). Comment says "scale-lines private host".
+
+6. Markers left on line_rsx (test J). Known presentation leak.
+
+7. Go TestRSXComponentsScaleContribution inverted with the layout.
+
+8. Wozduh pane tests B/E no longer freeze "RSX still plot-owned bounded".

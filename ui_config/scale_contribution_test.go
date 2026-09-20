@@ -49,7 +49,7 @@ func TestRSXComponentsScaleContribution(t *testing.T) {
 	}
 	p := primary["scaleContribution"].(map[string]any)
 	s := signal["scaleContribution"].(map[string]any)
-	if p["type"] != "bounded" || p["min"].(float64) != -5 || p["max"].(float64) != 105 {
+	if p["type"] != "ignore" {
 		t.Fatalf("primary=%v", p)
 	}
 	if s["type"] != "ignore" {

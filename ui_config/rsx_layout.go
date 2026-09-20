@@ -7,7 +7,9 @@ import (
 )
 
 // RSXComponents returns DDR bindings for Jurik RSX and its signal line.
-// ADR-022: scaleContribution is per-component (bounded anchor vs ignore peers).
+// ADR-022: scaleContribution is per-component. RSX-PANE-AUTOSCALE-OWNER-1:
+// every DDR RSX plot is ignore. Pane Auto domain [-5,105] lives on the
+// scale-lines private host, not on hideable line_rsx.
 func RSXComponents() []core.UIComponent {
 	return []core.UIComponent{
 		{
@@ -17,7 +19,7 @@ func RSXComponents() []core.UIComponent {
 			Kind:       "line",
 			DataMode:   "scalar",
 			Slot:       core.SlotJurikRSX,
-			RenderOpts: json.RawMessage(`{"color":"#512DA8","lineWidth":2,"title":"RSX","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded","min":-5,"max":105}}`),
+			RenderOpts: json.RawMessage(`{"color":"#512DA8","lineWidth":2,"title":"RSX","lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}}`),
 		},
 		{
 			ID:         "line_rsx_signal",

@@ -83,8 +83,6 @@ test('B. DDR layout: every Wozduh plot/channel is ignore; no scaleBoundedOsc', (
   const layout = fs.readFileSync(path.join(__dirname, '../ui_config/wozduh_layout.go'), 'utf8');
   assert.ok(!layout.includes('scaleBoundedOsc'));
   assert.ok(layout.includes('wozLine("woz_vol_rsi_ema5", core.SlotWozduhVolRsiEma5, scaleIgnore'));
-  const rsx = fs.readFileSync(path.join(__dirname, '../ui_config/rsx_layout.go'), 'utf8');
-  assert.ok(rsx.includes('"scaleContribution":{"type":"bounded","min":-5,"max":105}'));
 });
 
 test('C. factory: hiding ema5/close/channel does not remove host domain; Auto still commands autoScale', () => {
@@ -188,13 +186,11 @@ test('D. no range crutch / no Wozduh ScaleController branch / no force-visible e
   assert.ok(!/autoscaleInfoProvider:\s*\(\)\s*=>\s*null/.test(bands));
 });
 
-test('E. RSX layout still plot-owned bounded; host is not a Style/DDR id', () => {
-  const rsx = fs.readFileSync(path.join(__dirname, '../ui_config/rsx_layout.go'), 'utf8');
-  assert.ok(rsx.includes('line_rsx'));
-  assert.ok(rsx.includes('"type":"bounded"'));
+test('E. chrome hosts are not Style/DDR ids', () => {
   const settings = fs.readFileSync(path.join(__dirname, 'ui/settings-renderer.js'), 'utf8');
   assert.ok(!settings.includes('PANE_DOMAIN'));
   assert.ok(!settings.includes('WozduhExtremeBands'));
+  assert.ok(!settings.includes('RsxScaleLines'));
 });
 
 console.log('wozduh_pane_autoscale_owner_test: ALL PASS');

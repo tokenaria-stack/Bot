@@ -7,6 +7,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+require('./ui/scale-contribution.js');
 const RsxScaleLines = require('./rsx-scale-lines.js');
 const WozduhExtremeBands = require('./wozduh-extreme-bands.js');
 const { DDRFactory } = require('./series-factory.js');
@@ -64,16 +65,20 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(keys.includes('refresh'));
   assert.ok(keys.includes('dispose'));
   assert.ok(keys.includes('applyCrosshairTime'));
+  assert.ok(keys.includes('PANE_DOMAIN'));
   assert.ok(!keys.includes('getSeries'));
   assert.ok(!keys.includes('setData'));
   assert.ok(!keys.includes('update'));
 });
 
-test('B. private host autoscale is null; line_rsx stays bounded owner', () => {
+test('B. private host owns pane Auto domain; line_rsx is ignore', () => {
   const opts = RsxScaleLines._hostSeriesOptionsForTests();
   assert.strictEqual(opts.title, '');
   assert.strictEqual(typeof opts.autoscaleInfoProvider, 'function');
-  assert.strictEqual(opts.autoscaleInfoProvider(), null);
+  assert.deepStrictEqual(opts.autoscaleInfoProvider(), {
+    priceRange: { minValue: -5, maxValue: 105 },
+  });
+  assert.deepStrictEqual(RsxScaleLines.PANE_DOMAIN, { type: 'bounded', min: -5, max: 105 });
   assert.strictEqual(opts.lineVisible, false);
   assert.strictEqual(opts.priceLineVisible, false);
   assert.strictEqual(opts.lastValueVisible, false);
@@ -81,11 +86,9 @@ test('B. private host autoscale is null; line_rsx stays bounded owner', () => {
   assert.strictEqual(opts.priceScaleId, 'right');
   const layout = fs.readFileSync(path.join(__dirname, '../ui_config/rsx_layout.go'), 'utf8');
   assert.ok(layout.includes('"ID":         "line_rsx"') || layout.includes('ID:         "line_rsx"'));
-  assert.ok(layout.includes('"scaleContribution":{"type":"bounded","min":-5,"max":105}'));
-  assert.ok(layout.includes('"lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"bounded"'));
-  assert.ok(layout.includes('"ID":         "line_rsx_signal"') || layout.includes('ID:         "line_rsx_signal"'));
-  assert.ok(layout.includes('"scaleContribution":{"type":"ignore"}'));
   assert.ok(layout.includes('"lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}'));
+  assert.ok(!layout.includes('"scaleContribution":{"type":"bounded","min":-5,"max":105}'));
+  assert.ok(layout.includes('"ID":         "line_rsx_signal"') || layout.includes('ID:         "line_rsx_signal"'));
 });
 
 test('C. product law is exactly 30 / 50 / 70 dotted; no fill, no 20/80', () => {
@@ -156,6 +159,7 @@ test('paintCandles reseeds even when skipDecoration; updateCandle does not', () 
   const update = core.slice(core.indexOf('function updateCandle'), core.indexOf('const ChartAdapter'));
   assert.ok(paint.includes('RsxScaleLines.refresh(state._lastRealCandleTime)'));
   assert.ok(paint.indexOf('skipDecoration') < paint.indexOf('RsxScaleLines.refresh'));
+  assert.ok(core.includes('refreshOscillatorPaneChrome'));
   assert.ok(!update.includes('RsxScaleLines.refresh'));
   assert.ok(!update.includes('RsxScaleLines'));
 });
@@ -164,6 +168,7 @@ test('zOrder is bottom; chart-core wires RSX chart only', () => {
   const Prim = RsxScaleLines._RsxScaleLinesPrimitive;
   const p = new Prim();
   assert.strictEqual(p.paneViews()[0].zOrder(), 'bottom');
+  assert.strictEqual(typeof p.autoscaleInfo, 'undefined');
   const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
   assert.ok(core.includes('RsxScaleLines.attach(rsxChart)'));
   assert.ok(core.includes('RsxScaleLines.dispose()'));

@@ -1356,6 +1356,19 @@
   }
 
   /**
+   * Post-DDR: seed RSX chrome on the oscillator time scale that already has history.
+   * LWC 4.2.1 skips autoscaleInfoProvider when firstValue() is null.
+   * Does not refresh Wozduh (WOZDUH-PANE-AUTOSCALE-OWNER-1 freeze).
+   * Does not run on ticks (updateCandle / delta).
+   */
+  function refreshOscillatorPaneChrome(state) {
+    if (!state) return;
+    if (typeof RsxScaleLines !== 'undefined' && typeof RsxScaleLines.refresh === 'function') {
+      RsxScaleLines.refresh(state._lastRealCandleTime);
+    }
+  }
+
+  /**
    * PAINT-ORDER-1 belt: older than painted tip is illegal for series.update.
    * Same-time is allowed. Not a tick-bar identity law.
    */
@@ -1427,6 +1440,12 @@
       if (!_live) return;
       refreshDecorationFromState(_live);
       refreshRulerOverlay();
+    },
+
+    /** After DDR setData: RSX chrome host firstValue on the indexed RSX timeline. */
+    refreshOscillatorPaneChrome() {
+      if (!_live) return;
+      refreshOscillatorPaneChrome(_live);
     },
 
     /**

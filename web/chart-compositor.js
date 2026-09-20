@@ -247,6 +247,10 @@ class ChartCompositor {
     ChartAdapter.setLiveUpdating(true);
     try {
       this._applyDdrPlots(snapshot);
+      if (typeof ChartAdapter !== 'undefined'
+        && typeof ChartAdapter.refreshOscillatorPaneChrome === 'function') {
+        ChartAdapter.refreshOscillatorPaneChrome();
+      }
       if (this._annotationPaintNeeded()) {
         const storeData = ChartCompositor.snapshotToStoreData(snapshot);
         this._applyAnnotations(storeData);
@@ -330,6 +334,10 @@ class ChartCompositor {
 
     ChartAdapter.applyFullData('live', storeData, { skipAnnotations: true });
     this._applyDdrPlots(snapshot);
+    if (typeof ChartAdapter !== 'undefined'
+      && typeof ChartAdapter.refreshOscillatorPaneChrome === 'function') {
+      ChartAdapter.refreshOscillatorPaneChrome();
+    }
     this._applyAnnotations(storeData);
     const nav = this._getNavigatorResult();
     if (nav) {
@@ -364,6 +372,10 @@ class ChartCompositor {
 
     this._applyAnnotations(storeData);
     this._applyDdrPlots(snapshot);
+    if (typeof ChartAdapter !== 'undefined'
+      && typeof ChartAdapter.refreshOscillatorPaneChrome === 'function') {
+      ChartAdapter.refreshOscillatorPaneChrome();
+    }
     const nav = this._getNavigatorResult();
     if (nav) {
       ChartAdapter.setNavigatorOverlay('live', { navigators: nav }, storeData.candles, {

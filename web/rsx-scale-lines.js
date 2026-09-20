@@ -1,17 +1,36 @@
 /**
- * RSX-SCALE-1 — dotted 30 / 50 / 70 pane chrome.
- * Sibling of WozduhExtremeBands. Not DDR, not store, not settings.
+ * RSX-SCALE-1 + RSX-PANE-AUTOSCALE-OWNER-1
+ * Dotted 30 / 50 / 70 pane chrome. Sibling of WozduhExtremeBands.
+ * Private host + ISeriesPrimitive. Not DDR, not store, not settings.
  *
- * Public: attach / refresh / dispose.
+ * The host also owns the pane Auto domain (bounded [-5, 105]). Plot visibility
+ * must not remove that contributor. Public: attach / refresh / dispose /
+ * applyCrosshairTime. refresh() seeds one priced host point for priceToCoordinate.
  */
 (function (global) {
   'use strict';
 
   const LEVELS = Object.freeze({ low: 30, mid: 50, high: 70 });
+
+  /** RSX pane Auto domain. Same box as Wozduh. Not a per-plot contribution. */
+  const PANE_DOMAIN = Object.freeze({ type: 'bounded', min: -5, max: 105 });
+
+  /** Seed for priceToCoordinate of guides/crosshair. Autoscale uses PANE_DOMAIN, not this value. */
   const HOST_VALUE = 50;
   /** Match Wozduh dotted scale strokes. */
   const STROKE = 'rgba(120, 123, 134, 0.85)';
   const DOTTED_DASH = [1, 2];
+
+  function paneDomainProvider() {
+    const api = global.ScaleContribution;
+    if (api && typeof api.createAutoscaleProvider === 'function') {
+      const p = api.createAutoscaleProvider(PANE_DOMAIN);
+      if (typeof p === 'function') return p;
+    }
+    return () => ({
+      priceRange: { minValue: PANE_DOMAIN.min, maxValue: PANE_DOMAIN.max },
+    });
+  }
 
   function hostSeriesOptions() {
     return {
@@ -23,7 +42,7 @@
       priceLineVisible: false,
       crosshairMarkerVisible: false,
       priceScaleId: 'right',
-      autoscaleInfoProvider: () => null,
+      autoscaleInfoProvider: paneDomainProvider(),
     };
   }
 
@@ -214,6 +233,7 @@
     dispose,
     applyCrosshairTime,
     LEVELS,
+    PANE_DOMAIN,
     HOST_VALUE,
     STROKE,
     DOTTED_DASH,
