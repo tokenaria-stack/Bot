@@ -329,8 +329,13 @@ const SettingsRenderer = (() => {
   function applyVisibility(components, prefs) {
     const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
     if (!factory?.cutoverActive || typeof factory.setSeriesVisible !== 'function') return;
-    for (const c of components) {
-      factory.setSeriesVisible(c.id, isChecked(prefs, c));
+    if (typeof factory.beginVisibilityBatch === 'function') factory.beginVisibilityBatch();
+    try {
+      for (const c of components) {
+        factory.setSeriesVisible(c.id, isChecked(prefs, c));
+      }
+    } finally {
+      if (typeof factory.endVisibilityBatch === 'function') factory.endVisibilityBatch();
     }
   }
 

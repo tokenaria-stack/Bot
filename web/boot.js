@@ -936,9 +936,9 @@
     window.DDRFactory = new DDRFactory({
       normalizeTime: (raw) => (typeof chartTime === 'function' ? chartTime(raw) : DDRFactory.defaultNormalizeTime(raw)),
       fetchPlotColumns: fetchSubscribedPlotColumns,
-      onMergePlots: (plots) => {
+      onMergePlots: (plots, times) => {
         if (liveColumnarStore && typeof liveColumnarStore.updatePlots === 'function') {
-          liveColumnarStore.updatePlots(plots);
+          liveColumnarStore.updatePlots(plots, times);
         }
       },
       onSubscriptionChange: (ids) => {
@@ -1752,7 +1752,6 @@
       beginLiveTickBuffer();
     }
     window.__isDashboardLoading = true;
-    wsSubscribeTf(window.currentTf);
     if (!options.quiet && typeof ToolbarController !== 'undefined') {
       ToolbarController.setBuffering(true);
     }
@@ -1764,6 +1763,10 @@
         await window.DDRFactory.fetchManifest();
       }
       if (!isCurrentEpoch(epoch)) return;
+      // Prefs + seriesMap before the authoritative history request (HYDRATION-OWNERSHIP-1).
+      await mountDDRLiveCutover();
+      if (!isCurrentEpoch(epoch)) return;
+      wsSubscribeTf(window.currentTf);
 
       const symbol = document.getElementById('symbol')?.textContent?.trim() || '';
       const chunkLimit = typeof HISTORY_CHUNK_LIMIT !== 'undefined' ? HISTORY_CHUNK_LIMIT : 3000;

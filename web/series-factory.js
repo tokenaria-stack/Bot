@@ -57,6 +57,7 @@ class DDRFactory {
     this.onMergePlots = typeof options.onMergePlots === 'function'
       ? options.onMergePlots
       : null;
+    this._visibilityBatch = false;
   }
 
   static defaultNormalizeTime(raw) {
@@ -278,12 +279,22 @@ class DDRFactory {
   }
 
   _notifySubscription() {
+    if (this._visibilityBatch) return;
     if (typeof this.onSubscriptionChange !== 'function') return;
     try {
       this.onSubscriptionChange(this.requestedPlotIds());
     } catch {
       /* boot/tests */
     }
+  }
+
+  beginVisibilityBatch() {
+    this._visibilityBatch = true;
+  }
+
+  endVisibilityBatch() {
+    this._visibilityBatch = false;
+    this._notifySubscription();
   }
 
   /**
@@ -377,13 +388,17 @@ class DDRFactory {
       const gen = (this._enableGen.get(id) || 0) + 1;
       this._enableGen.set(id, gen);
       this._notifySubscription();
-      if (!DDRFactory._CROSSHAIR_ANCHORS.has(id)) {
-        series.applyOptions({ visible: false });
-        return this._enableRenderComponent(id, gen);
-      } else {
+      const ids = this._scalarIdsForRender(id);
+      if (this._plotsReadyForRender(ids)) {
         this._hydrateRenderComponent(id);
         series.applyOptions({ visible: true });
+        return true;
       }
+      if (this._storeHasBars()) {
+        series.applyOptions({ visible: false });
+        return this._enableRenderComponent(id, gen);
+      }
+      series.applyOptions({ visible: true });
     } else {
       series.applyOptions({ visible: false });
       this._notifySubscription();
@@ -399,7 +414,7 @@ class DDRFactory {
         if (gen !== this._enableGen.get(id) || this._feedVisible.get(id) === false) return;
         if (!fetched?.plots) return;
         if (typeof this.onMergePlots === 'function') {
-          this.onMergePlots(fetched.plots);
+          this.onMergePlots(fetched.plots, fetched.times);
         }
       } catch {
         return;
@@ -415,6 +430,23 @@ class DDRFactory {
         /* detached */
       }
     }
+  }
+
+  _storeHasBars() {
+    const snap = this._readAuthoritativeColumnar();
+    return Array.isArray(snap?.times) && snap.times.length > 0;
+  }
+
+  _plotsReadyForRender(ids) {
+    if (!Array.isArray(ids) || !ids.length) return false;
+    const snap = this._readAuthoritativeColumnar();
+    if (!snap || !Array.isArray(snap.times) || !snap.times.length || !snap.plots) return false;
+    const n = snap.times.length;
+    for (let i = 0; i < ids.length; i++) {
+      const col = snap.plots[ids[i]];
+      if (!Array.isArray(col) || col.length !== n) return false;
+    }
+    return true;
   }
 
   _neededPlotIds() {

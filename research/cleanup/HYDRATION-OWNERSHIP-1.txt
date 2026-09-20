@@ -1,0 +1,177 @@
+HYDRATION-OWNERSHIP-1
+Product implementation (Slice A). Not frozen. Not committed.
+
+GPT prompt followed. Corrections to that prompt are in section X.
+
+======================================================================
+A. EXECUTIVE
+======================================================================
+
+GREEN for scoped tests. Live cold-load vs TF fingerprint was NOT run
+(no attached dashboard). Crosshair unchanged.
+
+Invariant now:
+
+    prefs → seriesMap/_feedVisible → requestedPlotIds
+        → one /api/history
+        → replaceMonolith (canonical times[])
+        → ticks on that times[]
+        → visibility show/hide
+        → supplementary columns merged by OpenTime
+
+======================================================================
+B. FILES CHANGED
+======================================================================
+
+    web/boot.js
+    web/columnar-store.js
+    web/series-factory.js
+    web/ui/settings-renderer.js
+    web/wozduh_wire_test.js
+    web/hydration_ownership_test.js   (new)
+
+Not changed: chart-core crosshair, CROSSHAIR_ANCHORS set, RsxScaleLines,
+WozduhExtremeBands, WozduhNode, demand/mask, ChannelSeries, Auto.
+
+======================================================================
+C. OLD → NEW FLOW
+======================================================================
+
+OLD cold:
+
+    wsSubscribe (slots = collectManifest, seriesMap empty)
+    /api/history
+    replaceMonolith
+    flush ticks (may add bars)
+    mountDDR + applyVisibility
+        non-anchor setSeriesVisible → fetchPlotColumns(end=lastTime, limit=n)
+        updatePlots LEFT-INDEX paste
+    full paint
+
+NEW cold and TF (same loadDashboard):
+
+    beginLiveTickBuffer
+    fetchManifest
+    mountDDRLiveCutover          // prefs → _feedVisible / requestedPlotIds
+    wsSubscribeTf                // slots from requestedPlotIds
+    /api/history(slots=requestedPlotIds)
+    replaceMonolith
+    flush ticks
+    mountDDR again               // plots already in store → no refetch
+    full paint
+
+Genuine later enable (user checks a hidden plot, store has bars, column
+missing): hide, fetchPlotColumns, updatePlots(plots, times) by OpenTime,
+setData, show.
+
+======================================================================
+D. WHY INDEX-SHIFT IS IMPOSSIBLE
+======================================================================
+
+1. First history uses the same slot list visibility will need. Applying
+   visibility does not start a second windowed history for already-present
+   columns.
+
+2. updatePlots requires source times. It writes value at store times[i]
+   from the response row with that OpenTime. A right-aligned window leaves
+   unknown left times as sentinel; it cannot place "bar 1 of the response"
+   onto store times[0] unless those OpenTimes are equal.
+
+3. A plots-only payload (no times) does not paste. Existing columns stay.
+   Callers that still need a merge (enable fetch) pass fetched.times.
+
+======================================================================
+E. TESTS
+======================================================================
+
+Passed:
+
+    node web/hydration_ownership_test.js
+    node web/wozduh_wire_test.js
+    node web/hidden_render_skip_test.js
+    node web/projection_apply_test.js
+    node web/wozduh_owner_test.js
+    node web/wozduh_style_section_test.js
+    node web/wozduh_color_overrides_test.js
+    node web/seconds_history_nav_test.js
+    node web/live_delta_view_gate_test.js
+    node web/viewport_history_tf_switch_test.js
+    node web/wozduh_pane_autoscale_owner_test.js
+    node web/channel_paint_test.js
+    node web/wozduh_extreme_bands_test.js
+    node web/rsx_scale_lines_test.js
+    node web/micro_history_nav_test.js
+    node web/wave1_invariant_test.js
+    node web/timeline_recovery_state_test.js
+
+Wire G/G2 adjusted: fetch is only for MISSING columns. Already-hydrated
+enable must not refetch (G2 used to encode the old leak).
+
+No Go changes; no Go tests required.
+
+======================================================================
+F. LIVE VERIFICATION
+======================================================================
+
+NOT EXECUTED. Manual remaining:
+
+    fresh chart, Wozduh on, no TF reload
+    all Wozduh strokes vs TV from left through the live seam
+    toggle a hidden line on (should fetch once, align)
+    TF away/back should match first load, not "heal" a shift
+
+======================================================================
+G. REMAINING LIMITATIONS
+======================================================================
+
+1. CROSSHAIR_ANCHORS still force needsLwcData (hidden ema5 / line_rsx stay
+   on the slot list). Fetch/enable is no longer decided by that set.
+   Slice B removes the rest.
+
+2. zipChannelFromHydrated is still min-length by LWC point index. Not this
+   chapter. Store columns are time-aligned before zip.
+
+3. Channel omitted-key → whitespace on live ticks: not this chapter.
+
+4. Second mountDDR after monolith is redundant but skip-fetch makes it
+   a show/hydrate pass, not a second history universe.
+
+5. Cold vs TF numeric fingerprint needs a live session.
+
+======================================================================
+X. CORRECTIONS TO THE GPT PROMPT
+======================================================================
+
+Right: prefs before history; time-keyed merge; no visibility refetch;
+do not use anchors as the hydration mechanism; do not mix Slice B.
+
+Missed / adjusted:
+
+- "Equality of plot treatment" cannot mean deleting CROSSHAIR_ANCHORS
+  in this chapter. We unified the enable/fetch decision (_plotsReadyForRender
+  / _storeHasBars). needsLwcData still special-cases anchors until B.
+  Tests now forbid using CROSSHAIR_ANCHORS inside setSeriesVisible.
+
+- "Cold boot vs TF fingerprint" is a live check, not a unit test of two
+  browsers. Unit tests prove the merge law and boot ordering.
+
+- Do not keep fetch-on-enable when the snapshot already has the column
+  (old wire test G). That WAS the race.
+
+- Empty-store enable must not fetch (limit=1 / nowSec). Pending first
+  monolith only sets flags.
+
+- Batch dropPlotsNotIn: one subscription notify after the prefs loop,
+  so mid-loop keep-sets cannot delete channel sources.
+
+======================================================================
+GIT
+======================================================================
+
+Uncommitted product + web/hydration_ownership_test.js.
+Unrelated research/cleanup audits unstaged.
+No commit. No push.
+
+======================================================================
+END
+======================================================================

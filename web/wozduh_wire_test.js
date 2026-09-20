@@ -138,12 +138,12 @@ async function run() {
   await test('G. enable scalar fetches then one setData then reveal', async () => {
     const events = [];
     let fetched = null;
-    const plots = { woz_rsi_close_ema7: [1, 2, 3] };
+    const plots = {};
     const factory = new DDRFactory({
       getColumnarSnapshot: () => ({ times: [1, 2, 3], plots }),
       fetchPlotColumns: async (ids) => {
         fetched = ids.slice();
-        return { plots: { woz_rsi_close_ema7: [7, 8, 9] } };
+        return { times: [1, 2, 3], plots: { woz_rsi_close_ema7: [7, 8, 9] } };
       },
       onMergePlots: (incoming) => {
         Object.assign(plots, incoming);
@@ -176,6 +176,7 @@ async function run() {
       fetchPlotColumns: async (ids) => {
         fetched = ids.slice();
         return {
+          times: [1],
           plots: {
             woz_vol_rsi_ema5_chan_up: [90],
             woz_vol_rsi_ema5_chan_mid: [60],
@@ -222,7 +223,7 @@ async function run() {
   await test('G2. enable fetch failure stays hidden (no stale reveal)', async () => {
     const events = [];
     const factory = new DDRFactory({
-      getColumnarSnapshot: () => ({ times: [1], plots: { woz_rsi_close_ema7: [99] } }),
+      getColumnarSnapshot: () => ({ times: [1], plots: {} }),
       fetchPlotColumns: async () => {
         throw new Error('history down');
       },

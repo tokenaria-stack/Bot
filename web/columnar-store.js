@@ -401,18 +401,49 @@ class ColumnarStore {
 
   /**
    * Soft update: replace/add plot columns only. Never mutates _times or _candles.
-   * Arrays are padded/truncated to current barCount for invariant safety.
+   * Values are aligned to canonical store times[] by OpenTime. Never paste by
+   * array index unless the caller supplied a matching time domain.
    * Do NOT use for ADR-010 projected forming tips — use applyProjection (B2.1).
    * @param {Record<string, number[]>} newPlots
+   * @param {Array<number|string>|null|undefined} [sourceTimes] OpenTimes for newPlots columns
    */
-  updatePlots(newPlots) {
+  updatePlots(newPlots, sourceTimes) {
     if (!newPlots || typeof newPlots !== 'object') return;
     const n = this._times.length;
+    if (n === 0) return;
     const absent = ColumnarStore.plotAbsent();
+    const srcTimes = Array.isArray(sourceTimes)
+      ? sourceTimes.map((t) => ColumnarStore._normTimeSec(t))
+      : null;
+    let indexByTime = null;
+    if (srcTimes && srcTimes.length) {
+      indexByTime = new Map();
+      for (let j = 0; j < srcTimes.length; j++) {
+        const t = srcTimes[j];
+        if (t == null) continue;
+        indexByTime.set(t, j);
+      }
+    }
     for (const [id, col] of Object.entries(newPlots)) {
       if (!Array.isArray(col)) continue;
-      const next = col.slice(0, n);
-      while (next.length < n) next.push(absent);
+      const next = new Array(n);
+      for (let i = 0; i < n; i++) {
+        if (indexByTime) {
+          const j = indexByTime.get(this._times[i]);
+          if (j == null || j >= col.length) {
+            next[i] = absent;
+            continue;
+          }
+          const raw = col[j];
+          const v = Number(raw);
+          next[i] = Number.isFinite(v) ? raw : absent;
+        } else if (Array.isArray(this._plots[id]) && this._plots[id].length === n) {
+          // No proven time domain — do not positional-paste a foreign window.
+          next[i] = this._plots[id][i];
+        } else {
+          next[i] = absent;
+        }
+      }
       this._plots[id] = next;
     }
   }
