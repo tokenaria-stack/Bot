@@ -111,12 +111,12 @@ async function run() {
     assert.strictEqual(ids.filter((x) => x === 'woz_vol_rsi_ema5_chan_mid').length, 1);
   });
 
-  await test('D. woz_vol_rsi_ema5 hidden still requested (pane owner)', () => {
+  await test('D. hidden woz_vol_rsi_ema5 is not requested (ordinary plot)', () => {
     const factory = new DDRFactory();
     mountMixed(factory, []);
     factory.setSeriesVisible('woz_vol_rsi_ema5', false);
-    assert.ok(factory.requestedPlotIds().includes('woz_vol_rsi_ema5'));
-    assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema5'), true);
+    assert.ok(!factory.requestedPlotIds().includes('woz_vol_rsi_ema5'));
+    assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema5'), false);
   });
 
   await test('F. omitted live key does not write zero into store', () => {

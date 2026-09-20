@@ -1,0 +1,267 @@
+CROSSHAIR-PANE-HOST-1
+Frozen. Live operator GREEN. Product SHA filled after commit.
+
+GPT prompt followed. Corrections to that prompt are in section X.
+
+======================================================================
+A. EXECUTIVE
+======================================================================
+
+Phase 1 one-point chrome-host proof: GREEN (LWC 4.2.1).
+Scoped tests: GREEN.
+Live dashboard: operator GREEN (hard-reload after cache-bust; hidden
+line_rsx + woz_vol_rsi_ema5; historical hover).
+
+Invariant now:
+
+    CrosshairController { logical, time? }
+        → ChartAdapter
+        → pane chrome (price candles / RsxScaleLines / WozduhExtremeBands)
+        → LWC setCrosshairPosition(paneY, historicalTime, privateHost)
+
+    line_rsx and woz_vol_rsi_ema5 are ordinary DDR plots.
+    Hidden/visible does not own crosshair.
+
+Hydration remains HYDRATION-OWNERSHIP-1 (untouched).
+
+======================================================================
+B. PHASE 1 — LWC ONE-POINT PROOF
+======================================================================
+
+Question: does this build accept
+    setCrosshairPosition(price, historicalTime, chromeHost)
+when chromeHost has only its existing one-point seed (not the
+historical time)?
+
+Answer: YES.
+
+Evidence (pre-cut, live dashboard LWC 4.2.1):
+
+- TimelineDecoration.applyCrosshairTime(woz/rsx, hist=1789900200, 50)
+  returned true. Tip was 1789904940. n=3002.
+- No /api/history fetch.
+- LWC timeToIndex(horizontalPosition, true) is chart time-scale, not
+  series membership. Series is pane identity only.
+- Preferred architecture therefore holds. Fallback (price native +
+  ADR-026 decorative peers only) was not used.
+- No history-length fake series was created.
+
+Proxy note: at proof time Extreme Bands / RsxScaleLines hosts were
+private, so TimelineDecoration (same one-point private-series pattern)
+was the honest proxy. That is the same LWC API the product now calls
+on the oscillator chrome hosts.
+
+======================================================================
+C. FILES CHANGED
+======================================================================
+
+Product:
+    web/chart-core.js
+    web/series-factory.js
+    web/rsx-scale-lines.js
+    web/wozduh-extreme-bands.js
+    web/index.html          (cache-bust query only)
+
+Tests:
+    web/crosshair_pane_host_test.js   (new)
+    web/wozduh_owner_test.js
+    web/wozduh_wire_test.js
+    web/hidden_render_skip_test.js
+    web/rsx_scale_lines_test.js
+    web/wozduh_extreme_bands_test.js
+    web/hydration_ownership_test.js   (forbid CROSSHAIR_ANCHORS in factory)
+
+Not changed:
+    web/boot.js
+    web/columnar-store.js
+    requestedPlotIds / history loading
+    ChannelSeries, TimelineRecovery, camera
+    indicator math, Wozduh demand masks, RSX factual ownership
+    RSX Auto (still on line_rsx — later chapter)
+
+======================================================================
+D. OLD OWNERSHIP → NEW OWNERSHIP
+======================================================================
+
+OLD:
+    CROSSHAIR_ANCHORS = { line_rsx, woz_vol_rsi_ema5 }
+    needsLwcData true for those ids even when hidden
+    paintNativeCrosshairAtTime → getSeries(anchor) + hydratedValueAtTime
+    hidden oscillator still structurally required for native Y
+
+NEW:
+    price pane: candleSeries (unchanged)
+    rsx pane:   RsxScaleLines.applyCrosshairTime (private host)
+    woz pane:   WozduhExtremeBands.applyCrosshairTime (private host)
+    Y: pane midVisiblePrice else HOST_VALUE 50 — never RSX/EMA5
+    needsLwcData(id) = _feedVisible.get(id) !== false   // all plots equal
+    TimelineDecoration.applyCrosshairTime remains fallback
+
+======================================================================
+E. OBSOLETE MACHINERY REMOVED
+======================================================================
+
+    DDRFactory.CROSSHAIR_ANCHORS / _CROSSHAIR_ANCHORS
+    crosshairAnchorId()
+    hydratedValueAtTime() used as native oscillator Y
+    needsLwcData special-case for anchors
+    getSeries('line_rsx') / getSeries('woz_vol_rsi_ema5') as native
+        crosshair series (ChartAdapter)
+
+Kept:
+    CrosshairController { logical, time? }
+    ADR-026 logical-first + peer-crosshair-guide
+    candleSeries price native
+    Wozduh Auto on Extreme Bands host (already frozen)
+    applyLiveAnnotationLayer still uses getSeries('line_rsx') for
+        RSX markers — that is annotation paint, not crosshair
+
+======================================================================
+F. TESTS
+======================================================================
+
+    node web/crosshair_pane_host_test.js
+    node web/wozduh_extreme_bands_test.js
+    node web/rsx_scale_lines_test.js
+    node web/wozduh_owner_test.js
+    node web/wozduh_wire_test.js
+    node web/hidden_render_skip_test.js
+    node web/hydration_ownership_test.js
+    node web/crosshair_controller_test.js
+    node web/timeline_decoration_test.js
+    node web/channel_paint_test.js
+
+ALL PASS (2026-09-20).
+
+Required assertions covered:
+    A/B hidden line_rsx / ema5 skip LWC data
+    C hiding them does not fetchPlotColumns
+    D chrome applyCrosshairTime, not DDR plot ids
+    E/I ADR-026 applyPeerCrosshair + logical guide still present
+    G chrome applyCrosshairTime accepts time not on the one-point host
+    H price candleSeries still the only crosshairSeriesForChart
+
+Live hover / pane-move / TF reload: operator check (section H).
+
+======================================================================
+G. SERVED BYTES AFTER REBOOT
+======================================================================
+
+PID 92126 on :8080. FileServer Last-Modified matches working tree.
+
+    /chart-core.js              paintNative → chrome applyCrosshairTime
+    /rsx-scale-lines.js         function applyCrosshairTime
+    /wozduh-extreme-bands.js    function applyCrosshairTime
+    /series-factory.js          no CROSSHAIR_ANCHORS; needsLwcData = vis
+
+index.html cache-bust bumped so a normal reload cannot keep the old
+?v= blobs that caused applyCrosshairTime is not a function on the
+pre-reboot tab.
+
+======================================================================
+H. LIVE CHECK (OPERATOR — DO NOT USE BROWSER MCP)
+======================================================================
+
+Hard-reload the dashboard (new ?v=). Then:
+
+1. Wozduh visible.
+2. Uncheck line_rsx and woz_vol_rsi_ema5.
+3. Paste the console snippet in section I.
+4. Hover historical bars, move between panes.
+5. Confirm: vertical peers, local horizontal, no snap to host tip,
+   no /api/history for those two ids.
+6. Change TF / Reload and repeat 2–5.
+
+Do not commit until that visual pass is GREEN.
+
+======================================================================
+I. CONSOLE SNIPPET (NOT COMMITTED)
+======================================================================
+
+(() => {
+  const f = window.DDRFactory;
+  const orig = window.fetch;
+  const histFetches = [];
+  window.fetch = function () {
+    const u = String(arguments[0] || '');
+    if (u.indexOf('/api/history') >= 0) histFetches.push(u);
+    return orig.apply(this, arguments);
+  };
+  f.setSeriesVisible('line_rsx', false);
+  f.setSeriesVisible('woz_vol_rsi_ema5', false);
+  const times = liveColumnarStore.snapshot().times;
+  const t = times[times.length - 80];
+  const rsx = ChartAdapter.getChart('live', 'rsx');
+  const woz = ChartAdapter.getChart('live', 'wozduh');
+  const wozOk = WozduhExtremeBands.applyCrosshairTime(woz, t, 50);
+  const rsxOk = RsxScaleLines.applyCrosshairTime(rsx, t, 50);
+  return {
+    apply: {
+      woz: typeof WozduhExtremeBands.applyCrosshairTime,
+      rsx: typeof RsxScaleLines.applyCrosshairTime,
+    },
+    wozOk,
+    rsxOk,
+    hist: t,
+    tip: times[times.length - 1],
+    needsRsx: f.needsLwcData('line_rsx'),
+    needsEma5: f.needsLwcData('woz_vol_rsi_ema5'),
+    requested: f.requestedPlotIds(),
+    historyFetches: histFetches,
+  };
+})();
+
+Expect:
+    apply both "function"
+    wozOk/rsxOk true
+    hist !== tip
+    needsRsx/needsEma5 false
+    requested omits line_rsx and woz_vol_rsi_ema5
+    historyFetches []
+
+Then hover by hand. Unhook fetch by reloading when done.
+
+======================================================================
+X. GPT PROMPT — CORRECTIONS
+======================================================================
+
+1. Proof host: GPT asked to call setCrosshairPosition on the RSX/Wozduh
+   chrome hosts. Those series are private (no getter). The correct proof
+   is the existing ChartAdapter-facing socket (TimelineDecoration first,
+   then the same socket on the two chrome modules). Do not add getSeries.
+
+2. Cache-bust: GPT missed that index.html pins ?v= on these files. The
+   pre-reboot live tab failed with applyCrosshairTime is not a function
+   because the old query string was still cached. Reboot alone is not
+   enough without a new ?v= or a hard reload. Versions were bumped.
+
+3. Y value: GPT said 50 or pane-mid. Product uses midVisiblePrice first,
+   then HOST_VALUE 50. That is pane chrome, not indicator lookup.
+
+4. window.DDRFactory is the instance, not the class. CROSSHAIR_ANCHORS
+   lived on the class. Tests must use the constructor / source, not
+   assume window.DDRFactory.CROSSHAIR_ANCHORS after boot.
+
+5. applyLiveAnnotationLayer still getSeries('line_rsx') for markers.
+   GPT did not mention this. Left alone — not crosshair ownership.
+
+6. RSX Auto remains on line_rsx. GPT was right to keep that out.
+
+7. Do not public-host the chrome series. GPT preferred applyCrosshairTime
+   — that is what shipped.
+
+8. Hard stop honored: no fake history series if LWC had failed. It did
+   not fail.
+
+======================================================================
+Y. REMAINING LIMITATION
+======================================================================
+
+- Live hover GREEN is operator-owned this pass.
+- RSX Auto still structurally on hideable line_rsx (later chapter).
+- Oscillator native Y is pane-mid / 50, not the oscillator value. That
+  is intended: horizontal in an osc pane is local chrome, not a snapped
+  plot value when the plot is hidden.
+- TimelineDecoration remains fallback if chrome attach is missing.
+
+Live hover GREEN (operator). Do not reopen CROSSHAIR_ANCHORS.

@@ -18,15 +18,16 @@ function test(name, fn) {
 
 function fakeWozChart() {
   const created = [];
-  return {
+  const chart = {
     created,
+    calls: [],
     addLineSeries(opts) {
       const series = {
         opts,
         primitive: null,
         removed: false,
         data: null,
-        attachPrimitive(p) { this.primitive = p; if (p && typeof p.attached === 'function') p.attached({ chart: this, series }); },
+        attachPrimitive(p) { this.primitive = p; if (p && typeof p.attached === 'function') p.attached({ chart, series }); },
         detachPrimitive() { this.primitive = null; },
         remove() { this.removed = true; },
         setData(d) { this.data = d; },
@@ -35,7 +36,11 @@ function fakeWozChart() {
       created.push(series);
       return series;
     },
+    setCrosshairPosition(price, time, series) {
+      chart.calls.push({ price, time, series });
+    },
   };
+  return chart;
 }
 
 test('A. decoration is not a DDR/settings/store identity', () => {
@@ -55,6 +60,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(keys.includes('attach'));
   assert.ok(keys.includes('refresh'));
   assert.ok(keys.includes('dispose'));
+  assert.ok(keys.includes('applyCrosshairTime'));
   assert.ok(!keys.includes('getSeries'));
   assert.ok(!keys.includes('setData'));
   assert.ok(!keys.includes('update'));
@@ -170,6 +176,18 @@ test('zOrder is bottom; chart-core wires Wozduh chart only', () => {
   assert.ok(core.includes('WozduhExtremeBands.dispose()'));
   assert.ok(!core.includes('WozduhExtremeBands.attach(priceChart)'));
   assert.ok(!core.includes('WozduhExtremeBands.attach(rsxChart)'));
+});
+
+test('applyCrosshairTime uses private host; historical time need not be on the host', () => {
+  WozduhExtremeBands._resetForTests();
+  const chart = fakeWozChart();
+  WozduhExtremeBands.attach(chart);
+  WozduhExtremeBands.refresh(99);
+  assert.strictEqual(WozduhExtremeBands.applyCrosshairTime(chart, 10, 50), true);
+  assert.strictEqual(chart.calls.length, 1);
+  assert.deepStrictEqual(chart.calls[0], { price: 50, time: 10, series: chart.created[0] });
+  assert.deepStrictEqual(chart.created[0].data, [{ time: 99, value: 50 }]);
+  WozduhExtremeBands.dispose();
 });
 
 console.log('wozduh_extreme_bands_test: ALL PASS');

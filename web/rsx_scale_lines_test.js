@@ -18,8 +18,9 @@ function test(name, fn) {
 
 function fakeRsxChart() {
   const created = [];
-  return {
+  const chart = {
     created,
+    calls: [],
     addLineSeries(opts) {
       const series = {
         opts,
@@ -28,7 +29,7 @@ function fakeRsxChart() {
         data: null,
         attachPrimitive(p) {
           this.primitive = p;
-          if (p && typeof p.attached === 'function') p.attached({ chart: this, series });
+          if (p && typeof p.attached === 'function') p.attached({ chart, series });
         },
         detachPrimitive() { this.primitive = null; },
         remove() { this.removed = true; },
@@ -38,7 +39,11 @@ function fakeRsxChart() {
       created.push(series);
       return series;
     },
+    setCrosshairPosition(price, time, series) {
+      chart.calls.push({ price, time, series });
+    },
   };
+  return chart;
 }
 
 test('A. decoration is not a DDR/settings/store identity', () => {
@@ -58,6 +63,7 @@ test('A. decoration is not a DDR/settings/store identity', () => {
   assert.ok(keys.includes('attach'));
   assert.ok(keys.includes('refresh'));
   assert.ok(keys.includes('dispose'));
+  assert.ok(keys.includes('applyCrosshairTime'));
   assert.ok(!keys.includes('getSeries'));
   assert.ok(!keys.includes('setData'));
   assert.ok(!keys.includes('update'));
@@ -80,7 +86,6 @@ test('B. private host autoscale is null; line_rsx stays bounded owner', () => {
   assert.ok(layout.includes('"ID":         "line_rsx_signal"') || layout.includes('ID:         "line_rsx_signal"'));
   assert.ok(layout.includes('"scaleContribution":{"type":"ignore"}'));
   assert.ok(layout.includes('"lastValueVisible":false,"priceLineVisible":false,"scaleContribution":{"type":"ignore"}'));
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('line_rsx'), true);
 });
 
 test('C. product law is exactly 30 / 50 / 70 dotted; no fill, no 20/80', () => {
@@ -172,12 +177,25 @@ test('HIDDEN-RENDER-SKIP and series-factory stay unaware of the host', () => {
   assert.ok(!factory.includes('RsxScaleLines'));
   assert.ok(!skip.includes('RsxScaleLines'));
   const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  assert.ok(core.includes('RsxScaleLines.applyCrosshairTime'));
   const seriesFn = core.slice(
     core.indexOf('function crosshairSeriesForChart'),
-    core.indexOf('function crosshairAnchorId'),
+    core.indexOf('function candleCloseAtTime'),
   );
-  assert.ok(seriesFn.includes("getSeries('line_rsx')"));
-  assert.ok(!seriesFn.includes('RsxScaleLines'));
+  assert.ok(!seriesFn.includes("getSeries('line_rsx')"));
+  assert.ok(seriesFn.includes('candleSeries'));
+});
+
+test('applyCrosshairTime uses private host; historical time need not be on the host', () => {
+  RsxScaleLines._resetForTests();
+  const chart = fakeRsxChart();
+  RsxScaleLines.attach(chart);
+  RsxScaleLines.refresh(99);
+  assert.strictEqual(RsxScaleLines.applyCrosshairTime(chart, 10, 50), true);
+  assert.strictEqual(chart.calls.length, 1);
+  assert.deepStrictEqual(chart.calls[0], { price: 50, time: 10, series: chart.created[0] });
+  assert.deepStrictEqual(chart.created[0].data, [{ time: 99, value: 50 }]);
+  RsxScaleLines.dispose();
 });
 
 console.log('rsx_scale_lines_test: ALL PASS');

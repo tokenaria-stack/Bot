@@ -127,8 +127,8 @@ async function run() {
     const visStart = src.indexOf('setSeriesVisible(id, visible)');
     const vis = src.slice(visStart, src.indexOf('async _enableRenderComponent'));
     assert.ok(vis.includes('_plotsReadyForRender'));
-    assert.ok(!vis.includes('_CROSSHAIR_ANCHORS'));
-    assert.ok(src.includes("DDRFactory._CROSSHAIR_ANCHORS = new Set(['woz_vol_rsi_ema5', 'line_rsx'])"));
+    assert.ok(!src.includes('CROSSHAIR_ANCHORS'));
+    assert.ok(!src.includes('_CROSSHAIR_ANCHORS'));
   });
 
   await test('E. boot still uses requestedPlotIds for the history slots list', () => {

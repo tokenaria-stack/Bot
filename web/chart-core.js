@@ -445,34 +445,9 @@
     });
   }
 
-  /** Canonical pane anchors — never hunt seriesMap / score / debt series. */
+  /** Price pane native series. Oscillator panes use pane chrome, not DDR plots. */
   function crosshairSeriesForChart(state, chart) {
     if (chart === state.charts.price) return state.candleSeries;
-    const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
-    if (!factory?.cutoverActive || typeof factory.getSeries !== 'function') return null;
-    if (chart === state.charts.wozduh) return factory.getSeries('woz_vol_rsi_ema5');
-    if (chart === state.charts.rsx) return factory.getSeries('line_rsx');
-    return null;
-  }
-
-  function crosshairAnchorId(state, chart) {
-    if (chart === state.charts.wozduh) return 'woz_vol_rsi_ema5';
-    if (chart === state.charts.rsx) return 'line_rsx';
-    return null;
-  }
-
-  /** Value at business-time from DDR hydrated buffer (cross-pane when seriesData is empty). */
-  function hydratedValueAtTime(seriesId, time) {
-    const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
-    const points = factory?.getHydratedSeries?.(seriesId);
-    if (!points?.length || time == null) return null;
-    // Exact match first (LWC business-day / unix sec equality).
-    for (let i = points.length - 1; i >= 0; i--) {
-      const p = points[i];
-      if (p?.time !== time) continue;
-      const v = p.value;
-      return Number.isFinite(v) ? v : null; // whitespace → null
-    }
     return null;
   }
 
@@ -498,8 +473,6 @@
    */
   function resolveLocalYAtTime(state, targetChart, targetSeries, time) {
     if (time == null || !targetChart || !targetSeries) return null;
-    const anchorId = crosshairAnchorId(state, targetChart);
-    if (anchorId) return hydratedValueAtTime(anchorId, time);
     if (targetChart === state.charts.price) return candleCloseAtTime(time);
     return null;
   }
@@ -533,13 +506,40 @@
     return null;
   }
 
+  function paneChromePrice(chart, hostId) {
+    const mid = midVisiblePrice(chart);
+    if (mid != null && Number.isFinite(mid)) return mid;
+    if (hostId === 'wozduh' && typeof WozduhExtremeBands !== 'undefined'
+      && Number.isFinite(WozduhExtremeBands.HOST_VALUE)) {
+      return WozduhExtremeBands.HOST_VALUE;
+    }
+    if (hostId === 'rsx' && typeof RsxScaleLines !== 'undefined'
+      && Number.isFinite(RsxScaleLines.HOST_VALUE)) {
+      return RsxScaleLines.HOST_VALUE;
+    }
+    return 50;
+  }
+
   /**
    * Paint LWC native crosshair (incl. time label) on one pane.
-   * Market series first; decoration series fallback (future DisplayTimeline times).
+   * Price: candle series. Oscillator panes: presentation chrome host.
+   * Decoration series is fallback (future DisplayTimeline times / missing chrome).
    */
   function paintNativeCrosshairAtTime(state, hostId, time) {
     const chart = chartForHostId(state, hostId);
     if (!chart || time == null || typeof chart.setCrosshairPosition !== 'function') return false;
+    if (hostId === 'wozduh' && typeof WozduhExtremeBands !== 'undefined'
+      && typeof WozduhExtremeBands.applyCrosshairTime === 'function') {
+      if (WozduhExtremeBands.applyCrosshairTime(chart, time, paneChromePrice(chart, hostId))) {
+        return true;
+      }
+    }
+    if (hostId === 'rsx' && typeof RsxScaleLines !== 'undefined'
+      && typeof RsxScaleLines.applyCrosshairTime === 'function') {
+      if (RsxScaleLines.applyCrosshairTime(chart, time, paneChromePrice(chart, hostId))) {
+        return true;
+      }
+    }
     const market = crosshairSeriesForChart(state, chart);
     let y = market ? resolveLocalYForCrosshair(state, chart, market, time) : null;
     if (market && y != null && Number.isFinite(y)) {
@@ -551,8 +551,7 @@
     if (typeof TimelineDecoration === 'undefined' || !TimelineDecoration.applyCrosshairTime) {
       return false;
     }
-    if (y == null || !Number.isFinite(y)) y = midVisiblePrice(chart);
-    if (y == null || !Number.isFinite(y)) y = 0;
+    if (y == null || !Number.isFinite(y)) y = paneChromePrice(chart, hostId);
     return TimelineDecoration.applyCrosshairTime(chart, time, y);
   }
 

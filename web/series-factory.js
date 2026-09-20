@@ -26,11 +26,6 @@ class DDRFactory {
     return 1.7976931348623157e+308;
   }
 
-  /** Pane crosshair anchors — feed LWC even when the stroke is unchecked. */
-  static get CROSSHAIR_ANCHORS() {
-    return DDRFactory._CROSSHAIR_ANCHORS;
-  }
-
   constructor(options = {}) {
     /** @type {Map<string, { chart: import('lightweight-charts').IChartApi, series: import('lightweight-charts').ISeriesApi }>} */
     this.seriesMap = new Map();
@@ -87,7 +82,6 @@ class DDRFactory {
 
   needsLwcData(id) {
     if (!id) return false;
-    if (DDRFactory._CROSSHAIR_ANCHORS.has(id)) return true;
     return this._feedVisible.get(id) !== false;
   }
 
@@ -722,8 +716,6 @@ class DDRFactory {
     }
   }
 }
-
-DDRFactory._CROSSHAIR_ANCHORS = new Set(['woz_vol_rsi_ema5', 'line_rsx']);
 
 if (typeof window !== 'undefined') {
   window.DDRFactory = DDRFactory;

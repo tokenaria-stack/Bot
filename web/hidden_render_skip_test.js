@@ -201,7 +201,7 @@ test('F. TF switch while hidden: enable gets TF B, never TF A', () => {
   assert.deepStrictEqual(set[0].points, [{ time: 9, value: 200 }]);
 });
 
-test('G. hidden woz_vol_rsi_ema5 and line_rsx still receive full/live data', () => {
+test('G. hidden woz_vol_rsi_ema5 and line_rsx skip LWC data like other plots', () => {
   const events = [];
   const factory = new DDRFactory();
   factory.buildPanes(
@@ -232,10 +232,7 @@ test('G. hidden woz_vol_rsi_ema5 and line_rsx still receive full/live data', () 
   });
   factory.applyHydratedData();
   factory.updateTick(2, { woz_vol_rsi_ema5: 41, line_rsx: 56, woz_vol_rsi_ema12: 11 });
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5'));
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'line_rsx'));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5' && e.pt.value === 41));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'line_rsx' && e.pt.value === 56));
+  assert.ok(!events.some((e) => e.op === 'setData' || e.op === 'update'));
 });
 
 test('H. hidden non-anchor Wozduh receives no LWC data work', () => {
@@ -267,8 +264,6 @@ test('I. setSeriesVisible remains the visibility SSOT (no extra FSM)', () => {
   assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema12'), false);
   factory.setSeriesVisible('woz_vol_rsi_ema12', true);
   assert.strictEqual(factory.needsLwcData('woz_vol_rsi_ema12'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema5'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema12'), false);
 });
 
 console.log('hidden_render_skip_test: ALL PASS');

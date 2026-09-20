@@ -23,28 +23,23 @@ function fakeLine(events, id) {
   };
 }
 
-test('B. Wozduh crosshair anchor is woz_vol_rsi_ema5; RSX remains line_rsx', () => {
+test('B. oscillator crosshair uses pane chrome, not DDR plot ids', () => {
   const src = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
   const seriesFn = src.slice(
     src.indexOf('function crosshairSeriesForChart'),
-    src.indexOf('function crosshairAnchorId'),
+    src.indexOf('function candleCloseAtTime'),
   );
-  const anchorFn = src.slice(
-    src.indexOf('function crosshairAnchorId'),
-    src.indexOf('function hydratedValueAtTime'),
-  );
-  assert.ok(seriesFn.includes("getSeries('woz_vol_rsi_ema5')"));
-  assert.ok(!seriesFn.includes("getSeries('woz_vol_rsi_ema12')"));
-  assert.ok(seriesFn.includes("getSeries('line_rsx')"));
-  assert.ok(anchorFn.includes("return 'woz_vol_rsi_ema5'"));
-  assert.ok(!anchorFn.includes("return 'woz_vol_rsi_ema12'"));
-  assert.ok(anchorFn.includes("return 'line_rsx'"));
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema5'), true);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('woz_vol_rsi_ema12'), false);
-  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS.has('line_rsx'), true);
+  assert.ok(seriesFn.includes('candleSeries'));
+  assert.ok(!seriesFn.includes("getSeries('woz_vol_rsi_ema5')"));
+  assert.ok(!seriesFn.includes("getSeries('line_rsx')"));
+  assert.ok(src.includes('WozduhExtremeBands.applyCrosshairTime'));
+  assert.ok(src.includes('RsxScaleLines.applyCrosshairTime'));
+  assert.ok(!src.includes('function crosshairAnchorId'));
+  assert.ok(!src.includes('function hydratedValueAtTime'));
+  assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS, undefined);
 });
 
-test('C. hidden woz_vol_rsi_ema12 skips; hidden woz_vol_rsi_ema5 still fed', () => {
+test('C. hidden woz_vol_rsi_ema12 and hidden woz_vol_rsi_ema5 both skip LWC data', () => {
   const events = [];
   const order = ['woz_vol_rsi_ema12', 'woz_vol_rsi_ema5'];
   let i = 0;
@@ -69,8 +64,7 @@ test('C. hidden woz_vol_rsi_ema12 skips; hidden woz_vol_rsi_ema5 still fed', () 
   factory.applyHydratedData();
   factory.updateTick(2, { woz_vol_rsi_ema12: 11, woz_vol_rsi_ema5: 41 });
   assert.ok(!events.some((e) => e.id === 'woz_vol_rsi_ema12' && (e.op === 'setData' || e.op === 'update')));
-  assert.ok(events.some((e) => e.op === 'setData' && e.id === 'woz_vol_rsi_ema5'));
-  assert.ok(events.some((e) => e.op === 'update' && e.id === 'woz_vol_rsi_ema5' && e.pt.value === 41));
+  assert.ok(!events.some((e) => e.id === 'woz_vol_rsi_ema5' && (e.op === 'setData' || e.op === 'update')));
 });
 
 test('D. ema5 checked, ema12 unchecked: enabled peers still get LWC data; DDR plots ignore Auto', () => {
