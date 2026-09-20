@@ -37,6 +37,16 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **CHART-RENDERING-FAMILY-1 ✅ frozen** (after `01e2a7d`). Live indicator paint closed. Native RSX markers stay on `line_rsx`. Do not start annotation-pane-host work. Do not reopen scale / crosshair / hydration / fills / maximize unless a real regression.
 
+**Chart polish later (does not touch learning math / FeatureTape / labels / CatBoost):**
+
+| ID | What | Why later |
+|----|------|-----------|
+| **RSX-ANNOTATION-PAINT-1** | Native `setMarkers` still uses `getSeries('line_rsx')`. Hiding the stroke hides arrows. Facts remain `wire.Annotation`. | Operator accepted live look. Chrome-host `setMarkers` is unsafe (historical times + `aboveBar` relative to series value). |
+| **WOZDUH-AUTOSCALE-FIRSTVALUE-1** | Extreme Bands host owns `[-5,105]` on paper; LWC 4.2.1 skips null `firstValue()`. Wozduh plots already span ~0–100 so the pane *looks* correct. | Do not copy the RSX post-DDR refresh “to be safe.” Reopen only if Auto collapses when plots are hidden. |
+| **UI-PALETTE-1** | Factory `ui_config` colors vs operator taste. | Explicit ask only. Not FeatureSpec. |
+
+Do not mix these into TP-STOP / FeatureSpec / tape chapters.
+
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
