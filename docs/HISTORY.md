@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RSX-PANE-AUTOSCALE-OWNER-1 — pane-owned RSX Auto domain (Sep 2026)
+
+- Bounded `[-5,105]` moved from hideable `line_rsx` to the RsxScaleLines private host. Host is seeded after DDR `setData` so LWC `firstValue()` is non-null.
+- Frozen at `01e2a7d`. Artifact: `research/cleanup/RSX-PANE-AUTOSCALE-OWNER-1.txt`.
+
 ## CROSSHAIR-PANE-HOST-1 — oscillator native crosshair is pane chrome (Sep 2026)
 
 - Removed `CROSSHAIR_ANCHORS` / oscillator `hydratedValueAtTime`. RSX/Wozduh native apply uses private chrome hosts (one-point series; historical time is chart time-scale).

@@ -1472,7 +1472,11 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 
 **Consequences:** Debt **#68** closed. Modules: `web/ui/scale-contribution.js`, `web/series-factory.js`, `ui_config/rsx_layout.go`, `ui_config/wozduh_layout.go`. Tests: `web/scale_contribution_test.js`, `ui_config/scale_contribution_test.go`.
 
-**WOZDUH-PANE-AUTOSCALE-OWNER-1 amendment (frozen `1a409e9`):** Wozduh bounded `[-5,105]` is pane-owned on the Extreme Bands private host (`autoscaleInfoProvider` via `ScaleContribution.createAutoscaleProvider`). All DDR Wozduh plots including `woz_vol_rsi_ema5` are `ignore`. Plot visibility must not remove the pane Auto domain. RSX wire unchanged (`line_rsx` bounded). No ScaleController / `setVisibleRange` / `hostId === "wozduh"` branch.
+**WOZDUH-PANE-AUTOSCALE-OWNER-1 amendment (frozen `1a409e9`):** Wozduh bounded `[-5,105]` is pane-owned on the Extreme Bands private host (`autoscaleInfoProvider` via `ScaleContribution.createAutoscaleProvider`). All DDR Wozduh plots including `woz_vol_rsi_ema5` are `ignore`. Plot visibility must not remove the pane Auto domain. No ScaleController / `setVisibleRange` / `hostId === "wozduh"` branch.
+
+**RSX-PANE-AUTOSCALE-OWNER-1 amendment (frozen `01e2a7d`):** RSX bounded `[-5,105]` is pane-owned on the RsxScaleLines private host (same translator). All DDR RSX plots including `line_rsx` are `ignore`. Host seed is post-DDR `RsxScaleLines.refresh(tip)` so LWC 4.2.1 `firstValue()` is non-null before `autoscaleInfoProvider` is consulted. No primitive `autoscaleInfo()`, no history-length fake series, no RSX values copied onto chrome. ScaleController stays generic.
+
+Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhExtremeBands` → Wozduh.
 
 ---
 

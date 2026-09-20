@@ -1,5 +1,5 @@
 RSX-PANE-AUTOSCALE-OWNER-1
-GREEN. Frozen. Product SHA filled in docs freeze. Operator live GREEN.
+GREEN. Frozen at `01e2a7d`. Operator live GREEN.
 
 GPT prompt followed. Corrections in section X.
 
