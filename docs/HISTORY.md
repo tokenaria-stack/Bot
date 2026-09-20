@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## HYDRATION-OWNERSHIP-1 — prefs-first history, time-keyed plot merge (Sep 2026)
+
+- Cold-boot Wozduh shift: visibility refetch pasted a right-aligned window at index 0.
+- Law: prefs → `requestedPlotIds` → one history → canonical `times[]` → ticks; later missing plots merge by OpenTime.
+- Frozen at `c254253`. Artifact: `research/cleanup/HYDRATION-OWNERSHIP-1.txt`. Audit: `WOZDUH-BOOT-HYDRATION-PARITY-AUDIT-1.txt`.
+
 ## WOZDUH-PANE-AUTOSCALE-OWNER-1 — pane-owned Wozduh Auto domain (Sep 2026)
 
 - Bounded `[-5,105]` moved from hideable `woz_vol_rsi_ema5` to the Extreme Bands private host.

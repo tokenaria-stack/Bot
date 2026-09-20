@@ -1476,6 +1476,23 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 
 ---
 
+## HYDRATION-OWNERSHIP-1 — canonical times[] plot hydrate (frozen `c254253`)
+
+**Context:** Cold chart load could shift all Wozduh lines vs TradingView; TF reload healed. Visibility enable refetched columns and `ColumnarStore.updatePlots` pasted by array index onto a store whose left edge was older than the response window.
+
+**Decision:**
+
+- Resolve prefs / `requestedPlotIds` (mount DDR) **before** the authoritative `/api/history`.
+- Already-hydrated plots: visibility is show/hide only — no second history window.
+- Missing plots later: `fetchPlotColumns` + `updatePlots(plots, times)` keyed by OpenTime.
+- Fetch vs skip is `_plotsReadyForRender` / `_storeHasBars`, not `CROSSHAIR_ANCHORS`.
+
+**Rejected:** Timers / TF auto-reload / `setData` healing; index paste when lengths match; using crosshair-anchor status as a hydration exemption; mixing Slice B (chrome host) into this chapter.
+
+**Consequences:** Modules `web/boot.js`, `web/columnar-store.js`, `web/series-factory.js`, `web/ui/settings-renderer.js`. Tests: `web/hydration_ownership_test.js`. Artifact: `research/cleanup/HYDRATION-OWNERSHIP-1.txt`.
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.
