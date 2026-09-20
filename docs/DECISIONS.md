@@ -1493,6 +1493,23 @@ MICRO-2B: TimelineRecovery is **dense/native** recovery only. Sparse charts igno
 
 ---
 
+## CROSSHAIR-PANE-HOST-1 — pane chrome hosts oscillator native crosshair (frozen `87fd5a8`)
+
+**Context:** Native oscillator crosshair used DDR plots `line_rsx` and `woz_vol_rsi_ema5` as LWC series anchors, so those IDs were structurally special (`CROSSHAIR_ANCHORS` forced `needsLwcData` while hidden).
+
+**Decision:**
+
+- LWC 4.2.1 accepts `setCrosshairPosition(paneY, historicalTime, chromeHost)` when the host has only its existing one-point seed; series identity is the pane, time is the chart time-scale.
+- ChartAdapter-facing `applyCrosshairTime` on `RsxScaleLines` and `WozduhExtremeBands` (private host, same socket as TimelineDecoration). Y is pane mid / `HOST_VALUE` 50, not an indicator lookup.
+- Price pane remains `candleSeries`. ADR-026 `{ logical, time? }` unchanged.
+- `line_rsx` and `woz_vol_rsi_ema5` have the same hydration/demand rules as other DDR plots.
+
+**Rejected:** History-length fake chrome series; copying RSX/EMA5 into chrome; public host getter; mixing hydration reopen or RSX Auto move into this chapter.
+
+**Consequences:** Modules `web/chart-core.js`, `web/series-factory.js`, `web/rsx-scale-lines.js`, `web/wozduh-extreme-bands.js`. Tests: `web/crosshair_pane_host_test.js` plus inverted owner/wire/hidden-skip. Artifact: `research/cleanup/CROSSHAIR-PANE-HOST-1.txt`.
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.

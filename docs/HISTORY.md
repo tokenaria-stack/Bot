@@ -8,6 +8,11 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## CROSSHAIR-PANE-HOST-1 — oscillator native crosshair is pane chrome (Sep 2026)
+
+- Removed `CROSSHAIR_ANCHORS` / oscillator `hydratedValueAtTime`. RSX/Wozduh native apply uses private chrome hosts (one-point series; historical time is chart time-scale).
+- Frozen at `87fd5a8`. Artifact: `research/cleanup/CROSSHAIR-PANE-HOST-1.txt`.
+
 ## HYDRATION-OWNERSHIP-1 — prefs-first history, time-keyed plot merge (Sep 2026)
 
 - Cold-boot Wozduh shift: visibility refetch pasted a right-aligned window at index 0.

@@ -1,5 +1,5 @@
 CROSSHAIR-PANE-HOST-1
-Frozen. Live operator GREEN. Product SHA filled after commit.
+Frozen at `87fd5a8`. Live operator GREEN. Docs freeze follows.
 
 GPT prompt followed. Corrections to that prompt are in section X.
 
