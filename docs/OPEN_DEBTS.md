@@ -47,6 +47,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
+**ATOMIC-VOCAB-AUDIT-1 (NEXT — strategy resume after chart freeze).** Read-only inventory of live+research information into **event atoms** vs **context readings**. Champion/challenger lineage: Wozduh context on the same ignition rows is case 1; Wozduh confirmation clock is case 2 (new version, new `ConfirmedAt` law). Do not mutate frozen setup identities in place. Do not start Setup Lab UI. Do not invent events for every line. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger; it is not this chapter.
+
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.

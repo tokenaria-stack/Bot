@@ -1522,7 +1522,7 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 **Rejected:** Treating hide-stroke-hides-markers as a must-fix leak; chrome-host `setMarkers`; history-length fake marker series; copying RSX values onto chrome; broadening a marker inventory across all indicators.
 
-**Consequences:** Do not reopen scale / crosshair / hydration / channel fills / pane maximize for taste. Palette retune only when asked. Next unfinished ledger item remains DATA-1B (not rendering).
+**Consequences:** Do not reopen scale / crosshair / hydration / channel fills / pane maximize for taste. Palette retune only when asked. Strategy resume is **ATOMIC-VOCAB-AUDIT-1** (not annotation-host, not DATA-1B).
 
 ---
 
