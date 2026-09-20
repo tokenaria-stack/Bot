@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## CHART-RENDERING-FAMILY-1 — live indicator paint closed (Sep 2026)
+
+- Operator accepted live RSX/Wozduh/price paint. Do not start `RSX-ANNOTATION-OWNERSHIP-AUDIT-1` / `RSX-ANNOTATION-PANE-HOST-1`.
+- Native LWC markers remain on `line_rsx` (paint socket). Facts stay `IndicatorFactEvent` → `wire.Annotation`.
+- Family already frozen: maximize, channel fills, Wozduh Auto host, hydration, pane-host crosshair, RSX Auto host.
+- Closed after `01e2a7d` / docs `80ad426`.
+
 ## RSX-PANE-AUTOSCALE-OWNER-1 — pane-owned RSX Auto domain (Sep 2026)
 
 - Bounded `[-5,105]` moved from hideable `line_rsx` to the RsxScaleLines private host. Host is seeded after DDR `setData` so LWC `firstValue()` is non-null.

@@ -1514,6 +1514,18 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## CHART-RENDERING-FAMILY-1 — live indicator paint closed (frozen after `01e2a7d`)
+
+**Context:** After RSX pane Auto moved to chrome, GPT proposed a follow-on annotation/host chapter because `setMarkers` still uses `getSeries('line_rsx')`.
+
+**Decision:** Close chart rendering. Live RSX/Wozduh/price paint is accepted. Native markers stay on `line_rsx` as the LWC paint socket. Fact ownership stays `IndicatorFactEvent` → `wire.Annotation` (`Time`/`Pane`/`Source`). Do not start `RSX-ANNOTATION-OWNERSHIP-AUDIT-1` or `RSX-ANNOTATION-PANE-HOST-1` unless a real visual regression appears.
+
+**Rejected:** Treating hide-stroke-hides-markers as a must-fix leak; chrome-host `setMarkers`; history-length fake marker series; copying RSX values onto chrome; broadening a marker inventory across all indicators.
+
+**Consequences:** Do not reopen scale / crosshair / hydration / channel fills / pane maximize for taste. Palette retune only when asked. Next unfinished ledger item remains DATA-1B (not rendering).
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.
