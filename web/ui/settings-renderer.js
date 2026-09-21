@@ -33,6 +33,7 @@ const SettingsRenderer = (() => {
         if (String(c.hostId || '') !== 'wozduh') continue;
         if (String(c.kind || 'line').toLowerCase() === 'marker') continue;
         if (String(c.kind || '').toLowerCase() === 'plot') continue;
+        if (String(c.kind || '').toLowerCase() === 'crossover') continue;
         if (c.dataMode === 'annotations') continue;
         if (!c.id) continue;
         out.push(c);
@@ -145,6 +146,11 @@ const SettingsRenderer = (() => {
     ? WozduhColorPrefs
     : (typeof require === 'function'
       ? (() => { try { return require('../wozduh-color-prefs.js'); } catch { return null; } })()
+      : null);
+  const WozduhCrossoverPrefsApi = (typeof WozduhCrossoverPrefs !== 'undefined')
+    ? WozduhCrossoverPrefs
+    : (typeof require === 'function'
+      ? (() => { try { return require('../wozduh-crossover-prefs.js'); } catch { return null; } })()
       : null);
 
   function ddrFactory() {
@@ -326,6 +332,163 @@ const SettingsRenderer = (() => {
     return input;
   }
 
+  function notifyCrossoverPaint() {
+    if (typeof WozduhCrossovers !== 'undefined' && typeof WozduhCrossovers.requestPaint === 'function') {
+      WozduhCrossovers.requestPaint();
+    }
+  }
+
+  function noteCrossoverDemand() {
+    const factory = ddrFactory();
+    if (factory && typeof factory.noteCrossoverDemand === 'function') {
+      factory.noteCrossoverDemand();
+    } else {
+      notifyCrossoverPaint();
+    }
+  }
+
+  function crossoverColorInput(pairId, field, value, accessibleName) {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.className = 'wozduh-style-color';
+    input.dataset.crossoverId = pairId;
+    input.dataset.field = field;
+    input.value = String(value || '#000000').toLowerCase();
+    input.title = accessibleName;
+    input.setAttribute?.('aria-label', accessibleName);
+    input.addEventListener('input', () => {
+      if (!WozduhCrossoverPrefsApi) return;
+      WozduhCrossoverPrefsApi.patch(pairId, { [field]: input.value });
+      notifyCrossoverPaint();
+    });
+    return input;
+  }
+
+  function appendCrossoverSection(menu) {
+    if (!WozduhCrossoverPrefsApi || typeof WozduhCrossoverPrefsApi.allResolved !== 'function') return;
+    const heading = document.createElement('div');
+    heading.className = 'wozduh-style-label wozduh-xover-heading';
+    heading.textContent = 'Crossovers';
+    menu.appendChild(heading);
+    for (const row of WozduhCrossoverPrefsApi.allResolved()) {
+      const wrap = document.createElement('div');
+      wrap.className = 'wozduh-xover-block';
+      wrap.dataset.crossoverId = row.id;
+      const compact = document.createElement('div');
+      compact.className = 'wozduh-component-row';
+      const vis = document.createElement('label');
+      vis.className = 'wozduh-xover-vis';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.className = 'wozduh-xover-chk';
+      chk.checked = row.visible === true;
+      chk.addEventListener('change', () => {
+        WozduhCrossoverPrefsApi.patch(row.id, { visible: chk.checked });
+        noteCrossoverDemand();
+        notifyCrossoverPaint();
+      });
+      const name = document.createElement('span');
+      name.className = 'wozduh-style-label';
+      name.textContent = row.title;
+      vis.appendChild(chk);
+      vis.appendChild(name);
+      compact.appendChild(vis);
+      const gear = document.createElement('button');
+      gear.type = 'button';
+      gear.className = 'wozduh-xover-gear';
+      gear.textContent = '⚙';
+      gear.title = `${row.title} dot settings`;
+      gear.setAttribute?.('aria-label', `${row.title} dot settings`);
+      compact.appendChild(gear);
+      compact.appendChild(crossoverColorInput(row.id, 'upFill', row.upFill, `${row.title} up color`));
+      compact.appendChild(crossoverColorInput(row.id, 'downFill', row.downFill, `${row.title} down color`));
+      wrap.appendChild(compact);
+
+      const panel = document.createElement('div');
+      panel.className = 'wozduh-xover-panel';
+      panel.hidden = true;
+
+      function nestedRow(label, control) {
+        const r = document.createElement('div');
+        r.className = 'wozduh-style-row wozduh-style-row--nested';
+        const text = document.createElement('span');
+        text.className = 'wozduh-style-label';
+        text.textContent = label;
+        r.appendChild(text);
+        r.appendChild(control);
+        panel.appendChild(r);
+      }
+
+      const size = document.createElement('input');
+      size.type = 'number';
+      size.className = 'wozduh-xover-num';
+      size.min = '2';
+      size.max = '32';
+      size.step = '1';
+      size.value = String(row.size);
+      size.addEventListener('change', () => {
+        WozduhCrossoverPrefsApi.patch(row.id, { size: Number(size.value) });
+        notifyCrossoverPaint();
+      });
+      nestedRow('Size', size);
+
+      const shape = document.createElement('select');
+      shape.className = 'wozduh-xover-shape';
+      for (const s of WozduhCrossoverPrefsApi.SHAPES) {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s === 'star4' ? 'Four-pointed star' : s[0].toUpperCase() + s.slice(1);
+        if (s === row.shape) opt.selected = true;
+        shape.appendChild(opt);
+      }
+      shape.addEventListener('change', () => {
+        WozduhCrossoverPrefsApi.patch(row.id, { shape: shape.value });
+        notifyCrossoverPaint();
+      });
+      nestedRow('Shape', shape);
+
+      nestedRow('Outline color', crossoverColorInput(row.id, 'outlineColor', row.outlineColor, `${row.title} outline color`));
+
+      const ow = document.createElement('input');
+      ow.type = 'number';
+      ow.className = 'wozduh-xover-num';
+      ow.min = '0';
+      ow.max = '8';
+      ow.step = '0.5';
+      ow.value = String(row.outlineWidth);
+      ow.addEventListener('change', () => {
+        WozduhCrossoverPrefsApi.patch(row.id, { outlineWidth: Number(ow.value) });
+        notifyCrossoverPaint();
+      });
+      nestedRow('Outline width', ow);
+
+      const os = document.createElement('select');
+      os.className = 'wozduh-xover-outline';
+      for (const s of WozduhCrossoverPrefsApi.OUTLINE_STYLES) {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s[0].toUpperCase() + s.slice(1);
+        if (s === row.outlineStyle) opt.selected = true;
+        os.appendChild(opt);
+      }
+      os.addEventListener('change', () => {
+        WozduhCrossoverPrefsApi.patch(row.id, { outlineStyle: os.value });
+        notifyCrossoverPaint();
+      });
+      nestedRow('Outline style', os);
+
+      gear.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        panel.hidden = !panel.hidden;
+        gear.classList.toggle('is-open', !panel.hidden);
+      });
+
+      wrap.appendChild(panel);
+      menu.appendChild(wrap);
+    }
+  }
+
   function applyVisibility(components, prefs) {
     const factory = (typeof window !== 'undefined') ? window.DDRFactory : null;
     if (!factory?.cutoverActive || typeof factory.setSeriesVisible !== 'function') return;
@@ -353,6 +516,8 @@ const SettingsRenderer = (() => {
       if (componentKind(c) === 'channel') appendChannelGroup(menu, c, prefs);
       else appendLineRow(menu, c, prefs);
     }
+
+    appendCrossoverSection(menu);
 
     const allBtn = defaultButton('Default all colors', 'Default all Wozduh colors', () => {
       const factory = ddrFactory();

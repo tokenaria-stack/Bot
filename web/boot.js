@@ -941,6 +941,11 @@
           liveColumnarStore.updatePlots(plots, times);
         }
       },
+      onMergeWozduhCrossovers: (events) => {
+        if (liveColumnarStore && typeof liveColumnarStore.mergeWozduhCrossovers === 'function') {
+          liveColumnarStore.mergeWozduhCrossovers(events);
+        }
+      },
       onSubscriptionChange: (ids) => {
         if (liveColumnarStore && typeof liveColumnarStore.dropPlotsNotIn === 'function') {
           liveColumnarStore.dropPlotsNotIn(ids);
@@ -982,6 +987,9 @@
       rsx: { chart: rsx, defaultPriceScaleId: 'right' },
       wozduh: { chart: wozduh, defaultPriceScaleId: 'right' },
     }, window.DDRFactory.manifest.panes);
+    if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.remountWozduhCrossovers === 'function') {
+      ChartAdapter.remountWozduhCrossovers();
+    }
     if (typeof SettingsRenderer !== 'undefined') SettingsRenderer.refreshFromManifest();
     if (typeof LegendRenderer !== 'undefined') {
       LegendRenderer.mountFromManifest(window.DDRFactory.manifest);

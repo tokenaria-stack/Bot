@@ -8,6 +8,8 @@ global.chartTime = (t) => Number(t);
 
 const assert = require('assert');
 const { DDRFactory } = require('./series-factory.js');
+const WozduhCrossoverPrefs = require('./wozduh-crossover-prefs.js');
+WozduhCrossoverPrefs.disableAllForTests();
 const { ColumnarStore } = require('./columnar-store.js');
 
 function test(name, fn) {

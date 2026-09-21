@@ -37,6 +37,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **CHART-RENDERING-FAMILY-1 ✅ frozen** (after `01e2a7d`). Live indicator paint closed. Native RSX markers stay on `line_rsx`. Do not start annotation-pane-host work. Do not reopen scale / crosshair / hydration / fills / maximize unless a real regression.
 
+**WOZDUH-CROSSOVER-PAINT-1 ✅ frozen.** Four closed-bar Wozduh A×B dots. Presentation microscope only. Do not restore VolCross as a slot/fact/tape/`IndicatorFactEvent`. Do not attach dots to DDR series B. Do not invent a generic marker/event/demand framework. Gear menu is paint prefs only (`wozduh_crossover_prefs_v1`). Do not reopen Wozduh numeric semantics, hydration architecture, autoscale, or crosshair for this overlay.
+
 **Chart polish later (does not touch learning math / FeatureTape / labels / CatBoost):**
 
 | ID | What | Why later |
@@ -56,7 +58,7 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 **NEXT order (do not start inside this freeze):**
 
 1. **PRE-STRATEGY-CLEAN-1 / SLICE-1 GREEN / FROZEN** — Falcon-era Backtest product amputated. Do not reopen old Backtest. `/api/stats` is a **FUTURE CONSUMER AUDIT**. `ApplyBacktestRSXConfig` is **SURVIVING NAME DEBT**.
-2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1 frozen.** **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). **WOZDUH-PANE-AUTOSCALE-OWNER-1 frozen** (`1a409e9`). **HYDRATION-OWNERSHIP-1 frozen** (`c254253`). **CROSSHAIR-PANE-HOST-1 frozen** (`87fd5a8`). **RSX-PANE-AUTOSCALE-OWNER-1 frozen** (`01e2a7d`). **CHART-RENDERING-FAMILY-1 frozen.** Do **not** retune `ui_config` until asked. Falcon retirement chapters frozen. Next unfinished: **DATA-1B** (ledger seam vs listing-day ownership — not chart paint).
+2. **FALCON-REMOVE-1 frozen** — FalconEngine deleted. Canonical RSX/Wozduh are DAG + `indicators`. `ApplyBacktestRSXConfig` remains a legacy-named RSX pin/replay helper. **WOZDUH-NUMERIC-NAMES-1 frozen.** **WOZDUH-VOLCROSS-REMOVE-1 frozen.** **WOZDUH-COLOR-OVERRIDES-1 frozen** (`1c7ae3d`). **WOZDUH-STYLE-SECTION-1 frozen** (`b55b64f`). **CHANNEL-SPLIT-FILLS-1 frozen** (`a02aa98`). **WOZDUH-PANE-AUTOSCALE-OWNER-1 frozen** (`1a409e9`). **HYDRATION-OWNERSHIP-1 frozen** (`c254253`). **CROSSHAIR-PANE-HOST-1 frozen** (`87fd5a8`). **RSX-PANE-AUTOSCALE-OWNER-1 frozen** (`01e2a7d`). **CHART-RENDERING-FAMILY-1 frozen.** **WOZDUH-CROSSOVER-PAINT-1 frozen.** Do **not** retune `ui_config` until asked. Falcon retirement chapters frozen. Next unfinished: **DATA-1B** (ledger seam vs listing-day ownership — not chart paint).
 3. Dead-code / legacy cleanup ✅ CLEAN-1–4 + DOC-1  
 4. SQLite/WAL — **SQLITE-1 ✅** + **SQLITE-2 ✅** (MCP off) + **SQLITE-2b ✅** (single-conn pool; idle handles were pinning TRUNCATE)  
 5. TF-switch UX — **TF-1 ✅** + **TF-2A ✅**. **HIST frozen** (0/1/2 + 1.1 + 3). **DATA-1A ✅** (spot `history_sync` key + BTCUSDT 15m Vision Jan 2018–Sep 2019). **DATA-1B** next: choose ledger cleanup vs listing-day seam ownership from smoke (do not assume 16:00 becomes READY).  

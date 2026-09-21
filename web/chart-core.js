@@ -1254,6 +1254,13 @@
         if (typeof WozduhExtremeBands !== 'undefined') WozduhExtremeBands.dispose();
       });
     }
+    if (typeof WozduhCrossovers !== 'undefined') {
+      WozduhCrossovers.dispose();
+      WozduhCrossovers.attach(wozduhChart);
+      state._disposers.push(() => {
+        if (typeof WozduhCrossovers !== 'undefined') WozduhCrossovers.dispose();
+      });
+    }
     if (typeof RsxScaleLines !== 'undefined') {
       RsxScaleLines.dispose();
       RsxScaleLines.attach(rsxChart);
@@ -1349,6 +1356,9 @@
     if (typeof WozduhExtremeBands !== 'undefined' && typeof WozduhExtremeBands.refresh === 'function') {
       WozduhExtremeBands.refresh(state._lastRealCandleTime);
     }
+    if (typeof WozduhCrossovers !== 'undefined' && typeof WozduhCrossovers.refresh === 'function') {
+      WozduhCrossovers.refresh(state._lastRealCandleTime);
+    }
     if (typeof RsxScaleLines !== 'undefined' && typeof RsxScaleLines.refresh === 'function') {
       RsxScaleLines.refresh(state._lastRealCandleTime);
     }
@@ -1426,6 +1436,19 @@
       if (pane === 'wozduh' || pane === 'osc') return _live.charts.wozduh;
       if (pane === 'rsx') return _live.charts.rsx;
       return _live.charts.price;
+    },
+
+    /** After DDR mount so the overlay host is the last Wozduh series (dots above strokes). */
+    remountWozduhCrossovers() {
+      if (!_live?.charts?.wozduh || typeof WozduhCrossovers === 'undefined') return false;
+      if (typeof WozduhCrossovers.dispose === 'function') WozduhCrossovers.dispose();
+      const ok = typeof WozduhCrossovers.attach === 'function'
+        ? WozduhCrossovers.attach(_live.charts.wozduh)
+        : false;
+      if (typeof WozduhCrossovers.refresh === 'function') {
+        WozduhCrossovers.refresh(_live._lastRealCandleTime);
+      }
+      return ok;
     },
 
     applyFullData(context, storeData, options = {}) {

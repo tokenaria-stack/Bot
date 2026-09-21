@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-CROSSOVER-PAINT-1 — closed-bar A×B dots as presentation chrome (Sep 2026)
+
+- Four pairs: EMA12×EMA5, VWEMA(HL2)×EMA5, VWEMA(HL2)×EMA12, VWEMA(HL2)×EMA5 channel mid. Dot Y = B.
+- Go closed-bar edge trigger (equality included). History scan before forming-tip projection. One overlay, z-order above Wozduh strokes (remount after DDR). Autoscale ignore.
+- Sparse `wozduh_crossover_prefs_v1`. Enabled pair sources union into existing `_neededPlotIds`. Gear opens size/shape/outline. Not VolCross / fact / tape / FeatureSpec.
+- Operator GREEN. Artifact: `research/cleanup/WOZDUH-CROSSOVER-PAINT-1.txt`.
+
 ## CHART-RENDERING-FAMILY-1 — live indicator paint closed (Sep 2026)
 
 - Operator accepted live RSX/Wozduh/price paint. Do not start `RSX-ANNOTATION-OWNERSHIP-AUDIT-1` / `RSX-ANNOTATION-PANE-HOST-1`.

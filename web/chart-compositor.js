@@ -303,6 +303,7 @@ class ChartCompositor {
       if (this._annotationPaintNeeded() && typeof this._store.getForLightweightCharts === 'function') {
         this._applyAnnotations(this._store.getForLightweightCharts());
       }
+      this._applyWozduhCrossovers();
       if (this._onAfterFlush) this._onAfterFlush(intent);
     }
   }
@@ -631,6 +632,15 @@ class ChartCompositor {
       sentinel: typeof DDRFactory !== 'undefined' ? DDRFactory.HISTORY_ABSENT : undefined,
     });
     window.DDRFactory.applyHydratedData();
+    this._applyWozduhCrossovers();
+  }
+
+  _applyWozduhCrossovers() {
+    if (typeof WozduhCrossovers === 'undefined' || typeof WozduhCrossovers.setEvents !== 'function') return;
+    const events = (typeof this._store?.wozduhCrossovers === 'function')
+      ? this._store.wozduhCrossovers()
+      : [];
+    WozduhCrossovers.setEvents(events);
   }
 
   _visibilityMask() {

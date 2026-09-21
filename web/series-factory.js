@@ -17,6 +17,11 @@ const WozduhColorPrefsApi = (typeof WozduhColorPrefs !== 'undefined')
   : (typeof require === 'function'
     ? (() => { try { return require('./wozduh-color-prefs.js'); } catch { return null; } })()
     : null);
+const WozduhCrossoverPrefsApi = (typeof WozduhCrossoverPrefs !== 'undefined')
+  ? WozduhCrossoverPrefs
+  : (typeof require === 'function'
+    ? (() => { try { return require('./wozduh-crossover-prefs.js'); } catch { return null; } })()
+    : null);
 
 const LINE_RSX_ID = 'line_rsx';
 
@@ -49,8 +54,14 @@ class DDRFactory {
     this.onSubscriptionChange = typeof options.onSubscriptionChange === 'function'
       ? options.onSubscriptionChange
       : null;
+    this.onMergeWozduhCrossovers = typeof options.onMergeWozduhCrossovers === 'function'
+      ? options.onMergeWozduhCrossovers
+      : null;
     this.onMergePlots = typeof options.onMergePlots === 'function'
       ? options.onMergePlots
+      : null;
+    this.onMergeWozduhCrossovers = typeof options.onMergeWozduhCrossovers === 'function'
+      ? options.onMergeWozduhCrossovers
       : null;
     this._visibilityBatch = false;
   }
@@ -455,7 +466,28 @@ class DDRFactory {
       }
       ids.add(id);
     }
+    if (WozduhCrossoverPrefsApi && typeof WozduhCrossoverPrefsApi.demandPlotIds === 'function') {
+      const extra = WozduhCrossoverPrefsApi.demandPlotIds();
+      for (let i = 0; i < extra.length; i++) {
+        if (extra[i]) ids.add(extra[i]);
+      }
+    }
     return ids;
+  }
+
+  noteCrossoverDemand() {
+    this._notifySubscription();
+    const ids = this.requestedPlotIds();
+    if (!ids.length || typeof this.fetchPlotColumns !== 'function') return;
+    Promise.resolve(this.fetchPlotColumns(ids)).then((fetched) => {
+      if (!fetched) return;
+      if (fetched.plots && typeof this.onMergePlots === 'function') {
+        this.onMergePlots(fetched.plots, fetched.times);
+      }
+      if (Array.isArray(fetched.wozduhCrossovers) && typeof this.onMergeWozduhCrossovers === 'function') {
+        this.onMergeWozduhCrossovers(fetched.wozduhCrossovers);
+      }
+    }).catch(() => {});
   }
 
   _readAuthoritativeColumnar() {
@@ -522,7 +554,7 @@ class DDRFactory {
     if (this.seriesMap.has(component.id)) return;
 
     const kind = String(component.kind || 'line').toLowerCase();
-    if (kind === 'marker' || kind === 'plot' || component.dataMode === 'annotations') {
+    if (kind === 'marker' || kind === 'plot' || kind === 'crossover' || component.dataMode === 'annotations') {
       return;
     }
 

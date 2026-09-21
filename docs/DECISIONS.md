@@ -1526,6 +1526,23 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## WOZDUH-CROSSOVER-PAINT-1 — presentation-only closed-bar A×B dots (frozen)
+
+**Context:** Research needed a microscope for four Wozduh line pairs. VolCross had been deleted as a slot/fact. Attaching LWC markers to DDR series B hid dots under later strokes.
+
+**Decision:** Detect in Go on closed numeric atoms (Pine equality edge). Pack sparse `wozduhCrossovers`. Paint with one overlay host (Y = B, z above all Wozduh strokes, autoscale ignore). Demand is a union into existing Wozduh plot IDs. Factory in `ui_config`; sparse prefs; gear for shape/size/outline.
+
+**Rejected:**
+- Restore `woz_vol_cross` / facts / tape / FeatureSpec / `IndicatorFactEvent` — **Reason:** paint ≠ fact.
+- JS pixel/visual inference — **Reason:** numeric truth owns the edge.
+- Four fake DDR series or markers on series B — **Reason:** z-order and autoscale lies.
+- Generic marker/event/demand framework — **Reason:** Rule 6; one local overlay.
+- Channel-menu / line-style revival — **Reason:** cancelled chapter.
+
+**Consequences:** Do not reopen Wozduh numeric math, hydration architecture, autoscale, or crosshair for dots. NEXT remains **ATOMIC-VOCAB-AUDIT-1**.
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.

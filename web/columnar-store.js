@@ -35,6 +35,8 @@ class ColumnarStore {
     this._annotations = [];
     /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, rsxLabel, ... } */
     this._annotationMap = new Map();
+    /** @type {object[]} sparse Wozduh crossover presentation events */
+    this._wozduhCrossovers = [];
     /** Authoritative annotation data generation. Not a paint fingerprint. */
     this._annotationRevision = 0;
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
@@ -112,11 +114,55 @@ class ColumnarStore {
     this._plots = {};
     this._annotations = [];
     this._annotationMap.clear();
+    this._wozduhCrossovers = [];
     if (hadAnns) this._bumpAnnotationRevision();
     this._meta = { hasMore: false, tf: '', warmupDropped: 0, added: 0 };
     this._sealed = false;
     this.windowMode = 'live';
     this._clearRetainedNeighborhood();
+  }
+
+  static _xoverKey(ev) {
+    return `${ev?.pair}|${ev?.time}`;
+  }
+
+  _pruneWozduhCrossoversToRange(t0, t1) {
+    if (!this._wozduhCrossovers.length) return;
+    if (!Number.isFinite(t0) || !Number.isFinite(t1)) {
+      this._wozduhCrossovers = [];
+      return;
+    }
+    this._wozduhCrossovers = this._wozduhCrossovers.filter((ev) => {
+      const t = Number(ev?.time);
+      return Number.isFinite(t) && t >= t0 && t <= t1;
+    });
+  }
+
+  mergeWozduhCrossovers(events) {
+    if (!Array.isArray(events) || !events.length) return;
+    const seen = new Set(this._wozduhCrossovers.map((e) => ColumnarStore._xoverKey(e)));
+    for (const ev of events) {
+      if (!ev || !ev.pair) continue;
+      const t = Number(ev.time);
+      const y = Number(ev.y);
+      if (!Number.isFinite(t) || !Number.isFinite(y)) continue;
+      const side = ev.side === 'down' ? 'down' : (ev.side === 'up' ? 'up' : '');
+      if (!side) continue;
+      const row = { pair: String(ev.pair), side, time: t, y };
+      const key = ColumnarStore._xoverKey(row);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      this._wozduhCrossovers.push(row);
+    }
+  }
+
+  replaceWozduhCrossovers(events) {
+    this._wozduhCrossovers = [];
+    this.mergeWozduhCrossovers(events);
+  }
+
+  wozduhCrossovers() {
+    return this._wozduhCrossovers.slice();
   }
 
   /**
@@ -196,11 +242,16 @@ class ColumnarStore {
       const t = Number(ann?.time ?? ann?.Time);
       return Number.isFinite(t) && t >= bounds.fromSec && t <= bounds.toSec;
     });
+    const wozduhCrossovers = this._wozduhCrossovers.filter((ev) => {
+      const t = Number(ev?.time);
+      return Number.isFinite(t) && t >= bounds.fromSec && t <= bounds.toSec;
+    });
     return {
       times,
       candles: { open, high, low, close, volume },
       plots,
       annotations,
+      wozduhCrossovers,
     };
   }
 
@@ -288,6 +339,8 @@ class ColumnarStore {
     this._annotations = keepAnn;
     this._rebuildAnnotationMapFromArray(this._annotations);
     if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
+    this.mergeWozduhCrossovers(snap.wozduhCrossovers);
+    this._pruneWozduhCrossoversToRange(t0, t1);
     this._meta = { ...this._meta, added: this._times.length };
   }
 
@@ -349,6 +402,7 @@ class ColumnarStore {
     this._annotations = Array.isArray(data.annotations) ? data.annotations.slice() : [];
     this._rebuildAnnotationMapFromArray(this._annotations);
     this._bumpAnnotationRevision();
+    this.replaceWozduhCrossovers(data.wozduhCrossovers);
     const proj = data.projCont && typeof data.projCont === 'object' ? data.projCont : null;
     this._meta = {
       hasMore: data.hasMore === true,
@@ -673,6 +727,7 @@ class ColumnarStore {
       if (this._annotations.length) this._bumpAnnotationRevision();
       this._annotations = [];
       this._annotationMap.clear();
+      this._wozduhCrossovers = [];
     } else {
       const t0 = Number(this._times[0]);
       const t1 = Number(this._times[this._times.length - 1]);
@@ -683,6 +738,7 @@ class ColumnarStore {
       });
       this._rebuildAnnotationMapFromArray(this._annotations);
       if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
+      this._pruneWozduhCrossoversToRange(t0, t1);
     }
 
     if (meta.droppedNewest === true) {
@@ -881,6 +937,7 @@ class ColumnarStore {
       this._plots = {};
       this._annotations = [];
       this._annotationMap.clear();
+      this._wozduhCrossovers = [];
       this._meta = { ...this._meta, added: 0 };
       this._clearRetainedNeighborhood();
       return;
@@ -920,6 +977,7 @@ class ColumnarStore {
     });
     this._rebuildAnnotationMapFromArray(this._annotations);
     if (this._annotations.length !== prevLen) this._bumpAnnotationRevision();
+    this._pruneWozduhCrossoversToRange(t0, t1);
     if (meta.droppedNewest === true) {
       this.windowMode = 'history';
     }
@@ -1138,6 +1196,9 @@ class ColumnarStore {
         this._bumpAnnotationRevision();
       }
     }
+    if (tick.isClosed === true && Array.isArray(tick.wozduhCrossovers)) {
+      this.mergeWozduhCrossovers(tick.wozduhCrossovers);
+    }
     const ms = ColumnarStore._toMs(time);
 
     const delta = {
@@ -1254,6 +1315,7 @@ class ColumnarStore {
     if (newAnns.length > 0 || this._annotations.length !== prevAnnLen) {
       this._bumpAnnotationRevision();
     }
+    this.mergeWozduhCrossovers(data.wozduhCrossovers);
     this._meta = {
       ...this._meta,
       hasMore: data.hasMore === true,
@@ -1389,6 +1451,7 @@ class ColumnarStore {
     if (newAnns.length > 0 || this._annotations.length !== prevAnnLen) {
       this._bumpAnnotationRevision();
     }
+    this.mergeWozduhCrossovers(data.wozduhCrossovers);
     this._meta = {
       ...this._meta,
       added: this._times.length,
@@ -1496,6 +1559,7 @@ class ColumnarStore {
       },
       plots,
       annotations: this._annotations.slice(),
+      wozduhCrossovers: this._wozduhCrossovers.slice(),
       meta: { ...this._meta },
     });
   }

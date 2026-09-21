@@ -52,6 +52,15 @@ type WozduhNode struct {
 
 	ad    *indicators.AD
 	adRsi *indicators.RSI
+
+	// Closed-bar A×B prev for presentation crossovers. Snapshot/Restore with streams.
+	crossPrevA     [4]float64
+	crossPrevB     [4]float64
+	crossReady     [4]bool
+	crossSnapA     [4]float64
+	crossSnapB     [4]float64
+	crossSnapReady [4]bool
+	lastCrossHits  []WozduhCrossoverHit
 }
 
 // NewWozduhNode creates a full Wozduh atom pipeline (explicit compute-all mask).
@@ -353,6 +362,13 @@ func (n *WozduhNode) SaveState() {
 	n.rsiCloseChanStDev.SaveState()
 	n.ad.SaveState()
 	n.adRsi.SaveState()
+	n.lastCrossHits = nil
+	if n.bus != nil && n.bus.Cur != nil {
+		n.lastCrossHits = detectWozduhCrossoversFromFrame(n.bus.Cur, &n.crossPrevA, &n.crossPrevB, &n.crossReady)
+	}
+	n.crossSnapA = n.crossPrevA
+	n.crossSnapB = n.crossPrevB
+	n.crossSnapReady = n.crossReady
 }
 
 func (n *WozduhNode) RestoreState() {
@@ -377,6 +393,20 @@ func (n *WozduhNode) RestoreState() {
 	n.rsiCloseChanStDev.RestoreState()
 	n.ad.RestoreState()
 	n.adRsi.RestoreState()
+	n.crossPrevA = n.crossSnapA
+	n.crossPrevB = n.crossSnapB
+	n.crossReady = n.crossSnapReady
+	n.lastCrossHits = nil
+}
+
+// LastClosedCrossovers is the closed bar just committed by SaveState. Empty on forming ticks.
+func (n *WozduhNode) LastClosedCrossovers() []WozduhCrossoverHit {
+	if n == nil || len(n.lastCrossHits) == 0 {
+		return nil
+	}
+	out := make([]WozduhCrossoverHit, len(n.lastCrossHits))
+	copy(out, n.lastCrossHits)
+	return out
 }
 
 func (n *WozduhNode) OnConfigChange(any) error { return nil }

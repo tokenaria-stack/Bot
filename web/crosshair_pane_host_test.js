@@ -8,6 +8,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { DDRFactory } = require('./series-factory.js');
+const WozduhCrossoverPrefs = require('./wozduh-crossover-prefs.js');
+WozduhCrossoverPrefs.disableAllForTests();
 
 function test(name, fn) {
   fn();

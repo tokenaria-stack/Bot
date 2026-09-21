@@ -1,0 +1,26 @@
+WOZDUH-CROSSOVER-PAINT-1
+========================
+
+Verdict: WOZDUH_CROSSOVER_PAINT_GREEN (operator accepted; gear-icon menu)
+
+Law: paint ≠ fact ≠ FeatureSpec. Not VolCross.
+
+Flow:
+  Wozduh numeric atoms
+    → closed-bar A×B DetectCrossoverEdge in Go
+    → sparse wozduhCrossovers (history scan before forming tip; live only isClosed)
+    → ColumnarStore chrome
+    → ONE overlay (Y=B, z top, autoscale ignore)
+    → remount after DDR so strokes cannot bury dots
+
+Pairs (factory):
+  1. woz_vol_rsi_ema12 × woz_vol_rsi_ema5     default ON  circle
+  2. woz_rsi_hl2_vwema × woz_vol_rsi_ema5     default OFF square
+  3. woz_rsi_hl2_vwema × woz_vol_rsi_ema12    default OFF triangle
+  4. woz_rsi_hl2_vwema × woz_vol_rsi_ema5_chan_mid  default OFF star4
+
+Demand: enabled pair plotA+plotB union into DDRFactory._neededPlotIds.
+Prefs: sparse wozduh_crossover_prefs_v1. Menu: checkbox + name + ⚙ + Up + Down.
+
+Do not reopen: numeric semantics, hydration architecture, autoscale, crosshair,
+channel-menu, VolCross slot/fact/tape.

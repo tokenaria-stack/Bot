@@ -7,6 +7,8 @@
 const assert = require('assert');
 const { DDRFactory } = require('./series-factory.js');
 const { ChannelSeries, isChannelPoint } = require('./channel-series.js');
+const WozduhCrossoverPrefs = require('./wozduh-crossover-prefs.js');
+WozduhCrossoverPrefs.disableAllForTests();
 
 function test(name, fn) {
   fn();

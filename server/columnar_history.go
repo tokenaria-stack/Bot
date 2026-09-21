@@ -25,20 +25,21 @@ type columnarCandles struct {
 }
 
 type columnarHistoryResponse struct {
-	Format               string               `json:"format"`
-	Status               string               `json:"status"`
-	Code                 string               `json:"code,omitempty"`
-	Timeframe            string               `json:"timeframe"`
-	WarmupDropped        int                  `json:"warmupDropped"`
-	Added                int                  `json:"added"`
-	Times                []int64              `json:"times"`
-	Candles              columnarCandles      `json:"candles"`
-	Plots                map[string][]float64 `json:"plots"`
-	Annotations          []wire.Annotation    `json:"annotations"`
-	Sentinel             float64              `json:"sentinel"`
-	HasMore              bool                 `json:"hasMore"`
-	HasNewer             bool                 `json:"hasNewer"`
-	ParentResumeAfterSec int64                `json:"parentResumeAfterSec,omitempty"`
+	Format               string                       `json:"format"`
+	Status               string                       `json:"status"`
+	Code                 string                       `json:"code,omitempty"`
+	Timeframe            string                       `json:"timeframe"`
+	WarmupDropped        int                          `json:"warmupDropped"`
+	Added                int                          `json:"added"`
+	Times                []int64                      `json:"times"`
+	Candles              columnarCandles              `json:"candles"`
+	Plots                map[string][]float64         `json:"plots"`
+	Annotations          []wire.Annotation            `json:"annotations"`
+	WozduhCrossovers     []nodes.WozduhCrossoverEvent `json:"wozduhCrossovers,omitempty"`
+	Sentinel             float64                      `json:"sentinel"`
+	HasMore              bool                         `json:"hasMore"`
+	HasNewer             bool                         `json:"hasNewer"`
+	ParentResumeAfterSec int64                        `json:"parentResumeAfterSec,omitempty"`
 	// ProjCont is an opt-in ADR-015 probe (DEBUG_PROJ_CONT=1). Safe to ignore when absent.
 	ProjCont *projectionContinuityDiag `json:"projCont,omitempty"`
 }
@@ -174,6 +175,7 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	hist := replay.Hist
 	times := columnarTimesFromKlines(display)
 	plots, sentinel := d.projector.BuildHistoryColumnsFiltered(hist, times, slotIDs)
+	crossovers := nodes.ScanWozduhCrossovers(plots, times, sentinel)
 	annotations := d.packRSTVHistoryAnnotations(klines, hist, rsxSettings, times, replay.ZZFacts)
 	if annotations == nil {
 		annotations = []wire.Annotation{}
@@ -200,18 +202,19 @@ func (d *DashboardServer) buildColumnarHistoryPayloadOpts(
 	}
 
 	resp := columnarHistoryResponse{
-		Format:        "columnar",
-		Status:        "ready",
-		Timeframe:     timeframe,
-		WarmupDropped: trimBars,
-		Added:         n,
-		Times:         times,
-		Candles:       candles,
-		Plots:         plots,
-		Annotations:   annotations,
-		Sentinel:      sentinel,
-		HasMore:       hasMore,
-		HasNewer:      hasNewer,
+		Format:           "columnar",
+		Status:           "ready",
+		Timeframe:        timeframe,
+		WarmupDropped:    trimBars,
+		Added:            n,
+		Times:            times,
+		Candles:          candles,
+		Plots:            plots,
+		Annotations:      annotations,
+		WozduhCrossovers: crossovers,
+		Sentinel:         sentinel,
+		HasMore:          hasMore,
+		HasNewer:         hasNewer,
 	}
 	closedBars := len(resp.Times)
 	var mode viewportProjectionMode

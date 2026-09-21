@@ -138,6 +138,20 @@ func (a *Frame) WozduhVolRsiEma12Ptr() *indicators.EMA {
 	return woz.VolRsiEma12Ptr()
 }
 
+// LastWozduhCrossovers is the closed-bar presentation hits from the last SaveState.
+func (a *Frame) LastWozduhCrossovers() []nodes.WozduhCrossoverHit {
+	if a == nil {
+		return nil
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	woz := wozduhNodeFromDAG(a.dag)
+	if woz == nil {
+		return nil
+	}
+	return woz.LastClosedCrossovers()
+}
+
 // WozduhSlot is a test hook for current TickFrame Wozduh values.
 func (a *Frame) WozduhSlot(slot core.Slot) float64 {
 	if a == nil {

@@ -205,8 +205,9 @@ type tickPayload struct {
 	VolatilityRegime string             `json:"volatilityRegime,omitempty"`
 	Plots            map[string]float64 `json:"plots,omitempty"`
 	// Markers come from IndicatorFactEvent projection.
-	Marker      string            `json:"marker,omitempty"`
-	Annotations []wire.Annotation `json:"annotations,omitempty"`
+	Marker           string                       `json:"marker,omitempty"`
+	Annotations      []wire.Annotation            `json:"annotations,omitempty"`
+	WozduhCrossovers []nodes.WozduhCrossoverEvent `json:"wozduhCrossovers,omitempty"`
 }
 
 type markerPayload struct {
@@ -348,20 +349,32 @@ func (d *DashboardServer) RouteChartTick(timeframe string, candle domain.Candle,
 	marker, anns := d.closedRSTVAnnotations(timeframe, candle.OpenTime, isClosed)
 	hdr := dagHeaderFromFrame(dagFrame)
 	payload := tickPayload{
-		Timeframe:   timeframe,
-		Time:        chart.Time,
-		Open:        chart.Open,
-		High:        chart.High,
-		Low:         chart.Low,
-		Close:       chart.Close,
-		Volume:      chart.Volume,
-		IsClosed:    isClosed,
-		Plots:       plots,
-		Marker:      marker,
-		Annotations: anns,
+		Timeframe:        timeframe,
+		Time:             chart.Time,
+		Open:             chart.Open,
+		High:             chart.High,
+		Low:              chart.Low,
+		Close:            chart.Close,
+		Volume:           chart.Volume,
+		IsClosed:         isClosed,
+		Plots:            plots,
+		Marker:           marker,
+		Annotations:      anns,
+		WozduhCrossovers: closedWozduhCrossovers(d, timeframe, chart.Time, isClosed),
 	}
 	applyDAGHeaderToTick(&payload, hdr)
 	d.routeTick(timeframe, wsEnvelope{Type: "tick", Data: payload})
+}
+
+func closedWozduhCrossovers(d *DashboardServer, timeframe string, timeSec int64, isClosed bool) []nodes.WozduhCrossoverEvent {
+	if !isClosed || d == nil {
+		return nil
+	}
+	frame := d.frameForTimeframe(timeframe)
+	if frame == nil {
+		return nil
+	}
+	return nodes.StampWozduhCrossoverHits(frame.LastWozduhCrossovers(), timeSec)
 }
 
 // BroadcastChartTick is deprecated — use RouteChartTick (Core 4.2).
