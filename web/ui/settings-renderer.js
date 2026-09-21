@@ -142,6 +142,161 @@ const SettingsRenderer = (() => {
     return defaultVisibleFor(component);
   }
 
+  const MUTE_SNAP_KEY = 'wozduh_family_mute_snap_v1';
+  const FAMILY_MEMBERS = {
+    woz_vol_rsi_ema5_chan: [
+      'woz_vol_rsi_ema5_chan',
+      'woz_vol_rsi_ema5',
+      'woz_vol_rsi_ema12',
+      'woz_rsi_hl2_vwema',
+    ],
+    woz_rsi_close_chan: [
+      'woz_rsi_close_chan',
+      'woz_rsi_close',
+      'woz_rsi_close_ema7',
+      'woz_rsi_ad',
+      'woz_rsi_hl2',
+      'woz_rsi_rsi_close',
+      'woz_macd_rsi_close',
+    ],
+  };
+
+  function familyMemberIds(channelId) {
+    return FAMILY_MEMBERS[channelId] || [];
+  }
+
+  function menuOrderIds() {
+    return [
+      ...familyMemberIds('woz_rsi_close_chan'),
+      ...familyMemberIds('woz_vol_rsi_ema5_chan'),
+    ];
+  }
+
+  function orderMenuComponents(components) {
+    const list = Array.isArray(components) ? components : [];
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const seen = new Set();
+    const out = [];
+    for (const id of menuOrderIds()) {
+      const c = byId.get(id);
+      if (!c || seen.has(id)) continue;
+      seen.add(id);
+      out.push(c);
+    }
+    for (const c of list) {
+      if (!c || seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
+    }
+    return out;
+  }
+
+  function loadMuteSnap() {
+    try {
+      const raw = localStorage.getItem(MUTE_SNAP_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveMuteSnap(map) {
+    try {
+      const sparse = {};
+      if (map && typeof map === 'object') {
+        for (const [familyId, row] of Object.entries(map)) {
+          if (!FAMILY_MEMBERS[familyId] || !row || typeof row !== 'object') continue;
+          const cleaned = {};
+          for (const id of FAMILY_MEMBERS[familyId]) {
+            if (typeof row[id] === 'boolean') cleaned[id] = row[id];
+          }
+          if (Object.keys(cleaned).length) sparse[familyId] = cleaned;
+        }
+      }
+      if (!Object.keys(sparse).length) localStorage.removeItem(MUTE_SNAP_KEY);
+      else localStorage.setItem(MUTE_SNAP_KEY, JSON.stringify(sparse));
+    } catch {
+      /* quota / private mode */
+    }
+  }
+
+  function familyHasVisibleMember(channelId, components, prefs) {
+    const want = new Set(familyMemberIds(channelId));
+    if (!want.size) return false;
+    for (const c of components) {
+      if (!want.has(c.id)) continue;
+      if (isChecked(prefs, c)) return true;
+    }
+    return false;
+  }
+
+  function applyFamilyVisibility(components, prefs, memberIds) {
+    const factory = ddrFactory();
+    if (!factory?.cutoverActive || typeof factory.setSeriesVisible !== 'function') return;
+    const want = new Set(memberIds);
+    if (typeof factory.beginVisibilityBatch === 'function') factory.beginVisibilityBatch();
+    try {
+      for (const c of components) {
+        if (!want.has(c.id)) continue;
+        factory.setSeriesVisible(c.id, isChecked(prefs, c));
+      }
+    } finally {
+      if (typeof factory.endVisibilityBatch === 'function') factory.endVisibilityBatch();
+    }
+  }
+
+  function toggleFamilyEye(channelId, components, prefs) {
+    const ids = familyMemberIds(channelId);
+    if (!ids.length) return prefs;
+    const byId = new Map(components.map((c) => [c.id, c]));
+    const members = ids.map((id) => byId.get(id)).filter(Boolean);
+    const next = { ...prefs };
+    if (familyHasVisibleMember(channelId, members, next)) {
+      const snap = loadMuteSnap();
+      const row = {};
+      for (const c of members) row[c.id] = isChecked(next, c);
+      snap[channelId] = row;
+      saveMuteSnap(snap);
+      for (const c of members) next[c.id] = false;
+    } else {
+      const snap = loadMuteSnap();
+      const row = snap[channelId];
+      if (row && typeof row === 'object') {
+        for (const c of members) {
+          next[c.id] = typeof row[c.id] === 'boolean' ? row[c.id] : defaultVisibleFor(c);
+        }
+        delete snap[channelId];
+        saveMuteSnap(snap);
+      } else {
+        for (const c of members) next[c.id] = defaultVisibleFor(c);
+      }
+    }
+    savePrefsMap(next);
+    applyFamilyVisibility(components, next, ids);
+    return next;
+  }
+
+  function syncMenuVisibility(root, components, prefs) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    const byId = new Map(components.map((c) => [c.id, c]));
+    const boxes = root.querySelectorAll('.wozduh-chk');
+    for (const input of boxes) {
+      const c = byId.get(input.dataset && input.dataset.componentId);
+      if (!c) continue;
+      input.checked = isChecked(prefs, c);
+    }
+    const eyes = root.querySelectorAll('.wozduh-family-eye');
+    for (const btn of eyes) {
+      const familyId = btn.dataset && btn.dataset.familyId;
+      const open = familyHasVisibleMember(familyId, components, prefs);
+      btn.className = open ? 'wozduh-family-eye' : 'wozduh-family-eye is-closed';
+      btn.title = open ? 'Hide this visual family' : 'Show this visual family';
+      btn.setAttribute?.('aria-label', btn.title);
+    }
+  }
+
   const WozduhColorPrefsApi = (typeof WozduhColorPrefs !== 'undefined')
     ? WozduhColorPrefs
     : (typeof require === 'function'
@@ -201,6 +356,9 @@ const SettingsRenderer = (() => {
     factory.setWozduhColor(component.id, field, hex);
   }
 
+  let lastMenu = null;
+  let lastComponents = [];
+
   function bindVisibilityCheckbox(input, component) {
     input.addEventListener('change', () => {
       const map = loadPrefsMap();
@@ -210,6 +368,7 @@ const SettingsRenderer = (() => {
       if (factory?.cutoverActive && typeof factory.setSeriesVisible === 'function') {
         factory.setSeriesVisible(component.id, input.checked);
       }
+      syncMenuVisibility(lastMenu, lastComponents, map);
     });
   }
 
@@ -232,7 +391,7 @@ const SettingsRenderer = (() => {
     return text;
   }
 
-  function appendLineRow(menu, component, prefs) {
+  function appendLineRow(parent, component, prefs) {
     const name = labelFor(component);
     const row = document.createElement('div');
     row.className = 'wozduh-component-row';
@@ -252,21 +411,50 @@ const SettingsRenderer = (() => {
         || [...(row.children || [])].find((c) => c.type === 'color');
       if (input) input.value = pickerHex(component, 'color');
     }));
-    menu.appendChild(row);
+    parent.appendChild(row);
   }
 
-  function appendChannelGroup(menu, component, prefs) {
+  function appendChannelGroup(menu, component, prefs, components) {
     const name = labelFor(component);
     const wrap = document.createElement('div');
     wrap.className = 'wozduh-style-channel';
     wrap.dataset.componentId = component.id;
     const header = document.createElement('div');
     header.className = 'wozduh-component-row wozduh-component-row--channel-header';
+
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = familyHasVisibleMember(component.id, components, prefs)
+      ? 'wozduh-family-eye'
+      : 'wozduh-family-eye is-closed';
+    eye.textContent = '👁';
+    eye.dataset.familyId = component.id;
+    eye.title = familyHasVisibleMember(component.id, components, prefs)
+      ? 'Hide this visual family'
+      : 'Show this visual family';
+    eye.setAttribute?.('aria-label', eye.title);
+    eye.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = toggleFamilyEye(component.id, components, loadPrefsMap());
+      syncMenuVisibility(menu, components, next);
+    });
+    header.appendChild(eye);
+
     const vis = document.createElement('label');
     vis.className = 'wozduh-vis';
     vis.appendChild(visibilityCheckbox(component, prefs));
     vis.appendChild(nameSpan(component));
     header.appendChild(vis);
+
+    const gear = document.createElement('button');
+    gear.type = 'button';
+    gear.className = 'wozduh-chan-gear';
+    gear.textContent = '⚙';
+    gear.title = `${name} channel colors`;
+    gear.setAttribute?.('aria-label', `${name} channel colors`);
+    header.appendChild(gear);
+
     header.appendChild(defaultButton('Default', `Default ${name} colors`, () => {
       const factory = ddrFactory();
       if (factory && typeof factory.resetWozduhComponentColors === 'function') {
@@ -275,6 +463,10 @@ const SettingsRenderer = (() => {
       refreshColorInputs(wrap, [component]);
     }));
     wrap.appendChild(header);
+
+    const panel = document.createElement('div');
+    panel.className = 'wozduh-chan-panel';
+    panel.hidden = true;
     const factory = factoryColorsFor(component);
     const fields = [
       ['boundColor', 'Boundary'],
@@ -298,9 +490,17 @@ const SettingsRenderer = (() => {
       text.textContent = fieldLabel;
       row.appendChild(text);
       row.appendChild(colorInput(component, field, `${name} ${fieldLabel.toLowerCase()} color`));
-      wrap.appendChild(row);
+      panel.appendChild(row);
     }
+    gear.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      panel.hidden = !panel.hidden;
+      gear.classList.toggle('is-open', !panel.hidden);
+    });
+    wrap.appendChild(panel);
     menu.appendChild(wrap);
+    return wrap;
   }
 
   function defaultButton(label, title, onClick) {
@@ -504,6 +704,8 @@ const SettingsRenderer = (() => {
 
   function rebuildMenu(menu, components, prefs) {
     if (!menu) return;
+    lastMenu = menu;
+    lastComponents = Array.isArray(components) ? components : [];
     menu.replaceChildren();
 
     const handle = document.createElement('div');
@@ -512,9 +714,16 @@ const SettingsRenderer = (() => {
     handle.textContent = '⋮⋮⋮ Woz Settings';
     menu.appendChild(handle);
 
-    for (const c of components) {
-      if (componentKind(c) === 'channel') appendChannelGroup(menu, c, prefs);
-      else appendLineRow(menu, c, prefs);
+    let familyHost = null;
+    let familyMemberSet = new Set();
+    for (const c of orderMenuComponents(components)) {
+      if (componentKind(c) === 'channel') {
+        familyHost = appendChannelGroup(menu, c, prefs, components);
+        familyMemberSet = new Set(familyMemberIds(c.id));
+        continue;
+      }
+      const parent = familyHost && familyMemberSet.has(c.id) ? familyHost : menu;
+      appendLineRow(parent, c, prefs);
     }
 
     appendCrossoverSection(menu);
@@ -598,6 +807,12 @@ const SettingsRenderer = (() => {
     collectConfigurable,
     migrateLegacyPrefs,
     rebuildMenu,
+    FAMILY_MEMBERS,
+    MUTE_SNAP_KEY,
+    orderMenuComponents,
+    familyHasVisibleMember,
+    toggleFamilyEye,
+    isChecked,
   };
 })();
 

@@ -40,6 +40,16 @@ function createEl(tag) {
     addEventListener(type, fn) {
       (this._listeners[type] ||= []).push(fn);
     },
+    classList: {
+      toggle(name, force) {
+        const parts = String(el.className).split(/\s+/).filter(Boolean);
+        const has = parts.includes(name);
+        const on = force === undefined ? !has : !!force;
+        el.className = (on
+          ? [...parts.filter((p) => p !== name), name]
+          : parts.filter((p) => p !== name)).join(' ');
+      },
+    },
     dispatch(type) {
       const ev = {
         type,
@@ -297,6 +307,7 @@ async function run() {
     const before = storage.getItem('wozduh_color_prefs_v1');
     const menu = createEl('div');
     const comps = SettingsRenderer.collectConfigurable({ panes: panes() });
+    const ordered = SettingsRenderer.orderMenuComponents(comps);
     SettingsRenderer.rebuildMenu(menu, comps, {
       woz_rsi_hl2: true,
       woz_vol_rsi_ema5: true,
@@ -310,7 +321,7 @@ async function run() {
       const lab = vis.querySelectorAll('.wozduh-style-label')[0];
       return lab ? lab.textContent.trim() : '';
     });
-    assert.deepStrictEqual(titles, comps.map((c) => {
+    assert.deepStrictEqual(titles, ordered.map((c) => {
       const opts = c.renderOptions;
       return opts.title;
     }));
@@ -340,7 +351,15 @@ async function run() {
       }
     };
     walk(menu);
-    assert.deepStrictEqual(ids, comps.map((c) => c.id));
+    assert.deepStrictEqual(ids, SettingsRenderer.orderMenuComponents(comps).map((c) => c.id));
+    assert.deepStrictEqual(ids, [
+      'woz_rsi_close_chan',
+      'woz_rsi_hl2',
+      'woz_macd_rsi_close',
+      'woz_vol_rsi_ema5_chan',
+      'woz_vol_rsi_ema5',
+      'woz_vol_rsi_ema12',
+    ]);
     const ema5 = menu.querySelectorAll('.wozduh-pane-owner-label');
     assert.strictEqual(ema5.length, 1);
     assert.strictEqual(ema5[0].textContent, 'Volume RSI EMA5');
@@ -468,6 +487,15 @@ async function run() {
       'midColor',
       'fillColor',
     ]);
+    assert.strictEqual(menu.querySelectorAll('.wozduh-family-eye').length, 2);
+    const gears = menu.querySelectorAll('.wozduh-chan-gear');
+    const panels = menu.querySelectorAll('.wozduh-chan-panel');
+    assert.strictEqual(gears.length, 2);
+    assert.strictEqual(panels.length, 2);
+    assert.ok(panels.every((p) => p.hidden));
+    gears[0].dispatch('click');
+    assert.strictEqual(panels[0].hidden, false);
+    assert.strictEqual(panels[1].hidden, true);
   });
 
   await test('H. Default all colors removes the store', () => {
