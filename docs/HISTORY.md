@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-FAMILY-EYE-1 — visual-family mute on existing Wozduh visibility (Sep 2026)
+
+- Eye left of each channel name batches `wozduh_visibility_prefs_live` for that family. Snapshot `wozduh_family_mute_snap_v1` is restore-only. Eye open/closed is derived from member checkboxes.
+- Channel Boundary/Middle/Fill (and RSI split fills) stay behind the channel gear. Families: RSI close, then Volume RSI EMA5. Crossovers are not family members.
+- Operator GREEN. Frozen at `b9ae83b`.
+
 ## WOZDUH-CROSSOVER-PAINT-1 — closed-bar A×B dots as presentation chrome (Sep 2026)
 
 - Four pairs: EMA12×EMA5, VWEMA(HL2)×EMA5, VWEMA(HL2)×EMA12, VWEMA(HL2)×EMA5 channel mid. Dot Y = B.

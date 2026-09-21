@@ -1543,6 +1543,21 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## WOZDUH-FAMILY-EYE-1 — visual-family mute on existing visibility (frozen)
+
+**Context:** Operator wanted two Wozduh visual families in settings without collapsing lines into one master checkbox.
+
+**Decision:** Eye left of each channel name snapshots then writes `false` through existing `setSeriesVisible` / visibility prefs; restore uses the sparse mute snapshot or factory `defaultVisible`. Eye state is derived from member checkboxes. Channel Boundary/Middle/Fill stay paint fields behind the gear. Menu order is presentation-only (RSI close family, then Volume RSI EMA5 family).
+
+**Rejected:**
+- Family-master checkbox / `groupVisible` AND with per-line hidden — **Reason:** second visibility SSOT.
+- Group demand or fake series — **Reason:** current Wozduh demand plus crossover union already owns needed plots.
+- CSS-only hide — **Reason:** checkboxes and demand must follow the live prefs map.
+
+**Consequences:** Do not reopen crossover overlay architecture, hydration, autoscale, or channel math. NEXT remains **ATOMIC-VOCAB-AUDIT-1**.
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.
