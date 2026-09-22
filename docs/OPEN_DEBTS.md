@@ -45,6 +45,8 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **WOZDUH-X-AND-CAMERA-LEAK-1 accepted for strategy testing.** Wozduh peer cursor X uses `TimelineDecoration` (full times); Extreme Bands stays Y/Auto. Preserve txn is not released by the first LWC echo. History demand is TimeCamera user VIEW commits, not price `subscribeVisibleLogicalRangeChange`. Operator GREEN enough without full zoom-out. Do not reopen Wozduh chrome, `CROSSHAIR_ANCHORS`, or cap retune from this chapter.
 
+**WOZDUH-TIME-INDEX-PIN-1 accepted.** After oscillator `setData`, compositor force-applies TimeCamera VIEW on all panes (`pinLiveTimeView` → `applyCommittedCamera`). Identical `TimeCamera.commit` must not leave Wozduh on LWC fit-to-content. Operator GREEN. Do not retune caps. Do not delay `userNav`. Do not loosen preserve. Do not reopen this pin except a real pane time-domain regression.
+
 **Chart polish later (does not touch learning math / FeatureTape / labels / CatBoost):**
 
 | ID | What | Why later |

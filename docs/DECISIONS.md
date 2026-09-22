@@ -1514,6 +1514,18 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## WOZDUH-TIME-INDEX-PIN-1 — force canonical VIEW after oscillator setData
+
+**Context:** After WOZDUH-X-AND-CAMERA-LEAK-1, Wozduh still filled the full pane width while price/RSX kept history-left + future-empty. Cause: DDR/`_flushIndicators` `setData` lets LWC fit Wozduh; TimeCamera skips apply when VIEW is unchanged.
+
+**Decision:** After the last oscillator write in full, prepend, and indicators flushes, ChartAdapter reads TimeCamera canonical VIEW and writes `setVisibleLogicalRange` + spacing/offset to every pane (`pinLiveTimeView` → `applyCommittedCamera`). F2 prepend decoration runs under `_liveUpdating` then pins. Do not use `TimeCamera.commit` for this pin.
+
+**Rejected:** Pixel-nudge / RangeProposal; fake Extreme Bands history; retune 5000/9000/3000; delay `userNav`; loosen preserve; reopen RSX chrome or `CROSSHAIR_ANCHORS`.
+
+**Consequences:** Caps and HISTORY-ZOOM-OUT-EDGE-1 stay parked. NEXT remains **ATOMIC-VOCAB-AUDIT-1**.
+
+---
+
 ## WOZDUH-X-AND-CAMERA-LEAK-1 — Extreme Bands is not historical X; LWC is not history demand
 
 **Context:** After CROSSHAIR-PANE-HOST-1, Wozduh’s dashed cursor was time-offset vs price/RSX (one-point Extreme Bands host). History zoom-out teleported: LWC range echo / Wozduh `setData` looked like a human pan. Live proof: preserve blocked Wozduh `{from: -2942}`. Remaining full-zoom-out vibration is store vs VIEW geometry (`HISTORY-ZOOM-OUT-EDGE-1`).

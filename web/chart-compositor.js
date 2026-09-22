@@ -219,14 +219,34 @@ class ChartCompositor {
   }
 
   /**
+   * After last oscillator/decoration write: force canonical VIEW onto every pane.
+   * TimeCamera.commit is a no-op when VIEW is unchanged, so LWC Wozduh stay stretched
+   * unless ChartAdapter writes setVisibleLogicalRange directly.
+   */
+  _pinSharedTimeView() {
+    if (typeof ChartAdapter !== 'undefined'
+      && typeof ChartAdapter.pinLiveTimeView === 'function') {
+      ChartAdapter.pinLiveTimeView();
+    }
+  }
+
+  /**
    * Post-paint settle for full/prepend (F1 after paint, F2 without rebuilding store data).
-   * Decoration / onAfterFlush / prepend-camera notify — not a second setData.
+   * F1 decoration+pin already ran inside `_liveUpdating`. F2 still refreshes decoration
+   * under the mute, then re-pins VIEW. onAfterFlush / prepend-camera notify — not a second OHLC setData.
    */
   _settleAfterFullPrependPaint(intent) {
     if (intent.mode === 'prepend') {
-      if (typeof ChartAdapter !== 'undefined'
+      if (intent.phase === 'F2'
+        && typeof ChartAdapter !== 'undefined'
         && typeof ChartAdapter.refreshLiveDecoration === 'function') {
-        ChartAdapter.refreshLiveDecoration();
+        ChartAdapter.setLiveUpdating(true);
+        try {
+          ChartAdapter.refreshLiveDecoration();
+          this._pinSharedTimeView();
+        } finally {
+          ChartAdapter.setLiveUpdating(false);
+        }
       }
       this._notifyPrependCameraSettled();
     }
@@ -255,6 +275,7 @@ class ChartCompositor {
         const storeData = ChartCompositor.snapshotToStoreData(snapshot);
         this._applyAnnotations(storeData);
       }
+      this._pinSharedTimeView();
     } finally {
       ChartAdapter.setLiveUpdating(false);
       if (this._onAfterFlush) this._onAfterFlush(intent);
@@ -348,6 +369,7 @@ class ChartCompositor {
       });
     }
     this._navigateAfterPaint(intent, snapshot);
+    this._pinSharedTimeView();
   }
 
   _flushPrepend(storeData, snapshot, intent) {
@@ -384,6 +406,7 @@ class ChartCompositor {
         updateLoadedCandles: false,
       });
     }
+    this._pinSharedTimeView();
   }
 
   /**

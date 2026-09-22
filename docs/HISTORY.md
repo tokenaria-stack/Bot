@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-TIME-INDEX-PIN-1 — shared VIEW after oscillator setData (Sep 2026)
+
+- LWC `setData` on Wozduh/RSX can fit that pane independently. Identical TimeCamera commit is a no-op, so the oscillator stayed stretched vs price.
+- After DDR in full / prepend / indicators (and F2 prepend decoration), ChartAdapter force-applies canonical range+spacing+offset while `_liveUpdating`. Caps / preserve / demand unchanged.
+- Remaining full zoom-out vibration stays **HISTORY-ZOOM-OUT-EDGE-1**. Operator GREEN. NEXT **ATOMIC-VOCAB-AUDIT-1**.
+
 ## WOZDUH-X-AND-CAMERA-LEAK-1 — Wozduh X + user VIEW history demand (Sep 2026)
 
 - Cursor: Wozduh peer X is `TimelineDecoration` (full times). Extreme Bands `applyCrosshairTime` is a no-op; host stays Auto + Y. No `CROSSHAIR_ANCHORS`. RSX chrome path unchanged.

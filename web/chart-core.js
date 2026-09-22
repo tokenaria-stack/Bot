@@ -1601,6 +1601,27 @@
     },
 
     /**
+     * After oscillator setData, LWC may fit Wozduh independently.
+     * Re-apply TimeCamera VIEW on all panes even when commit is not dirty.
+     * Must run while `_liveUpdating` so pane echo cannot proposeFromPane.
+     */
+    pinLiveTimeView() {
+      if (!_live?.charts) return false;
+      if (typeof TimeCamera === 'undefined' || typeof TimeCamera.getCanonical !== 'function') {
+        return false;
+      }
+      const c = TimeCamera.getCanonical();
+      if (!c || !isFiniteLogicalRange(c.visibleRange)) return false;
+      applyCommittedCamera({
+        visibleRange: c.visibleRange,
+        barSpacing: c.barSpacing,
+        rightOffset: c.rightOffset,
+        sourceHostId: 'system',
+      });
+      return true;
+    },
+
+    /**
      * Hard pin visible logical range on all live panes (no rightOffset/decoration).
      * Used by LEFT prepend restore immediately after setData.
      */
