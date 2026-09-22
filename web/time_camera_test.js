@@ -37,6 +37,29 @@ test('echo lock: nested commit during apply is ignored', () => {
   assert.strictEqual(TimeCamera.getCanonical().barSpacing, 6);
 });
 
+test('onUserViewCommit fires for pane proposals, not system commits', () => {
+  TimeCamera._resetForTests();
+  const seen = [];
+  TimeCamera.bind({
+    applyCommitted: () => {},
+    onUserViewCommit: (range) => { seen.push(range); },
+  });
+  assert.strictEqual(
+    TimeCamera.commit({
+      visibleRange: { from: 0, to: 80 },
+      sourceHostId: 'system',
+    }),
+    true,
+  );
+  assert.strictEqual(seen.length, 0);
+  assert.strictEqual(
+    TimeCamera.proposeFromPane('price', { from: 10, to: 90 }, 6),
+    true,
+  );
+  assert.strictEqual(seen.length, 1);
+  assert.deepStrictEqual(seen[0], { from: 10, to: 90 });
+});
+
 test('two panes propose sequentially; canonical follows last commit; no recurse', () => {
   TimeCamera._resetForTests();
   const applied = [];

@@ -1514,6 +1514,23 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## WOZDUH-X-AND-CAMERA-LEAK-1 — Extreme Bands is not historical X; LWC is not history demand
+
+**Context:** After CROSSHAIR-PANE-HOST-1, Wozduh’s dashed cursor was time-offset vs price/RSX (one-point Extreme Bands host). History zoom-out teleported: LWC range echo / Wozduh `setData` looked like a human pan. Live proof: preserve blocked Wozduh `{from: -2942}`. Remaining full-zoom-out vibration is store vs VIEW geometry (`HISTORY-ZOOM-OUT-EDGE-1`).
+
+**Decision:**
+
+- Wozduh cursor **X** = market time on `TimelineDecoration` (mapper, not time owner). Extreme Bands = Auto + Y only.
+- `proposeFromPane` while preserve is open is observation; Boot wheel/pointer releases preserve. Do not consume the txn on the first pane echo.
+- History `userNav` only from TimeCamera **user** VIEW commit. System restore / LWC echo must not note a page.
+- RSX crosshair/host path stays the control. Caps 5000/9000/3000/25% unchanged.
+
+**Rejected:** Pixel-nudge cursor; fake Extreme Bands history; restore `CROSSHAIR_ANCHORS`; delay `userNav` until wheel idle; RangeProposal framework; retune caps in this chapter.
+
+**Consequences:** Strategy resume is **ATOMIC-VOCAB-AUDIT-1**. Zoom-out wall experiments wait on **HISTORY-ZOOM-OUT-EDGE-1**.
+
+---
+
 ## CHART-RENDERING-FAMILY-1 — live indicator paint closed (frozen after `01e2a7d`)
 
 **Context:** After RSX pane Auto moved to chrome, GPT proposed a follow-on annotation/host chapter because `setMarkers` still uses `getSeries('line_rsx')`.

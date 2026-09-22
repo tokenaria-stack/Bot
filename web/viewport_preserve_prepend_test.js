@@ -157,7 +157,11 @@ test('C: stale proposeFromPane cannot overwrite system preserve', () => {
   const stale = TimeCamera.proposeFromPane('price', { from: 5.25, to: 85.25 }, 6);
   assert.strictEqual(stale, false, 'stale echo must be ignored');
   assert.deepStrictEqual(TimeCamera.getCanonical().visibleRange, preserved);
-  assert.strictEqual(TimeCamera.hasOpenPreserveTransaction(), false);
+  assert.strictEqual(TimeCamera.hasOpenPreserveTransaction(), true,
+    'first pane echo must not unlock later chrome setData as a human pan');
+  const wozEcho = TimeCamera.proposeFromPane('wozduh', { from: 0, to: 5000 }, 6);
+  assert.strictEqual(wozEcho, false, 'second pane echo still observation');
+  assert.deepStrictEqual(TimeCamera.getCanonical().visibleRange, preserved);
   assert.strictEqual(commits.length, 1);
 });
 

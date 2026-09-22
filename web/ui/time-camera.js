@@ -45,6 +45,8 @@
   let applyCommitted = null;
   /** @type {null|(() => boolean)} */
   let shouldSkip = null;
+  /** @type {null|((range: {from:number,to:number}) => void)} */
+  let onUserViewCommit = null;
 
   /**
    * Preserve transaction: system-owned VIEW after prepend remapping.
@@ -283,11 +285,13 @@
   function bind(hooks) {
     applyCommitted = typeof hooks?.applyCommitted === 'function' ? hooks.applyCommitted : null;
     shouldSkip = typeof hooks?.shouldSkip === 'function' ? hooks.shouldSkip : null;
+    onUserViewCommit = typeof hooks?.onUserViewCommit === 'function' ? hooks.onUserViewCommit : null;
   }
 
   function unbind() {
     applyCommitted = null;
     shouldSkip = null;
+    onUserViewCommit = null;
     dataResolve = null;
     notedTipLogical = null;
     notedTimesSec = null;
@@ -370,16 +374,21 @@
       tipLogical: notedTipLogical,
       timesSec: notedTimesSec,
     });
+    if (sourceHostId !== 'system' && typeof onUserViewCommit === 'function') {
+      const view = cloneRange(canonical.visibleRange);
+      if (view) onUserViewCommit(view);
+    }
     return true;
   }
 
   function proposeFromPane(hostId, visibleRange, barSpacing) {
     if (isSyncing) return false;
     if (shouldSkip && shouldSkip()) return false;
-    // Stale echo after system preserve: consume txn, do not overwrite reconstructed VIEW.
-    // Real user gestures call releasePreserveTransaction() first (wheel/pointer).
+    // Stale LWC range echo after system preserve: observation only.
+    // Do not release here — the first pane echo must not unlock the next pane
+    // (Wozduh chrome setData) to look like a human pan. Wheel/pointer in Boot
+    // already calls releasePreserveTransaction() before a real gesture.
     if (openPreserveEpoch != null) {
-      releasePreserveTransaction();
       return false;
     }
     if (!isFiniteLogicalRange(visibleRange)) return false;

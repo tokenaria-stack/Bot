@@ -43,10 +43,13 @@ Do **not** change TimeCamera, hydration, RenderScheduler, store/render-window, c
 
 **WOZDUH-CROSSOVER-PAINT-1 ✅ frozen.** Four closed-bar Wozduh A×B dots. Presentation microscope only. Do not restore VolCross as a slot/fact/tape/`IndicatorFactEvent`. Do not attach dots to DDR series B. Do not invent a generic marker/event/demand framework. Gear menu is paint prefs only (`wozduh_crossover_prefs_v1`). Do not reopen Wozduh numeric semantics, hydration architecture, autoscale, or crosshair for this overlay.
 
+**WOZDUH-X-AND-CAMERA-LEAK-1 accepted for strategy testing.** Wozduh peer cursor X uses `TimelineDecoration` (full times); Extreme Bands stays Y/Auto. Preserve txn is not released by the first LWC echo. History demand is TimeCamera user VIEW commits, not price `subscribeVisibleLogicalRangeChange`. Operator GREEN enough without full zoom-out. Do not reopen Wozduh chrome, `CROSSHAIR_ANCHORS`, or cap retune from this chapter.
+
 **Chart polish later (does not touch learning math / FeatureTape / labels / CatBoost):**
 
 | ID | What | Why later |
 |----|------|-----------|
+| **HISTORY-ZOOM-OUT-EDGE-1** | Chart vibrates / clips when panning at the loaded-island edge while fully zoomed out. Geometry: visible **5000** + chunk **3000** ×2 > store **9000**. Working-set / zoom-out-wall experiments (including any later store/visible resize) stay here. | Operator will not zoom fully out for strategy work. Do not delay `userNav` fetch. Do not loosen preserve. Do not retune 5000/9000/3000 until this chapter. |
 | **RSX-ANNOTATION-PAINT-1** | Native `setMarkers` still uses `getSeries('line_rsx')`. Hiding the stroke hides arrows. Facts remain `wire.Annotation`. | Operator accepted live look. Chrome-host `setMarkers` is unsafe (historical times + `aboveBar` relative to series value). |
 | **WOZDUH-AUTOSCALE-FIRSTVALUE-1** | Extreme Bands host owns `[-5,105]` on paper; LWC 4.2.1 skips null `firstValue()`. Wozduh plots already span ~0–100 so the pane *looks* correct. | Do not copy the RSX post-DDR refresh “to be safe.” Reopen only if Auto collapses when plots are hidden. |
 | **UI-PALETTE-1** | Factory `ui_config` colors vs operator taste. | Explicit ask only. Not FeatureSpec. |

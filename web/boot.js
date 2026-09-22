@@ -1986,16 +1986,12 @@
       await fetchRsxIndicatorSettings();
 
       attachLiveHistoryScrollArm();
-      const priceChart = ChartAdapter.getChart('live', 'price');
-      priceChart?.timeScale()?.subscribeVisibleLogicalRangeChange((range) => {
-        // Mid-paint LWC echoes are not user navigation. Paint must not re-arm
-        // viewport history; onAfterFlush only consumes existing human pending.
-        if (typeof ChartAdapter !== 'undefined' && ChartAdapter.isLiveUpdating()) {
-          return;
-        }
-        scheduleHistoryLoad(range);
-        maybeReturnToLiveFromHistory(range);
-      });
+      if (typeof ChartAdapter !== 'undefined' && typeof ChartAdapter.setUserViewCommit === 'function') {
+        ChartAdapter.setUserViewCommit((range) => {
+          scheduleHistoryLoad(range);
+          maybeReturnToLiveFromHistory(range);
+        });
+      }
 
       safeInit('UI wozduh', () => WozduhController.init());
       // Shot 10B: open WS before history fetch so ticks buffer during load (no Startup Gap).

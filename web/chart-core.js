@@ -12,6 +12,8 @@
   /** @type {{ charts: object, priceSeries: object, volumeSeries: object, priceStyle: string, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
   let _live = null;
   let _liveUpdating = false;
+  /** Boot: TimeCamera user VIEW → history demand (not LWC range echoes). */
+  let _onUserViewCommit = null;
 
   /** @type {null|{ locale: string, timeFormatter: Function, dateFormatter: Function, tickMarkFormatter: Function }} */
   let _timeFormatBundle = null;
@@ -416,6 +418,9 @@
     TimeCamera.bind({
       applyCommitted: applyCommittedCamera,
       shouldSkip: () => _liveUpdating,
+      onUserViewCommit: (range) => {
+        if (typeof _onUserViewCommit === 'function') _onUserViewCommit(range);
+      },
     });
   }
 
@@ -522,17 +527,19 @@
 
   /**
    * Paint LWC native crosshair (incl. time label) on one pane.
-   * Price: candle series. Oscillator panes: presentation chrome host.
-   * Decoration series is fallback (future DisplayTimeline times / missing chrome).
+   * Price: candle series. RSX: scale-lines chrome (dense pane index + post-DDR seed).
+   * Wozduh X: TimelineDecoration (full times). Extreme Bands is Y/Auto only — a
+   * one-point tip host must not be the historical X series for setCrosshairPosition.
    */
   function paintNativeCrosshairAtTime(state, hostId, time) {
     const chart = chartForHostId(state, hostId);
     if (!chart || time == null || typeof chart.setCrosshairPosition !== 'function') return false;
-    if (hostId === 'wozduh' && typeof WozduhExtremeBands !== 'undefined'
-      && typeof WozduhExtremeBands.applyCrosshairTime === 'function') {
-      if (WozduhExtremeBands.applyCrosshairTime(chart, time, paneChromePrice(chart, hostId))) {
-        return true;
+    if (hostId === 'wozduh') {
+      const y = paneChromePrice(chart, hostId);
+      if (typeof TimelineDecoration !== 'undefined' && TimelineDecoration.applyCrosshairTime) {
+        return TimelineDecoration.applyCrosshairTime(chart, time, y);
       }
+      return false;
     }
     if (hostId === 'rsx' && typeof RsxScaleLines !== 'undefined'
       && typeof RsxScaleLines.applyCrosshairTime === 'function') {
@@ -1556,12 +1563,19 @@
     /** After DDR mount so the overlay host is the last Wozduh series (dots above strokes). */
     remountWozduhCrossovers() {
       if (!_live?.charts?.wozduh || typeof WozduhCrossovers === 'undefined') return false;
-      if (typeof WozduhCrossovers.dispose === 'function') WozduhCrossovers.dispose();
-      const ok = typeof WozduhCrossovers.attach === 'function'
-        ? WozduhCrossovers.attach(_live.charts.wozduh)
-        : false;
-      if (typeof WozduhCrossovers.refresh === 'function') {
-        WozduhCrossovers.refresh(_live._lastRealCandleTime);
+      const prevUpdating = _liveUpdating;
+      _liveUpdating = true;
+      let ok = false;
+      try {
+        if (typeof WozduhCrossovers.dispose === 'function') WozduhCrossovers.dispose();
+        ok = typeof WozduhCrossovers.attach === 'function'
+          ? WozduhCrossovers.attach(_live.charts.wozduh)
+          : false;
+        if (typeof WozduhCrossovers.refresh === 'function') {
+          WozduhCrossovers.refresh(_live._lastRealCandleTime);
+        }
+      } finally {
+        _liveUpdating = prevUpdating;
       }
       return ok;
     },
@@ -1644,6 +1658,15 @@
     /** Read-only: compositor/setData in flight. Same SSOT as pane range-echo skip. */
     isLiveUpdating() {
       return _liveUpdating === true;
+    },
+
+    /**
+     * Human VIEW commits only. LWC/paint echoes must not be wired here.
+     * @param {((range: {from:number,to:number}) => void)|null} fn
+     */
+    setUserViewCommit(fn) {
+      _onUserViewCommit = typeof fn === 'function' ? fn : null;
+      return true;
     },
 
     getVisibleLogicalRange(context) {

@@ -301,26 +301,20 @@ class HydrationOrchestrator {
     if (pickOnce && typeof this._deps.pickHistoryPrefetchEdge === 'function') {
       const edge = this._deps.pickHistoryPrefetchEdge(liveRange);
       if (edge === 'right') {
-        this._pendingLeftIntent = null;
-        if (!this._pendingRightIntent && liveRange
-          && Number.isFinite(liveRange.from) && Number.isFinite(liveRange.to)) {
-          this._pendingRightIntent = {
-            range: { from: liveRange.from, to: liveRange.to },
-            options: { force: true, cause: 'userNav' },
-          };
+        if (!this._pendingRightIntent) {
+          if (this._pendingLeftIntent) this._tryStartLeftPending();
+          return;
         }
+        this._pendingLeftIntent = null;
         this._tryStartRightPending();
         return;
       }
       if (edge === 'left') {
-        this._pendingRightIntent = null;
-        if (!this._pendingLeftIntent && liveRange
-          && Number.isFinite(liveRange.from) && Number.isFinite(liveRange.to)) {
-          this._pendingLeftIntent = {
-            range: { from: liveRange.from, to: liveRange.to },
-            options: { force: true, cause: 'userNav' },
-          };
+        if (!this._pendingLeftIntent) {
+          if (this._pendingRightIntent) this._tryStartRightPending();
+          return;
         }
+        this._pendingRightIntent = null;
         this._tryStartLeftPending();
         return;
       }

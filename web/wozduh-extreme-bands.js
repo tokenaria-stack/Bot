@@ -253,21 +253,12 @@
   }
 
   /**
-   * ChartAdapter-only: native LWC crosshair on this pane via the private host.
-   * Series stays private — no getter. Y is pane chrome, not indicator data.
+   * Not the historical X path. Extreme Bands owns Auto + Y seed only.
+   * ChartAdapter maps Wozduh cursor X via TimelineDecoration (full times).
+   * Kept as a no-op socket so a one-point tip host cannot steal setCrosshairPosition.
    */
-  function applyCrosshairTime(chart, time, price) {
-    const att = findAttachment(chart);
-    if (!att?.series || !chart || time == null) return false;
-    if (typeof chart.setCrosshairPosition !== 'function') return false;
-    let y = Number(price);
-    if (!Number.isFinite(y)) y = HOST_VALUE;
-    try {
-      chart.setCrosshairPosition(y, time, att.series);
-      return true;
-    } catch {
-      return false;
-    }
+  function applyCrosshairTime(_chart, _time, _price) {
+    return false;
   }
 
   function dispose() {

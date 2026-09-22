@@ -115,6 +115,9 @@ test('boot scheduleHistoryLoad must not busy-drop (source gate)', () => {
   assert.ok(!/isApproachingLoadedLeftEdge\(_raw/.test(body), 'Must not prefetch from raw LWC range arg');
   assert.ok(!/isBusy\(\)/.test(body), 'Boot must not gate on isBusy (Hydration owns pending)');
   assert.ok(!/liveRenderScheduler\?\.isBusy/.test(body), 'Boot must not drop on scheduler busy');
+  assert.ok(/setUserViewCommit/.test(boot), 'Boot wires user VIEW commits to scheduleHistoryLoad');
+  assert.ok(!/subscribeVisibleLogicalRangeChange[\s\S]{0,400}scheduleHistoryLoad/.test(boot),
+    'LWC ticks must not note viewport history');
 });
 
 test('in-flight LEFT does not arm RIGHT from prune-echo note', async () => {
@@ -309,6 +312,32 @@ test('pick NONE clears both slots and does not fall through to leftover LEFT', (
   assert.strictEqual(orch.hasPendingLeftIntent(), false);
   assert.strictEqual(orch.hasPendingRightIntent(), false);
   assert.strictEqual(started, 0);
+});
+
+test('pick left with only RIGHT pending does not invent a LEFT userNav', () => {
+  const orch = new HydrationOrchestrator();
+  let leftStarts = 0;
+  orch.init({
+    getEpoch: () => 1,
+    getReqId: () => 1,
+    shouldLoad: () => { leftStarts += 1; return true; },
+    getAnchorEndTimeSec: () => 1000,
+    isRenderBusy: () => false,
+    isDashboardLoading: () => false,
+    getVisibleRange: () => ({ from: 5, to: 60 }),
+    pickHistoryPrefetchEdge: () => 'left',
+    fetchColumnar: async () => ({ times: [1], hasMore: true, candles: {} }),
+    mergeIntoStore: () => ({ added: 1 }),
+    markDirty: () => {},
+    processTick: () => {},
+    shouldLoadRight: () => true,
+    getRightFetchEndSec: () => 2000,
+    mergeAppendIntoStore: () => ({ added: 1 }),
+  });
+  orch.noteRightHistoryIntent({ from: 40, to: 90 }, { force: true, cause: 'userNav' });
+  orch.tryConsumePending();
+  assert.strictEqual(leftStarts, 0);
+  assert.strictEqual(orch.hasPendingLeftIntent(), false);
 });
 
 console.log('wave2_pending_intent_test: ALL PASS');

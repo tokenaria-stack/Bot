@@ -178,15 +178,21 @@ test('zOrder is bottom; chart-core wires Wozduh chart only', () => {
   assert.ok(!core.includes('WozduhExtremeBands.attach(rsxChart)'));
 });
 
-test('applyCrosshairTime uses private host; historical time need not be on the host', () => {
+test('applyCrosshairTime is not the historical X path (one-point host must not steal time)', () => {
   WozduhExtremeBands._resetForTests();
   const chart = fakeWozChart();
   WozduhExtremeBands.attach(chart);
   WozduhExtremeBands.refresh(99);
-  assert.strictEqual(WozduhExtremeBands.applyCrosshairTime(chart, 10, 50), true);
-  assert.strictEqual(chart.calls.length, 1);
-  assert.deepStrictEqual(chart.calls[0], { price: 50, time: 10, series: chart.created[0] });
+  assert.strictEqual(WozduhExtremeBands.applyCrosshairTime(chart, 10, 50), false);
+  assert.strictEqual(chart.calls.length, 0);
   assert.deepStrictEqual(chart.created[0].data, [{ time: 99, value: 50 }]);
+  const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+  const paint = core.slice(
+    core.indexOf('function paintNativeCrosshairAtTime'),
+    core.indexOf('function applyBottomAxisLabel'),
+  );
+  assert.ok(paint.includes('TimelineDecoration.applyCrosshairTime'));
+  assert.ok(!paint.includes('WozduhExtremeBands.applyCrosshairTime'));
   WozduhExtremeBands.dispose();
 });
 

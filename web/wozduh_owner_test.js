@@ -32,8 +32,14 @@ test('B. oscillator crosshair uses pane chrome, not DDR plot ids', () => {
   assert.ok(seriesFn.includes('priceSeries'));
   assert.ok(!seriesFn.includes("getSeries('woz_vol_rsi_ema5')"));
   assert.ok(!seriesFn.includes("getSeries('line_rsx')"));
-  assert.ok(src.includes('WozduhExtremeBands.applyCrosshairTime'));
-  assert.ok(src.includes('RsxScaleLines.applyCrosshairTime'));
+  const paint = src.slice(
+    src.indexOf('function paintNativeCrosshairAtTime'),
+    src.indexOf('function applyBottomAxisLabel'),
+  );
+  assert.ok(paint.includes('TimelineDecoration.applyCrosshairTime'));
+  assert.ok(paint.includes("hostId === 'wozduh'"));
+  assert.ok(!paint.includes('WozduhExtremeBands.applyCrosshairTime'));
+  assert.ok(paint.includes('RsxScaleLines.applyCrosshairTime'));
   assert.ok(!src.includes('function crosshairAnchorId'));
   assert.ok(!src.includes('function hydratedValueAtTime'));
   assert.strictEqual(DDRFactory.CROSSHAIR_ANCHORS, undefined);

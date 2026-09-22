@@ -184,6 +184,12 @@ async function run() {
     const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
     assert.ok(core.includes('WozduhCrossovers.attach'));
     assert.ok(core.includes('remountWozduhCrossovers'));
+    const remount = core.slice(
+      core.indexOf('remountWozduhCrossovers()'),
+      core.indexOf('applyFullData'),
+    );
+    assert.ok(remount.includes('_liveUpdating = true'));
+    assert.ok(remount.includes('finally'));
     assert.ok(core.indexOf('WozduhExtremeBands.attach') < core.indexOf('WozduhCrossovers.attach'));
     const boot = fs.readFileSync(path.join(__dirname, 'boot.js'), 'utf8');
     assert.ok(boot.indexOf('buildPanes') < boot.indexOf('remountWozduhCrossovers'));

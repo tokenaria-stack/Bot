@@ -87,8 +87,10 @@ assert.ok(ingest.indexOf('historyHasNewer') < ingest.indexOf('appendTick'),
   'detach gate is before appendTick');
 
 assert.ok(!/LIVE-TF-DIAG/.test(boot), 'temporary LIVE-TF-DIAG tracer must be gone');
-assert.ok(/subscribeVisibleLogicalRangeChange[\s\S]{0,400}isLiveUpdating[\s\S]{0,200}scheduleHistoryLoad/.test(boot),
-  'LWC range echo must skip history nav while compositor live-updating');
+assert.ok(/setUserViewCommit/.test(boot), 'history demand binds TimeCamera user VIEW commits');
+assert.ok(/ChartAdapter.setUserViewCommit/.test(boot), 'Boot wires ChartAdapter.setUserViewCommit');
+assert.ok(!/subscribeVisibleLogicalRangeChange[\s\S]{0,500}scheduleHistoryLoad/.test(boot),
+  'LWC range must not schedule viewport history');
 assert.ok(!/isLiveUpdating/.test(extractFn(boot, 'scheduleHistoryLoad')),
   'scheduleHistoryLoad must not inherit the echo gate');
 assert.ok(/queueMicrotask\(\(\) => \{[\s\S]*tryConsumePending/.test(boot),
@@ -101,5 +103,7 @@ assert.ok(/cause: 'userNav'/.test(extractFn(boot, 'scheduleHistoryLoad')),
 const core = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
 assert.ok(/isLiveUpdating\(\)\s*\{\s*return _liveUpdating === true;/.test(core),
   'ChartAdapter.isLiveUpdating reads existing _liveUpdating');
+assert.ok(/setUserViewCommit/.test(core) && /onUserViewCommit/.test(core),
+  'ChartAdapter forwards TimeCamera user VIEW to Boot demand');
 
 console.log('seconds_history_nav_test: OK');

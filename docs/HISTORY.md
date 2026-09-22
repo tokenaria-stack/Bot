@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## WOZDUH-X-AND-CAMERA-LEAK-1 — Wozduh X + user VIEW history demand (Sep 2026)
+
+- Cursor: Wozduh peer X is `TimelineDecoration` (full times). Extreme Bands `applyCrosshairTime` is a no-op; host stays Auto + Y. No `CROSSHAIR_ANCHORS`. RSX chrome path unchanged.
+- Jump: preserve txn stays open until Boot wheel/pointer `releasePreserveTransaction`. Crossover remount is inside `_liveUpdating`. Live proof: Wozduh echo `{from: -2942}` was blocked.
+- Demand: `TimeCamera.onUserViewCommit` → `ChartAdapter.setUserViewCommit` → `scheduleHistoryLoad`. Price LWC range no longer notes `userNav`. Hydration must not invent a LEFT page from a RIGHT-only pending.
+- Operator: visuals good enough for strategy testing if not zoomed fully out. Remaining edge vibration → **HISTORY-ZOOM-OUT-EDGE-1**. NEXT **ATOMIC-VOCAB-AUDIT-1**.
+
 ## PRICE-SERIES-STYLE-1.1 — candles/bars/line as one priceSeries (Sep 2026)
 
 - Toolbar: starred style glyphs one-click; `[glyph ▾]` catalog + stars. Line ⚙ color/width; `applyOptions` only. Factory `PRICE_LINE_FACTORY`; sparse `dashboard_price_style_v1`.

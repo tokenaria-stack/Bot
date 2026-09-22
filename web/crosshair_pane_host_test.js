@@ -57,7 +57,8 @@ test('B. ChartAdapter routes osc panes to chrome applyCrosshairTime', () => {
     core.indexOf('function paintNativeCrosshairAtTime'),
     core.indexOf('function applyBottomAxisLabel'),
   );
-  assert.ok(paint.includes('WozduhExtremeBands.applyCrosshairTime'));
+  assert.ok(paint.includes('TimelineDecoration.applyCrosshairTime'));
+  assert.ok(!paint.includes('WozduhExtremeBands.applyCrosshairTime'));
   assert.ok(paint.includes('RsxScaleLines.applyCrosshairTime'));
   assert.ok(!paint.includes("getSeries('woz_vol_rsi_ema5')"));
   assert.ok(!paint.includes("getSeries('line_rsx')"));
