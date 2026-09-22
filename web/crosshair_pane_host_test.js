@@ -62,7 +62,7 @@ test('B. ChartAdapter routes osc panes to chrome applyCrosshairTime', () => {
   assert.ok(!paint.includes("getSeries('woz_vol_rsi_ema5')"));
   assert.ok(!paint.includes("getSeries('line_rsx')"));
   assert.ok(!paint.includes('hydratedValueAtTime'));
-  assert.ok(core.includes('candleSeries'));
+  assert.ok(core.includes('priceSeries'));
   assert.ok(!core.includes('function hydratedValueAtTime'));
   assert.ok(core.includes('applyPeerCrosshair'));
   assert.ok(core.includes('peer-crosshair-guide'));

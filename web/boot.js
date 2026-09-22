@@ -628,16 +628,16 @@
           wozduh: ChartAdapter.getChart(ctx, 'wozduh'),
           rsx: ChartAdapter.getChart(ctx, 'rsx'),
         },
-        candleSeries: null,
+        priceSeries: typeof ChartAdapter.getPriceSeries === 'function'
+          ? ChartAdapter.getPriceSeries(ctx)
+          : null,
       }),
       setToggleSeriesVisible: noop,
-      setChartType: noop,
       renderFib: noop,
       setEquityData: noop,
       fitEquityContent: noop,
       resizeEquity: noop,
       setLegendVisibility: noop,
-      getChartType: () => 'candles',
       applyRsxData: noop,
       setNavigatorOverlay: noop,
       hideLegacyOscillatorSeries: noop,
@@ -1459,7 +1459,7 @@
 
   /**
    * Debt #69A emergency restore: HTF server cache + FE store clear + canonical hydrate.
-   * Not a memory manager — user-facing "Reload Dashboard".
+   * Ops/debug only — not on the toolbar. Not a memory manager. Not recovery/TF/reconnect.
    */
   async function reloadDashboard() {
     try {
@@ -1965,6 +1965,9 @@
     });
     safeInit('UI tabs', () => TabsController.init());
     safeInit('UI timeframe', () => TimeframeController.init({ useServerTf: false }));
+    safeInit('UI price style', () => {
+      if (typeof PriceStyleController !== 'undefined') PriceStyleController.init();
+    });
     safeInit('UI toolbar', () => ToolbarController.init());
     safeInit('UI scale', () => ScaleController.init());
     safeInit('UI layout', () => LayoutController.init());

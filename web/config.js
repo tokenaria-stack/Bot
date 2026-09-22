@@ -228,6 +228,16 @@ const TF_MENU = {
   ],
 };
 
+/** Closed price-pane styles: same market-time OHLC, different LWC presentation. */
+const PRICE_STYLE_CATALOG = [
+  { id: 'candles', label: 'Candles', defaultFavorite: true },
+  { id: 'bars', label: 'Bars', defaultFavorite: true },
+  { id: 'line', label: 'Line', defaultFavorite: true },
+];
+const PRICE_STYLE_DEFAULT = 'candles';
+const PRICE_LINE_FACTORY = { color: TV.green, lineWidth: 2 };
+const LS_PRICE_STYLE_KEY = 'dashboard_price_style_v1';
+
 const LS_FAV_KEY = 'dashboard_tf_favorites';
 const LS_TF_KEY = 'dashboard_tf_current';
 const LS_PANE_KEY = 'dashboard_pane_heights';
@@ -312,6 +322,10 @@ function ensureChartLibraryStyles() {
     upColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeUp : 'rgba(8,153,129,0.55)',
     downColor: (typeof ChartTheme !== 'undefined') ? ChartTheme.volumeDown : 'rgba(242,54,69,0.55)',
   },
+  line: {
+    color: PRICE_LINE_FACTORY.color,
+    lineWidth: PRICE_LINE_FACTORY.lineWidth,
+  },
 };
 
   /** Price pane only. Oscillator paint lives in ui_config + primitives + rsxStrokeColor. */
@@ -320,6 +334,7 @@ function ensureChartLibraryStyles() {
     candle: CHART_STYLES.candle,
     volume: CHART_STYLES.volume,
     volumeBar: CHART_STYLES.volumeBar,
+    line: CHART_STYLES.line,
     volumeScale: { scaleMargins: { top: 0.82, bottom: 0 } },
     priceScale: { scaleMargins: { top: 0.05, bottom: 0.22 } },
   },

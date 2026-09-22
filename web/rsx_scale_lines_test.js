@@ -188,7 +188,7 @@ test('HIDDEN-RENDER-SKIP and series-factory stay unaware of the host', () => {
     core.indexOf('function candleCloseAtTime'),
   );
   assert.ok(!seriesFn.includes("getSeries('line_rsx')"));
-  assert.ok(seriesFn.includes('candleSeries'));
+  assert.ok(seriesFn.includes('priceSeries'));
 });
 
 test('applyCrosshairTime uses private host; historical time need not be on the host', () => {

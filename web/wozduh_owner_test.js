@@ -29,7 +29,7 @@ test('B. oscillator crosshair uses pane chrome, not DDR plot ids', () => {
     src.indexOf('function crosshairSeriesForChart'),
     src.indexOf('function candleCloseAtTime'),
   );
-  assert.ok(seriesFn.includes('candleSeries'));
+  assert.ok(seriesFn.includes('priceSeries'));
   assert.ok(!seriesFn.includes("getSeries('woz_vol_rsi_ema5')"));
   assert.ok(!seriesFn.includes("getSeries('line_rsx')"));
   assert.ok(src.includes('WozduhExtremeBands.applyCrosshairTime'));

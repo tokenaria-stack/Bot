@@ -143,7 +143,8 @@ test('Phase 2 chart-core composition contracts', () => {
   assert.ok(core.includes('_lastRealCandleTime'));
   assert.ok(core.includes('isNewBar'));
   // Tip path must stay update(), not setData(real+ws).
-  assert.ok(core.includes('state.candleSeries.update(candle)'));
+  assert.ok(core.includes('applyPriceSeriesUpdate'));
+  assert.ok(core.includes('state.priceSeries.update(pt)'));
   assert.ok(!core.includes('applyCandlesWithWhitespace'));
 });
 

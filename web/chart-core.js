@@ -1,6 +1,6 @@
 /**
  * chart-core.js — sterile live ChartAdapter facade (Project Renaissance).
- * Contract: 7 public methods only. Price pane owns candles; indicators via DDRFactory.
+ * Contract: public ChartAdapter methods. Price pane owns one priceSeries (OHLC presentation).
  *
  * Time axis: wire data stays UTC unix seconds. Axis/crosshair labels use the browser
  * local timezone (display only — never shift stored timestamps).
@@ -9,7 +9,7 @@
   'use strict';
 
   const PRICE_SCALE_MIN = 75;
-  /** @type {{ charts: object, candleSeries: object, volumeSeries: object, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
+  /** @type {{ charts: object, priceSeries: object, volumeSeries: object, priceStyle: string, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
   let _live = null;
   let _liveUpdating = false;
 
@@ -447,7 +447,7 @@
 
   /** Price pane native series. Oscillator panes use pane chrome, not DDR plots. */
   function crosshairSeriesForChart(state, chart) {
-    if (chart === state.charts.price) return state.candleSeries;
+    if (chart === state.charts.price) return state.priceSeries;
     return null;
   }
 
@@ -903,7 +903,7 @@
 
   function rulerMinMove() {
     try {
-      const fmt = _live?.candleSeries?.options?.()?.priceFormat;
+      const fmt = _live?.priceSeries?.options?.()?.priceFormat;
       const mm = Number(fmt?.minMove);
       if (Number.isFinite(mm) && mm > 0) return mm;
     } catch { /* */ }
@@ -919,13 +919,13 @@
     const dom = ensureRulerDom();
     if (!dom) return;
     const { wrap, shade, tip } = dom;
-    if (!geo || geo.hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) {
+    if (!geo || geo.hostId !== 'price' || !_live?.charts?.price || !_live?.priceSeries) {
       shade.style.display = 'none';
       tip.style.display = 'none';
       return;
     }
     const chart = _live.charts.price;
-    const series = _live.candleSeries;
+    const series = _live.priceSeries;
     const a = geo.anchorA;
     const b = geo.anchorB;
     let x1;
@@ -999,7 +999,7 @@
    * @returns {{ logical: number, price: number, time: *|null }|null}
    */
   function logicalPointFromClient(hostId, clientX, clientY) {
-    if (hostId !== 'price' || !_live?.charts?.price || !_live?.candleSeries) return null;
+    if (hostId !== 'price' || !_live?.charts?.price || !_live?.priceSeries) return null;
     const host = document.getElementById('price-chart');
     if (!host) return null;
     const rect = host.getBoundingClientRect();
@@ -1018,7 +1018,7 @@
     try {
       const ts = _live.charts.price.timeScale();
       logical = ts.coordinateToLogical(x);
-      price = _live.candleSeries.coordinateToPrice(y);
+      price = _live.priceSeries.coordinateToPrice(y);
       try {
         time = ts.coordinateToTime(x);
       } catch {
@@ -1152,6 +1152,76 @@
     return INDICATOR_CONFIG?.price ?? defaultPricePaneConfig();
   }
 
+  function normalizePriceStyle(id) {
+    if (typeof PriceStyleController !== 'undefined' && typeof PriceStyleController.normalizeStyle === 'function') {
+      return PriceStyleController.normalizeStyle(id);
+    }
+    return id === 'bars' || id === 'line' || id === 'candles' ? id : 'candles';
+  }
+
+  function currentPriceStyle() {
+    if (typeof PriceStyleController !== 'undefined' && typeof PriceStyleController.getCurrent === 'function') {
+      return normalizePriceStyle(PriceStyleController.getCurrent());
+    }
+    return 'candles';
+  }
+
+  function projectPricePoints(style, candles) {
+    if (typeof PriceStyleController !== 'undefined' && typeof PriceStyleController.projectPricePoints === 'function') {
+      return PriceStyleController.projectPricePoints(style, candles);
+    }
+    return Array.isArray(candles) ? candles : [];
+  }
+
+  function projectPricePoint(style, candle) {
+    if (typeof PriceStyleController !== 'undefined' && typeof PriceStyleController.projectPricePoint === 'function') {
+      return PriceStyleController.projectPricePoint(style, candle);
+    }
+    return candle || null;
+  }
+
+  function priceSeriesOptions(style, priceCfg) {
+    if (style === 'line') {
+      const line = (typeof PriceStyleController !== 'undefined'
+        && typeof PriceStyleController.resolveLinePaint === 'function')
+        ? PriceStyleController.resolveLinePaint()
+        : { color: '#089981', lineWidth: 2 };
+      return {
+        color: line.color,
+        lineWidth: line.lineWidth,
+        priceScaleId: 'right',
+      };
+    }
+    const candle = priceCfg?.candle || {};
+    return { ...candle, priceScaleId: 'right' };
+  }
+
+  function addPriceSeries(chart, style, priceCfg) {
+    const opts = priceSeriesOptions(style, priceCfg);
+    if (style === 'bars' && typeof chart.addBarSeries === 'function') {
+      return chart.addBarSeries(opts);
+    }
+    if (style === 'line' && typeof chart.addLineSeries === 'function') {
+      return chart.addLineSeries(opts);
+    }
+    return chart.addCandlestickSeries(opts);
+  }
+
+  function applyPriceSeriesData(state, candles) {
+    if (!state?.priceSeries || !Array.isArray(candles) || !candles.length) return;
+    const style = state.priceStyle || 'candles';
+    const points = projectPricePoints(style, candles);
+    if (!points.length) return;
+    state.priceSeries.setData(points);
+  }
+
+  function applyPriceSeriesUpdate(state, candle) {
+    if (!state?.priceSeries || !candle) return;
+    const pt = projectPricePoint(state.priceStyle || 'candles', candle);
+    if (!pt) return;
+    state.priceSeries.update(pt);
+  }
+
   function buildLiveState(selectors) {
     const sel = selectors || (typeof LIVE_CHART_SELECTORS !== 'undefined' ? LIVE_CHART_SELECTORS : {});
     const priceHost = document.getElementById(sel.chartContainer || 'price-chart');
@@ -1178,10 +1248,9 @@
     rsxChart.timeScale().applyOptions(unifiedTimeScaleOptions(false));
 
     const priceCfg = resolvePricePaneConfig();
-    const candleOpts = priceCfg?.candle || { upColor: '#089981', downColor: '#f23645', wickUpColor: '#089981', wickDownColor: '#f23645', borderVisible: false };
     const volumeOpts = priceCfg?.volume || { priceFormat: { type: 'volume' }, priceScaleId: 'volume' };
-
-    const candleSeries = priceChart.addCandlestickSeries({ ...candleOpts, priceScaleId: 'right' });
+    const priceStyle = currentPriceStyle();
+    const priceSeries = addPriceSeries(priceChart, priceStyle, priceCfg);
     const volumeSeries = priceChart.addHistogramSeries(volumeOpts);
 
     const priceMargins = priceCfg?.priceScale?.scaleMargins || { top: 0.05, bottom: 0.22 };
@@ -1227,8 +1296,9 @@
     }
     const state = {
       charts: { price: priceChart, wozduh: wozduhChart, rsx: rsxChart },
-      candleSeries,
+      priceSeries,
       volumeSeries,
+      priceStyle,
       _realCandles: null,
       _lastRealCandleTime: null,
       _bottomTimeAxisHostId: 'price',
@@ -1325,7 +1395,7 @@
   }
 
   /**
-   * ADR-027 — candleSeries is real OHLC only (tip update invariant).
+   * ADR-027 — priceSeries is a presentation of real OHLC only (tip update invariant).
    * Future strip via TimelineDecoration, never concatenated onto candles.
    *
    * Paint order (no mid-paint camera):
@@ -1339,10 +1409,10 @@
    * @param {{ skipDecoration?: boolean }} [paintOpts]
    */
   function paintCandles(state, candles, paintOpts = {}) {
-    if (!state?.candleSeries || !Array.isArray(candles) || !candles.length) return;
+    if (!state?.priceSeries || !Array.isArray(candles) || !candles.length) return;
     state._realCandles = candles;
     state._lastRealCandleTime = candles[candles.length - 1]?.time ?? null;
-    state.candleSeries.setData(candles);
+    applyPriceSeriesData(state, candles);
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.setData(toVolumeBars(candles));
     }
@@ -1390,7 +1460,7 @@
   }
 
   function updateCandle(state, candle) {
-    if (!state?.candleSeries || !candle) return;
+    if (!state?.priceSeries || !candle) return;
     if (isOlderThanPaintedTip(state, candle)) return;
     const isNewBar = candle.time !== state._lastRealCandleTime;
     if (Array.isArray(state._realCandles) && state._realCandles.length) {
@@ -1402,7 +1472,7 @@
     } else {
       state._realCandles = [candle];
     }
-    state.candleSeries.update(candle);
+    applyPriceSeriesUpdate(state, candle);
     if (state.volumeSeries && typeof toVolumeBars === 'function') {
       state.volumeSeries.update(toVolumeBars([candle])[0]);
     }
@@ -1426,9 +1496,54 @@
       return !!_live;
     },
 
-    getCandleSeries(context) {
+    getPriceSeries(context) {
       if (context !== 'live' || !_live) return null;
-      return _live.candleSeries;
+      return _live.priceSeries;
+    },
+
+    getPriceStyle() {
+      return _live?.priceStyle || currentPriceStyle();
+    },
+
+    getChartType() {
+      return ChartAdapter.getPriceStyle();
+    },
+
+    /**
+     * Swap the price visual on the existing live chart. Same OHLC window; no hydrate/camera.
+     * @param {string} id
+     */
+    setPriceStyle(id) {
+      if (!_live?.charts?.price) return false;
+      const next = normalizePriceStyle(id);
+      const chart = _live.charts.price;
+      if (_live.priceStyle === next && _live.priceSeries) return true;
+      const painted = Array.isArray(_live._realCandles) ? _live._realCandles : [];
+      const prev = _live.priceSeries;
+      if (prev && typeof chart.removeSeries === 'function') {
+        try { chart.removeSeries(prev); } catch { /* already detached */ }
+      }
+      const series = addPriceSeries(chart, next, resolvePricePaneConfig());
+      _live.priceSeries = series;
+      _live.priceStyle = next;
+      if (painted.length) applyPriceSeriesData(_live, painted);
+      return true;
+    },
+
+    /**
+     * Line paint only. No setData, no series swap, no hydrate.
+     * No-op when the active visual is not line.
+     */
+    applyPriceLinePaint(opts) {
+      if (!_live?.priceSeries || _live.priceStyle !== 'line') return false;
+      if (!opts || typeof _live.priceSeries.applyOptions !== 'function') return false;
+      const next = {};
+      if (opts.color != null) next.color = String(opts.color);
+      const width = Number(opts.lineWidth);
+      if (Number.isFinite(width)) next.lineWidth = width;
+      if (!Object.keys(next).length) return false;
+      _live.priceSeries.applyOptions(next);
+      return true;
     },
 
     getChart(context, pane = 'price') {

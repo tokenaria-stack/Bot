@@ -284,6 +284,168 @@
 
     .tf-star.fav { color: #fff; }
 
+    .price-style-picker {
+      position: relative;
+      z-index: 10000;
+    }
+
+    .price-style-current {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(41,98,255,0.25);
+      border: 1px solid var(--tv-accent);
+      color: #fff;
+      padding: 3px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      min-width: 36px;
+      height: 26px;
+    }
+
+    .price-style-current .price-style-glyph {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+    }
+
+    .price-style-caret {
+      font-size: 0.65rem;
+      line-height: 1;
+      opacity: 0.85;
+    }
+
+    .price-style-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 10001;
+      min-width: 168px;
+      background: #1e222d;
+      border: 1px solid var(--tv-border);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      padding: 6px 0;
+    }
+
+    .price-style-dropdown[hidden]:not(.open) { display: none; }
+    .price-style-dropdown.open { display: block; }
+
+    .price-style-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+      z-index: 9999;
+    }
+
+    .price-style-favorites {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .price-style-fav {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--tv-muted);
+      cursor: pointer;
+    }
+
+    .price-style-fav:hover,
+    .price-style-fav.active {
+      color: #fff;
+      border-color: var(--tv-accent);
+      background: rgba(41,98,255,0.2);
+    }
+
+    .price-style-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+    }
+
+    .price-style-item:hover { background: rgba(255,255,255,0.05); }
+    .price-style-item.selected { background: rgba(255,255,255,0.1); }
+
+    .price-style-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--tv-text);
+      font: inherit;
+      font-size: 0.78rem;
+      cursor: pointer;
+      padding: 0;
+      text-align: left;
+    }
+
+    .price-style-name svg {
+      flex: 0 0 auto;
+      color: var(--tv-muted);
+    }
+
+    .price-style-gear {
+      flex: 0 0 auto;
+      margin-left: 2px;
+      padding: 0 4px;
+      height: 18px;
+      border: 1px solid rgba(42, 46, 57, 0.85);
+      border-radius: 2px;
+      background: rgba(19, 23, 34, 0.72);
+      color: var(--tv-muted, #787b86);
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .price-style-gear:hover,
+    .price-style-gear.is-open {
+      color: var(--tv-text, #d1d4dc);
+      border-color: var(--tv-muted, #787b86);
+    }
+
+    .price-style-line-panel {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 8px 28px;
+    }
+
+    .price-style-line-panel[hidden] {
+      display: none;
+    }
+
+    .price-style-line-color {
+      width: 22px;
+      height: 18px;
+      padding: 0;
+      border: 1px solid #363a45;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .price-style-line-width {
+      width: 52px;
+      height: 20px;
+      background: #1c1e26;
+      color: var(--tv-text);
+      border: 1px solid #363a45;
+      border-radius: 3px;
+      font-size: 0.72rem;
+    }
+
     .tf-group {
       display: flex;
       gap: 2px;
@@ -333,28 +495,6 @@
 
     .tool-btn:hover { border-color: var(--tv-muted); color: var(--tv-text); }
     .tool-btn.active { background: rgba(41,98,255,0.2); border-color: var(--tv-accent); color: #fff; }
-
-    .seg-group {
-      display: flex;
-      gap: 1px;
-      background: var(--tv-border);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .seg-btn {
-      background: #131722;
-      border: none;
-      color: var(--tv-muted);
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-
-    .seg-btn:hover { color: var(--tv-text); }
-    .seg-btn.active { background: rgba(41,98,255,0.25); color: #fff; }
 
     .toolbar-meta {
       margin-left: auto;
@@ -1165,12 +1305,17 @@
       Ruler
     </button>
 
-    <button type="button" id="btn-clear-cache" class="tool-btn" title="Reload dashboard (HTF cache + live chart hydrate)">🔄 Reload</button>
-
-    <div class="seg-group" id="chart-type-group">
-      <button type="button" class="seg-btn active" data-chart="candles">Candles</button>
-      <button type="button" class="seg-btn" data-chart="bars">Bars</button>
-      <button type="button" class="seg-btn" data-chart="line">Line</button>
+    <div class="price-style-bar" id="price-style-bar">
+      <div class="price-style-favorites" id="price-style-favorites"></div>
+      <div class="price-style-picker" id="price-style-picker">
+        <button type="button" class="price-style-current" id="price-style-current" title="Candles" aria-label="Chart style: Candles">
+          <span class="price-style-glyph" aria-hidden="true"></span>
+          <span class="price-style-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="price-style-dropdown" id="price-style-dropdown" hidden>
+          <div id="price-style-menu"></div>
+        </div>
+      </div>
     </div>
 
     <div class="toolbar-meta">
@@ -1498,7 +1643,7 @@
   <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="/chart-theme.js?v=3.4.0-rsx-signal-1-1"></script>
   <script src="/trendline_plugin.js?v=3.1.0"></script>
-  <script src="/config.js?v=3.8.0-rsx-vis-1" defer></script>
+  <script src="/config.js?v=3.9.1-price-series-style-1-1" defer></script>
   <script src="/mappers.js?v=3.7.0-dag-demand-1" defer></script>
   <script src="/ui/scale-contribution.js?v=1.0.0" defer></script>
   <script src="/channel-series.js?v=1.1.0-wozduh-visual-1" defer></script>
@@ -1523,7 +1668,7 @@
   <script src="/wozduh-extreme-bands.js?v=1.4.0-crosshair-pane-host-1" defer></script>
   <script src="/wozduh-crossovers.js?v=1.0.0-wozduh-crossover-1" defer></script>
   <script src="/rsx-scale-lines.js?v=1.2.2-pane-autoscale-owner-1" defer></script>
-  <script src="/chart-core.js?v=4.29.0-wozduh-crossover-1" defer></script>
+  <script src="/chart-core.js?v=4.30.1-price-series-style-1-1" defer></script>
   <script src="/ui/viewport-manager.js?v=4.4.0-max-visible-20k" defer></script>
   <script src="/api.js?v=3.3.0-rsx-vis-1" defer></script>
   <script src="/ws.js?v=4.6.0-timeline-state-1" defer></script>
@@ -1534,13 +1679,14 @@
   <script src="/ui/wozduh-controller.js?v=4.0.0" defer></script>
   <script src="/ui/risk-controller.js?v=3.1.0" defer></script>
   <script src="/ui/timeframe-controller.js?v=3.7.1" defer></script>
+  <script src="/ui/price-style-controller.js?v=1.1.0-price-series-style-1-1" defer></script>
   <script src="/ui/rsx-controller.js?v=3.3.0-dag-demand-1" defer></script>
   <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.5.2-wozduh-family-indent-1" defer></script>
-  <script src="/ui/toolbar-controller.js?v=4.2.1" defer></script>
+  <script src="/ui/toolbar-controller.js?v=4.3.0-price-series-style-1" defer></script>
   <script src="/ui/legend-renderer.js?v=4.2.1" defer></script>
   <script src="/ui/layout-controller.js?v=4.4.0" defer></script>
   <script src="/ui/pane-layout.js?v=1.4.0" defer></script>
-  <script src="/boot.js?v=4.40.0-wozduh-crossover-1" defer></script>
+  <script src="/boot.js?v=4.41.0-price-series-style-1" defer></script>
 </body>
 </html>
