@@ -16,7 +16,7 @@ HISTORY_CHUNK_LIMIT        = 3000
 HISTORY_EDGE_PREFETCH_FRAC = 0.25
 ```
 
-Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining live `[Violation]` RAF cost is accepted; later speed work is fewer painted indicator series, not more camera logic. Do not reopen TimeCamera, LEFT/RIGHT hydration, RenderScheduler, cap/chunk/prefetch, or tick throttling unless a real regression appears. **HYDRATION-OWNERSHIP-1 frozen** (`c254253`): plot columns are prefs → `requestedPlotIds` → one history → time-keyed store. Do not restore index `updatePlots` or visibility-triggered refetch of present columns. **CROSSHAIR-PANE-HOST-1 frozen** (`87fd5a8`): oscillator native crosshair is pane chrome, not DDR plot IDs. **RSX-PANE-AUTOSCALE-OWNER-1 frozen** (`01e2a7d`): RSX Auto domain is pane chrome, not `line_rsx`. **CHART-RENDERING-FAMILY-1 frozen:** live RSX/Wozduh/price paint closed; do not start annotation-host follow-ups. **WOZDUH-CROSSOVER-PAINT-1 frozen:** four closed-bar Wozduh A×B dots are presentation chrome only (one overlay; not VolCross / facts / tape). **WOZDUH-FAMILY-EYE-1 frozen** (`b9ae83b`): family mute is a batch of existing visibility prefs, not a second demand/groupVisible SSOT.
+Fix C–G retained. Patch 2 (live-delta throttle) is **not** active. Remaining live `[Violation]` RAF cost is accepted; later speed work is fewer painted indicator series, not more camera logic. Do not reopen TimeCamera, LEFT/RIGHT hydration, RenderScheduler, cap/chunk/prefetch, or tick throttling unless a real regression appears. **HYDRATION-OWNERSHIP-1 frozen** (`c254253`): plot columns are prefs → `requestedPlotIds` → one history → time-keyed store. Do not restore index `updatePlots` or visibility-triggered refetch of present columns. **CROSSHAIR-PANE-HOST-1 frozen** (`87fd5a8`): oscillator native crosshair is pane chrome, not DDR plot IDs. **RSX-PANE-AUTOSCALE-OWNER-1 frozen** (`01e2a7d`): RSX Auto domain is pane chrome, not `line_rsx`. **CHART-RENDERING-FAMILY-1 frozen:** live RSX/Wozduh/price paint closed; do not start annotation-host follow-ups. **WOZDUH-CROSSOVER-PAINT-1 frozen:** four closed-bar Wozduh A×B dots are presentation chrome only (one overlay; not VolCross / facts / tape). **WOZDUH-FAMILY-EYE-1 frozen** (`b9ae83b`): family mute is a batch of existing visibility prefs, not a second demand/groupVisible SSOT. **PRICE-SERIES-STYLE-1.1 frozen** (`71c929b`): one `priceSeries` (candles/bars/line) on the existing OHLC window; toolbar favorites one-click; Line paint is sparse `applyOptions`. Reload is ops/debug only (`reloadDashboard` / `/api/cache/clear`), not toolbar chrome.
 
 **HISTORY-IDLE-PUMP-1 (frozen):** viewport history demand is human-owned. Wheel / drag / navigation may note `userNav`. Paint and LWC range echo must not schedule a new page. Post-flush consumes pending only. Sparse `sourceContinue` is separate.
 
@@ -308,7 +308,7 @@ Why / rejected alternatives → `docs/DECISIONS.md` (ADR-027).
 | `windowMode` | `live` — WS may append; `history` — set when NEWEST pruned; WS/gap must not feed store or auto-`loadDashboard` |
 | Return to live | Pin right edge while `history` → `loadDashboard()` (server tip) |
 | Paint | Track C: full retained snapshot (`selectPaintSnapshot`); no soft 15k tip-window |
-| Reload Dashboard | HTF clear + `store.clear()` + `loadDashboard()` (emergency, not memory manager) |
+| Reload (ops/debug) | `reloadDashboard()` = `/api/cache/clear` + `store.clear()` + `loadDashboard()`. **Not on the toolbar.** Not recovery, TF switch, or reconnect. |
 
 ---
 

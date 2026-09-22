@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## PRICE-SERIES-STYLE-1.1 — candles/bars/line as one priceSeries (Sep 2026)
+
+- Toolbar: starred style glyphs one-click; `[glyph ▾]` catalog + stars. Line ⚙ color/width; `applyOptions` only. Factory `PRICE_LINE_FACTORY`; sparse `dashboard_price_style_v1`.
+- One `priceSeries` handle. Style swap uses the already-painted OHLC window. Line source is Close.
+- Reload removed from chrome. `/api/cache/clear` + `reloadDashboard()` remain ops/debug. Recovery stays hydration / TF / reconnect.
+- Operator GREEN. Frozen at `71c929b`.
+
 ## WOZDUH-FAMILY-EYE-1 — visual-family mute on existing Wozduh visibility (Sep 2026)
 
 - Eye left of each channel name batches `wozduh_visibility_prefs_live` for that family. Snapshot `wozduh_family_mute_snap_v1` is restore-only. Eye open/closed is derived from member checkboxes.

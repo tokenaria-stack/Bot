@@ -1558,6 +1558,22 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 
 ---
 
+## PRICE-SERIES-STYLE-1.1 — candles/bars/line as one priceSeries (frozen)
+
+**Context:** Toolbar Candles/Bars/Line buttons were CSS-only (`setChartType` noop). Reload was a #69A emergency hammer on the chrome. Operator needed TF-like favorites and Line color/width.
+
+**Decision:** One `priceSeries` presentation of the existing OHLC window. `PriceStyleController` owns current style, toolbar favorites, and sparse Line paint. Style swap is remove/add/`setData` of the painted window. Line color/width is `applyOptions` only. Reload leaves the toolbar; `reloadDashboard()` / `/api/cache/clear` stay ops/debug.
+
+**Rejected:**
+- Three hidden series + visibility toggle — **Reason:** competing price owners.
+- Favorites only inside the popup — **Reason:** defeats stars.
+- Wozduh color prefs for Line — **Reason:** wrong host.
+- User-facing Reload replacement — **Reason:** recovery already has owners.
+
+**Consequences:** Hollow/area/HA may join this catalog later. Renko/Kagi stay a bar-source chapter. NEXT remains **ATOMIC-VOCAB-AUDIT-1**.
+
+---
+
 ## ADR-023 — Single Bottom Timeline Axis + Footer Layout Cleanup
 
 **Context:** After ADR-021 (TimeCamera) and ADR-022 (scale contribution), time labels still lived only on the price pane while every footer reserved blank LWC time-scale height. That wasted vertical space and looked like “gaps,” not a CSS bug.
