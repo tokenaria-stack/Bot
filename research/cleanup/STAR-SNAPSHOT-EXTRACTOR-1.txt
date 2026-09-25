@@ -1,0 +1,125 @@
+STAR-SNAPSHOT-EXTRACTOR-1
+Date: 2026-09-25
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_SNAPSHOT_EXTRACTOR_GREEN
+
+One ExtractStarSnapshots call walks 15m, 1h, and 4h once each.
+The deterministic fixture produced 134 Stars.
+DAG runners born inside that call: 3.
+Star count does not add walks.
+
+Corrections to the implementation prompt:
+
+- Side is the canonical edge string "up" or "down" (nodes.WozduhXoverSideUp / Down). The prompt's UP/DOWN labels are those two values.
+- The single slope field is VWEMA(HL2)[t] - VWEMA(HL2)[t-1] on that timeframe. Mid slope is not stored. The sign of VWEMA-to-mid distance is not stored. It is the sign of the stored distance.
+- An empty higher-timeframe slice is a caller error. A missing context is a finished walk whose latest close is still after the Star, or no bar has closed yet. The Star row stays. This keeps the three-walk law absolute.
+- Two rsx_tv_div facts with different directions at the same ConfirmedAt leave TV unavailable. The extractor does not pick a direction.
+- NativePresentAge and Spec2TVPivotAgePrimary are not imported. Age is starIndex - factIndex. The fixture kept 44 ages above 36.
+
+============================================================
+2. WHAT WAS BUILT
+============================================================
+
+market/star_snapshot.go
+  ExtractStarSnapshots
+  StarSnapshot, StarTF
+
+market/star_snapshot_test.go
+  full-ring NaN
+  age 0 versus missing, future fact rejected, age 40 kept
+  fixture extract
+
+research/cleanup/STAR-SNAPSHOT-EXTRACTOR-1.txt
+  this note
+
+No edits to HistoryBus.Get, WozduhNode, RSXNode, FeatureRuntime2, FeatureSpec, tape, Brain3, chart, or Frame.
+
+============================================================
+3. DATAFLOW
+============================================================
+
+replayClosedBarsCap(klines, rsx, ValidateHistoryCap(len+1), WozduhMaskAll)
+
+three times, then:
+
+  historySlotSeries of
+    SlotWozduhRsiHl2Vwema
+    SlotWozduhVolRsiEma5ChanMid / Up / Dn
+    SlotJurikRSX
+    SlotJurikSignal          (15m row only)
+
+  nodes.DetectCrossoverEdge on the 15m VWEMA and mid columns
+
+  indicators.TVDivergenceFacts on the 15m RSX column
+    once per call, not once per Star
+    source rsx_tv_div only
+    no Jurik inside that function
+
+  latest HTF index with CloseTime <= Star CloseTime
+    data.BarCloseTimeMs is the close check
+    a supplied CloseTime that disagrees with it is an error
+
+ClosedDAGReplay.ZZFacts is ignored.
+1h and 4h RSX and signal columns are read into the series struct so the
+column length can be checked, and are not copied onto StarSnapshot.
+FeatureRuntime2 is not called. Frame.dag is not called.
+
+============================================================
+4. FIXTURE
+============================================================
+
+Synthetic closed bars from 2024-01-01 UTC.
+2560 × 15m, 640 × 1h, 160 × 4h.
+defaultRSXSettings (length 14, signal 9, source hlc3, div lookback 90).
+
+  stars          134
+  up             67
+  down           67
+  DAG runners    3 per ExtractStarSnapshots call
+  1h finite      133
+  4h finite      133
+  1h unavailable 1
+  4h unavailable 1
+  tv present     133
+  tv none        1
+  tv age > 36    44
+
+The unavailable higher-timeframe row closes before the first 1h close and
+before the first 4h close. The test rejects a missing block when an eligible
+bar exists. Shifting 1h and 4h into the future keeps all 134 Stars and
+clears both higher-timeframe blocks.
+
+Two identical calls return identical rows.
+An independent ReplayClosedBars of the 15m slice produces the same
+(OpenTime, side) sequence. That fourth walk is the test oracle, not part
+of ExtractStarSnapshots.
+
+Age 0 is a fact whose ConfirmedAt is the Star OpenTime, with TVAgeOK true.
+No fact is TVDirection "none", TVAgeOK false. The stored age integer is 0
+in both cases. The flag is the distinction.
+
+============================================================
+5. REMAINING DEBT
+============================================================
+
+Not implemented here:
+
+- Higher-timeframe ReplayClosedBars still runs RSX and ZigZag because
+  newDAGRunnerMasked always adds those nodes. The snapshot does not read
+  them. A Wozduh-only walk is a later chapter.
+- HistoryBus.Get still returns NaN for lookback == cap. Research replay
+  asks for a larger cap. Get is unchanged. The full-ring test shows the NaN.
+- Streaming RSI and SMA emit finite partial values during warmup, so a
+  Star can exist before the first higher-timeframe bar has closed.
+  Warmup policy was not changed.
+- No archive certification, digest, outcome, TP, or SL.
+
+============================================================
+6. FINAL VERDICT
+============================================================
+
+STAR_SNAPSHOT_EXTRACTOR_GREEN
