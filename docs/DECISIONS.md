@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STAR-PRICE-PATH-CERTIFICATION-1 — the path read matches the snapshot window
+
+**Context:** `BuildPricePath` was green on a 16-Star smoke. The archive tip had already moved past the certified snapshot. A recipe needs one frozen path, not the moving tip.
+
+**Decision:** Freeze the certification on the snapshot's BTCUSDT futures opens. 8783 Stars. Read length 16 is a copy budget. Path digest `40c84ed2c78df3de5ee72ce6ee50730f05b9c621e248559eacfac15a484c7672`. Unavailable ATR stays `ATROK` false with stored 0. A later recipe subtracts on this read. It does not rebuild `StarSnapshot` or `PricePath`.
+
+**Rejected:** Recertifying because the live tip gained Stars — **Reason:** the digest belongs to the frozen window. Reading stored 0 as volatility — **Reason:** the flag is the measurement. Choosing a target from these paths — **Reason:** that is a later experiment.
+
+**Consequences:** Do not reopen `BuildPricePath` or `StarSnapshot` for a recipe. NEXT is **STAR-OUTCOME-RECIPE-AUDIT-1**. That audit names the first descriptive measurement and does not emit a label.
+
+---
+
 ## STAR-PRICE-PATH-1 — future price is a raw read, not a label
 
 **Context:** The Star snapshot is a certified observation. Outcome still needs a future price path. The old labeler stamps a 15-minute HitAt, bakes ATR multiples, and uses horizon 72.

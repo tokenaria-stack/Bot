@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-PRICE-PATH-CERTIFICATION-1 — path certified on the snapshot window (Sep 2026)
+
+- Same BTCUSDT futures opens as the snapshot certification. 8783 Stars, 4392 up, 4391 down. Read length 16. Filled 8782. Truncated 1 (open `1790327700000`, 15 bars, fill present). Primary gap 0. Fill absent 0. ATR unavailable 1 (open `1567965600000`).
+- Path digest `40c84ed2c78df3de5ee72ce6ee50730f05b9c621e248559eacfac15a484c7672`. Report `research/cleanup/STAR-PRICE-PATH-CERTIFICATION-1.txt`. `BuildPricePath` was not modified.
+- NEXT **STAR-OUTCOME-RECIPE-AUDIT-1**.
+
 ## STAR-PRICE-PATH-1 — raw future bars after a Star (Sep 2026)
 
 - `market.BuildPricePath` (`1317724`). Successor 15-minute open/high/low only. Star bar excluded. Fill does not fall back to the close. ATR(14) through the Star bar. Read length is an argument.

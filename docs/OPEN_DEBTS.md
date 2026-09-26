@@ -60,11 +60,11 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **STAR observation layer ✅ frozen.** Contract, dataflow, extractor (`44de969`), and archive certification are closed. Star is the 15-minute edge `woz_rsi_hl2_vwema` × `woz_vol_rsi_ema5_chan_mid`. One `ReplayClosedBars` per timeframe. RSX on that walk is optional context. `FeatureRuntime2` is not a Star source. Do not attach RSX-ignition labels by timestamp. Do not reopen the snapshot because a later strategy idea appears.
 
-**STAR-PRICE-PATH-1 ✅ frozen** (`1317724`). `market.BuildPricePath` copies raw successor 15-minute open/high/low after the Star. Signal entry is the Star close. Fill entry is the next open, or absent. ATR(14) stops at the Star bar. No TP, SL, horizon, or outcome on the type. `ResolveMinuteTouch` is unused by the builder. Reports: `research/cleanup/STAR-PRICE-PATH-CONTRACT-AUDIT-1.txt`, `research/cleanup/STAR-PRICE-PATH-1.txt`.
+**STAR-PRICE-PATH-1 ✅ frozen** (`1317724`) and **certified** on the snapshot window. `market.BuildPricePath` copies raw successor 15-minute open/high/low after the Star. Signal entry is the Star close. Fill entry is the next open, or absent. ATR(14) stops at the Star bar. Stored ATR `0` with `ATROK` false is unavailable, not a volatility. No TP, SL, horizon, or outcome on the type. `ResolveMinuteTouch` is unused by the builder. Reports: `research/cleanup/STAR-PRICE-PATH-CONTRACT-AUDIT-1.txt`, `research/cleanup/STAR-PRICE-PATH-1.txt`, `research/cleanup/STAR-PRICE-PATH-CERTIFICATION-1.txt`.
 
 **RSX-COMPUTE-DEDUP-AUDIT (gate).** `FeatureRuntime2` computes Jurik again beside `ReplayClosedBars`, which already writes `SlotJurikRSX` and `SlotJurikSignal`. Do not start another RSX research engine, tape regen, or `FeatureRuntime2` extension until this audit picks the single compute owner. Frozen Brain3 artifacts stay frozen. Live DAG RSX is unchanged. Star research must not call `FeatureRuntime2`.
 
-**NEXT: STAR-PRICE-PATH-CERTIFICATION-1.** Certify `BuildPricePath` on the same BTCUSDT futures archive. No outcome recipe, no TP/SL. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**NEXT: STAR-OUTCOME-RECIPE-AUDIT-1.** Read-only. Name the first descriptive measurement on the certified path. Do not choose TP, SL, or an ATR multiple. Do not rebuild the snapshot or the path. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

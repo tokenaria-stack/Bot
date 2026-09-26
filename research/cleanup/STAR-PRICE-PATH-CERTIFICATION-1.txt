@@ -1,0 +1,182 @@
+STAR-PRICE-PATH-CERTIFICATION-1
+Date: 2026-09-26
+READ-ONLY. BuildPricePath and StarSnapshot were not modified.
+The temporary runner was deleted after this pass.
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_PRICE_PATH_CERTIFICATION_GREEN
+
+Counts below belong to the frozen STAR-SNAPSHOT-CERTIFICATION-1
+window. They are not a market census and not the later archive tip.
+
+Corrections to the chapter prompt:
+
+- The PricePath code commit is 1317724. That commit is on
+  origin/2026-07-06-puvo. The doc freeze that records it is 44d5201.
+  It is not a local-only commit.
+- Side strings are "up" and "down". They are not UP and DOWN.
+- The certification as-of is 1790342100000, one millisecond after the
+  certified 15m last close. time.Now() was not used. Bars after the
+  certified last opens were not read.
+- 1-minute bars were not an input. Their current tip was not
+  remeasured, so a moving 1m endpoint is not in these statistics.
+  BuildPricePath does not call ResolveMinuteTouch.
+- An unavailable ATR is stored as 0 with ATROK false. That 0 is the
+  sentinel already frozen in STAR-PRICE-PATH-1. It is not a volatility
+  and it was not substituted into a ratio. This chapter did not change
+  that storage.
+- The read length 16 is the certification copy budget. It is not a
+  strategy horizon. 72 was not used.
+- Stars were not rediscovered as a new population. ExtractStarSnapshots
+  was run on the frozen klines so the snapshot digest could be compared
+  with a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854.
+  It matched. PricePath then only read those rows.
+- The observation layer was already frozen. This chapter certifies the
+  path read on that window. It does not reopen the snapshot.
+
+============================================================
+2. FROZEN INPUT
+============================================================
+
+File: /Users/ilmaru/trading_bot/history.db
+Table: historical_klines
+Symbol: BTCUSDT (USD-M futures storage key, not BTCUSDT_SPOT)
+Loader: data.OpenReadOnlyHistory. InitDB was not called.
+As-of: 1790342100000
+The last bar of each series was closed at that as-of.
+
+15m 247086  open 1567964700000 .. 1790341200000  last close 1790342099999
+1h  61772   open 1567962000000 .. 1790337600000
+4h  15443   open 1567958400000 .. 1790323200000
+
+Open-time digests matched the snapshot certification:
+  15m f573b7e7081ede32634e367f017c44b496c2e7746f29e672e171e8c4e1130d2e
+  1h  29b9a197fb1cecafb19fa004a6fa67d4fab866418fd645658240ceb5cdb993f4
+  4h  ab2cb5139662f1d0e283cbdfe6a7afb4ae98cbbc3e87c279ad264b42815857b6
+
+1m input used: none.
+
+============================================================
+3. CERTIFIED STARS
+============================================================
+
+Snapshot digest, both extraction passes:
+a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854
+
+total 8783
+up    4392
+down  4391
+
+PricePath.StarOpen, Side, and StarClose are copied from that row.
+Signal is the 15m close at StarOpen, read from the archive row.
+No second Star detector ran inside BuildPricePath.
+
+============================================================
+4. PATH COMPLETENESS
+============================================================
+
+Read length: 16 successor bars.
+filled       8782
+truncated    1
+primary_gap  0
+
+FillOK       8783
+fill absent  0
+
+truncated and FillOK      1
+truncated and fill absent 0
+primary_gap and FillOK    0
+primary_gap and fill absent 0
+
+The one truncated row is Star open 1790327700000 with 15 successor
+bars. The certified 15m series ends at 1790341200000, which is 15
+bars later. The read asked for 16, so the archive end stopped it.
+The first of those 15 bars is the true next open, so the fill exists.
+That is truncation. It is not a missing fill and not a primary gap.
+
+No row used the word timeout.
+
+============================================================
+5. ATR
+============================================================
+
+ATR present     8782
+ATR unavailable 1
+
+Unavailable Star open: 1567965600000
+ATROK false. Stored ATR 0.
+
+That is the same flat prefix as the smoke: the first two 15m bars
+are OHLC 10000, so the true range at that Star is 0.
+
+Oracle: one indicators.ATRSeries(CanonicalATRSpec) on the full 15m
+window. Every ATROK path matched the series at the Star index.
+A future bar would not change that index. No path ATR disagreed.
+
+No multiple is stored.
+
+============================================================
+6. CONTRACT CHECKS
+============================================================
+
+Violations: 0
+
+Checked on every row:
+  the Star bar is not in Path.Bars
+  every PathBar.OpenTime is after StarClose and after the Star open
+  the first bar is data.NextBarOpen(Star open, "15m")
+  later bars are successive 15m opens
+  len(Bars) is never above 16
+  Signal is the Star kline close
+  Fill is bars[0].Open when bars exist
+  an empty bar list leaves FillOK and GapOK false and Fill and Gap at 0
+  Gap is Fill-Signal for up, and Signal-Fill for down
+  Complete is filled, truncated, or primary_gap
+  a filled row has 16 bars and a fill
+  a truncated or gapped row has fewer than 16 bars
+  read length 8 returns the prefix of read length 16
+  when the long read already holds 8 bars, the short read is filled
+  when the long read stops earlier, the short read has the same state
+  signed favorable and adverse were computed only in the checker,
+  from Signal and the raw high and low, for both sides
+  those signed numbers were not written back onto the path
+
+============================================================
+7. DETERMINISM AND OWNERSHIP
+============================================================
+
+Path digest, both passes:
+40c84ed2c78df3de5ee72ce6ee50730f05b9c621e248559eacfac15a484c7672
+
+The digest covers StarOpen, StarClose, side, Signal, Fill, FillOK,
+Gap, GapOK, ATR, ATROK, Complete, and each PathBar open/high/low.
+The passes matched on the counts as well.
+
+DAG runners born while building paths: 0
+
+BuildPricePath calls successorBars and atrAtStar.
+It does not call ReplayClosedBars, Wozduh, RSX, FeatureRuntime2,
+ResolveMinuteTouch, the labeler, or Brain3.
+It does not read Frame or chart state.
+Price truth for the bars is the BTCUSDT futures archive slice above.
+
+============================================================
+8. ANOMALOUS ROWS
+============================================================
+
+ATR unavailable: Star open 1567965600000. Expected. Not a blocker.
+
+Truncated: Star open 1790327700000, 15 bars, fill present.
+Expected at this read length because the frozen series ends.
+Not a hole.
+
+No other row was flagged.
+
+============================================================
+9. FINAL VERDICT
+============================================================
+
+STAR_PRICE_PATH_CERTIFICATION_GREEN
