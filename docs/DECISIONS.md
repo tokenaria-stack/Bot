@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STAR-EXCURSION-TIMING-AUDIT-1 — the move is measured before a recipe
+
+**Context:** The certified path proved a 16-bar read. Star is a medium-term intraday entry candidate. A hold, target, and stop need the shape of the move first.
+
+**Decision:** Freeze the timing measurement on the snapshot window. One `BuildPricePath` read of 96 successor bars. Windows 16, 32, and 72 are prefixes. Digest `8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1`. The paired ratio is the Star-level fact. The median Star has about half of its 24-hour favorable extreme by 4 hours, about 80% by 8 hours, and has printed it by 18 hours. Median adverse ATR matches median favorable ATR. No hold, target, or stop is chosen here.
+
+**Rejected:** Treating 16 bars as the trading clock — **Reason:** that was the path certification budget. Treating a rising level-median as the typical Star's own added move — **Reason:** the tail can lift the level while the paired ratio stays 1. Encoding 72–96 as the hold — **Reason:** the center prints earlier; the late window is the tail.
+
+**Consequences:** Do not reopen `StarSnapshot` or `BuildPricePath` to re-measure this. NEXT is **STAR-OUTCOME-RECIPE-AUDIT-1**: name one entry, one hold, and two distances. Do not implement them. Do not build a screen.
+
+---
+
 ## STAR-PRICE-PATH-CERTIFICATION-1 — the path read matches the snapshot window
 
 **Context:** `BuildPricePath` was green on a 16-Star smoke. The archive tip had already moved past the certified snapshot. A recipe needs one frozen path, not the moving tip.

@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-EXCURSION-TIMING-AUDIT-1 — four windows on the certified path (Sep 2026)
+
+- Same 8783 Stars. Read length 96. Prefixes 16, 32, 72. Five Stars fall short of 96 bars at the frozen end. One Star has no ATR. Fill absent 0. No primary gap.
+- Median share of the 24-hour favorable extreme: up 0.478 / 0.798 / 1.000 at 16 / 32 / 72. Down 0.539 / 0.859 / 1.000. Median favorable ATR at 24 hours: up 4.392, down 4.555. Median adverse ATR: up 4.529, down 4.474.
+- Digest `8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1`. Report `research/cleanup/STAR-EXCURSION-TIMING-AUDIT-1.txt`. No hold, TP, or SL. NEXT **STAR-OUTCOME-RECIPE-AUDIT-1**.
+
 ## STAR-PRICE-PATH-CERTIFICATION-1 — path certified on the snapshot window (Sep 2026)
 
 - Same BTCUSDT futures opens as the snapshot certification. 8783 Stars, 4392 up, 4391 down. Read length 16. Filled 8782. Truncated 1 (open `1790327700000`, 15 bars, fill present). Primary gap 0. Fill absent 0. ATR unavailable 1 (open `1567965600000`).

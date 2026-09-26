@@ -1,0 +1,266 @@
+STAR-EXCURSION-TIMING-AUDIT-1
+Date: 2026-09-26
+READ-ONLY. StarSnapshot and BuildPricePath were not modified.
+The temporary runner was deleted after this pass.
+No label, no TP, no SL, no horizon was chosen.
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_EXCURSION_TIMING_GREEN
+
+The figures below describe the frozen snapshot window only.
+They are not a market census and not a trading rule.
+
+Corrections to the chapter prompt:
+
+- One BuildPricePath call per Star used read length 96. The windows
+  16, 32, and 72 are prefixes of that read. The certified 16-bar path
+  was not reused as the measurement, and PricePath was not redesigned.
+- The extreme of a prefix always lies inside that prefix. That check
+  is empty. The timing fact is when the 96-bar extreme first printed,
+  and what share of that extreme was already printed at 16, 32, and 72.
+- A median of the slice-by-slice increase is the wrong summary here.
+  For a majority of Stars, any one slice adds nothing, while the Star
+  still grows in some other slice. Those slice medians round to 0.
+  The paired ratio is the Star-level fact. Both are recorded so the
+  zero is not read as "the move stopped."
+- The median of the level at 96 can rise even when the median Star
+  adds nothing after 72. The rising level is the distribution. The
+  paired ratio is the typical Star. They are not the same sentence.
+- Fill-entry magnitudes differ from signal-entry magnitudes by the
+  signed gap, exactly. The extreme times do not depend on the entry.
+  On this window the median gap is 0.00 price. The two entries do not
+  make two different curves here.
+- A negative favorable extreme is kept. It means price never went
+  beyond the entry. It is not replaced with 0.
+- Stars that do not have enough successor bars are left out of that
+  window. They are not scored as zero and they are not called timeout.
+- The same 15-minute bar can print both extremes. That bar is not
+  ordered. Wick time is not a 1-minute barrier race.
+- Sides are "up" and "down".
+- 94 is not a fifth window. 72 and 96 already bracket that prior.
+- No screen was built. There is no frozen TP or SL to draw.
+
+============================================================
+2. FROZEN INPUT
+============================================================
+
+File: /Users/ilmaru/trading_bot/history.db
+Symbol: BTCUSDT USD-M futures. Not BTCUSDT_SPOT.
+Loader: data.OpenReadOnlyHistory. InitDB was not called.
+As-of: 1790342100000. time.Now() was not used.
+1-minute bars were not read.
+
+15m 247086  open 1567964700000 .. 1790341200000
+1h  61772   open 1567962000000 .. 1790337600000
+4h  15443   open 1567958400000 .. 1790323200000
+
+Open-time digests matched STAR-SNAPSHOT-CERTIFICATION-1.
+Snapshot digest matched
+a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854.
+
+Stars 8783. up 4392. down 4391.
+Measurement digest, both passes:
+8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1
+
+DAG runners born while reading paths: 0.
+Violations: 0. No primary gap in this window.
+
+============================================================
+3. COVERAGE
+============================================================
+
+A window is complete only when that many true successor bars exist.
+Five Stars sit too close to the frozen end:
+
+  open 1790255700000  bars 95
+  open 1790289900000  bars 57
+  open 1790292600000  bars 54
+  open 1790307000000  bars 38
+  open 1790327700000  bars 15
+
+up complete:   16 → 4391,  32 → 4391,  72 → 4390,  96 → 4389
+down complete: 16 → 4391,  32 → 4391,  72 → 4389,  96 → 4389
+
+ATR unavailable: 1, an up Star inside the 96-bar set.
+It is out of every ATR figure. Stored ATR 0 was not used as a divisor.
+Fill absent: 0.
+
+============================================================
+4. METHOD
+============================================================
+
+Entry for the tables is the Star close (signal).
+The next-open fill was computed on the same bars.
+
+up favorable = high − entry. up adverse = entry − low.
+down favorable = entry − low. down adverse = high − entry.
+
+MFE is the maximum favorable print in the window.
+MAE is the maximum adverse print in the window.
+Time is the first bar in that window that prints it.
+Bar 1 is the first 15-minute bar after the Star.
+16 bars = 4h. 32 = 8h. 72 = 18h. 96 = 24h.
+
+Percentiles are nearest-rank.
+
+The 96-bar ratio is MFE at the shorter window divided by MFE at 96,
+for Stars whose 96-bar favorable extreme is positive.
+The same for MAE.
+
+============================================================
+5. RESULTS
+============================================================
+
+Signal entry. ATR units are excursion / ATR(14) at the Star.
+Price units are USDT.
+
+UP, median favorable / adverse:
+
+  bars   hours   MFE ATR   MAE ATR   MFE price   MAE price
+  16     4       1.587     1.638     191.81      205.03
+  32     8       2.368     2.388     296.50      295.10
+  72     18      3.681     3.817     457.00      462.90
+  96     24      4.392     4.529     548.70      525.10
+
+UP, ATR favorable spread at 96: p10 0.729, p25 1.989, p75 8.354, p90 14.206, mean 6.569.
+UP, ATR adverse spread at 96: p10 0.798, p25 1.956, p75 8.324, p90 13.580, mean 6.396.
+
+DOWN, median favorable / adverse:
+
+  bars   hours   MFE ATR   MAE ATR   MFE price   MAE price
+  16     4       1.759     1.616     208.13      195.34
+  32     8       2.575     2.365     291.50      293.83
+  72     18      3.924     3.708     459.20      455.70
+  96     24      4.555     4.474     528.40      540.90
+
+DOWN, ATR favorable spread at 96: p10 0.833, p25 2.096, p75 8.545, p90 14.336, mean 6.561.
+DOWN, ATR adverse spread at 96: p10 0.873, p25 2.058, p75 8.017, p90 13.561, mean 6.363.
+
+Means sit above medians. The right tail is long.
+p90 favorable ATR keeps rising through 96 bars:
+up 5.401, 7.982, 12.217, 14.206.
+down 5.741, 7.957, 12.504, 14.336.
+
+Paired share of the 96-bar extreme already printed.
+Median, Stars with a positive 96-bar extreme.
+up favorable n=4374, plus 15 non-positive.
+down favorable n=4380, plus 9 non-positive.
+
+  window    up MFE    up MAE    down MFE    down MAE
+  16        0.478     0.500     0.539       0.471
+  32        0.798     0.848     0.859       0.765
+  72        1.000     1.000     1.000       1.000
+
+Where the 96-bar extreme first printed.
+Share of complete-96 Stars whose extreme is strictly after that bar.
+
+  after    up MFE    up MAE    down MFE    down MAE
+  16       70.7%     70.9%     67.2%       73.1%
+  32       57.2%     54.8%     53.8%       58.8%
+  72       27.8%     25.3%     24.1%       27.8%
+
+Clock of that 96-bar extreme, in bars. Median, then the middle half.
+
+  side   MFE time              MAE time
+  up     42   (12 .. 76)       39   (13 .. 73)
+  down   38   (10 .. 72)       44   (15 .. 76)
+
+42 bars is 10.5 hours. 38 bars is 9.5 hours.
+
+Which extreme printed first, inside the 96-bar window.
+Same bar means the 15-minute bar cannot order them.
+
+  side   favorable first   adverse first   same bar
+  up     2194 (50.0%)      2189 (49.9%)    6
+  down   2272 (51.8%)      2108 (48.0%)    9
+
+At 16 bars the split is already close:
+up 2297 / 2061 / 33, down 2292 / 2056 / 43.
+
+Next-open fill. Median gap is 0.00 price on both sides
+(p25 −0.01, p75 0.01). Median gap in ATR units rounds to 0.000.
+Median fill-entry MFE and MAE match the signal-entry medians
+at every window, to the cent or to 0.001 ATR.
+The identity was checked on every complete prefix. It held.
+
+============================================================
+6. UP AND DOWN
+============================================================
+
+The two sides are the same kind of path on this window.
+Down's median favorable ATR is a little higher at each window
+(1.76 vs 1.59 at 4h, 4.56 vs 4.39 at 24h).
+Down's favorable extreme prints a little earlier
+(bar 38 vs bar 42).
+Neither side has a favorable-first or adverse-first majority.
+
+============================================================
+7. WHAT THE CURVES SAY
+============================================================
+
+Observed:
+
+The typical Star is not finished at 4 hours. About half of its
+24-hour favorable extreme is visible by then, and about 70% of
+Stars print that extreme later than bar 16.
+
+It is mostly in place by 8 hours: about 80% of the 24-hour
+favorable extreme for an up Star, about 86% for a down Star.
+By 18 hours the median Star has already printed the favorable
+extreme it will have at 24 hours.
+
+The last 6 hours still matter for the right tail, and for the
+quarter of Stars whose extreme prints after bar 72.
+They do not move the median Star's extreme.
+
+Adverse excursion tracks favorable excursion.
+At every window the median heat is about the same ATR size as
+the median favorable extreme. The clocks match too.
+
+The population does not show "adverse first, then recovery"
+as a majority, and it does not show "favorable first" either.
+
+Fifteen up Stars and nine down Stars never print a positive
+favorable extreme inside 96 bars.
+
+Hypothesis, not a rule:
+
+The prior that the meaningful move waits until 72–96 bars is
+only partly visible. The typical extreme is nearer 10 hours
+than 4 hours, and the typical magnitude has stopped growing
+by 18 hours. The late window is a tail, not the center.
+
+This is still not a hold, a target, or a stop.
+A target near the median 24-hour extreme would sit on top of
+a median adverse excursion of the same size.
+
+============================================================
+8. FACTS AND HYPOTHESES
+============================================================
+
+Facts: sections 2 through 6, and the observed list in section 7.
+Hypothesis: the last paragraphs of section 7.
+No threshold, multiple, or hold was selected.
+
+============================================================
+9. LIMITS
+============================================================
+
+The frozen series ends, so five Stars are short of 96 bars.
+One Star has no ATR.
+Excursion uses 15-minute wicks. It does not say which wick
+came first inside one bar.
+No cost, no fill size, no skip rule, and no second entry
+were applied.
+The level medians rise through 96 bars because the tail grows.
+That rise is not the median Star's own added excursion after
+72 bars. Section 1 states the difference.
+
+============================================================
+10. FINAL VERDICT
+============================================================
+
+STAR_EXCURSION_TIMING_GREEN

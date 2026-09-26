@@ -64,7 +64,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **RSX-COMPUTE-DEDUP-AUDIT (gate).** `FeatureRuntime2` computes Jurik again beside `ReplayClosedBars`, which already writes `SlotJurikRSX` and `SlotJurikSignal`. Do not start another RSX research engine, tape regen, or `FeatureRuntime2` extension until this audit picks the single compute owner. Frozen Brain3 artifacts stay frozen. Live DAG RSX is unchanged. Star research must not call `FeatureRuntime2`.
 
-**NEXT: STAR-OUTCOME-RECIPE-AUDIT-1.** Read-only. Name the first descriptive measurement on the certified path. Do not choose TP, SL, or an ATR multiple. Do not rebuild the snapshot or the path. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**STAR-EXCURSION-TIMING-AUDIT-1 ✅ frozen.** One 96-bar read of the certified Stars; 16, 32, and 72 are prefixes. Report `research/cleanup/STAR-EXCURSION-TIMING-AUDIT-1.txt`. Digest `8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1`. No hold, TP, or SL was chosen. Do not rebuild the snapshot or the path to re-ask this question.
+
+**NEXT: STAR-OUTCOME-RECIPE-AUDIT-1.** Read-only. From the frozen timing facts, name one entry, one hold, and two distances. Do not implement them. Do not build a screen. Do not rebuild the snapshot or the path. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
