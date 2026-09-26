@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STAR-PRICE-PATH-1 — future price is a raw read, not a label
+
+**Context:** The Star snapshot is a certified observation. Outcome still needs a future price path. The old labeler stamps a 15-minute HitAt, bakes ATR multiples, and uses horizon 72.
+
+**Decision:** Freeze `PricePath` as successor 15-minute open/high/low, both entry prices, signed gap only when the fill exists, and ATR(14) through the Star bar. Horizon, distances, TP, and SL stay off the type. Minute ordering is a separate helper and is not called while building the path. A recipe, later, subtracts on this read.
+
+**Rejected:** Signing the stored bars by one entry — **Reason:** that freezes the entry. Copying 1-minute bars onto the path — **Reason:** they are needed only for a both-touch. Baking horizon 72 — **Reason:** that is the old experiment. Inventing ATR when the Star prefix is flat — **Reason:** the true range is zero.
+
+**Consequences:** NEXT is **STAR-PRICE-PATH-CERTIFICATION-1**. Do not reopen `StarSnapshot` or `BuildPricePath` for a strategy idea. Outcome recipes start after that certification.
+
+---
+
 ## CHANNEL-SPLIT-FILLS-1 (Sep 2026)
 
 **Context:** RSI close needed independent interior fill colors. First unpushed attempt painted pane-edge outer fills (pane top→upper, lower→pane bottom). User rejected that geometry. Volume then still advertised two identical edge stroke prefs.
@@ -1511,6 +1523,18 @@ Pane Auto ownership: `candleSeries` → price; `RsxScaleLines` → RSX; `WozduhE
 **Rejected:** History-length fake chrome series; copying RSX/EMA5 into chrome; public host getter; mixing hydration reopen or RSX Auto move into this chapter.
 
 **Consequences:** Modules `web/chart-core.js`, `web/series-factory.js`, `web/rsx-scale-lines.js`, `web/wozduh-extreme-bands.js`. Tests: `web/crosshair_pane_host_test.js` plus inverted owner/wire/hidden-skip. Artifact: `research/cleanup/CROSSHAIR-PANE-HOST-1.txt`.
+
+---
+
+## STAR-CONTRACT-AUDIT-1 — Star is a new clock; RSX context comes from the same replay
+
+**Context:** The Star vocabulary is coherent and does not belong on the frozen RSX tape. `ReplayClosedBars` already writes Wozduh slots and `SlotJurikRSX` / `SlotJurikSignal`. `FeatureRuntime2` computes Jurik again for the frozen tape.
+
+**Decision:** Freeze the Star contract. One closed-bar replay per timeframe is the Star source. TV facts, when requested, fold that replayed RSX column. Do not call `FeatureRuntime2` from Star research. Do not dedup `FeatureRuntime2` in this chapter. **RSX-COMPUTE-DEDUP-AUDIT** is the gate before the next RSX research-engine use. Entry, invalidation, target, and horizon stay unbound.
+
+**Rejected:** Adding Star columns to FeatureSpec2 — **Reason:** different clock. Using `FeatureRuntime2` as the Star RSX source — **Reason:** second Jurik. Choosing TP/SL now — **Reason:** that defines the opportunity outcome. Removing ZigZag from the replay — **Reason:** it is already on the walk and is not a Star field.
+
+**Consequences:** NEXT is **STAR-SNAPSHOT-DATAFLOW-AUDIT-1**. Frozen Brain3 artifacts stay frozen. Live DAG RSX is unchanged.
 
 ---
 

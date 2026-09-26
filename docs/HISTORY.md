@@ -8,6 +8,24 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-PRICE-PATH-1 — raw future bars after a Star (Sep 2026)
+
+- `market.BuildPricePath` (`1317724`). Successor 15-minute open/high/low only. Star bar excluded. Fill does not fall back to the close. ATR(14) through the Star bar. Read length is an argument.
+- Smoke on 16 Stars from a later archive tip (8787 Stars). Not a recertification of the 8783-row snapshot window.
+- Outcome recipe, TP, and SL are not in this chapter. NEXT **STAR-PRICE-PATH-CERTIFICATION-1**.
+
+## STAR observation layer — snapshot certified (Sep 2026)
+
+- Extractor `44de969`. One replay per timeframe, then reads. Archive certification: 247086 × 15m, 61772 × 1h, 15443 × 4h, 8783 Stars, 0 causal violations. Report `research/cleanup/STAR-SNAPSHOT-CERTIFICATION-1.txt`.
+- Price-path contract `research/cleanup/STAR-PRICE-PATH-CONTRACT-AUDIT-1.txt`. Outcome vocabulary `research/cleanup/STAR-OUTCOME-VOCAB-AUDIT-1.txt` is a proposal only. No multiplier chosen.
+
+## STAR-CONTRACT-AUDIT-1 — Star clock frozen (Sep 2026)
+
+- Read-only. Report `research/cleanup/STAR-CONTRACT-AUDIT-1.txt`.
+- Star edge is the existing closed-bar crossover. Clock is kline OpenTime in milliseconds, not chart seconds. One `ReplayClosedBars` per timeframe. RSX is optional context from that walk.
+- Outcome slots unbound. `FeatureRuntime2` is not the Star RSX source. Dedup of that second Jurik is **RSX-COMPUTE-DEDUP-AUDIT**, required before the next RSX research-engine use.
+- NEXT **STAR-SNAPSHOT-DATAFLOW-AUDIT-1**.
+
 ## WOZDUH-TIME-INDEX-PIN-1 — shared VIEW after oscillator setData (Sep 2026)
 
 - LWC `setData` on Wozduh/RSX can fit that pane independently. Identical TimeCamera commit is a no-op, so the oscillator stayed stretched vs price.

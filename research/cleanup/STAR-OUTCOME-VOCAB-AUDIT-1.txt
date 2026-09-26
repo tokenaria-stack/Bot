@@ -1,0 +1,347 @@
+STAR-OUTCOME-VOCAB-AUDIT-1
+Date: 2026-09-26
+READ-ONLY. No path builder, no recipe, no TP, no SL, no label, no Brain3.
+
+The certified Star snapshot stays frozen. This note says what a later
+price-path function may read, and what a recipe may decide.
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_OUTCOME_VOCAB_PROPOSED
+
+A Star outcome is a pure reading of price bars after the Star close.
+It does not replay Wozduh or RSX. It does not live on StarSnapshot.
+
+Corrections:
+
+- The next 15-minute open is not known at the Star close. It is a fill
+  measurement on the path. It is not a snapshot field and not a decision feature.
+- Four outcome names are not enough. Timeout, a short archive, a hole in
+  the 15-minute series, and an unordered touch are different facts.
+  The existing labeler already separates them by reason.
+- When 1-minute data orders a 15-minute dual touch, forecast/finer_resolution.go
+  still stamps HitAt with the 15-minute OpenTime. A Star path should stamp
+  the minute that decided the order.
+- forecast/candidate_geometry.go pathExcursion folds a threshold of 1 and 2
+  volatility units into the excursion. Those thresholds are a recipe.
+  They do not belong on the raw path.
+- Do not persist a second copy of future OHLC. The archive is the price
+  truth. The path is a function of that archive. A cache may be dropped
+  and rebuilt. MFE alone cannot answer a new barrier.
+- indicators.ATRValues returns nil until the period is full. The causal
+  series is indicators.ATRSeries / UpdateClosed. It is finite from the
+  first true range under atr:wilder-rma-first-tr-v1.
+- The old structural stop is a recipe: k=2 wick, then 0.15 ATR, then R
+  multiples, horizon 72. The wick can be read later. The buffer and the
+  multiples stay out of the path.
+
+============================================================
+2. DECISION BOUNDARY
+============================================================
+
+Owner of the Star clock: the closed 15-minute kline.
+Identity: OpenTime in milliseconds.
+Decision instant: that bar's CloseTime, which is data.BarCloseTimeMs
+of that OpenTime on 15m (next open minus 1).
+
+The edge is knowable only after that close. The high and low of the
+Star bar printed before the close. A fill at the close cannot harvest
+them. Path extremes start on the following bar.
+
+============================================================
+3. TWO ENTRY REFERENCES
+============================================================
+
+Signal entry: the Star bar's close. Known at CloseTime.
+Fill entry: the open of the next 15-minute bar. Known only once that
+bar exists. If the archive has no next bar, the fill entry is absent
+and the Star row remains.
+
+Signed gap, signal to fill:
+
+  up:   nextOpen - starClose
+  down: starClose - nextOpen
+
+A positive gap is a fill already in the favorable direction.
+A negative gap is slippage against the signal.
+That gap is not a barrier hit. Barrier hits are high/low after the
+chosen entry price.
+
+The old labeler centers barriers on bars[t].Close and never sees a
+next-open entry. See forecast/label_set.go labelCandidate. A Star
+recipe may use either entry. The path function must take the entry
+price as an argument.
+
+============================================================
+4. SIGNED PATH
+============================================================
+
+One coordinate for both sides. Entry is the price the recipe chose.
+
+  up,   favorable: price - entry
+  up,   adverse:   entry - price
+  down, favorable: entry - price
+  down, adverse:   price - entry
+
+Future bars are the 15-minute bars whose OpenTime is strictly after
+the Star OpenTime, in order, and only while each OpenTime equals
+data.NextBarOpen of the previous one. A hole stops the walk. It is
+not filled.
+
+The first of those bars is also the fill bar when the entry is the
+next open. Its high and low are inside the path. Its open is the fill.
+
+Store excursions in price, not in ATR units. ATR is a separate number.
+
+============================================================
+5. 15-MINUTE AND 1-MINUTE PRICE
+============================================================
+
+15-minute OHLC orders a barrier only when a bar touches one side.
+If high reaches the favorable level and low reaches the adverse level,
+the 15-minute bar cannot say which happened first.
+
+1-minute futures bars exist in history.db under symbol BTCUSDT:
+
+  count 3689226
+  first open 1569031260000
+  last open  1790384760000
+  open-time steps other than 60 seconds: 0
+
+The certified 15-minute window starts at 1567964700000. The 1-minute
+series starts later, about twelve days after that. Early Stars have
+no minute bars. Inside the 1-minute span, the stored minutes are
+contiguous. This pass did not join each Star to its minutes.
+
+The ordering rule to reuse is forecast/finer_resolution.go resolve:
+walk minute opens from the parent open until the next 15-minute open.
+Do not call labelCandidate, TargetSpec, or FeatureRow2.
+
+============================================================
+6. MFE AND MAE
+============================================================
+
+Over a read window of future 15-minute bars, after the chosen entry:
+
+  MFE = maximum favorable extreme
+  MAE = maximum adverse extreme
+  MFE time = OpenTime of the first bar that prints that MFE
+  MAE time = OpenTime of the first bar that prints that MAE
+
+High is the favorable extreme for an up Star. Low is the favorable
+extreme for a down Star. The opposite wick is the adverse extreme.
+
+Both extremes may come from the same 15-minute bar. The path records
+both and does not order them. Order is a recipe question, asked only
+after a favorable level and an adverse level exist.
+
+forecast/structural_stop.go excursionUntilInvalidation stops favorable
+excursion at a stop price and then uses 1-minute children. That is a
+recipe shaped like the old stop. The raw path does not stop at a level.
+
+============================================================
+7. FIRST HIT
+============================================================
+
+Owner of the primary walk: forecast/label_set.go firstPassage.
+
+Given upper and lower prices and a horizon in primary bars, it starts
+at the bar after t. For each next bar:
+
+  high >= upper and low <= lower -> both, stop
+  high >= upper                   -> up first
+  low  <= lower                   -> down first
+  neither                         -> continue
+
+The last bar of the horizon is included. The next bar is not.
+Verified by the horizon test in forecast/label_set_test.go.
+
+On a signed Star path the same walk becomes:
+
+  favorable level first
+  adverse level first
+  both on this bar
+  neither yet
+
+Hit time is the OpenTime of the bar that answered. When minutes
+resolve a both-touch, the hit time is that minute's OpenTime.
+The current finer resolver returns the outcome and leaves the caller's
+HitAt on the 15-minute parent (labelCandidate). A Star path should
+not copy that parent stamp.
+
+============================================================
+8. SAME-BAR AND MISSING MINUTES
+============================================================
+
+Owner: forecast/finer_resolution.go resolve, and the reason constants
+in forecast/label_set.go.
+
+  first minute of the 15-minute bar missing -> finer missing
+  a later minute inside that bar missing    -> finer gap
+  one minute touches both levels             -> finer dual hit
+  minutes never touch either level           -> finer inconsistent
+    (the 15-minute high/low said both did)
+
+All four stay unordered. None of them picks a side.
+A minute that touches only one level resolves the order.
+
+If the recipe does not consult minutes, a 15-minute both-touch stays
+unordered. That matches DualHitExcludeAmbiguous. It is a recipe policy.
+
+============================================================
+9. ATR AT THE DECISION
+============================================================
+
+Owner: indicators.ATRSeries with indicators.CanonicalATRSpec.
+Period 14. Method wilder_rma. Logic atr:wilder-rma-first-tr-v1.
+First bar's true range is high minus low. Later bars use the previous
+close. The value at index t is the update of bar t.
+
+For a Star, ATR is ATRSeries on 15-minute high, low, and close through
+the Star bar, inclusive. No bar after the Star close enters it.
+
+The path stores that one number. It does not store a multiple.
+A non-positive ATR makes every ATR-scaled recipe unavailable.
+The Star and the price path remain.
+
+Do not use indicators.ATRValues for this. That helper returns nil
+when the length is at most the period.
+
+============================================================
+10. HORIZON
+============================================================
+
+Horizon is how many future 15-minute bars a recipe reads.
+It is not a field of the Star.
+
+  the walk reaches the horizon with no hit -> timeout
+  the archive ends first                    -> truncated
+  a 15-minute open is not the next open     -> primary gap
+
+Timeout HitAt in firstPassage is 0. Truncation HitAt is 0.
+A hit on the last horizon bar is a real hit.
+Those three results must stay distinct. A truncated row is not a
+sample of "nothing happened."
+
+No horizon from the old tape is adopted. 72 is StructuralStopHorizon
+and Spec2TargetHorizon. It is one possible recipe argument.
+
+============================================================
+11. STRUCTURAL LEVEL
+============================================================
+
+forecast/price_swing.go LatestCausalPriceSwing reads a k-bar wick
+whose confirming bar has OpenTime at or before the entry bar.
+The entry price it compares is that bar's close.
+That wick is knowable at the Star close when the confirming bar is
+the Star bar or an earlier bar.
+
+forecast/structural_stop.go then subtracts or adds
+StructuralStopBufferATR15 (0.15) and builds plus-1R, plus-2R, and
+plus-3R. Stop owners are rsx_fractal and price_k2. That package also
+takes a Feature tape. None of that is the Star path.
+
+A later recipe may pass a price level into the same first-hit walk.
+The level has to be computed from bars already closed at the Star.
+This audit does not choose the level.
+
+============================================================
+12. PATH VERSUS RECIPE
+============================================================
+
+Path function, given the archive and one Star:
+
+  decision CloseTime
+  signal entry = Star close
+  fill entry   = next 15m open, or absent
+  signed gap between those two
+  ATR at the Star bar
+  future 15m highs and lows in the signed frame
+  MFE, MAE, and their OpenTimes inside a caller-supplied read window
+  the window ends early on truncation or a 15m hole
+
+The read window is an argument so a summary can be computed.
+It is not a frozen horizon. The bars themselves stay in the archive.
+
+Recipe function, given that path plus arguments:
+
+  which entry
+  favorable distance
+  adverse distance
+  horizon, not past the read window
+  whether to consult 1m on a both-touch
+  optional extra level, already causal at the Star
+
+Recipe output:
+
+  favorable first
+  adverse first
+  timeout
+  truncated
+  primary gap
+  unordered, with the finer reason when minutes were consulted
+
+Changing the distances or the horizon reads the same archive.
+It does not replay indicators and does not rebuild StarSnapshot.
+
+============================================================
+13. WHAT IS NOT FROZEN
+============================================================
+
+Not selected:
+
+  entry choice
+  any ATR multiple
+  any R multiple
+  the 0.15 ATR buffer
+  horizon length
+  a structural formula
+  TP, SL, or a label enum for Brain3
+
+UP_FIRST and DOWN_FIRST stay the old labeler's absolute directions.
+A Star recipe speaks in favorable and adverse, using the Star side.
+AMBIGUOUS in the old labeler is excluded from fitting. A Star recipe
+must say the same for truncated, gapped, and unordered rows:
+they are not a third trade outcome.
+
+============================================================
+14. REUSE AND DO NOT CALL
+============================================================
+
+Reuse as price laws:
+
+  data.BarCloseTimeMs
+  data.NextBarOpen
+  indicators.ATRSeries with CanonicalATRSpec
+  the branch order inside firstPassage
+  the minute walk and the four finer reasons inside finerResolve
+
+Do not call:
+
+  labelCandidate or TargetSpec (they bind ATR multiples and the close entry)
+  pathExcursion (it binds thresholds 1 and 2)
+  excursionUntilInvalidation (it binds a stop)
+  StructuralStop, FeatureRow2, FeatureRuntime2
+  Brain3
+
+============================================================
+15. FINAL CONTRACT
+============================================================
+
+Decision time is the Star CloseTime.
+OpenTime remains the identity.
+
+The path is a pure read of later OHLC, plus ATR through the Star bar.
+Two entries are measured. The next open is not a decision feature.
+Excursion is signed in price. MFE and MAE do not order a same-bar pair.
+
+A recipe names entry, two distances, and a horizon, then asks which
+came first. A 15-minute both-touch is resolved only by contiguous
+1-minute bars, or it stays unordered. Timeout, truncation, and gaps
+stay separate.
+
+No multiplier is chosen in this chapter.
+
+STAR_OUTCOME_VOCAB_PROPOSED

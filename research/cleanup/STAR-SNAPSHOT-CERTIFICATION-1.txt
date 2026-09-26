@@ -1,0 +1,166 @@
+STAR-SNAPSHOT-CERTIFICATION-1
+Date: 2026-09-25
+READ-ONLY. ExtractStarSnapshots was not modified.
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_SNAPSHOT_CERTIFICATION_GREEN
+
+The synthetic fixture count of 134 is not a market statistic.
+Counts below describe this archive window only.
+
+Correction: the archive was read with data.OpenReadOnlyHistory.
+InitDB was not called, so this pass did not set journal_mode.
+The loader is the futures storage key BTCUSDT from Binance futures
+genesis, the same window loadResearchClosedBarsTF uses. Spot rows
+under BTCUSDT_SPOT were not read.
+
+A separate 15m oracle walk compared edges after the two extraction
+calls. It is not part of either call's three runners.
+
+============================================================
+2. ARCHIVE INPUT
+============================================================
+
+File: /Users/ilmaru/trading_bot/history.db
+Table: historical_klines
+Symbol: BTCUSDT (USD-M futures storage key, not BTCUSDT_SPOT)
+Venue identity: BINANCE FUTURES_PERP BTCUSDT
+Genesis OpenTime: 1567900800000 (2019-09-08 UTC)
+Volume identity named by the repository for this futures archive: volume-truth:futures-base-v1
+This pass did not recompute that volume digest.
+RSX settings: length 14 signal 9 source hlc3 div lookback 90
+Extract wall time, pass 1: 718ms
+
+15m bars 247086  first open 1567964700000  last open 1790341200000  last close 1790342099999  gaps 0
+1h  bars 61772  first open 1567962000000  last open 1790337600000  last close 1790341199999  gaps 0
+4h  bars 15443  first open 1567958400000  last open 1790323200000  last close 1790337599999  gaps 0
+
+Input open-time digests:
+  15m f573b7e7081ede32634e367f017c44b496c2e7746f29e672e171e8c4e1130d2e
+  1h  29b9a197fb1cecafb19fa004a6fa67d4fab866418fd645658240ceb5cdb993f4
+  4h  ab2cb5139662f1d0e283cbdfe6a7afb4ae98cbbc3e87c279ad264b42815857b6
+
+A gap is an OpenTime step other than one native bar. Gaps are archive
+holes. They are not filled. This window has none.
+
+The three series do not share a left edge. 4h starts at 1567958400000,
+1h at 1567962000000, 15m at 1567964700000. All three are after futures
+genesis 1567900800000. They are the first stored BTCUSDT bars of each
+interval, not a spot stitch.
+
+============================================================
+3. STAR COUNTS
+============================================================
+
+total 8783
+up    4392
+down  4391
+
+These counts are this window only.
+
+============================================================
+4. HTF COVERAGE
+============================================================
+
+1h populated 8783
+1h empty     0
+1h populated but channel values not finite 0
+4h populated 8782
+4h empty     1
+4h populated but channel values not finite 0
+
+First 1h close 1567965599999. First 4h close 1567972799999.
+An empty block means no closed bar of that timeframe has CloseTime
+at or before the Star close. The Star row is kept.
+A populated block whose values are not finite is warmup inside the
+indicator, stored with ValuesOK false and the numbers left at 0.
+
+The one empty 4h block is a Star whose close is before 1567972799999.
+The first 15m bar closes at the same millisecond as the first 1h bar,
+and a Star needs a previous bar, so every Star in this window has a
+closed 1h bar. No 1h block is empty.
+
+============================================================
+5. TV COVERAGE
+============================================================
+
+with causal rsx_tv_div 8782
+without                 1
+bullish                 4331
+bearish                 4451
+age min 0  max 384  age 0 33  age > 36 5088
+
+No age cutoff was applied. Age > 36 remains on the row.
+
+============================================================
+6. CAUSALITY AND IDENTITY
+============================================================
+
+Violations: 0
+
+Checked on every row:
+  AnchorAt == ConfirmedAt == that 15m OpenTime
+  M15 close is that bar's close
+  side is up or down
+  side and OpenTime match DetectCrossoverEdge on a same-cap 15m oracle
+  populated HTF CloseTime <= Star close
+  populated HTF OpenTime is the latest bar with that property
+  TV ConfirmedAt <= Star ConfirmedAt
+  TV age == star index - fact index
+  missing TV is direction none, not age 0 with the flag set
+  empty HTF does not carry an OpenTime
+
+Oracle edges 8783. Extraction rows 8783.
+
+============================================================
+7. DETERMINISM AND WALKS
+============================================================
+
+Pass 1 DAG runners 3
+Pass 2 DAG runners 3
+Rows identical: true
+Digest pass 1 a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854
+Digest pass 2 a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854
+
+Each extraction call is one 15m walk, one 1h walk, and one 4h walk.
+The oracle walk is extra and was not counted in those two numbers.
+
+============================================================
+8. OWNERSHIP, RING, READINESS
+============================================================
+
+Wozduh and RSX numbers come from replayClosedBarsCap with WozduhMaskAll.
+TV facts come from indicators.TVDivergenceFacts on the 15m RSX column.
+FeatureRuntime2 is not on this path.
+15m RSX not finite: 0
+15m VWEMA slope not ready: 0
+15m width change not ready: 0
+
+Ring caps requested by the extractor, all strictly above the series length:
+  15m cap 262144 count 247086
+  1h  cap 65536 count 61772
+  4h  cap 16384 count 15443
+
+HistoryBus.Get was not modified. Unavailable numbers stay behind OK flags.
+A false flag with a stored 0 was checked and was not counted as a value.
+
+============================================================
+9. DATASET DIGEST
+============================================================
+
+rows 8783
+digest a99dd1e50d8f4eb996a1fae5a048816ba9517edf76270fbe2c196abc329df854
+15m 1567964700000 .. 1790341200000
+1h  1567962000000 .. 1790337600000
+4h  1567958400000 .. 1790323200000
+symbol BTCUSDT futures
+source file history.db
+
+============================================================
+10. FINAL VERDICT
+============================================================
+
+STAR_SNAPSHOT_CERTIFICATION_GREEN

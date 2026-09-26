@@ -1,0 +1,244 @@
+STAR-SNAPSHOT-DATAFLOW-AUDIT-1
+Date: 2026-09-25
+READ-ONLY. No extractor, tests, TP/SL, FeatureSpec, or RSX-dedup changes.
+
+============================================================
+1. VERDICT
+============================================================
+
+One ReplayClosedBars walk per kline series can feed Star detection, Wozduh context, RSX value/signal, and a TV fold. FeatureRuntime2 is a separate Jurik and stays off this path. The higher-timeframe rule is an existing close-time comparison, not a framework. The ring-cap NaN is a read hazard.
+
+Correction: ReplayClosedBars does not take a timeframe. The signature is ReplayClosedBars(klines, rsxSettings). "15m" means the closed 15-minute klines the caller passes. The same function on 1h klines is the 1h walk.
+
+Answers:
+
+1. Yes, if the caller keeps that HistoryBus and the original klines, and uses WozduhMaskAll (the ReplayClosedBars default).
+2. The intended Star path does not call FeatureRuntime2. Nothing in ReplayClosedBars or RSTVFactsFromDAGHistory calls it. A later author could still call it by mistake. That is a hazard, not the current replay.
+3. Yes. RSTVFactsFromDAGHistory reads SlotJurikRSX from the replay history and passes it to ReplayRSTV.
+4. Yes. One native walk each. WozduhNode has no timeframe constant. It computes on the klines it is given.
+5. Yes. Compare kline CloseTime, or data.BarCloseTimeMs, and take the latest bar that is <= the Star close. No new framework.
+6. Yes. Age caps, distance cuts, and slope signs are reads of the produced series.
+7. Yes. The oldest bar was computed. HistoryBus.Get hides it when lookback >= cap.
+8. No second Wozduh or Jurik inside ReplayClosedBars. ZigZag runs on that same walk and is not a Star input. Two hazards sit beside the path: FeatureRuntime2, and the live Frame RSX wake (section 4). Neither is invoked by ReplayClosedBars.
+9. Gaps before STAR-SNAPSHOT-1 are listed in section 10.
+
+============================================================
+2. 15m REPLAY DATAFLOW
+============================================================
+
+Owner: market.ReplayClosedBars → ReplayClosedBarsMasked(klines, rsx, WozduhMaskAll) → replayClosedBarsCap.
+
+newDAGRunnerMasked adds, in order:
+  nodes.NewRSXNode
+  nodes.NewWozduhNodeMasked(WozduhMaskAll)
+  nodes.NewZigZagNode
+
+core.DAGRunner.TickUpdate on each kline with isClosed true:
+  Restore → Update → SaveState → HistoryBus.PushFrame → Advance.
+
+Return value: market.ClosedDAGReplay
+  Hist    *core.HistoryBus
+  ZZFacts from the ZigZag collector on that walk
+
+RSXNode.Update writes core.SlotJurikRSX and core.SlotJurikSignal onto the current frame, which PushFrame commits.
+
+WozduhMaskAll includes the Star pair and the V1 context bits:
+  WozduhBitRsiHl2Vwema
+  WozduhBitVolRsiEma5Chan (upper, mid, lower)
+  WozduhBitRsiCloseChan
+  WozduhBitRsiCloseEma7
+  WozduhBitMacdRsiClose
+  plus the other Wozduh branches
+
+MUST: the Star walk uses ReplayClosedBars (mask all), not a live visibility mask. A narrow mask leaves Star slots NaN.
+MUST NOT: a second DAG walk for RSX context on the same 15-minute klines.
+
+The Star pair is already inside that walk. nodes.WozduhCrossoverPairs includes
+WozduhXoverVwemaXEma5ChanMid ("woz_rsi_hl2_vwema_x_ema5_chan_mid"):
+SlotWozduhRsiHl2Vwema × SlotWozduhVolRsiEma5ChanMid.
+WozduhNode.SaveState calls detectWozduhCrossoversFromFrame, which calls
+DetectCrossoverEdge, and stores the hits on lastCrossHits.
+
+replayClosedBarsCap does not keep those hits. It only appends ZigZag facts.
+The next closed bar overwrites lastCrossHits. The slot values remain in Hist.
+
+A later reader can recover the same edges without another Wozduh update:
+  historySlotSeries (or an equivalent Get) on the two slots
+  then ScanWozduhCrossovers / DetectCrossoverEdge
+That second pass reads numbers. It does not run the node again.
+
+MUST: stamp a Star at the kline OpenTime in milliseconds.
+MUST NOT: use StampWozduhCrossoverHits as the Star clock. That helper takes a
+chart time in seconds.
+
+============================================================
+3. TV DIVERGENCE FOLD
+============================================================
+
+Owner: market.RSTVFactsFromDAGHistory(klines, hist, settings).
+
+It calls historySlotSeries(hist, core.SlotJurikRSX), then RSTVFactsFromClosedSeries, then indicators.ReplayRSTV(opens, closes, rsx, lookback).
+
+Verified: ReplayRSTV takes a precomputed []float64. It does not construct JurikRSX. RSTVFactsFromClosedSeries documents that rsx[i] must already be SlotJurikRSX for klines[i].
+
+Facts are indicators.IndicatorFactEvent with ConfirmedAt / AnchorAt as OpenTime milliseconds. Latest eligible fact: ConfirmedAt <= Star OpenTime. Side is bullish, bearish, or none. Age is a later pure function (forecast.NativePresentAge and the existing caps). The fact struct has no age field.
+
+MUST NOT: call FeatureRuntime2 to obtain these facts.
+
+Hazard only: DumpFeatureTape2 / FeatureRuntime2 already know how to age TV facts for the frozen tape. Reusing that runtime for a Star row would run Jurik again.
+
+============================================================
+4. FEATURERUNTIME2 BOUNDARY
+============================================================
+
+market.FeatureRuntime2.newNativeRSXContext builds its own Jurik for 15m, 1h, and 4h. Update15m emits FeatureRow2 for the frozen tape. It does not read ClosedDAGReplay.
+
+MUST: frozen RSX experiment keeps FeatureRuntime2.
+MUST: Star research reads ReplayClosedBars history and, if needed, RSTVFactsFromDAGHistory.
+MUST NOT: construct FeatureRuntime2 on the Star path.
+
+Second hazard, also off the intended path: market.Frame wake in rsx_demand.go.
+When NeedRSXCore wakes, it builds a fresh nodes.RSXNode and runs replayRSXClosedBars,
+then PatchNewest into the live HistoryBus. Live Frame history is also capped at
+dagHistoryCap (1024), not at the full kline length.
+
+MUST NOT: build Star rows from Frame.dag, Frame.rsxTVFacts, or that wake.
+Those are the live dashboard. A research replay is a separate ReplayClosedBars call
+on the closed kline slice.
+
+RSX-COMPUTE-DEDUP-AUDIT remains the gate before the next RSX research-engine use. This chapter does not change FeatureRuntime2.
+
+============================================================
+5. 1h / 4h REPLAY AND CAUSAL JOIN
+============================================================
+
+The same ReplayClosedBars function on a slice of closed 1h klines is the 1h walk. The same on 4h klines is the 4h walk. WozduhNode and RSXNode do not branch on timeframe. Native bar spacing is whatever those klines are.
+
+Replay does not read Kline.CloseTime. The caller still has the klines. exchange.Kline.CloseTime is unix milliseconds. data.BarCloseTimeMs(openMs, interval) is the same inclusive close (next open minus 1) that FeatureRuntime2.updateHTF stores, and Update15m rejects a cached higher-timeframe closeTime after the primary close.
+
+MUST: latest 1h bar and latest 4h bar with CloseTime <= Star bar CloseTime.
+MUST NOT: a bar that has not closed, a forward-filled 15-minute slope, or a new HTF framework.
+
+Precedent, not a join function: FeatureRuntime2.Update15m returns an error when a
+cached 1h or 4h closeTime is greater than the primary close. data.BarCloseTimeMs
+is the close-time helper both that gate and a future lookup can use.
+Kline.CloseTime is the same millisecond on bars the exchange already closed.
+
+No Wozduh join helper exists. The future lookup is a scan or a binary search on
+the two CloseTime arrays the caller already holds. That is the gap, not a missing engine.
+
+============================================================
+6. CHEAP DERIVATION BOUNDARY
+============================================================
+
+After the walks, each timeframe is a closed series of slot values plus the kline times. These are reads:
+
+  slope[t]         = value[t] - value[t-1]     on that timeframe
+  slope_change[t]  = slope[t] - slope[t-1]
+  width[t]         = upper[t] - lower[t]
+  width_change[t]  = width[t] - width[t-1]
+  distance[t]      = A[t] - B[t]
+  side[t]          = sign(distance[t])
+
+They are not implemented as Star helpers. They do not call indicators.
+
+MUST NOT: replay because a cut changed (divergence age <= 15, distance, slope sign, side filter). Those cuts read the series and the fact list.
+
+A new atom that WozduhNode does not already compute would require a new walk. The V1 slots are already inside WozduhMaskAll.
+
+============================================================
+7. HISTORY-RING HAZARD
+============================================================
+
+Owner: core.HistoryBus.Get. lookback 1 is the newest committed bar. lookback >= cap, or lookback > count, returns NaN.
+
+core.HistoryBus.ValueAtBar(slot, 0) calls Get(slot, count). When count == cap, that lookback is rejected, so the oldest bar reads NaN.
+
+core.ValidateHistoryCap(len(klines)) is the replay cap. It is the next power of two, at least 64. When len is not a power of two, cap > count and every bar is readable. When len is a power of two, cap == count after the walk, and bar 0 reads NaN.
+
+wire.Projector.BuildHistoryColumnsFiltered and market.historySlotSeries use the same Get lookback. They show the same oldest-bar NaN. They do not shift the later bars.
+
+Classification: CONSUMER HAZARD. TickUpdate committed bar 0. The ring still holds it. The read API cannot address lookback == cap.
+
+MUST: a future Star reader treat this boundary on purpose (cap strictly above len, or a read that can see a full ring).
+MUST NOT: a second indicator walk to "fill" that NaN.
+
+============================================================
+8. WARMUP / FULL-HISTORY BOUNDARY
+============================================================
+
+replayClosedBarsCap walks every kline it is given, from index 0, isClosed true. It does not trim a chart window and it does not use ChartTimeSec.
+
+Indicator warmup is inside the node. Early channel and RSI values are non-finite. DetectCrossoverEdge returns "" on non-finite inputs, so those bars are not Stars. No extra warmup trim is required for the edge to be honest.
+
+The chart path is a different consumer. server/columnar_history.go replays the full fetch, then drops a warmup prefix and a candle limit, then BuildHistoryColumnsFiltered and ScanWozduhCrossovers on ChartTimeSec of that display slice.
+
+MUST: Star research scan the full closed replay the caller passed.
+MUST NOT: use the trimmed chart columns or paint timestamps as the Star source.
+MUST: the caller pass closed klines only. ReplayClosedBars will treat a forming bar as closed if the caller includes it.
+
+============================================================
+9. VERIFIED DATAFLOW
+============================================================
+
+  closed 15m klines
+        │
+        ▼
+  market.ReplayClosedBars          (WozduhMaskAll)
+        │
+        ▼
+  ClosedDAGReplay.Hist             (one HistoryBus)
+        ├── SlotWozduhRsiHl2Vwema
+        ├── SlotWozduhVolRsiEma5ChanMid / Up / Dn
+        ├── other Wozduh V1 slots
+        ├── SlotJurikRSX
+        └── SlotJurikSignal
+                │
+                ▼
+        RSTVFactsFromDAGHistory → indicators.ReplayRSTV
+                │
+                ▼
+        rsx_tv_div facts (no second Jurik)
+
+  WozduhNode.SaveState already runs DetectCrossoverEdge
+  (pair woz_rsi_hl2_vwema_x_ema5_chan_mid) into lastCrossHits.
+  The replay collector discards those hits.
+                │
+                ▼
+  later read of the two Hist slots → ScanWozduhCrossovers
+                │
+                ▼
+        Star row at kline OpenTime ms
+                ├── 15m slot reads + pure derivations
+                └── latest TV fact with ConfirmedAt <= that OpenTime
+
+  closed 1h klines → ReplayClosedBars → Hist_1h  ─┐
+                                                    ├─ latest CloseTime <= Star CloseTime
+  closed 4h klines → ReplayClosedBars → Hist_4h  ─┘
+                │
+                ▼
+        HTF slot reads + native slope, then copy
+
+  ClosedDAGReplay.ZZFacts is produced and not read.
+  FeatureRuntime2 is not on this graph.
+  Frame wake replayRSXClosedBars is not on this graph.
+
+============================================================
+10. IMPLEMENTATION GAPS
+============================================================
+
+Before STAR-SNAPSHOT-1, these do not exist yet:
+
+- A reader that builds Star edges from Hist slots plus kline OpenTime milliseconds, not from the chart scan and not from StampWozduhCrossoverHits. The walk already detected the edge and dropped the hit.
+- A close-time lookup from Star close to the latest 1h bar and latest 4h bar.
+- Pure functions for slope, slope change, width, width change, distance, and side.
+- TV age from ConfirmedAt using NativePresentAge. The facts themselves have no age.
+- An explicit ring read so a power-of-two length does not drop bar 0.
+
+These stay out of this chapter: entry, invalidation, target, horizon, and any change to FeatureRuntime2.
+
+============================================================
+11. FINAL VERDICT
+============================================================
+
+The dataflow holds. One walk per timeframe, then reads. FeatureRuntime2 stays on the frozen tape. The missing pieces are the Star reader, the close-time lookup, and the derivation functions, plus a conscious history-ring read. None of those is a second indicator.

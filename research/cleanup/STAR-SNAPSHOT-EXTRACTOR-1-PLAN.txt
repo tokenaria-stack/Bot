@@ -1,0 +1,287 @@
+STAR-SNAPSHOT-EXTRACTOR-1-PLAN
+Date: 2026-09-25
+READ-ONLY. No code, tests, or edits to frozen RSX, Wozduh, FeatureSpec, tape, Brain3, chart, Frame, or outcome.
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_SNAPSHOT_EXTRACTOR_READY
+
+The owners exist. The missing piece is one function in package market that replays each timeframe once and reads the buses. Nothing in the frozen contracts blocks that.
+
+Corrections to the chapter prompt:
+
+- Replay 15m, 1h, and 4h once each, before the Star loop. Replaying HTF inside the loop would repeat the DAG.
+- Do not call ScanWozduhCrossovers. It walks all four paint pairs and stamps whatever clock the caller passes. The Star edge is DetectCrossoverEdge on one pair, then the kline OpenTime in milliseconds.
+- V1 columns were not frozen as a list. Section 4 pins them. EMA5, EMA12, RSI-close channel, EMA7, MACD, HTF RSX, and HTF TV stay computed-or-available and unread.
+- A missing TV fact or a missing HTF bar does not delete the Star. The edge is the row. Unavailable is per field. TV side "none" is a real value.
+- NativePresentAge cap 36 marks age absent. It does not drop the fact. Age 0 is a fact on the Star bar, so absent cannot be the number 0 alone.
+- RSTVFactsFromDAGHistory also emits rsx_tv_pivot. The snapshot keeps rsx_tv_div only.
+- RSTVFactsFromDAGHistory silently shortens to min(hist.Count(), len(klines)). That aligns only when the counts are equal. The extractor must require equality and stop if the ring dropped bars.
+- Research replay must request a history cap strictly above len(klines). ReplayClosedBars uses ValidateHistoryCap(len), which equals len when len is a power of two, and HistoryBus.Get then returns NaN for the oldest bar. That policy is a cap argument to the existing replayClosedBarsCap, not a second indicator and not a change to Get.
+- Do not read GetRSXSettings(). Pass RSXSettings in. Default is defaultRSXSettings (length 14, signal 9, source hlc3, div lookback 90).
+- AnchorAt and ConfirmedAt are the same OpenTime written twice. They are not two clocks.
+
+============================================================
+2. SHAPE
+============================================================
+
+One new file, package market: star_snapshot.go.
+One test file in the implementation chapter: star_snapshot_test.go.
+No new package. No Frame method. No routeTick branch. No HTTP.
+
+Entry:
+
+  ExtractStarSnapshots(k15, k1h, k4h []exchange.Kline, rsx RSXSettings) ([]StarSnapshot, error)
+
+Preconditions, rejected rather than trimmed:
+
+- Each slice is closed bars only, oldest first, strictly increasing OpenTime.
+- The caller did not append a forming bar. This function does not look at wall time.
+- After each replay, hist.Count() == len(klines). Otherwise return an error.
+
+Order:
+
+  replay15 := replayClosedBarsCap(k15, rsx, core.ValidateHistoryCap(len(k15)+1), nodes.WozduhMaskAll)
+  replay1h := same for k1h
+  replay4h := same for k4h
+  rsxCol := historySlotSeries(replay15.Hist, core.SlotJurikRSX)
+  divs := indicators.TVDivergenceFacts(closes, rsxCol, opens, rsx.DivLookback)
+  stars := edges from SlotWozduhRsiHl2Vwema and SlotWozduhVolRsiEma5ChanMid
+  for each star: read 15m, copy latest 1h, copy latest 4h, attach latest div
+
+replayClosedBarsCap is the existing unexported walk. ValidateHistoryCap(len+1) is always greater than len, including powers of two (64 → 128, 128 → 256). Count stays len, so lookback == count is still < cap and bar 0 is readable.
+
+DivLookback is not an RSX length. Changing it refolds TVDivergenceFacts on the same rsxCol. It must not call ReplayClosedBars again. V1 may still fold once inside ExtractStarSnapshots. No cache type.
+
+ZZFacts is discarded. FeatureRuntime2 is not called. Frame.dag and replayRSXClosedBars are not called.
+
+============================================================
+3. STAR EDGE
+============================================================
+
+Reuse nodes.DetectCrossoverEdge. Pair nodes.WozduhXoverVwemaXEma5ChanMid.
+
+  A = historySlotSeries(hist, core.SlotWozduhRsiHl2Vwema)
+  B = historySlotSeries(hist, core.SlotWozduhVolRsiEma5ChanMid)
+
+For i from 1 to n-1:
+
+  side = DetectCrossoverEdge(A[i-1], B[i-1], A[i], B[i])
+
+"up" and "down" are the only sides. "" is not a row. Non-finite inputs are already "".
+
+  AnchorAt = ConfirmedAt = k15[i].OpenTime
+
+Do not use StampWozduhCrossoverHits, ChartTimeSec, ScanWozduhCrossovers, or lastCrossHits.
+
+============================================================
+4. V1 ROW
+============================================================
+
+StarSnapshot
+
+  Side            string    // "up" or "down"
+  AnchorAt        int64     // OpenTime ms
+  ConfirmedAt     int64     // same value
+
+  M15             starTF    // the Star bar
+  H1              starTF    // latest causal 1h bar, or Present false
+  H4              starTF    // latest causal 4h bar, or Present false
+
+  RSX             float64
+  RSXSlope        float64
+  Signal          float64
+  SignalSlope     float64
+  RSXMinusSignal  float64
+  RSXSide         int       // sign of RSX-signal; 0 on the line or not finite
+  RSXReady        bool      // false when the Star bar's RSX or signal is non-finite
+
+  TVSource        string    // "rsx_tv_div" or ""
+  TVDirection     string    // "bullish", "bearish", or "none"
+  TVConfirmedAt   int64     // 0 when none
+  TVPresent       float64   // NativePresentAge present flag
+  TVAge           float64   // native 15m bars, only meaningful when TVPresent == 1
+
+starTF
+
+  Present         bool
+  OpenTime        int64
+  CloseTime       int64
+  Vwema           float64
+  ChanMid         float64
+  ChanUp          float64
+  ChanDn          float64
+  VwemaSlope      float64
+  MidSlope        float64
+  Width           float64
+  WidthChange     float64
+  Distance        float64   // Vwema - ChanMid
+  DistanceSide    int       // sign(Distance); 0 when Distance == 0 or not finite
+  SlopeReady      bool      // false when t-1 is missing or non-finite
+  WidthChangeReady bool
+
+Slots, same names on every timeframe:
+
+  core.SlotWozduhRsiHl2Vwema
+  core.SlotWozduhVolRsiEma5ChanMid
+  core.SlotWozduhVolRsiEma5ChanUp
+  core.SlotWozduhVolRsiEma5ChanDn
+  core.SlotJurikRSX          // 15m block only
+  core.SlotJurikSignal       // 15m block only
+
+Derivations, local variables, not written back to HistoryBus:
+
+  slope[t]        = value[t] - value[t-1]     on that timeframe
+  width[t]        = ChanUp[t] - ChanDn[t]
+  width_change[t] = width[t] - width[t-1]
+  distance[t]     = Vwema[t] - ChanMid[t]
+
+slope_change is a frozen law and is not a V1 field. One struct used three times is not a framework. No interface, no timeframe registry.
+
+Not on the row: score, confidence, trend, veto, rating, entry, invalidation, target, horizon, TP, SL, outcome, label, ZigZag, EMA5, EMA12, RSI-close channel, EMA7, MACD, HTF RSX, HTF TV.
+
+TV: filter indicators.FactSourceRSXTVDiv. Latest fact with ConfirmedAt <= Star OpenTime. If two div facts share that ConfirmedAt, TVDirection is "none" and TVConfirmedAt is 0. Do not pick a direction. Age uses forecast.NativePresentAge(starIndex, factIndex, forecast.Spec2TVPivotAgePrimary). factIndex is the 15m bar whose OpenTime equals TVConfirmedAt. Cap is 36. present 0 means outside the cap, not "no fact". No within_15 field.
+
+H1 and H4 RSX columns stay in those HistoryBuses and are not copied. ReplayClosedBars always runs RSXNode. Leaving those values unread is the cut.
+
+============================================================
+5. CAUSAL HTF
+============================================================
+
+Private function in star_snapshot.go. Not a shared join type.
+
+  close of bar i = kline.CloseTime when it is non-zero
+  otherwise data.BarCloseTimeMs(kline.OpenTime, "15m" | "1h" | "4h")
+
+The fixture sets CloseTime and the test checks it equals BarCloseTimeMs.
+
+Select the greatest index with close <= Star close. The previous HTF bar, if the slope is computed, has an even earlier close. If no such bar, starTF.Present is false and the floats stay at zero with SlopeReady false. The Star row is still returned.
+
+Assert inside the extractor for every present HTF block:
+
+  htf.CloseTime <= star.CloseTime
+  the next HTF bar, if any, has CloseTime > star.CloseTime
+
+Do not forward-fill HTF values onto 15m steps and then difference them. HTF slope is the native pair of HTF bars, then copied.
+
+============================================================
+6. RING AND READINESS
+============================================================
+
+Policy: research cap = ValidateHistoryCap(len+1), then read with historySlotSeries. Do not change HistoryBus.Get.
+
+The implementation test still builds a ring with count == cap and shows Get(slot, count) is NaN. That test does not go through the extractor. It proves the hazard stays in Get.
+
+Non-finite warmup values are real NaNs. Do not replace them with 0.
+
+  Star bar Vwema and ChanMid are finite, because DetectCrossoverEdge rejected them otherwise.
+  SlopeReady is false when t-1 is non-finite. Slope fields are then 0 and must not be read.
+  RSXReady is false when Jurik or signal on the Star bar is non-finite. The Star remains.
+  H1.Present / H4.Present false means no closed HTF bar yet. The Star remains.
+  TVDirection "none" means no eligible div. The Star remains.
+
+Do not use forecast.NotReady. That flag drops a tape vector. This row is an observation.
+
+============================================================
+7. REUSE AND NEW CODE
+============================================================
+
+Reuse, do not wrap:
+
+  market.replayClosedBarsCap
+  market.historySlotSeries
+  market.defaultRSXSettings
+  indicators.TVDivergenceFacts
+  indicators.ReplayRSTV            (already under TVDivergenceFacts)
+  nodes.DetectCrossoverEdge
+  data.BarCloseTimeMs
+  forecast.NativePresentAge
+  forecast.Spec2TVPivotAgePrimary
+  exchange.Kline.OpenTime / CloseTime
+  core slot constants listed in section 4
+
+Do not call:
+
+  market.ReplayClosedBars          (its cap can equal len)
+  market.RSTVFactsFromDAGHistory   (keeps pivots and may shorten)
+  nodes.ScanWozduhCrossovers
+  nodes.StampWozduhCrossoverHits
+  market.FeatureRuntime2 and nativeRSXContext
+  market.Frame, replayRSXClosedBars, PatchNewest
+  server columnar history, ChartTimeSec
+  ClosedDAGReplay.ZZFacts
+
+New:
+
+  market/star_snapshot.go
+    ExtractStarSnapshots
+    StarSnapshot, starTF
+    latestClosedIndex
+    fillStarTF
+    latestTVDiv
+
+No change to HistoryBus, WozduhNode, RSXNode, FeatureSpec2, FeatureTape2, Brain3, or web/.
+
+============================================================
+8. FIXTURE
+============================================================
+
+File market/star_snapshot_test.go. Synthetic klines only. No archive, no chart.
+
+A. Ring. A HistoryBus with count == cap. Get at lookback == count is NaN. Separate from the extractor.
+
+B. Join. Three 1h bars and one Star whose close falls inside the second 1h bar. Selected OpenTime is bar 2. Bar 3 is not selected. A Star before bar 1 yields H1.Present false and still returns the row when the 15m edge exists.
+
+C. Spine. One deterministic series, at least 120 closed 15m bars, plus aligned 1h and 4h bars with CloseTime = next open - 1. Price and volume are a fixed formula, not a random seed and not live history. RSXSettings is defaultRSXSettings().
+
+  Call ExtractStarSnapshots twice. Rows match.
+  At least one "up" and one "down", or the test fails. If the first formula yields only one side, change the formula until both sides appear, then freeze it.
+  For every row, literal checks after that freeze:
+    Side, AnchorAt, ConfirmedAt
+    M15 Vwema, ChanMid
+    H1 OpenTime, H1 CloseTime
+    H4 OpenTime, H4 CloseTime
+    TVDirection, TVConfirmedAt, TVPresent, TVAge
+  And for every row:
+    ConfirmedAt == AnchorAt == that 15m OpenTime
+    H1.CloseTime <= M15.CloseTime when H1.Present
+    H4.CloseTime <= M15.CloseTime when H4.Present
+    TVConfirmedAt <= AnchorAt when TVDirection != "none"
+    TVAge is not 0 when TVPresent == 0 and a fact exists beyond the cap
+      (assert the present flag, not a manufactured age)
+
+D. Lookback. Same buses, two DivLookback values, one Replay count. Div facts may differ. Star OpenTimes do not. The test can count DAG births with the existing testDAGRunnerBorn if the extractor stays on replayClosedBarsCap.
+
+============================================================
+9. ASSERTIONS
+============================================================
+
+In ExtractStarSnapshots, return an error when:
+
+  hist.Count() != len(klines) for any timeframe
+  a Star index is out of range
+  ConfirmedAt != k15[i].OpenTime
+  a present HTF close is after the Star close
+  a present HTF bar is not the latest eligible index
+  Side is not "up" or "down"
+
+In the test, also assert the next HTF bar is ineligible and that ZZFacts were not copied onto the row.
+
+============================================================
+10. NON-GOALS
+============================================================
+
+No TP, SL, entry, invalidation, target, horizon, label, tape, digest, or archive scan.
+No second Jurik or Wozduh.
+No HTF manager.
+No chart or Frame change.
+No edit to HistoryBus.Get.
+Certification over real history is STAR-SNAPSHOT-CERTIFICATION-1, after this extractor is green.
+
+============================================================
+11. FINAL VERDICT
+============================================================
+
+STAR_SNAPSHOT_EXTRACTOR_READY
