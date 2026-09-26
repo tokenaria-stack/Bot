@@ -1,0 +1,115 @@
+STAR-PRICE-PATH-1
+Date: 2026-09-26
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_PRICE_PATH_GREEN
+
+PricePath is a read of the 15-minute archive after a Star.
+Outcome recipes are not implemented.
+
+Gap stays on the path. It is Fill minus Signal for an up Star, and
+Signal minus Fill for a down Star, and only when the next bar is the
+true successor. It is the distance between two observed prices.
+It is not a barrier and not an outcome.
+
+The smoke extract saw 8787 Stars. The certified window was 8783.
+The archive tip has moved. This chapter does not recertify that count.
+
+============================================================
+2. FILES
+============================================================
+
+market/star_price_path.go
+  BuildPricePath
+  ResolveMinuteTouch
+
+market/star_price_path_test.go
+
+research/cleanup/STAR-PRICE-PATH-1.txt
+
+StarSnapshot, the labeler, and the indicator walk were not edited.
+
+============================================================
+3. TYPE
+============================================================
+
+PricePath
+  StarOpen, StarClose, Side
+  Signal, Fill, FillOK, Gap, GapOK
+  ATR, ATROK
+  Bars, Complete
+
+PathBar
+  OpenTime, Open, High, Low
+
+Complete is filled, truncated, or primary_gap.
+There is no timeout, horizon, TP, or SL field.
+
+============================================================
+4. RULES
+============================================================
+
+The Star bar is not copied.
+The first bar is data.NextBarOpen(Star OpenTime, "15m").
+A later bar at the wrong open is primary_gap and is not used as the fill.
+Archive end on a true boundary is truncated.
+Signal is the Star kline close, read from the 15-minute row.
+Fill is that successor's open, or absent. Absent does not become Signal.
+
+readBars is an argument. The smoke used 8.
+
+ATR is indicators.ATRSeries(CanonicalATRSpec) on bars through the Star
+index. A later bar does not change it. A non-positive result sets
+ATROK false and stores 0.
+
+ResolveMinuteTouch is not called by BuildPricePath.
+A winning minute stamps that minute's OpenTime.
+A minute that touches both levels returns finer_dual and no hit time.
+Missing minutes return finer_missing or finer_gap.
+The old labeler's 15-minute HitAt is untouched.
+
+============================================================
+5. TESTS
+============================================================
+
+Focused tests cover the successor rule, both gap signs, no fill
+fallback, a hole versus the archive end, ATR frozen at the Star,
+flat ATR left absent, raw highs left raw, identical repeats, and
+the minute hit time.
+
+Archive smoke, 16 Stars spread across the extract, read length 8:
+
+  fill 16
+  missing fill 0
+  filled 16
+  truncated 0
+  primary_gap 0
+  ATR present 15
+  ATR absent 1, Star open 1567965600000
+
+That Star's 15-minute prefix is two prints of 10000 with no range.
+True range is 0. The path did not invent a substitute.
+
+Digest of the 16 paths, both passes:
+ead6fed0434e979e48f175dc3903920e50641f3952e50c14485503ed946a1a6b
+
+This smoke is not a full path certification.
+
+============================================================
+6. DEBT
+============================================================
+
+No outcome recipe.
+No full-archive path certification.
+The read budget is still chosen by the caller.
+Stars before the 1-minute archive keep a 15-minute path, and a
+both-touch there stays unresolved until a recipe asks.
+
+============================================================
+7. FINAL VERDICT
+============================================================
+
+STAR_PRICE_PATH_GREEN
