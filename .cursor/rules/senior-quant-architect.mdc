@@ -55,6 +55,16 @@ Route each fact to the owning SSOT (Core 6.x):
 
 After a memory update: touch only the files that changed; keep one fact in one place (SSOT).
 
+## Frozen-chapter protocol
+
+A research or architecture chapter closes in this order:
+
+AUDIT → user approval → IMPLEMENT → CERTIFY → FREEZE → COMMIT → PUSH → verify origin.
+
+A certified chapter is not frozen until its intended implementation, tests, artifacts, and report are committed and pushed. Local HEAD must equal origin after that push.
+
+Do not leave several finished chapters in the working tree. Do not mix unrelated work into a chapter commit. After the push, the chapter stays immutable unless a real regression appears or the user approves an amendment.
+
 ## Before coding (checklist)
 
 Answer each item. If any answer is wrong, stop and redesign.

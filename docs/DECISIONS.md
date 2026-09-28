@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STAR-STATE-SNAPSHOT-V2 — the Star row keeps the lines the replay already computed
+
+**Context:** The first static-state question was asked of a snapshot that stored the orange midline value and not its slope. The closed-bar replay already computed that slope's series, the RSI-close family, and higher-timeframe RSX, then dropped them.
+
+**Decision:** Freeze schema 2 as a projection of those HistoryBus slots. Same Stars, same detector, same causal bar. Schema-1 fields keep their meaning. Digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. Alignment, distance slope, and RSX-minus-signal on 1h and 4h stay research reads. The 15m RSX-minus-signal field stays as it was.
+
+**Rejected:** A second Jurik or Wozduh pass — **Reason:** the walk already owns the series. Storing trend flags or a level such as 74.5 — **Reason:** those are hypotheses, not measurements. Overwriting the schema-1 artifact — **Reason:** the old digest names the narrow row. EMA12 acceleration, width acceleration, signal acceleration, and higher-timeframe TV — **Reason:** they were deferred on purpose.
+
+**Consequences:** Do not reopen the projection to add a dropped slot unless a named question asks for it. Do not call `FeatureRuntime2` from the Star path. The outcome question is a later chapter.
+
+---
+
 ## STAR-EXCURSION-TIMING-AUDIT-1 — the move is measured before a recipe
 
 **Context:** The certified path proved a 16-bar read. Star is a medium-term intraday entry candidate. A hold, target, and stop need the shape of the move first.

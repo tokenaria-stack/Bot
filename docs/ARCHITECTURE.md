@@ -410,6 +410,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **STAR-EXCURSION-TIMING-AUDIT-1 ✅ frozen.** The same Stars, read length 96, prefixes 16 / 32 / 72. Digest `8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1`. Median share of the 24-hour favorable extreme: about half by 4 hours, about 80% by 8 hours, already printed by 18 hours. Median favorable and adverse ATR at 24 hours are both near 4.4. No hold, TP, or SL.
 
+**STAR-STATE-SNAPSHOT-V2 ✅ frozen.** Schema 2 of the same 8783 Stars. The row keeps the schema-1 fields and adds the Wozduh and RSX lines the three closed-bar walks already wrote. Slope is one bar of that timeframe. Acceleration is the next difference. Digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. `FeatureRuntime2` is not a source. No learner.
+
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
 **DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.

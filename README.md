@@ -51,4 +51,4 @@ strategy/     doc.go beacon only
 
 - **Core 5.0** data plane (Phases A–G) ✅
 - **Core 6.0 / 6.1** documentation OS ✅
-- **NEXT:** **STAR-OUTCOME-RECIPE-AUDIT-1** — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)
+- **NEXT:** **STAR-STATE-SNAPSHOT-V2 frozen.** The outcome question is not started — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)

@@ -184,7 +184,7 @@ func TestExtractStarSnapshots(t *testing.T) {
 		if row.AnchorAt != rows[i].AnchorAt || row.Side != rows[i].Side {
 			t.Fatalf("shifted star %d", i)
 		}
-		if row.H1.Present || row.H4.Present {
+		if row.H1.Present || row.H4.Present || row.H1RSX != (StarRSX{}) || row.H4RSX != (StarRSX{}) {
 			t.Fatalf("future htf selected %+v %+v", row.H1, row.H4)
 		}
 	}

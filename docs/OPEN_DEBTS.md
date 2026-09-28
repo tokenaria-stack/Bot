@@ -66,7 +66,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **STAR-EXCURSION-TIMING-AUDIT-1 ✅ frozen.** One 96-bar read of the certified Stars; 16, 32, and 72 are prefixes. Report `research/cleanup/STAR-EXCURSION-TIMING-AUDIT-1.txt`. Digest `8ca97eed20854c0503630f4880dd675f323ccca0eb6a883071e191af8bc08bd1`. No hold, TP, or SL was chosen. Do not rebuild the snapshot or the path to re-ask this question.
 
-**NEXT: STAR-OUTCOME-RECIPE-AUDIT-1.** Read-only. From the frozen timing facts, name one entry, one hold, and two distances. Do not implement them. Do not build a screen. Do not rebuild the snapshot or the path. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**STAR-STATE-SNAPSHOT-V2 ✅ frozen.** Schema 2, digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. Report `research/cleanup/STAR-STATE-SNAPSHOT-V2.txt`. Same Stars. Orange midline slope, the RSI-close family, and 1h/4h RSX are projections of the existing replay. Do not add a second indicator owner. Do not reopen the row for a slot the vocabulary audit left out.
+
+**NEXT: the schema-2 outcome question, not started.** Ask whether this T0 state changes the frozen outcome distribution under the existing purge and the 2026 wall. Do not start it until asked. Do not refit the stop, build a learner, or change the snapshot inside that question. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

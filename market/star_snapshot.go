@@ -11,8 +11,13 @@ import (
 	"trading_bot/indicators"
 )
 
-// StarSnapshot is the V1 projection of one closed-bar Star.
-// The numeric truth stays on the three HistoryBus values from that call.
+// StarSnapshotSchemaV2 is the expanded static-state projection.
+// Schema 1 is the frozen artifact written before these fields existed.
+// Existing fields keep their schema-1 meaning.
+const StarSnapshotSchemaV2 = 2
+
+// StarSnapshot is the closed-bar projection of one Star.
+// The numeric truth stays on the HistoryBus from the three timeframe walks.
 // This struct is not a second indicator and not a strategy.
 type StarSnapshot struct {
 	Side        string
@@ -33,6 +38,9 @@ type StarSnapshot struct {
 	SignalSlopeOK  bool
 	RSXMinusSignal float64
 	RSXMinusOK     bool
+	// RSXAccel is the 15m RSX two-bar difference. Signal acceleration is not stored.
+	RSXAccel   float64
+	RSXAccelOK bool
 
 	// TVDirection is bullish, bearish, or none.
 	// TVAgeOK false means no causal rsx_tv_div. Age 0 with TVAgeOK means the
@@ -41,11 +49,34 @@ type StarSnapshot struct {
 	TVConfirmedAt int64
 	TVAge         int
 	TVAgeOK       bool
+
+	// H1RSX and H4RSX are the causal higher-timeframe RSX pair.
+	// They do not repeat RSXMinusSignal. That gap stays a research subtraction.
+	H1RSX StarRSX
+	H4RSX StarRSX
+}
+
+// StarRSX is RSX and its signal at one causal bar.
+// Slope is one closed bar of that timeframe. Accel is the next difference.
+// A false OK flag stores 0 and is not an observation.
+type StarRSX struct {
+	Value         float64
+	ValueOK       bool
+	Slope         float64
+	SlopeOK       bool
+	Accel         float64
+	AccelOK       bool
+	Signal        float64
+	SignalOK      bool
+	SignalSlope   float64
+	SignalSlopeOK bool
 }
 
 // StarTF is one timeframe read at a single causal bar.
 // Slope is VWEMA(HL2)[t] - VWEMA(HL2)[t-1] on that timeframe.
 // Width is orange-channel upper minus lower. Distance is VWEMA minus mid.
+// Later fields are the schema-2 projection of other slots on the same bar.
+// Slope and acceleration use that timeframe's own closed bars.
 // Present false means no causal bar. A false OK flag means that number is
 // unavailable. Unavailable numbers are stored as 0 and must not be read.
 type StarTF struct {
@@ -65,6 +96,58 @@ type StarTF struct {
 	WidthChangeOK bool
 	Distance      float64
 	DistanceOK    bool
+
+	MidSlope   float64
+	MidSlopeOK bool
+	MidAccel   float64
+	MidAccelOK bool
+
+	Ema5        float64
+	Ema5OK      bool
+	Ema5Slope   float64
+	Ema5SlopeOK bool
+	Ema5Accel   float64
+	Ema5AccelOK bool
+
+	Ema12        float64
+	Ema12OK      bool
+	Ema12Slope   float64
+	Ema12SlopeOK bool
+
+	VwemaAccel   float64
+	VwemaAccelOK bool
+
+	RsiClose        float64
+	RsiCloseOK      bool
+	RsiCloseSlope   float64
+	RsiCloseSlopeOK bool
+	RsiCloseAccel   float64
+	RsiCloseAccelOK bool
+
+	CloseMid           float64
+	CloseMidOK         bool
+	CloseUp            float64
+	CloseUpOK          bool
+	CloseDn            float64
+	CloseDnOK          bool
+	CloseWidth         float64
+	CloseWidthOK       bool
+	CloseWidthChange   float64
+	CloseWidthChangeOK bool
+
+	Ema7        float64
+	Ema7OK      bool
+	Ema7Slope   float64
+	Ema7SlopeOK bool
+	Ema7Accel   float64
+	Ema7AccelOK bool
+
+	Macd        float64
+	MacdOK      bool
+	MacdSlope   float64
+	MacdSlopeOK bool
+	MacdAccel   float64
+	MacdAccelOK bool
 }
 
 // ExtractStarSnapshots replays 15m, 1h, and 4h once each, then reads Stars.
@@ -111,14 +194,22 @@ func ExtractStarSnapshots(k15, k1h, k4h []exchange.Kline, rsx RSXSettings) ([]St
 }
 
 type starSeries struct {
-	open  []int64
-	close []int64
-	vwema []float64
-	mid   []float64
-	up    []float64
-	dn    []float64
-	rsx   []float64
-	sig   []float64
+	open     []int64
+	close    []int64
+	vwema    []float64
+	mid      []float64
+	up       []float64
+	dn       []float64
+	ema5     []float64
+	ema12    []float64
+	rsiClose []float64
+	closeMid []float64
+	closeUp  []float64
+	closeDn  []float64
+	ema7     []float64
+	macd     []float64
+	rsx      []float64
+	sig      []float64
 }
 
 func replayStarSeries(klines []exchange.Kline, interval string, rsx RSXSettings) (starSeries, error) {
@@ -150,9 +241,20 @@ func replayStarSeries(klines []exchange.Kline, interval string, rsx RSXSettings)
 	s.mid = historySlotSeries(replay.Hist, core.SlotWozduhVolRsiEma5ChanMid)
 	s.up = historySlotSeries(replay.Hist, core.SlotWozduhVolRsiEma5ChanUp)
 	s.dn = historySlotSeries(replay.Hist, core.SlotWozduhVolRsiEma5ChanDn)
+	s.ema5 = historySlotSeries(replay.Hist, core.SlotWozduhVolRsiEma5)
+	s.ema12 = historySlotSeries(replay.Hist, core.SlotWozduhVolRsiEma12)
+	s.rsiClose = historySlotSeries(replay.Hist, core.SlotWozduhRsiClose)
+	s.closeMid = historySlotSeries(replay.Hist, core.SlotWozduhRsiCloseChanMid)
+	s.closeUp = historySlotSeries(replay.Hist, core.SlotWozduhRsiCloseChanUp)
+	s.closeDn = historySlotSeries(replay.Hist, core.SlotWozduhRsiCloseChanDn)
+	s.ema7 = historySlotSeries(replay.Hist, core.SlotWozduhRsiCloseEma7)
+	s.macd = historySlotSeries(replay.Hist, core.SlotWozduhMacdRsiClose)
 	s.rsx = historySlotSeries(replay.Hist, core.SlotJurikRSX)
 	s.sig = historySlotSeries(replay.Hist, core.SlotJurikSignal)
-	for _, col := range [][]float64{s.vwema, s.mid, s.up, s.dn, s.rsx, s.sig} {
+	for _, col := range [][]float64{
+		s.vwema, s.mid, s.up, s.dn, s.ema5, s.ema12, s.rsiClose,
+		s.closeMid, s.closeUp, s.closeDn, s.ema7, s.macd, s.rsx, s.sig,
+	} {
 		if len(col) != len(klines) {
 			return s, fmt.Errorf("market: star snapshot %s column len %d != %d", interval, len(col), len(klines))
 		}
@@ -212,6 +314,20 @@ func projectStar(m15, h1, h4 starSeries, divs []indicators.IndicatorFactEvent, o
 		H4:          h4tf,
 	}
 	fillRSX(&row, m15, i)
+	if h1tf.Present {
+		idx := latestCloseIndex(h1.close, local.CloseTime)
+		if idx < 0 {
+			return StarSnapshot{}, fmt.Errorf("market: star snapshot 1h rsx without a bar")
+		}
+		row.H1RSX = projectStarRSX(h1, idx)
+	}
+	if h4tf.Present {
+		idx := latestCloseIndex(h4.close, local.CloseTime)
+		if idx < 0 {
+			return StarSnapshot{}, fmt.Errorf("market: star snapshot 4h rsx without a bar")
+		}
+		row.H4RSX = projectStarRSX(h4, idx)
+	}
 	dir, at, age, ok, err := causalTVDiv(divs, openAt, local.OpenTime, i)
 	if err != nil {
 		return StarSnapshot{}, err
@@ -287,30 +403,82 @@ func readStarTF(s starSeries, i int) (StarTF, error) {
 		tf.WidthChange = tf.Width - prev
 		tf.WidthChangeOK = true
 	}
+	tf.MidSlope, tf.MidSlopeOK, tf.MidAccel, tf.MidAccelOK = slopeAccel(s.mid, i)
+	_, _, tf.VwemaAccel, tf.VwemaAccelOK = slopeAccel(s.vwema, i)
+	tf.Ema5, tf.Ema5OK, tf.Ema5Slope, tf.Ema5SlopeOK, tf.Ema5Accel, tf.Ema5AccelOK = projectSample(s.ema5, i)
+	tf.Ema12, tf.Ema12OK, tf.Ema12Slope, tf.Ema12SlopeOK, _, _ = projectSample(s.ema12, i)
+	tf.RsiClose, tf.RsiCloseOK, tf.RsiCloseSlope, tf.RsiCloseSlopeOK, tf.RsiCloseAccel, tf.RsiCloseAccelOK = projectSample(s.rsiClose, i)
+	tf.CloseMid, tf.CloseMidOK = finiteAt(s.closeMid, i)
+	tf.CloseUp, tf.CloseUpOK = finiteAt(s.closeUp, i)
+	tf.CloseDn, tf.CloseDnOK = finiteAt(s.closeDn, i)
+	if tf.CloseUpOK && tf.CloseDnOK {
+		tf.CloseWidth = tf.CloseUp - tf.CloseDn
+		tf.CloseWidthOK = true
+	}
+	if i > 0 && tf.CloseWidthOK && starFinite(s.closeUp[i-1]) && starFinite(s.closeDn[i-1]) {
+		tf.CloseWidthChange = tf.CloseWidth - (s.closeUp[i-1] - s.closeDn[i-1])
+		tf.CloseWidthChangeOK = true
+	}
+	tf.Ema7, tf.Ema7OK, tf.Ema7Slope, tf.Ema7SlopeOK, tf.Ema7Accel, tf.Ema7AccelOK = projectSample(s.ema7, i)
+	tf.Macd, tf.MacdOK, tf.MacdSlope, tf.MacdSlopeOK, tf.MacdAccel, tf.MacdAccelOK = projectSample(s.macd, i)
 	return tf, nil
 }
 
+func finiteAt(col []float64, i int) (float64, bool) {
+	if i < 0 || i >= len(col) || !starFinite(col[i]) {
+		return 0, false
+	}
+	return col[i], true
+}
+
+func slopeAccel(col []float64, i int) (slope float64, slopeOK bool, accel float64, accelOK bool) {
+	if i < 0 || i >= len(col) {
+		return 0, false, 0, false
+	}
+	if i > 0 && starFinite(col[i]) && starFinite(col[i-1]) {
+		slope = col[i] - col[i-1]
+		slopeOK = true
+	}
+	if i > 1 && starFinite(col[i]) && starFinite(col[i-1]) && starFinite(col[i-2]) {
+		accel = col[i] - 2*col[i-1] + col[i-2]
+		accelOK = true
+	}
+	return slope, slopeOK, accel, accelOK
+}
+
+func projectSample(col []float64, i int) (value float64, valueOK bool, slope float64, slopeOK bool, accel float64, accelOK bool) {
+	value, valueOK = finiteAt(col, i)
+	slope, slopeOK, accel, accelOK = slopeAccel(col, i)
+	return value, valueOK, slope, slopeOK, accel, accelOK
+}
+
+func projectStarRSX(s starSeries, i int) StarRSX {
+	value, valueOK, slope, slopeOK, accel, accelOK := projectSample(s.rsx, i)
+	signal, signalOK, signalSlope, signalSlopeOK, _, _ := projectSample(s.sig, i)
+	return StarRSX{
+		Value: value, ValueOK: valueOK,
+		Slope: slope, SlopeOK: slopeOK,
+		Accel: accel, AccelOK: accelOK,
+		Signal: signal, SignalOK: signalOK,
+		SignalSlope: signalSlope, SignalSlopeOK: signalSlopeOK,
+	}
+}
+
 func fillRSX(row *StarSnapshot, s starSeries, i int) {
-	rsxV, sigV := s.rsx[i], s.sig[i]
-	row.RSXOK = starFinite(rsxV)
-	row.SignalOK = starFinite(sigV)
-	if row.RSXOK {
-		row.RSX = rsxV
-	}
-	if row.SignalOK {
-		row.Signal = sigV
-	}
+	rsx := projectStarRSX(s, i)
+	row.RSX = rsx.Value
+	row.RSXOK = rsx.ValueOK
+	row.RSXSlope = rsx.Slope
+	row.RSXSlopeOK = rsx.SlopeOK
+	row.RSXAccel = rsx.Accel
+	row.RSXAccelOK = rsx.AccelOK
+	row.Signal = rsx.Signal
+	row.SignalOK = rsx.SignalOK
+	row.SignalSlope = rsx.SignalSlope
+	row.SignalSlopeOK = rsx.SignalSlopeOK
 	if row.RSXOK && row.SignalOK {
-		row.RSXMinusSignal = rsxV - sigV
+		row.RSXMinusSignal = row.RSX - row.Signal
 		row.RSXMinusOK = true
-	}
-	if i > 0 && row.RSXOK && starFinite(s.rsx[i-1]) {
-		row.RSXSlope = rsxV - s.rsx[i-1]
-		row.RSXSlopeOK = true
-	}
-	if i > 0 && row.SignalOK && starFinite(s.sig[i-1]) {
-		row.SignalSlope = sigV - s.sig[i-1]
-		row.SignalSlopeOK = true
 	}
 }
 
@@ -373,6 +541,12 @@ func checkStarRow(row StarSnapshot, h1, h4 starSeries) error {
 	}
 	if !row.TVAgeOK && (row.TVDirection != "none" || row.TVAge != 0 || row.TVConfirmedAt != 0) {
 		return fmt.Errorf("market: star snapshot missing tv encoded as age 0")
+	}
+	if !row.H1.Present && row.H1RSX != (StarRSX{}) {
+		return fmt.Errorf("market: star snapshot 1h rsx without a bar")
+	}
+	if !row.H4.Present && row.H4RSX != (StarRSX{}) {
+		return fmt.Errorf("market: star snapshot 4h rsx without a bar")
 	}
 	if err := checkLatest(h1, row.M15.CloseTime, row.H1); err != nil {
 		return err

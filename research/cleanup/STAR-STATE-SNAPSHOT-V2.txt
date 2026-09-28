@@ -1,0 +1,160 @@
+STAR-STATE-SNAPSHOT-V2
+Date: 2026-09-28
+
+============================================================
+1. VERDICT
+============================================================
+
+STAR_SNAPSHOT_V2_GREEN
+
+Schema 2. Same 8,783 Stars as schema 1.
+4,392 up, 4,391 down.
+The new fields are a projection of the existing
+HistoryBus. No new indicator was constructed.
+
+Digest:
+1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb
+
+Artifact:
+research/starstop/star_snapshot_v2.json
+
+============================================================
+2. WHAT WAS PROJECTED
+============================================================
+
+One ReplayClosedBars walk per timeframe, unchanged.
+Three walks per extraction. RSXNode and WozduhNode
+remain the only writers.
+
+For 15m, 1h, and 4h, on the causal bar:
+
+  orange mid slope and acceleration
+  volume RSI EMA5 value, slope, acceleration
+  volume RSI EMA12 value and slope
+  VWEMA acceleration
+  RSI close value, slope, acceleration
+  RSI close channel mid, upper, lower, width, width change
+  RSI close EMA7 value, slope, acceleration
+  MACD RSI(close)+50 value, slope, acceleration
+
+RSX value, slope, acceleration, signal, and signal slope
+on 15m, 1h, and 4h.
+The existing 15m RSXMinusSignal field is unchanged.
+TV divergence stays the 15m fact.
+
+Slope is value[t] - value[t-1] on that timeframe.
+Acceleration is value[t] - 2*value[t-1] + value[t-2].
+Units are points per bar of that timeframe.
+A missing sample stores 0 with OK false.
+
+Not added: EMA12 acceleration, width acceleration,
+signal acceleration, RSI of RSI, RSI HL2, RSI AD,
+daily, higher-timeframe TV, alignment, scores,
+thresholds.
+
+============================================================
+3. SOURCE OWNER
+============================================================
+
+Orange mid, upper, lower     SlotWozduhVolRsiEma5Chan*
+Volume RSI EMA5              SlotWozduhVolRsiEma5
+Volume RSI EMA12             SlotWozduhVolRsiEma12
+VWEMA(HL2)                   SlotWozduhRsiHl2Vwema
+RSI close                    SlotWozduhRsiClose
+RSI close channel            SlotWozduhRsiCloseChan*
+RSI close EMA7               SlotWozduhRsiCloseEma7
+MACD RSI(close)+50           SlotWozduhMacdRsiClose
+RSX and signal               SlotJurikRSX, SlotJurikSignal
+
+Slopes and accelerations are arithmetic on those
+columns. The extractor does not call FeatureRuntime2,
+NewJurikRSX, NewRSI, NewEMA, NewMACD, a second
+Wozduh node, or a second RSX node.
+
+15m state is the Star bar.
+1h and 4h state is the latest bar whose close is at
+or before the Star close.
+
+============================================================
+4. STAR IDENTITY AND V1
+============================================================
+
+Count, order, side, and decision time match the frozen
+stop file and the outcome dataset.
+Every schema-1 state field matches the dataset row.
+1h and 4h VWEMA, slope, width, and distance match the
+stop file.
+
+These files were byte-identical after the V2 write:
+
+  research/starstop/star_stops.json
+  research/starstop/star_sl_outcome.json
+  research/starstop/star_sl_buffer_compare.json
+  research/starstop/star_outcome_dataset.json
+
+Schema-1 field meanings are unchanged.
+Slope is still the VWEMA slope.
+ValuesOK is still VWEMA plus the orange channel.
+RSXMinusSignal is still the 15m gap.
+
+============================================================
+5. OK COUNTS
+============================================================
+
+8,783 Stars. A count below 8,783 is the first bar of
+that series, where the previous sample does not exist.
+It is not a hole in the middle of the archive.
+
+15m
+  values, slopes, width, distance, EMA, RSI, MACD   8783
+  every acceleration                                  8782
+  one Star sits on the second 15m bar
+
+1h
+  present and line values                             8783
+  slopes and accelerations                            8782
+  one Star sits on the first 1h bar
+
+4h
+  present and line values                             8782
+  slopes                                              8782
+  accelerations                                       8781
+  one Star has no closed 4h bar yet
+  one present 4h bar is the second bar of the series
+
+RSX value
+  15m 8783    1h 8783    4h 8782
+RSX slope
+  15m 8783    1h 8782    4h 8782
+RSX acceleration
+  15m 8782    1h 8782    4h 8781
+Signal follows the same value and slope counts.
+TV age known: 8782. Unchanged.
+
+============================================================
+6. CHECKS
+============================================================
+
+Two extractions were byte-identical and produced the
+same digest.
+Each new value equals the HistoryBus slot at the
+causal index, from a separate read of that bus.
+Higher-timeframe close is never after the Star close.
+The extractor source does not construct a second
+indicator. Two extractions born six DAG runners,
+three per call.
+
+Tests:
+  TestStarV2ProjectionLaws
+  TestStarV2MatchesHistoryBus
+  TestStarExtractorDoesNotConstructIndicators
+  TestExtractStarSnapshots
+  TestStarSnapshotV2Certification
+
+============================================================
+7. STOP
+============================================================
+
+No outcome refit. No tree. No learner. No UI.
+The next chapter can ask whether this state changes
+the outcome distribution. This chapter does not.

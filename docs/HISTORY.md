@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-STATE-SNAPSHOT-V2 — expanded static state on the same Stars (Sep 2026)
+
+- Schema 2. 8783 Stars, 4392 up, 4391 down. Same decision times and sides as schema 1.
+- The three closed-bar walks are unchanged. New fields read existing Wozduh and RSX slots. Slope and acceleration are differences on that timeframe.
+- Digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. Artifact `research/starstop/star_snapshot_v2.json`. Report `research/cleanup/STAR-STATE-SNAPSHOT-V2.txt`.
+- Schema-1 stop, outcome, and dataset files were not rewritten. No learner.
+
 ## STAR-EXCURSION-TIMING-AUDIT-1 — four windows on the certified path (Sep 2026)
 
 - Same 8783 Stars. Read length 96. Prefixes 16, 32, 72. Five Stars fall short of 96 bars at the frozen end. One Star has no ATR. Fill absent 0. No primary gap.
