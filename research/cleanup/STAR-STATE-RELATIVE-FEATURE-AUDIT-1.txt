@@ -1,0 +1,360 @@
+STAR-STATE-RELATIVE-FEATURE-AUDIT-1
+Date: 2026-09-28
+READ-ONLY. No snapshot change. No Daily walk. No matrix build.
+No learner.
+
+Schema 2 remains b23dc4b.
+Digest 1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb.
+
+============================================================
+1. VERDICT
+============================================================
+
+RELATIVE_MATRIX_DEFINED
+
+The first research matrix is raw schema 2 plus 34 new
+relations on 15m, 1h, and 4h, and, after a daily walk
+exists, the same pattern for daily and for 4h−daily.
+
+Do not certify that matrix on 15m/1h/4h alone.
+Daily is part of the hierarchy the operator reads.
+A matrix that stops at 4h cannot see a daily extreme.
+The next implementation chapter is the daily projection
+only. The matrix chapter follows it.
+
+Relations are arithmetic on the snapshot. They are not
+new indicator owners and not new snapshot columns.
+
+============================================================
+2. FIRST MATRIX
+============================================================
+
+Clock. 15m numbers are the Star bar.
+1h, 4h, and daily use the latest bar of that timeframe
+whose close is at or before the Star close.
+A relation uses those bars only.
+If either side is not a real observation, the relation
+is OK false and stores 0. That 0 is not a reading.
+No fill. No future bar.
+
+A line's own OK flag gates that line.
+Orange mid is finite on its own. Do not require
+ValuesOK, which also demands VWEMA and both bounds.
+VWEMA is finite on its own. Distance already uses
+ValuesOK and is left as stored.
+
+VWEMA and orange mid have no OK field on the
+snapshot. Do not add one. Schema 3 stays frozen.
+Their observation is Present and a finite number.
+An absent bar stores 0, and Present false keeps
+that 0 from being read as a real zero.
+ValuesOK is not the gate. A finite 0 with
+ValuesOK false is still an observation.
+Validity belongs to the operand. A tie of two
+real readings is 0 with OK true. A missing
+operand stores 0 with OK false, whatever the
+other number is.
+
+Unit for every level and every width is oscillator
+points. Native slope is points per bar of that
+timeframe. These lines are not prices.
+
+--- Raw, kept as stored ---
+
+Every schema-2 number stays, including both channel
+bounds. Identity and bar times stay so a row can be
+joined to the Star. They are not state relations.
+
+Per timeframe, 30 numbers, on 15m, 1h, and 4h:
+
+  VWEMA
+  orange mid, upper, lower
+  VWEMA slope                         field name Slope
+  orange width, width change
+  VWEMA − orange mid                  field name Distance
+  orange mid slope, orange mid acceleration
+  EMA5 value, slope, acceleration
+  EMA12 value, slope
+  VWEMA acceleration
+  RSI close value, slope, acceleration
+  close-channel mid, upper, lower, width, width change
+  EMA7 value, slope, acceleration
+  MACD line value, slope, acceleration
+                                      the slot is already +50
+
+15m RSX is the root block, not a field on M15:
+  value, slope, acceleration, signal, signal slope,
+  value − signal
+1h and 4h RSX, five numbers each:
+  value, slope, acceleration, signal, signal slope
+TV direction and TV age stay 15m facts.
+Side stays the Star side.
+
+Count of raw numbers: 30×3 + 6 + 5 + 5 + TV age = 107.
+Side and TV direction are categories, not numbers.
+
+--- New relations, 15m / 1h / 4h ---
+
+Same bar, same timeframe. Unit: oscillator points,
+except the slope gap, which is points per bar of
+that timeframe.
+
+  EMA7 − MACD
+      OK when Ema7OK and MacdOK
+  EMA7 − close-channel mid
+      OK when Ema7OK and CloseMidOK
+  RSI close − close-channel mid
+      OK when RsiCloseOK and CloseMidOK
+  VWEMA slope − orange mid slope
+      OK when SlopeOK and MidSlopeOK
+      This is the slope of Distance.
+      Do not store a second Distance column.
+
+  1h RSX − 1h signal
+  4h RSX − 4h signal
+      OK when that timeframe's value and signal are OK
+      15m already has RSXMinusSignal. Do not add another.
+
+Neighbor levels. Lower timeframe minus the next
+higher one. Unit: oscillator points.
+Pairs: 15m−1h and 1h−4h.
+Eight lines: orange mid, VWEMA, EMA5, EMA12,
+RSI close, EMA7, MACD, RSX.
+OK when both endpoints are finite.
+16 columns.
+
+Neighbor widths. Same pairs. Volume-channel width
+and close-channel width. Unit: oscillator points.
+OK when both WidthOK, or both CloseWidthOK.
+4 columns.
+
+New columns before daily: 4×3 + 2 + 16 + 4 = 34.
+
+Do not add 15m−4h. It equals (15m−1h) + (1h−4h)
+when all three bars are present.
+
+============================================================
+3. DEFERRED
+============================================================
+
+Real arithmetic. Not in the first matrix.
+
+Points per hour, then the neighbor gap of those
+rates. Convert first:
+
+  15m slope × 4
+  1h slope × 1
+  4h slope ÷ 4
+  daily slope ÷ 24    only after schema 3
+
+Then subtract neighbors. Apply this to the slopes
+that already exist: orange mid, VWEMA, EMA5, EMA12,
+RSI close, EMA7, MACD, RSX, and RSX signal.
+OK when both native slopes are OK.
+The converted slope is points per hour.
+The gap is points per hour.
+
+Width ratio, neighbor only:
+  width_lower / width_higher
+OK when both widths are OK and the higher width
+is greater than 0. A higher width of 0 is OK false,
+not an infinite ratio. Volume channel and close
+channel. Dimensionless.
+
+Level gap / width of the lower timeframe.
+Same eight lines as the level gaps.
+OK when the gap is OK and that lower width is OK
+and greater than 0. Unit: widths of that channel.
+Orange, EMA5, and EMA12 use the volume-channel width.
+RSI close, EMA7, and MACD use the close-channel width.
+VWEMA and RSX have no private channel. Their scale
+form uses the volume-channel width, and the audit
+marks that choice as a convention, not a law of the
+indicator. Leave this whole family out of the first
+matrix so the convention is not baked in early.
+
+Cross-timeframe acceleration. Native acceleration is
+points per bar squared, and the bars differ.
+A common clock would be points per hour per hour,
+which needs the square of the same factors
+(15m × 16, 4h ÷ 16, daily ÷ 576).
+That family is noisier than the slope family.
+Defer it until a named question asks for it.
+
+Signal level gaps across timeframes, and EMA12
+acceleration. EMA12 acceleration was left out of
+schema 2. A cross-timeframe signal gap can be added
+later by the same neighbor rule. Neither is required
+to state the first hierarchy.
+
+============================================================
+4. INVALID
+============================================================
+
+Alignment count, trend, exhaustion, continuation,
+reversal, take, skip, target, score.
+These name a phase or a decision. The matrix keeps
+the coordinates. Discovery may describe a phase
+afterward.
+
+A threshold carried in from old notes, including 74.5.
+The matrix is continuous where the line is continuous.
+
+Native slope on 15m minus native slope on 1h or 4h.
+The units are points per different bars.
+
+Any oscillator gap divided by ATR.
+ATR is a price distance. The line is not a price.
+
+Bars since a cross.
+The snapshot is the state at the Star. The sign of a
+gap says which line is above now.
+
+Higher-timeframe TV.
+Schema 2 does not compute it. Do not invent it here.
+
+15m−4h as its own column, and any bound-to-bound
+gap. The bounds remain in the raw row. The operator
+reads them as a weak sign. The midline, the width,
+and the distance already carry that geometry for the
+first matrix.
+
+============================================================
+5. REDUNDANT COPIES
+============================================================
+
+These stay in the raw row. A later report must not
+treat them as separate discoveries.
+
+Volume channel, when mid and width are both known:
+  upper = mid + width/2
+  lower = mid − width/2
+The close channel is the same when mid, upper, and
+lower are all known.
+
+Distance is VWEMA minus orange mid.
+The new slope gap is the slope of that distance.
+15m RSX minus signal is the stored root field.
+
+============================================================
+6. DAILY
+============================================================
+
+Schema 3. Not this audit. Not a delta computed from
+schema 2.
+
+One ReplayClosedBars walk on the daily series.
+Same WozduhNode, same RSXNode, same settings as the
+15m walk. No FeatureRuntime2. No second formula.
+
+The daily bar on a Star is the latest daily bar whose
+close is at or before the Star close. No later daily
+bar. Missing daily is Present false. Slopes use the
+previous daily bar, not the previous 15m bar.
+OK flags match schema 2. A missing sample stores 0.
+
+Project the same 30 line numbers and the same five
+RSX numbers. Do not project daily TV.
+Do not change schema-2 fields, the Star detector,
+the path, the stop, or the outcomes.
+New digest. The schema-2 file stays byte-identical.
+
+After that projection exists, the first matrix adds:
+
+  the 35 daily numbers
+  five same-timeframe daily gaps
+      EMA7−MACD, EMA7−close mid, RSI close−close mid,
+      VWEMA slope−orange slope, RSX−signal
+  eight level gaps, 4h−daily
+  two width gaps, 4h−daily
+
+That is 50 columns. They use the same OK rule as
+section 2.
+
+Recommendation: the certified Relative Matrix V1
+includes this daily block. Certifying a 15m/1h/4h
+matrix first would freeze a hierarchy the operator
+has already said is missing its top. The following
+implementation chapter is schema 3 only. The matrix
+is the chapter after schema 3 is certified.
+
+Without daily, the experiment cannot separate a
+15m Star whose 1h and 4h lines agree and whose daily
+line is extended from the same Star whose daily line
+is neutral. No 15m/1h/4h relation reconstructs that.
+
+============================================================
+7. COLUMN COUNT
+============================================================
+
+Before daily, if the matrix were built early:
+
+  raw numbers            107
+  new relations           34
+  numeric columns        141
+  plus side and TV direction
+
+Certified V1, after schema 3:
+
+  raw numbers            142     107 + 35 daily
+  new relations           49     34 + 15 daily
+  numeric columns        191
+  plus side and TV direction
+
+The 15 daily relations are five same-timeframe
+gaps, eight 4h−daily level gaps, and two 4h−daily
+width gaps. The other 35 daily columns are raw
+readings, not relations.
+
+The 191 figure is the logical research space:
+142 canonical schema-3 numbers plus 49 relations.
+The matrix artifact persists the Star identity,
+the schema-3 digest, and the 49 relations with
+their OK flags. It does not write the 142 raw
+numbers again. Schema 3 remains the only copy
+of those readings.
+
+============================================================
+8. FOLLOWING CHAPTER
+============================================================
+
+SCHEMA-3 daily projection. Implementation, then
+certification. Not the matrix. Not a learner.
+
+Must not touch:
+
+  Star detection
+  schema-2 field meanings and the schema-2 artifact
+  PricePath
+  the stop and the 96-bar outcomes
+  Wozduh math, RSX math, the DAG
+  FeatureRuntime2
+  the chart
+
+The chapter after that one, and only after schema 3
+is certified, builds Relative Matrix V1 from this
+list. It reads the snapshot. It does not walk the
+indicators again to invent a second value.
+
+============================================================
+9. CORRECTIONS TO THE HANDOFF
+============================================================
+
+The handoff allows the first matrix to be certified
+on 15m, 1h, and 4h, with daily called untested.
+This audit reverses that order. Daily is in V1.
+The matrix waits for schema 3.
+
+15m RSX is the root of the snapshot, not a field
+on the 15m timeframe struct. A matrix that reads
+M15.RSX will miss it. Read the root for 15m and
+H1RSX / H4RSX above that.
+
+Distance and 15m RSX−signal are already stored.
+The matrix uses those fields. It does not compute
+a second copy.
+
+The handoff's NEXT line in the living docs is older
+than this audit. Those docs are unchanged here.
+The next asked chapter is schema 3, not the
+outcome question and not the learner.

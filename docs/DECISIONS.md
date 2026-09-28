@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## RELATIVE-MATRIX-V1 — relations are arithmetic on the frozen row
+
+**Context:** Schema 3 holds 142 raw numbers, including the causal daily bar. The research space also needs the adjacent gaps. Those gaps are subtractions, not new indicator series.
+
+**Decision:** Freeze 49 named relations. The matrix reads `[]StarSnapshotV3` and writes identity, the schema-3 digest, and the relations with OK flags. It does not copy the 142 raw numbers. The research space is those 142 plus the 49. Sign is lower timeframe minus the next higher one. Pairs are 15m−1h, 1h−4h, and 4h−daily. Digest `8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a`.
+
+**Rejected:** A VWEMA OK field on the snapshot — **Reason:** schema 3 is frozen, and the observation is already Present plus a finite number. Using `ValuesOK` as the gate — **Reason:** that flag also requires the channel bounds. A 15m−4h column — **Reason:** it is the sum of the two neighbor gaps. Points per hour, ratios, and a learner — **Reason:** they are later questions, not part of the coordinate list.
+
+**Consequences:** Do not add a relation to this file to chase a result. Do not walk the indicators again to recompute a gap. The next chapter is the discovery protocol. It is not started. It asks what structure the 191 coordinates have, and how that structure sits against the future path. It does not rank a feature or emit a trade.
+
+---
+
 ## SCHEMA-3-DAILY-PROJECTION — daily is another walk, not another type of indicator
 
 **Context:** The relative-state matrix needs a daily bar, and the Star path already replays any closed series through one Wozduh owner and one RSX owner. Schema 2 is frozen as the 15m / 1h / 4h row.

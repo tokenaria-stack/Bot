@@ -414,6 +414,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **SCHEMA-3-DAILY-PROJECTION ✅ frozen.** Schema 3 is the schema-2 row plus one daily walk. `StarSnapshot` stays 15m / 1h / 4h. `StarSnapshotV3` adds `D1` and `D1RSX` from the same nodes. The visible daily bar is the latest `1d` close at or before the Star's 15m close. Digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. The schema-2 artifact stays byte-identical. No daily TV. No learner.
 
+**RELATIVE-MATRIX-V1 ✅ frozen.** Forty-nine arithmetic relations on the schema-3 row. The file stores identity, the schema-3 digest, and those relations. The 142 raw numbers stay in schema 3. The research space is 191 coordinates. Digest `8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a`. VWEMA and orange mid are present and finite. `ValuesOK` is not their gate. No learner.
+
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
 **DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.

@@ -1,0 +1,182 @@
+RELATIVE-MATRIX-V1-1
+Date: 2026-09-28
+
+============================================================
+1. VERDICT
+============================================================
+
+RELATIVE_MATRIX_V1_GREEN
+
+49 relations on the frozen schema-3 rows.
+8,783 Stars. 4,392 up, 4,391 down.
+Same order, side, and decision time.
+No second copy of the raw numbers.
+
+Matrix digest:
+8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+
+Artifact:
+research/starstop/star_relative_v1.json
+514d513dd173bba6d62b05aa0d1b3c15bf1a4ca3216aaf1d8db4ec8550c109c6
+24,648,627 bytes
+
+============================================================
+2. FROZEN SOURCE
+============================================================
+
+Schema 3 commit 975da0d.
+Artifact research/starstop/star_snapshot_v3.json
+Digest 934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+File 18f1e5ec79ee2ec4f2ab2afd5d5fbb213acd332df4e1396681bddd8ec652463a
+
+Schema 2 file stayed
+0f7e68fa942092449cc910f6c2bdba2c10a79fb769ac5fffa544a16adc1c102c
+Digest 1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb
+
+Both files were hashed before the matrix write and after it.
+Neither changed.
+
+============================================================
+3. COORDINATES AND THE FILE
+============================================================
+
+The research space is 191 coordinates.
+142 of them are the schema-3 numbers.
+49 are these relations.
+Side and TV direction stay categories on schema 3.
+
+The matrix file stores Star identity, the schema-3
+digest, the schema-3 commit, and the 49 relations
+with their OK flags. It does not store the 142
+raw numbers again.
+
+============================================================
+4. THE 49 RELATIONS
+============================================================
+
+Same bar, four timeframes, four gaps:
+  EMA7 − MACD
+  EMA7 − close-channel mid
+  RSI close − close-channel mid
+  VWEMA slope − orange-mid slope
+16.
+
+RSX − signal on 1h, 4h, and daily.
+The 15m gap stays the stored root field.
+3.
+
+Adjacent levels, lower minus higher:
+  15m−1h, 1h−4h, 4h−daily
+  orange mid, VWEMA, EMA5, EMA12, RSI close,
+  EMA7, MACD, RSX
+24.
+
+Adjacent widths, same three pairs:
+  volume-channel width, close-channel width
+6.
+
+15m RSX is the snapshot root.
+1h, 4h, and daily RSX are H1RSX, H4RSX, and D1RSX.
+There is no 15m−4h field.
+
+============================================================
+5. OK FLAGS
+============================================================
+
+A relation is value and OK.
+Both operands must be observations.
+Otherwise the stored value is 0 and OK is false.
+A result of 0 with OK true is a real tie.
+
+VWEMA and orange mid have no OK flag on the
+snapshot. ValuesOK also requires the channel
+bounds, so it is not their gate. The gate is
+Present and a finite number. An absent bar
+stores 0, and Present false keeps that 0 from
+being read as a VWEMA of zero.
+
+Every other line uses its own OK flag, and
+Present must be true. Width uses WidthOK.
+Close width uses CloseWidthOK.
+
+============================================================
+6. CERTIFICATION
+============================================================
+
+TestStarRelationArithmetic PASS
+  ordinary gaps, a negative gap, a zero gap,
+  a finite VWEMA of 0 while ValuesOK is false,
+  a non-finite orange mid stored as missing,
+  one missing endpoint,
+  an absent daily bar that leaves the lower
+  relations intact.
+
+TestStarRelationsCountAndSource PASS
+  49 Rel fields.
+  No M15H4 or M15D1 field.
+  The matrix file does not name a replay,
+  a node, an indicator constructor, a kline
+  loader, or FeatureRuntime2.
+
+TestStarRelativeV1Certification
+STAR_RELATIVE_V1_CERT=1
+PASS, 0.89s
+
+Two builds matched.
+One digest.
+Every relation on every Star matched a second
+subtraction of the schema-3 fields.
+Count, order, side, and decision time matched.
+
+Absent Star 1567965600000, side up.
+Its 15 daily relations are 0 with OK false.
+The lower-timeframe relations on that row
+remain readings.
+
+Real daily VWEMA of 0, ValuesOK true, on
+  1567997100000 down
+  1568028600000 up
+  1568047500000 down
+  1568067300000 up
+The 4h−daily VWEMA gap is OK true and equals
+the 4h VWEMA minus 0.
+Those four bars have SlopeOK false, so the
+daily slope gap stays missing. The zero is a
+level. It is not a slope.
+
+============================================================
+7. CORRECTION
+============================================================
+
+The prompt asks for VWEMA's own OK flag.
+The frozen snapshot does not have one.
+Adding one would change schema 3.
+Present and finite is the observation test.
+ValuesOK is the stricter channel flag and
+is not the gate. The hand row with VWEMA 0
+and ValuesOK false still produces the gap.
+
+============================================================
+8. FILES
+============================================================
+
+market/star_relative.go
+market/star_relative_test.go
+market/star_relative_cert_test.go
+research/starstop/star_relative_v1.json
+research/cleanup/STAR-STATE-RELATIVE-FEATURE-AUDIT-1.txt
+research/cleanup/RELATIVE-MATRIX-V1-1.txt
+
+StarSnapshot and StarSnapshotV3 were not changed.
+The schema-2 and schema-3 artifacts were not rewritten.
+The stop, the outcomes, PricePath, and the chart
+were not touched.
+
+============================================================
+9. NOT IN THIS CHAPTER
+============================================================
+
+Points per hour, width ratios, level divided by
+width, cross-timeframe acceleration, signal level
+gaps, EMA12 acceleration, scores, labels, and
+the learner.

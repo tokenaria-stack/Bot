@@ -70,7 +70,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **SCHEMA-3-DAILY-PROJECTION ✅ frozen.** Schema 3, digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. Report `research/cleanup/SCHEMA-3-DAILY-PROJECTION-1.txt`. Same Stars. `D1` and `D1RSX` are the causal daily read. The schema-2 file stays byte-identical. Do not fold `M15` / `H1` / `H4` into a map. Do not add daily TV.
 
-**NEXT: Relative Matrix V1, not started.** The relation list is already written in `research/cleanup/STAR-STATE-RELATIVE-FEATURE-AUDIT-1.txt`. Include the 4h–daily gaps. Do not start it until asked. Do not change the snapshot, the stop, or the outcomes inside that chapter. Do not build a learner. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**RELATIVE-MATRIX-V1 ✅ frozen.** Digest `8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a`. Report `research/cleanup/RELATIVE-MATRIX-V1-1.txt`. Forty-nine relations. The raw schema-3 numbers stay in their own file. Do not add a VWEMA OK field. Do not add 15m−4h. Do not reopen the list to insert a ratio or a points-per-hour slope.
+
+**NEXT: the discovery protocol, not started.** Ask what structure the 191 coordinates have around a Star, and how that structure sits against the future path. Do not rank relations. Do not add coordinates. Do not build a learner. Do not change the snapshot, the matrix, the stop, or the outcomes inside that chapter. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

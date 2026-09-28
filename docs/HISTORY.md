@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## RELATIVE-MATRIX-V1 — 49 relations on the frozen Stars (Sep 2026)
+
+- Schema 3 rows in. Arithmetic only. 8783 Stars, 4392 up, 4391 down. Same order, side, and decision time.
+- 16 same-bar gaps, 3 higher-timeframe RSX-minus-signal gaps, 24 adjacent level gaps, 6 adjacent width gaps. No 15m−4h column. The 15m RSX gap stays the stored root field.
+- Digest `8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a`. Artifact `research/starstop/star_relative_v1.json`. Report `research/cleanup/RELATIVE-MATRIX-V1-1.txt`. Audit `research/cleanup/STAR-STATE-RELATIVE-FEATURE-AUDIT-1.txt`.
+- Schema 3 stays digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. The raw numbers are not copied. No learner.
+
 ## SCHEMA-3-DAILY-PROJECTION — daily context on the same Stars (Sep 2026)
 
 - Schema 3. 8783 Stars, 4392 up, 4391 down. Same decision times and sides as schema 2.
