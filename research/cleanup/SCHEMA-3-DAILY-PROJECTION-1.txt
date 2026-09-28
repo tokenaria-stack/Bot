@@ -1,0 +1,151 @@
+SCHEMA-3-DAILY-PROJECTION-1
+Date: 2026-09-28
+
+============================================================
+1. VERDICT
+============================================================
+
+SCHEMA_3_DAILY_PROJECTION_GREEN
+
+Schema 2 plus one daily walk.
+8,783 Stars. 4,392 up, 4,391 down.
+Order, side, and decision time match the frozen schema-2 rows.
+Daily is context on a separate result type.
+
+Schema-2 digest, unchanged:
+1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb
+
+Schema-2 file, byte-identical:
+research/starstop/star_snapshot_v2.json
+0f7e68fa942092449cc910f6c2bdba2c10a79fb769ac5fffa544a16adc1c102c
+
+Schema-3 digest:
+934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+
+Schema-3 artifact:
+research/starstop/star_snapshot_v3.json
+18f1e5ec79ee2ec4f2ab2afd5d5fbb213acd332df4e1396681bddd8ec652463a
+
+The two digests differ because schema 3 has daily fields.
+That is the expected result, not a regression.
+
+============================================================
+2. WHAT WAS ADDED
+============================================================
+
+ExtractStarSnapshots stays the three-walk function.
+StarSnapshot stays the 15m / 1h / 4h type.
+It has no D1 field.
+
+ExtractStarSnapshotsV3 calls that function, then
+replayStarSeries on the "1d" series once.
+readCausalTF and projectStarRSX fill D1 and D1RSX.
+Same WozduhNode, same RSXNode, same HistoryBus slots.
+No daily TV. No second formula.
+
+One extraction builds four DAG runners.
+Two identical extractions built eight, and matched.
+
+Daily series on the frozen cutoff:
+2,574 closed bars
+first open 1567900800000
+last open  1790208000000
+
+Present 8,782. Absent 1.
+The absent Star is 1567965600000, side up.
+Its 15m close is 1567966499999.
+The first daily close is 1567987199999, so that bar
+was still open. D1 and D1RSX are zero with OK false.
+
+66 Stars close on a daily close and take that bar.
+8,716 Stars take an earlier closed daily bar.
+4 Stars have a real daily VWEMA of 0 with ValuesOK true.
+Those four are readings. The absent Star is not.
+
+============================================================
+3. FILES
+============================================================
+
+market/star_snapshot.go
+market/star_snapshot_test.go
+    the daily step used by the fixture
+market/star_snapshot_v3_test.go
+market/star_snapshot_v3_cert_test.go
+research/starstop/star_snapshot_v3.json
+research/cleanup/SCHEMA-3-DAILY-PROJECTION-1.txt
+
+Not changed: Wozduh, RSX, ReplayClosedBars,
+FeatureRuntime2, Star detection, PricePath, the stop,
+the outcomes, the chart, the relation matrix,
+the schema-2 artifact.
+
+============================================================
+4. CERTIFICATION
+============================================================
+
+TestStarSnapshotV3Certification
+STAR_SNAPSHOT_V3_CERT=1
+PASS, 3.11s
+
+Two extracts deep-equal.
+Schema-2 fields of every schema-3 row deep-equal
+the stored schema-2 row.
+Schema-2 digest of those fields equals the frozen digest.
+Schema-2 file hash before and after the run is the same.
+Every D1 and D1RSX equals the daily HistoryBus
+at the selected bar.
+No daily close is after the Star's 15m close.
+The last loaded daily close is at or before the as-of.
+
+TestDailyCausalBoundaries PASS
+    Star close one millisecond before the daily close:
+        that bar is hidden; with no earlier bar, D1 is absent
+    Star close equal to the daily close:
+        that bar is visible
+    Star close after the daily close, before the next:
+        that bar stays visible
+    Next daily close:
+        the next bar becomes visible
+    VWEMA 0 and RSX 0 with OK true stay observations
+
+TestExtractStarSnapshotsV3 PASS
+    schema-2 fields unchanged by the daily walk
+    four DAG runners
+    bus identity on the fixture
+    future-shifted daily series:
+        same Stars, same schema-2 fields, D1 absent
+
+TestExtractStarSnapshots still expects three DAG runners.
+The source scan still rejects a second indicator constructor.
+
+============================================================
+5. CORRECTIONS TO THE PROMPT
+============================================================
+
+The visibility clock is the 15m bar close, not the
+decision time. Decision time in this repository is the
+15m open. The last 15m bar of a UTC day opens 15 minutes
+before the daily close and closes on that daily close.
+Tested: the open does not see that daily bar; the close
+does. The archive has 66 Stars on that exact close.
+1h and 4h already use this close. Daily uses it too.
+
+The history loader drops only one trailing bar. The
+newest daily rows were still open at the frozen as-of.
+The certified series stops at open 1790208000000, the
+last daily bar whose close is at or before that as-of.
+A first run that kept the two later bars produced the
+same schema-3 digest. They were not visible. The
+certified load does not include them.
+
+Schema 2 does not carry a zero daily block.
+Absence exists only on StarSnapshotV3, and only when
+the daily series was walked and no bar had closed.
+
+============================================================
+6. NOT IN THIS CHAPTER
+============================================================
+
+Relative Matrix V1.
+The 4h-daily relations.
+Any learner, discovery, label, or threshold.

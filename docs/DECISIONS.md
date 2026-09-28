@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## SCHEMA-3-DAILY-PROJECTION — daily is another walk, not another type of indicator
+
+**Context:** The relative-state matrix needs a daily bar, and the Star path already replays any closed series through one Wozduh owner and one RSX owner. Schema 2 is frozen as the 15m / 1h / 4h row.
+
+**Decision:** Freeze schema 3 as that row plus `D1` and `D1RSX`. `ExtractStarSnapshots` stays the three-walk function. The daily walk uses `replayStarSeries` and `readCausalTF` on `"1d"`. Visibility is the latest daily close at or before the Star's 15m close. The stored decision time remains the 15m open and is not the visibility test. Digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. The schema-2 artifact stays byte-identical.
+
+**Rejected:** A timeframe map or a new replay type — **Reason:** the generic walk already exists, and renaming `M15` / `H1` / `H4` would rewrite the frozen row. Daily TV, scores, or alignment — **Reason:** daily is context, not a second Star. Using the 15m open as the daily clock — **Reason:** the bar that closes with the day opens fifteen minutes earlier, and 1h / 4h already use the close. Rewriting `star_snapshot_v2.json` — **Reason:** its digest is the regression baseline. A loader change — **Reason:** bars still open at the cutoff were invisible, and the digest did not move when they were left out.
+
+**Consequences:** Do not add `D1` to `StarSnapshot`. Do not reopen the daily walk to add a formula. Relative Matrix V1 is the next chapter and is not started. It may read 4h against daily. It does not change this projection.
+
+---
+
 ## STAR-STATE-SNAPSHOT-V2 — the Star row keeps the lines the replay already computed
 
 **Context:** The first static-state question was asked of a snapshot that stored the orange midline value and not its slope. The closed-bar replay already computed that slope's series, the RSI-close family, and higher-timeframe RSX, then dropped them.

@@ -16,6 +16,9 @@ import (
 // Existing fields keep their schema-1 meaning.
 const StarSnapshotSchemaV2 = 2
 
+// StarSnapshotSchemaV3 adds the causal daily read beside the schema-2 row.
+const StarSnapshotSchemaV3 = 3
+
 // StarSnapshot is the closed-bar projection of one Star.
 // The numeric truth stays on the HistoryBus from the three timeframe walks.
 // This struct is not a second indicator and not a strategy.
@@ -54,6 +57,15 @@ type StarSnapshot struct {
 	// They do not repeat RSXMinusSignal. That gap stays a research subtraction.
 	H1RSX StarRSX
 	H4RSX StarRSX
+}
+
+// StarSnapshotV3 is one schema-2 Star plus the daily bar visible at that
+// Star's 15m close. D1 is context. It is not part of StarSnapshot, and it
+// does not create, move, or side a Star.
+type StarSnapshotV3 struct {
+	StarSnapshot
+	D1    StarTF
+	D1RSX StarRSX
 }
 
 // StarRSX is RSX and its signal at one causal bar.
@@ -189,6 +201,48 @@ func ExtractStarSnapshots(k15, k1h, k4h []exchange.Kline, rsx RSXSettings) ([]St
 			return nil, err
 		}
 		out = append(out, row)
+	}
+	return out, nil
+}
+
+// ExtractStarSnapshotsV3 runs the schema-2 extraction, then one daily walk.
+// The daily bar is the latest "1d" bar whose close is at or before the Star's
+// 15m close. That is the same clock readCausalTF uses for 1h and 4h.
+// The 15m open is earlier than that close, so it is not the visibility test.
+func ExtractStarSnapshotsV3(k15, k1h, k4h, k1d []exchange.Kline, rsx RSXSettings) ([]StarSnapshotV3, error) {
+	rsx = NormalizeRSXSettings(rsx)
+	base, err := ExtractStarSnapshots(k15, k1h, k4h, rsx)
+	if err != nil {
+		return nil, err
+	}
+	daily, err := replayStarSeries(k1d, "1d", rsx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StarSnapshotV3, len(base))
+	for i, row := range base {
+		d1, err := readCausalTF(daily, row.M15.CloseTime)
+		if err != nil {
+			return nil, err
+		}
+		v3 := StarSnapshotV3{StarSnapshot: row, D1: d1}
+		if d1.Present {
+			idx := latestCloseIndex(daily.close, row.M15.CloseTime)
+			if idx < 0 {
+				return nil, fmt.Errorf("market: star snapshot 1d rsx without a bar")
+			}
+			v3.D1RSX = projectStarRSX(daily, idx)
+		}
+		if !v3.D1.Present && v3.D1RSX != (StarRSX{}) {
+			return nil, fmt.Errorf("market: star snapshot 1d rsx without a bar")
+		}
+		if v3.D1.Present && v3.D1.CloseTime > row.M15.CloseTime {
+			return nil, fmt.Errorf("market: star snapshot 1d close after star")
+		}
+		if err := checkLatest(daily, row.M15.CloseTime, v3.D1); err != nil {
+			return nil, err
+		}
+		out[i] = v3
 	}
 	return out, nil
 }

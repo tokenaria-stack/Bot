@@ -68,7 +68,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **STAR-STATE-SNAPSHOT-V2 ✅ frozen.** Schema 2, digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. Report `research/cleanup/STAR-STATE-SNAPSHOT-V2.txt`. Same Stars. Orange midline slope, the RSI-close family, and 1h/4h RSX are projections of the existing replay. Do not add a second indicator owner. Do not reopen the row for a slot the vocabulary audit left out.
 
-**NEXT: the schema-2 outcome question, not started.** Ask whether this T0 state changes the frozen outcome distribution under the existing purge and the 2026 wall. Do not start it until asked. Do not refit the stop, build a learner, or change the snapshot inside that question. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**SCHEMA-3-DAILY-PROJECTION ✅ frozen.** Schema 3, digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. Report `research/cleanup/SCHEMA-3-DAILY-PROJECTION-1.txt`. Same Stars. `D1` and `D1RSX` are the causal daily read. The schema-2 file stays byte-identical. Do not fold `M15` / `H1` / `H4` into a map. Do not add daily TV.
+
+**NEXT: Relative Matrix V1, not started.** The relation list is already written in `research/cleanup/STAR-STATE-RELATIVE-FEATURE-AUDIT-1.txt`. Include the 4h–daily gaps. Do not start it until asked. Do not change the snapshot, the stop, or the outcomes inside that chapter. Do not build a learner. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

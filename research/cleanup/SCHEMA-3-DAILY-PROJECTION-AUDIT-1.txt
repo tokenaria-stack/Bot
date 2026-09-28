@@ -1,0 +1,231 @@
+SCHEMA-3-DAILY-PROJECTION-AUDIT-1
+Date: 2026-09-28
+READ-ONLY. No code. No schema change. No matrix. No learner.
+
+============================================================
+1. VERDICT
+============================================================
+
+SCHEMA3_IS_A_FOURTH_WALK
+
+Daily does not need a new projection architecture.
+The Star path already treats a timeframe as data.
+
+replayStarSeries(klines, interval, rsx) walks any closed
+series once, through the same RSXNode and WozduhNode,
+and copies the same HistoryBus slots.
+readCausalTF picks the latest bar whose close is at or
+before the Star close.
+15m, 1h, and 4h are three calls to that pair.
+Schema 3 is the fourth call, plus a D1 block and a D1
+RSX block on the snapshot.
+
+A map of timeframes, a state-stream type, a cursor type,
+or a feature recipe does not belong in this chapter.
+Those would rewrite the frozen 15m/1h/4h shape in order
+to add one series.
+
+============================================================
+2. WHERE THE CODE ALREADY IS
+============================================================
+
+Replay. market/star_snapshot.go
+  replayStarSeries
+    → replayClosedBarsCap(..., WozduhMaskAll)
+    → historySlotSeries of the same slots for every interval
+
+The interval string is used for the bar close clock
+(data.BarCloseTimeMs). "1d" is already a fixed 24h step
+in data/history_db.go. The close is the next open minus
+1 millisecond, the same rule as 15m, 1h, and 4h.
+There is no Replay15m, Replay1h, or Replay4h.
+
+Causal read. readCausalTF + latestCloseIndex.
+The index is the rightmost close that is <= the Star
+close. The next bar must not also be <= that close.
+Stars are extracted in time order. On a sorted series
+that search cannot return bar 101 and then bar 100.
+A separate cursor type would repeat this rule.
+
+Storage. One HistoryBus per walk. Slots are written by
+WozduhNode and RSXNode. Daily uses that bus. It does
+not get DailyWozduh or DailyRSX.
+
+Projection. projectStar calls readStarTF on the 15m
+index and readCausalTF for 1h and 4h. RSX for 1h and 4h
+is projectStarRSX at that same index. 15m RSX stays on
+the snapshot root. That split stays. Daily RSX is a
+sibling of H1RSX and H4RSX, not a new root.
+
+Snapshot shape. StarTF is the 30-number block.
+StarRSX is the five-number RSX block.
+Named fields M15, H1, H4 are the frozen schema-2 layout.
+Daily fits as D1 StarTF and D1RSX StarRSX beside them.
+Do not replace M15/H1/H4 with a map. A map changes the
+schema-2 JSON shape and is a refactor of a frozen row.
+
+Missing bar. Present false, numbers 0, OK flags false,
+RSX block zero. Same as 4h. A stored 0 with OK false is
+not a daily reading. A real 0 with OK true is a reading.
+
+TV. 15m only. Do not project daily TV.
+
+============================================================
+3. WHAT SCHEMA 3 ADDS
+============================================================
+
+One daily series, interval "1d", loaded the same way
+as 15m, 1h, and 4h, on the same frozen as-of.
+replayStarSeries(daily, "1d", rsx) once per extraction.
+Not once per Star.
+
+D1 is readCausalTF(daily, starClose).
+D1RSX is projectStarRSX at that index when D1 is present.
+When D1 is absent, D1RSX stays zero.
+
+Schema constant 3. New artifact, new digest.
+research/starstop/star_snapshot_v2.json is not rewritten.
+
+Keep ExtractStarSnapshots(k15, k1h, k4h, rsx) and
+keep StarSnapshot without a daily field. Schema-2
+tests and the uncommitted stop and dataset certs call
+that function. They see three DAG walks. They do not
+see a daily block of zeros.
+
+A zero daily block on the schema-2 type would mean
+both "daily was not asked for" and "daily was asked
+for and no bar was visible." Those are different.
+
+Schema 3 is a second result type: the schema-2
+snapshot plus D1 and D1RSX. Present false and zeros
+on that type mean the daily series was walked and no
+bar had close <= the Star close. The schema-3 file
+always writes D1 and D1RSX, including that case.
+
+Both entry points call the same 15m/1h/4h projection.
+The schema-3 entry point adds one daily walk. It does
+not turn M15, H1, and H4 into a loop or a map.
+
+Star count, order, side, and decision time come from
+the 15m cross only. Daily cannot drop a Star, move it,
+or flip its side.
+
+============================================================
+4. CAUSAL CASES THE CERT MUST HIT
+============================================================
+
+Daily close means BarCloseTimeMs(open, "1d"), not
+midnight and not the daily open.
+
+  Star close < that daily close
+      the bar is still open
+      the visible bar is the previous daily close
+  Star close == that daily close
+      that daily bar is visible
+  Star close > that daily close
+      that daily bar is visible
+      until a later daily close is also <= the Star
+
+Using daily open <= Star close would include the
+forming daily bar. That is the lookahead this chapter
+exists to avoid. readCausalTF already compares closes.
+Schema 3 must call it. It must not write a daily
+exception.
+
+A future-shifted daily series, the same trick already
+used for 1h and 4h, must leave D1 absent and D1RSX zero
+while the Star list stays identical.
+
+============================================================
+5. SCHEMA-2 REGRESSION
+============================================================
+
+The schema-2 file stays byte-identical.
+That is the regression of the artifact.
+
+A schema-3 extract has extra fields, so its digest
+cannot equal the schema-2 digest. The check is:
+
+  schema-2 numbers and OK flags of the new extract
+  match the stored schema-2 rows
+  on decision time, side, 15m, 1h, 4h, root RSX, and TV
+
+If any of those move because daily was added, schema 3
+is not certified.
+
+The three-walk function still builds three DAG runners,
+not four.
+
+============================================================
+6. CORRECTIONS
+============================================================
+
+The review describes four replay functions and asks for
+a generic timeframe engine so that 1m through 1w can
+appear later. This repository already has the generic
+walk and the generic causal read. The frozen part is
+the named snapshot fields, which should gain D1, not
+become a dictionary.
+
+A monotonic cursor, a TFStateStream, and a declarative
+relation recipe are later consumers. Schema 3 does not
+build them. The relation list is already written in
+STAR-STATE-RELATIVE-FEATURE-AUDIT-1.txt. It is applied
+only after schema 3 is certified.
+
+"Byte-for-byte schema 2" applies to the schema-2 file
+and to the schema-2 fields. It does not mean the new
+digest equals the old digest.
+
+Daily close is the bar-boundary close, next open minus
+1 millisecond. Tests must use that instant, not
+00:00:00 of the next day as a different convention.
+
+============================================================
+7. FILES
+============================================================
+
+Touch:
+
+  market/star_snapshot.go
+      D1, D1RSX, the fourth walk, schema constant 3
+  market/star_snapshot_test.go
+      the three close cases, and a future-shifted daily
+  a new schema-3 cert test
+  a new schema-3 artifact and its report, after the cert
+
+Do not touch:
+
+  core/nodes/wozduh.go
+  core/nodes/rsx.go
+  ReplayClosedBars itself
+  FeatureRuntime2
+  PricePath, the stop, the outcomes
+  the schema-2 artifact
+  the chart
+  the relation matrix
+
+============================================================
+8. CERTIFICATION
+============================================================
+
+  two extracts, one digest
+  four DAG runners when daily is passed, three when not
+  Star count 8783, same order, side, and decision time
+  no daily close after the Star close
+  the three boundary cases in section 4
+  D1 numbers equal the HistoryBus of that one daily walk
+  OK false stores 0, including a missing early daily bar
+  no daily TV
+  schema-2 file byte-identical
+  schema-2 fields match the stored schema-2 rows
+  source of the extractor still does not construct
+  a Jurik, an RSI, an EMA, a MACD, or FeatureRuntime2
+
+============================================================
+9. AFTER THIS
+============================================================
+
+Relative Matrix V1, from the relational audit, including
+the 4h−daily gaps. Not in the schema-3 chapter.
+No learner in either chapter.

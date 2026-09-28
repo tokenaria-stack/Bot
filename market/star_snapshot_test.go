@@ -254,6 +254,8 @@ func starIntervalMs(interval string) int64 {
 		return 60 * 60 * 1000
 	case "4h":
 		return 4 * 60 * 60 * 1000
+	case "1d":
+		return 24 * 60 * 60 * 1000
 	default:
 		panic(interval)
 	}

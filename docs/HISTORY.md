@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## SCHEMA-3-DAILY-PROJECTION — daily context on the same Stars (Sep 2026)
+
+- Schema 3. 8783 Stars, 4392 up, 4391 down. Same decision times and sides as schema 2.
+- One more `replayStarSeries` walk on closed `1d` bars. `D1` and `D1RSX` read that HistoryBus. The causal clock is the 15m close. 8782 Stars have a daily bar. One does not, because the first daily bar was still open. 66 Stars close on a daily close.
+- Digest `934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7`. Artifact `research/starstop/star_snapshot_v3.json`. Report `research/cleanup/SCHEMA-3-DAILY-PROJECTION-1.txt`.
+- Schema-2 file unchanged, digest `1d86391613f56ad82895d6d98e3f16673c2c3b8ff3e230cc74400c7ac36196cb`. No learner.
+
 ## STAR-STATE-SNAPSHOT-V2 — expanded static state on the same Stars (Sep 2026)
 
 - Schema 2. 8783 Stars, 4392 up, 4391 down. Same decision times and sides as schema 1.
