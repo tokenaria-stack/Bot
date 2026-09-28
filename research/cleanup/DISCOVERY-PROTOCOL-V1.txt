@@ -1,0 +1,225 @@
+DISCOVERY-PROTOCOL-V1
+Date: 2026-09-28
+
+============================================================
+1. VERDICT
+============================================================
+
+DISCOVERY_PROTOCOL_V1_GREEN
+
+The join is certified.
+No region is named.
+No learner was built.
+
+Join digest:
+72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b
+
+Artifact:
+research/starstop/star_discovery_v1.json
+4ef088f1a8473a631391a01671868cc596f3e29bded6cfe04167b76bbc303133
+
+The coordinate and relation pictures are in that file,
+in schema order. They are not sorted by any path fact.
+
+============================================================
+2. FROZEN INPUTS
+============================================================
+
+Schema 3 commit 975da0d.
+Digest 934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+
+Relative Matrix V1 commit 0389023.
+Digest 8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+
+Both files were hashed before the discovery write and
+after it. Neither changed.
+
+============================================================
+3. PATH MEASUREMENT
+============================================================
+
+Source file research/starstop/star_sl_outcome.json
+Digest 6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+Header window 96. Header buffer 0.15.
+
+That file is still outside the frozen commits.
+This chapter reads it and does not rewrite it.
+The join above is the certified copy of the three facts.
+
+Williams k is StarStopK = 2 on the stop that fed
+the file. The outcome row does not store k.
+The code constants match k = 2, buffer 0.15, window 96.
+
+Stop survival:
+  SURVIVED_WINDOW  survived the stop through the window
+  STOP_FIRST       the stop was reached
+  UNORDERED_BAR    the stop was reached on a bar whose
+                   order is not resolved; this is not survival
+  every other status has no survival reading
+
+Favorable excursion is the full-window MFE in ATR.
+Adverse excursion is the full-window MAE in ATR.
+Travel after the stop stays inside those two numbers.
+They are absent when the ATR excursion is absent or
+the window is incomplete. A stored 0 is not the
+missing test.
+
+The file also contains 1R, 2R, and 3R. Those fields
+are not path facts here and are not in the join.
+
+============================================================
+4. JOIN
+============================================================
+
+8,783 Stars. 4,392 up, 4,391 down.
+Same order, decision time, and side as schema 3
+and as the matrix.
+
+Survival readings 8,734.
+Survived 2,777. Stop first 5,887. Unordered 70.
+No survival reading 49.
+That 49 is the one star with no structure, the 46
+invalid-geometry stars, and the 2 incomplete windows.
+
+Favorable and adverse readings 8,780.
+The three absences are the star with no ATR excursion
+and the two incomplete windows.
+
+No star was dropped.
+
+============================================================
+5. UNCONDITIONAL BASELINE
+============================================================
+
+All 8,783 Stars. ATR units. Percentiles are
+descriptions, not cutoffs.
+
+Favorable  p10 0.786  p25 2.055  p50 4.471  p75 8.450  p90 14.263
+Adverse    p10 0.840  p25 2.008  p50 4.496  p75 8.153  p90 13.561
+
+Among the 8,734 survival readings, 2,777 survived
+the window.
+
+Discovery period, decision time before 1767225600000:
+7,862 Stars. Holdout Stars: 921.
+The holdout count is recorded. Those Stars are not
+in the slices below.
+
+Discovery favorable p50 4.429. Adverse p50 4.461.
+Survival readings 7,819. Survived 2,500.
+Stop first 5,257. Unordered 62. Absent 43.
+
+============================================================
+6. SIDE BASELINE
+============================================================
+
+Discovery period only.
+
+Up, 3,931 Stars. Survival readings 3,911.
+Survived 1,276. Stop first 2,604. Unordered 31.
+Favorable p50 4.350. Adverse p50 4.512.
+
+Down, 3,931 Stars. Survival readings 3,908.
+Survived 1,224. Stop first 2,653. Unordered 31.
+Favorable p50 4.529. Adverse p50 4.422.
+
+Side moves these three facts only slightly
+relative to the discovery baseline.
+That is the bar a later coordinate has to clear.
+It is not a score and not a rule.
+
+============================================================
+7. ONE COORDINATE AND ONE RELATION
+============================================================
+
+Slice law, written before the tables were read:
+
+Five slices.
+Edges are the 20, 40, 60, and 80 percent ranks
+of the discovery-period observations of that
+coordinate alone.
+The same five slices are used for every raw
+coordinate and every relation.
+OK false is a separate group, not slice zero.
+A real zero stays inside its rank.
+Fewer than five observations does not invent slices.
+The edge count was not searched.
+No coordinate is combined with another.
+
+142 raw coordinates and 49 relations were
+described under that law. The pictures are in
+the artifact, in schema order.
+
+No region is named. Choosing one slice after
+seeing 191 pictures would be a ranking.
+The catalog is empty on purpose.
+
+============================================================
+8. EPISODES
+============================================================
+
+A run is a stretch of Stars whose decision times
+follow the previous Star by at most 96 bars of
+15 minutes. The run is not a feature. No Star
+is removed.
+
+80 runs. Longest 581. Median run length 69.
+8,703 Stars follow a previous Star inside the window.
+
+Those Stars are one episode's repeated readings,
+not 8,703 independent proofs.
+
+============================================================
+9. HOLDOUT
+============================================================
+
+The wall is 1767225600000.
+921 Stars are at or after it.
+They are in the join.
+They were not used to place a slice or to name
+a region. No region was named, so no holdout
+check was run.
+
+============================================================
+10. CORRECTIONS
+============================================================
+
+The path file is not a frozen commit. The chapter
+certifies the join against it and leaves the file
+byte-identical. k = 2 is the stop constant, not
+an outcome column.
+
+Unordered is kept apart from both survival and
+stop-first. Folding it into either one would
+hide 70 Stars.
+
+Full-window excursion and stop survival are
+different clocks. The excursion does not stop
+when the stop is touched.
+
+VWEMA and orange mid still use present and finite.
+ValuesOK is not the slice gate.
+
+============================================================
+11. FILES
+============================================================
+
+market/star_discovery.go
+market/star_discovery_test.go
+market/star_discovery_cert_test.go
+research/starstop/star_discovery_v1.json
+research/cleanup/DISCOVERY-PROTOCOL-V1.txt
+
+Schema 3, the matrix, and the outcome file were
+not rewritten. No indicator was replayed.
+No klines were loaded. No learner, tree,
+clusterer, bin search, or combination was run.
+
+============================================================
+12. NOT IN THIS CHAPTER
+============================================================
+
+A named region, a threshold, a rank, a model,
+and a strategy.
+The chapter is certified in the working tree.
+It is not committed.

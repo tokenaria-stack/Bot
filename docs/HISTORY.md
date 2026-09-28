@@ -8,6 +8,14 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## DISCOVERY-PROTOCOL-V1 — path join, no named region (Sep 2026)
+
+- 8783 Stars joined to stop survival, full-window MFE, and full-window MAE. Same order, side, and decision time. Measurement 0.15 ATR, Williams k = 2, window 96.
+- Survival readings 8734: survived 2777, stop first 5887, unordered 70. No survival reading on 49. Excursion readings 8780.
+- Discovery period 7862 Stars. Holdout 921, unused for slices. Side does not split the three facts by much. 80 overlapping runs. Median run 69. Longest 581.
+- Join digest `72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b`. Artifact `research/starstop/star_discovery_v1.json`. Report `research/cleanup/DISCOVERY-PROTOCOL-V1.txt`.
+- The outcome source digest is `6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62`. That file is not part of this commit. No region was named. No learner.
+
 ## RELATIVE-MATRIX-V1 — 49 relations on the frozen Stars (Sep 2026)
 
 - Schema 3 rows in. Arithmetic only. 8783 Stars, 4392 up, 4391 down. Same order, side, and decision time.

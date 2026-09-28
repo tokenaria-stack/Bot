@@ -72,7 +72,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **RELATIVE-MATRIX-V1 ✅ frozen.** Digest `8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a`. Report `research/cleanup/RELATIVE-MATRIX-V1-1.txt`. Forty-nine relations. The raw schema-3 numbers stay in their own file. Do not add a VWEMA OK field. Do not add 15m−4h. Do not reopen the list to insert a ratio or a points-per-hour slope.
 
-**NEXT: the discovery protocol, not started.** Ask what structure the 191 coordinates have around a Star, and how that structure sits against the future path. Do not rank relations. Do not add coordinates. Do not build a learner. Do not change the snapshot, the matrix, the stop, or the outcomes inside that chapter. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**DISCOVERY-PROTOCOL-V1 ✅ frozen.** Join digest `72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b`. Report `research/cleanup/DISCOVERY-PROTOCOL-V1.txt`. Three path facts on every Star. Five fixed slices. Empty region catalog. Do not reopen the join to rank a coordinate. Do not put the 2026 Stars into a slice. The outcome file that fed the join is not frozen with this chapter.
+
+**NEXT: inspection of the 191 fixed views, not started.** A human may name one coordinate or one relation when its fixed slices differ from both the unconditional baseline and the Side baseline, and the difference is not only Side. Use the slices already stored. Do not add a cutoff. Do not combine coordinates. Do not build a learner. If no such view exists, record that and stop. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

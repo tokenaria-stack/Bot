@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## DISCOVERY-PROTOCOL-V1 — the path join comes before a named region
+
+**Context:** Schema 3 and the 49 relations are frozen. The future path is a separate object: stop survival, full-window favorable excursion, and full-window adverse excursion. Overlapping Stars are a third object.
+
+**Decision:** Freeze the join of all 8,783 Stars to those three facts. Measurement is 0.15 ATR, Williams k = 2, and a 96-bar window. `UNORDERED_BAR` stays its own class. 1R, 2R, and 3R are not path facts. The unconditional distribution and the Side split are the baselines. Each of the 191 coordinates is described with the same five discovery-period rank slices, chosen before the tables were read. No region is named. Join digest `72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b`. The outcome file that supplied the facts stays outside this commit. Its digest is `6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62`.
+
+**Rejected:** Naming the strongest-looking slice — **Reason:** that is a ranking of 191 pictures. A learner, a tree, or a bin-count search — **Reason:** no region has been named, so no model capacity has been declared. Using the 2026 Stars to choose a slice — **Reason:** those 921 Stars are in the join and out of the description. Turning an episode id into a coordinate — **Reason:** the 80 runs describe dependence. They are not a feature.
+
+**Consequences:** Do not reopen this file to insert a region that was chosen by scanning the pictures. The next chapter is human inspection of the fixed views. It may name one single coordinate or one relation, using these slices, only when that view differs from both baselines and is not only Side. It does not add a cutoff, a combination, or a model. If no such view exists, that negative result is the chapter.
+
+---
+
 ## RELATIVE-MATRIX-V1 — relations are arithmetic on the frozen row
 
 **Context:** Schema 3 holds 142 raw numbers, including the causal daily bar. The research space also needs the adjacent gaps. Those gaps are subtractions, not new indicator series.
@@ -15,7 +27,7 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 **Rejected:** A VWEMA OK field on the snapshot — **Reason:** schema 3 is frozen, and the observation is already Present plus a finite number. Using `ValuesOK` as the gate — **Reason:** that flag also requires the channel bounds. A 15m−4h column — **Reason:** it is the sum of the two neighbor gaps. Points per hour, ratios, and a learner — **Reason:** they are later questions, not part of the coordinate list.
 
-**Consequences:** Do not add a relation to this file to chase a result. Do not walk the indicators again to recompute a gap. The next chapter is the discovery protocol. It is not started. It asks what structure the 191 coordinates have, and how that structure sits against the future path. It does not rank a feature or emit a trade.
+**Consequences:** Do not add a relation to this file to chase a result. Do not walk the indicators again to recompute a gap. DISCOVERY-PROTOCOL-V1 is the following chapter and is frozen separately. It does not rank a feature or emit a trade.
 
 ---
 
