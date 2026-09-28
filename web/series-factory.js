@@ -530,6 +530,37 @@ class DDRFactory {
     }
   }
 
+  /**
+   * The color the manifest paints for this component, after a sparse override.
+   * Returns null when the component or the field is absent.
+   */
+  swatchHex(id, field) {
+    if (!id || !WozduhColorPrefsApi || !field) return null;
+    const component = this._componentById(id);
+    if (!component) return null;
+    const kind = String(component.kind || 'line').toLowerCase() === 'channel' ? 'channel' : 'line';
+    const renderOpts = DDRFactory._parseRenderOpts(component.renderOptions);
+    const hex = WozduhColorPrefsApi.pickerHexFor(
+      kind,
+      WozduhColorPrefsApi.factoryColorFields(kind, renderOpts),
+      WozduhColorPrefsApi.overrideFor(id),
+      field,
+    );
+    return hex ? hex.toLowerCase() : null;
+  }
+
+  _componentById(id) {
+    const panes = this.manifest && this.manifest.panes;
+    if (!panes || typeof panes !== 'object') return null;
+    for (const components of Object.values(panes)) {
+      if (!Array.isArray(components)) continue;
+      for (const component of components) {
+        if (component && component.id === id) return component;
+      }
+    }
+    return null;
+  }
+
   clear() {
     for (const entry of this.seriesMap.values()) {
       const chart = entry?.chart;

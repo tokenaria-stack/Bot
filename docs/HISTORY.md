@@ -8,6 +8,13 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## UI-INSPECTION-SHELL-V1 — one Star on the existing chart (Sep 2026)
+
+- Right panel for the selected Star. Path words, schema-3 groups, and the 49 stored relations.
+- Color dots use discovery-period ranges frozen on the server. Holdout Stars do not move those ranges. Hue stops are a browser preference.
+- Line squares read the existing series color. A relation shows the two lines. Side is a green or red dot on the title.
+- Report `research/cleanup/UI-VISUAL-GRAMMAR-AND-INSPECTION-SHELL-V1.txt`. The stop artifact the selector reads is not in this commit. No region was named.
+
 ## DISCOVERY-PROTOCOL-V1 — path join, no named region (Sep 2026)
 
 - 8783 Stars joined to stop survival, full-window MFE, and full-window MAE. Same order, side, and decision time. Measurement 0.15 ATR, Williams k = 2, window 96.

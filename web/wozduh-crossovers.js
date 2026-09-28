@@ -7,6 +7,7 @@
   'use strict';
 
   const HOST_VALUE = 50;
+  const STAR_PAIR = 'woz_rsi_hl2_vwema_x_ema5_chan_mid';
 
   function ignoreAutoscaleProvider() {
     const api = global.ScaleContribution;
@@ -246,6 +247,43 @@
     }
   }
 
+  /**
+   * Open time of the painted canonical Star mark under this pane point.
+   * Other pairs and empty space return null. This does not detect a crossover.
+   */
+  function canonicalOpenSec(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const prefs = prefsApi();
+    if (!prefs || typeof prefs.resolved !== 'function') return null;
+    const cfg = prefs.resolved(STAR_PAIR);
+    if (!cfg || !cfg.visible) return null;
+    const radius = Math.max(1.5, Number(cfg.size) / 2) + 4;
+    let best = null;
+    let bestD = radius;
+    for (let i = 0; i < attachments.length; i++) {
+      const chart = attachments[i].chart;
+      const series = attachments[i].series;
+      const events = attachments[i].primitive && attachments[i].primitive._events;
+      const ts = chart && typeof chart.timeScale === 'function' ? chart.timeScale() : null;
+      if (!ts || typeof ts.timeToCoordinate !== 'function' || !series || !Array.isArray(events)) continue;
+      for (let j = 0; j < events.length; j++) {
+        const ev = events[j];
+        if (!ev || ev.pair !== STAR_PAIR) continue;
+        let cx = null;
+        let cy = null;
+        try { cx = ts.timeToCoordinate(ev.time); } catch { cx = null; }
+        try { cy = series.priceToCoordinate(ev.y); } catch { cy = null; }
+        if (cx == null || cy == null || !Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+        const d = Math.hypot(cx - x, cy - y);
+        if (d <= bestD) {
+          bestD = d;
+          best = ev.time;
+        }
+      }
+    }
+    return best;
+  }
+
   function requestPaint() {
     for (let i = 0; i < attachments.length; i++) {
       const p = attachments[i].primitive;
@@ -279,6 +317,7 @@
     attach,
     refresh,
     setEvents,
+    canonicalOpenSec,
     requestPaint,
     dispose,
     HOST_VALUE,

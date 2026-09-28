@@ -282,6 +282,8 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/cache/clear", withGzip(d.handleCacheClear))
 	mux.HandleFunc("/api/debug/tip-ssot", withGzip(d.handleDebugTipSSOT))
 	mux.HandleFunc("/api/research/structural-stop-1", withGzip(d.handleStructuralStop1))
+	mux.HandleFunc("/api/research/star-stop", withGzip(d.handleStarStop))
+	mux.HandleFunc("/api/research/star-inspection", withGzip(d.handleStarInspection))
 	mux.HandleFunc("/ws", d.handleWS)
 
 	webRoot, err := filepath.Abs(d.staticDir)

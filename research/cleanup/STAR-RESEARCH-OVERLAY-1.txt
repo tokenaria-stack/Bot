@@ -1,0 +1,52 @@
+STAR-RESEARCH-OVERLAY-1 — paint one selected Star on the existing chart
+
+NAV-1 is frozen. TimeCamera, hydration, history loading, timeframe navigation, Wozduh, RSX, and the pane splitters were not reopened. This slice only paints the certified row for the selected star. It does not add a chart, an HTF marker, or a right-hand panel. Not committed.
+
+Corrections
+
+1. The chart paints stopPrice from the certified row. It does not apply wick ± 0.15 ATR in the browser. That formula already lives in forecast.BuildStarStop. A second copy in JavaScript would be a second owner.
+
+2. 1R, 2R, and 3R are |entryPrice − stopPrice| stepped in the trade direction (up adds, down subtracts). They are rulers. They are not targets, and they are not another ATR formula.
+
+3. The lines are full-width. The chart library has no ray that starts at the entry bar. A custom ray would be a new painter. Full-width lines follow the existing time scale and do not clip candles after the entry, the stop, or the rulers.
+
+4. The causal swing is a marker on the supplied bar, with the supplied wick in the label. A horizontal line at that wick sits on the stop: the buffer is 0.15 ATR, about two points on star 2, so the two lines hide each other. The marker still shows the wick. The stop is the solid line.
+
+5. Marks paint only while the chart timeframe is 15m. A 15-minute open is also a 1-minute open, so the same timestamp on another timeframe would mark the wrong candle. That is not an HTF projection. On 1h the marks clear, the star number stays, and star selection does not seek. Returning to 15m paints the same row again.
+
+6. The four-point sparkle stays on the Wozduh pane. The price chart uses a native arrow labeled Star. Copying the Wozduh painter would touch frozen paint.
+
+7. There is no inspector. The certified status word is on the existing star control: valid, no_structure, invalid_geometry.
+
+8. The rulers follow candle autoscale and do not expand it. Expanding the scale would change the price zoom. A ruler beyond the visible high or low stays off-screen until candles reach it. On star 127, 1R is on screen and 2R/3R sit just above the candle high. On star 13, price trades through all three, so all three are on screen.
+
+9. setData clears series markers, so the existing candle paint reapplies this overlay after the data write. That reapply does not seek and does not change the visible range. A second refresh on star 2 left the range at 1424–1574.
+
+10. Star selection still seeks once. It now keeps the row it already fetched and notifies a listener after that seek. The listener paints. It does not seek.
+
+11. Nothing in this slice decides whether the stop was hit. There is no TP, no outcome label, and no take/skip label.
+
+What the chart showed
+
+Star 2, down, valid. Swing wick 10392.25. Stop just above it. Entry is the next open, below the stop. Later candles trade back up through the stop. Price also went down through 1R toward 2R. Candles continue past that.
+
+Star 13, up, valid. Stop sits under the swing. Price trades through 1R, 2R, and 3R, and candles continue past 3R. The stop line does not move.
+
+Star 127, up, valid. The stop line passes through the star candle. The swing wick 8254 is the prior bar. Entry is the next open.
+
+Star 272, invalid_geometry. Star, swing 7206.2, and entry are shown. No stop and no rulers. The toolbar says invalid_geometry.
+
+Star 1, no_structure. Star and the next-open entry at 10000. No swing, no stop, no rulers. Later candles stay on the chart, including the archive gap that was already in the data.
+
+1h while star 13 was selected: marks cleared, the number stayed 13, and the seek count stayed 5. Back on 15m the five lines returned without another star seek. Each star selection was one seekHistoryIsland and one proposeAfterData. The extra refresh added neither.
+
+A synthetic wheel on the price canvas did not reach the chart library, so this pass did not re-prove the human pan gesture. The overlay refresh itself left the visible range unchanged. The previous navigation check remains the gesture record.
+
+Tests
+
+node web/star_research_nav_test.js
+node web/star_research_overlay_test.js
+
+Both passed. The overlay tests use the certified prices for stars 1, 2, 127, and 272.
+
+Stopped here. No HTF star projection. No right-side research panel.

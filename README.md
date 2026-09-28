@@ -51,4 +51,4 @@ strategy/     doc.go beacon only
 
 - **Core 5.0** data plane (Phases A–G) ✅
 - **Core 6.0 / 6.1** documentation OS ✅
-- **NEXT:** **DISCOVERY-PROTOCOL-V1 frozen.** Inspection of the 191 fixed views is not started — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)
+- **NEXT:** **UI-INSPECTION-SHELL-V1 frozen.** Inspection of the 191 fixed views is not started — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)

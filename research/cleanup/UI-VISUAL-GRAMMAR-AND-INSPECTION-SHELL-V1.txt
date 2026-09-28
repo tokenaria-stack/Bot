@@ -1,0 +1,59 @@
+UI-VISUAL-GRAMMAR-AND-INSPECTION-SHELL-V1
+Date: 2026-09-28
+
+The shell reads schema 3, the 49 relations, and the discovery path join.
+It does not rewrite them. Schema 3 digest on the inspection payload is
+934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7.
+Archive join: 8783 Stars, 49 relations, the first Star's daily VWEMA has no dot.
+
+Workspace
+  selectedStar   StarResearch index. The rail follows that index.
+  cursorTime     crosshair time, stored beside it. Moving the crosshair does not clear the Star.
+  viewport       noted only. It is not an input to color.
+
+Color
+  The server freezes each coordinate's discovery-period range once.
+  Signed saturation is the larger of abs(P10) and abs(P90), rank index floor((n-1)*p).
+  Levels and widths use the discovery-period rank of that coordinate.
+  Holdout Stars are colored with those ranges and do not enter them.
+  The browser receives a position in 0..1 and paints a 7px dot.
+  Amber is low or negative. Gray is the center. Cyan is high or positive.
+  The number stays neutral. Missing has an empty ring and no arrow.
+  A real zero keeps 0.00, a gray dot, and a flat arrow when the family is signed.
+
+Path
+  Words and ATR numbers only. No cyan/amber.
+
+Chart mark
+  On 15m, a neutral vertical line is drawn on the decision candle.
+  The card's inspection clock is that candle's close.
+  The line is not placed at the close, because that timestamp sits on the next candle.
+
+Corrections
+  The relation row does not store its two operands. The panel shows the stored gap and a label. It does not subtract.
+  Higher-timeframe RSX minus signal is the stored relation. The state rows do not subtract RSX from signal.
+  VWEMA and orange mid use present and finite. ValuesOK is not their gate.
+  The live page was not opened. The project rule requires an explicit yes before the browser. Restart the server so /api/research/star-inspection is registered.
+
+Accepted on the chart
+  The Star title and Path fold. Side is a green or red dot after the star number.
+  State dots stay cyan, gray, and amber. Those three paints are a local preference.
+  Arrows sit in one column, dots in the next, numbers flush right to the longest open reading.
+  Line squares use the chart's paint color. A relation shows two squares.
+
+Not in this chapter
+  191-view browser, slice explorer, stacked timeframes, episode panel, learner, ranking.
+  research/starstop/star_stops.json stays outside this commit. The selector reads it locally.
+
+Files
+  server/star_inspection.go
+  server/star_inspection_api.go
+  server/star_inspection_test.go
+  server/webserver.go
+  web/ui/star-inspection-grammar.js
+  web/ui/star-inspection-panel.js
+  web/ui/star-research-overlay.js
+  web/star_inspection_grammar_test.js
+  web/chart-core.js
+  web/index.html
+  web/style.css

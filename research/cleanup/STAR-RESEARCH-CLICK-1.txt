@@ -1,0 +1,49 @@
+STAR-RESEARCH-CLICK-1 — click a Wozduh Star to select the certified row
+
+Clicking the painted VWEMA(HL2) × EMA5 channel-mid mark on the 15m Wozduh pane selects that certified Star and paints the existing price overlay. The star number, Previous/Next, and the overlay share that row. A click does not center the chart. Number selection still does. Not committed.
+
+Corrections
+
+1. The pane does not report "whatever bar you clicked." A bar time would select a Star when the click landed on a different Wozduh sparkle, or on empty space, of a Star candle. The hit test uses only the already painted canonical mark. Other pairs return nothing. The browser still does not detect a crossover and does not compute a swing, ATR, stop, or R.
+
+2. The time sent to the server is that painted mark's open time, not the bar under an adjacent pixel. Chart time is seconds. The certified decisionAt is milliseconds. The click multiplies by 1000. That is the existing clock, not a new Star identity.
+
+3. The entry mark is a few-pixel triangle drawn by the research overlay that already draws the stop and the rulers. The chart library's markers have one fixed size and no triangle small enough for the example. Up is #00E676 pointing up. Down is #FF1744 pointing down. The entry line uses that same color. The stop stays #ff5a6a and solid, so a down entry and the stop stay distinguishable.
+
+4. A click that misses the canonical mark does nothing, including the status word. Flashing "not a star" on every empty click would fight normal use of the pane. If the painted mark's time is absent from the certified file, the status becomes "not a star" and the previous selection stays.
+
+5. That Star pair is hidden in the factory prefs. The hit test follows the paint: a hidden mark is not clickable. This slice does not turn the pair on, because that would change Wozduh settings.
+
+6. The hit target is the drawn radius plus 4 pixels. A size-8 star would otherwise be a 4-pixel dot. It is still the mark, not the candle.
+
+7. Previous and Next after a click still center. They are the number path. Only the click itself does not seek, reload, or touch TimeCamera.
+
+Click path
+
+The existing Wozduh chart has subscribeClick and nothing was using it. ChartAdapter.onWozduhClick reports the pane point and does not read the camera. WozduhCrossovers.canonicalOpenSec answers with the open time of the canonical mark under that point, or null. StarResearch.onPaneClick ignores the point unless the chart is 15m. It asks GET /api/research/star-stop?at=<open ms>. The handler binary-searches the certified file and returns the same index the number selector uses. Star 3456 is index 3455, decisionAt 1655156700000, down, valid. The toolbar number becomes 3456. The overlay paints that row.
+
+The running dashboard process must be restarted before ?at= exists. The page scripts update on refresh.
+
+Files
+
+- web/ui/star-research.js — click selects without seek; number selection still seeks
+- web/ui/star-research-overlay.js — direction triangles and entry-line color
+- web/wozduh-crossovers.js — read-only hit test; draw() unchanged
+- web/chart-core.js — subscribeClick on the Wozduh chart only
+- server/star_stop_api.go — lookup by decisionAt
+- web/index.html — script cache keys
+- tests listed below
+
+Tests
+
+node web/star_research_nav_test.js
+node web/star_research_overlay_test.js
+node web/star_research_click_test.js
+node web/wozduh_crossover_paint_test.js
+go test ./server/ -count=1 -run TestHandleStarStop
+
+All passed. The API test read the certified file: at 1655156700000 is star number 3456.
+
+The browser was not opened. This chat forbids the browser MCP unless you ask. The checks above are the verification for this slice.
+
+Stopped here. No HTF projection, no inspector, no hit labels.

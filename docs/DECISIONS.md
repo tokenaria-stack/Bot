@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## UI-INSPECTION-SHELL-V1 — the panel reads certified rows
+
+**Context:** The path join is frozen and no region is named. A person needs to see one Star's state, relations, and path before any later inspection of the 191 views.
+
+**Decision:** Freeze a right-hand inspection panel on the existing chart. One selected Star is the research object. The crosshair time is separate. The panel reads schema 3, the 49 stored relations, and the discovery path join. It does not replay indicators. Signed color is centered on zero. Levels use that coordinate's discovery rank. The browser paints a position the server already froze. Hue stops are a local display preference. Line squares read the chart's existing paint color. Path stays words and ATR numbers.
+
+**Rejected:** Coloring the digits — **Reason:** the number has to stay readable. A track under every row — **Reason:** 191 readings become noise. Green and red for state dots — **Reason:** those colors already mean side. Ranking or combining coordinates in the panel — **Reason:** no region has been named.
+
+**Consequences:** Do not recompute a relation or a slice in the browser. Do not let the crosshair clear the selected Star. The stop file the selector reads stays outside this commit. The research inspection of the 191 views is still not started.
+
+---
+
 ## DISCOVERY-PROTOCOL-V1 — the path join comes before a named region
 
 **Context:** Schema 3 and the 49 relations are frozen. The future path is a separate object: stop survival, full-window favorable excursion, and full-window adverse excursion. Overlapping Stars are a third object.

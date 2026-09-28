@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=4.3.3-wozduh-family-indent-1" />
+  <link rel="stylesheet" href="/style.css?v=4.3.10-star-value-fit" />
   <style>
     :root {
       --tv-bg: #131722;
@@ -150,6 +150,35 @@
       font-weight: 700;
       color: var(--tv-text);
       white-space: nowrap;
+    }
+
+    .star-research {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 8px;
+      font-size: 12px;
+      color: var(--tv-muted);
+      white-space: nowrap;
+    }
+    .star-research input {
+      width: 5.2em;
+      background: var(--tv-bg);
+      color: var(--tv-text);
+      border: 1px solid var(--tv-border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font: inherit;
+      text-align: right;
+    }
+    .star-research button {
+      background: transparent;
+      color: var(--tv-text);
+      border: 1px solid var(--tv-border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font: inherit;
+      cursor: pointer;
     }
 
     .toolbar-symbol span {
@@ -1284,6 +1313,15 @@
       <span id="timeframe-label">1m</span>
     </div>
 
+    <div class="star-research" id="star-research">
+      <span>Star</span>
+      <input id="star-research-no" type="number" min="1" step="1" inputmode="numeric" aria-label="Star">
+      <span id="star-research-count">/ —</span>
+      <span id="star-research-status"></span>
+      <button type="button" id="star-research-prev">Prev</button>
+      <button type="button" id="star-research-next">Next</button>
+    </div>
+
     <div class="tf-bar" id="tf-bar">
       <div class="tf-favorites" id="tf-favorites"></div>
       <div class="tf-picker">
@@ -1650,7 +1688,7 @@
   <script src="/rsx-stroke-color.js?v=1.0-rsx-stroke-1" defer></script>
   <script src="/wozduh-color-prefs.js?v=1.0.0-wozduh-color-1" defer></script>
   <script src="/wozduh-crossover-prefs.js?v=1.0.0-wozduh-crossover-1" defer></script>
-  <script src="/series-factory.js?v=4.17.0-wozduh-crossover-1" defer></script>
+  <script src="/series-factory.js?v=4.17.1-star-line-swatch" defer></script>
   <script src="/hydration-orchestrator.js?v=3.10.1-log-cleanup" defer></script>
   <script src="/time-normalizer.js?v=3.1.0" defer></script>
   <script src="/store.js?v=3.1.0" defer></script>
@@ -1668,7 +1706,7 @@
   <script src="/wozduh-extreme-bands.js?v=1.4.0-crosshair-pane-host-1" defer></script>
   <script src="/wozduh-crossovers.js?v=1.0.0-wozduh-crossover-1" defer></script>
   <script src="/rsx-scale-lines.js?v=1.2.2-pane-autoscale-owner-1" defer></script>
-  <script src="/chart-core.js?v=4.30.1-price-series-style-1-1" defer></script>
+  <script src="/chart-core.js?v=4.30.4-star-inspection-1" defer></script>
   <script src="/ui/viewport-manager.js?v=4.4.0-max-visible-20k" defer></script>
   <script src="/api.js?v=3.3.0-rsx-vis-1" defer></script>
   <script src="/ws.js?v=4.6.0-timeline-state-1" defer></script>
@@ -1687,6 +1725,11 @@
   <script src="/ui/legend-renderer.js?v=4.2.1" defer></script>
   <script src="/ui/layout-controller.js?v=4.4.0" defer></script>
   <script src="/ui/pane-layout.js?v=1.4.0" defer></script>
+  <script src="/ui/star-research.js?v=1.0.0-star-research-click-1" defer></script>
+  <script src="/ui/star-research-overlay.js?v=1.0.0-star-inspection-1" defer></script>
+  <script src="/ui/star-inspection-grammar.js?v=1.0.1-star-dot-colors" defer></script>
+  <script src="/ui/star-inspection-swatches.js?v=1.0.0-star-line-swatch" defer></script>
+  <script src="/ui/star-inspection-panel.js?v=1.0.7-star-value-fit" defer></script>
   <script src="/boot.js?v=4.41.0-price-series-style-1" defer></script>
 </body>
 </html>

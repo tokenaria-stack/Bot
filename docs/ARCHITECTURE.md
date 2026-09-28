@@ -418,6 +418,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **DISCOVERY-PROTOCOL-V1 ✅ frozen.** Every Star keeps its identity and gains three path facts: stop survival, full-window favorable excursion, and full-window adverse excursion. Measurement is 0.15 ATR, Williams k = 2, 96 bars. Join digest `72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b`. Five fixed discovery-period slices describe each of the 191 coordinates. The named-region catalog is empty. The 921 Stars at or after `1767225600000` are in the join and not in the slices. No learner.
 
+**UI-INSPECTION-SHELL-V1 ✅ frozen.** The chart keeps one selected Star. A right panel shows that Star's path, schema-3 state, and stored relations. Dots are a scan of a frozen display position. Line squares use the chart paint color. The crosshair does not select the Star. No learner.
+
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
 **DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.

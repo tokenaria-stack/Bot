@@ -230,6 +230,23 @@ async function run() {
     assert.ok(src.includes('Outline style'));
     if (origCreate) global.document.createElement = origCreate;
   });
+
+  await test('canonical star hit returns that open time only', () => {
+    WozduhCrossovers._resetForTests();
+    WozduhCrossoverPrefs.patch('woz_rsi_hl2_vwema_x_ema5_chan_mid', { visible: true, size: 8 });
+    const chart = fakeChart();
+    assert.strictEqual(WozduhCrossovers.attach(chart), true);
+    WozduhCrossovers.setEvents([
+      { pair: 'woz_rsi_hl2_vwema_x_ema5_chan_mid', side: 'up', time: 100, y: 50 },
+      { pair: 'woz_vol_rsi_ema12_x_ema5', side: 'down', time: 100, y: 80 },
+    ]);
+    assert.strictEqual(WozduhCrossovers.canonicalOpenSec(100, 50), 100);
+    assert.strictEqual(WozduhCrossovers.canonicalOpenSec(100, 80), null);
+    assert.strictEqual(WozduhCrossovers.canonicalOpenSec(400, 50), null);
+    WozduhCrossoverPrefs.patch('woz_rsi_hl2_vwema_x_ema5_chan_mid', { visible: false });
+    assert.strictEqual(WozduhCrossovers.canonicalOpenSec(100, 50), null);
+    WozduhCrossovers._resetForTests();
+  });
 }
 
 function factoryHasCrossoverDdr() {

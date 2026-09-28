@@ -866,6 +866,9 @@
         const pos = extractCrosshairPosition(chart, param);
         if (!pos) return;
         InteractionController.onCrosshairMove(hostId, pos);
+        if (typeof StarInspection !== 'undefined' && typeof StarInspection.noteCursor === 'function') {
+          StarInspection.noteCursor(pos.time);
+        }
       });
     });
   }
@@ -1440,6 +1443,10 @@
       RsxScaleLines.refresh(state._lastRealCandleTime);
     }
     refreshRulerOverlay();
+    // Research marks follow this setData. They must not move the camera.
+    if (typeof StarResearchOverlay !== 'undefined' && typeof StarResearchOverlay.refresh === 'function') {
+      StarResearchOverlay.refresh();
+    }
   }
 
   /**
@@ -1492,13 +1499,21 @@
   const ChartAdapter = {
     initLiveCharts(selectors) {
       if (typeof LightweightCharts === 'undefined') return false;
-      if (_live?.charts?.price) return true;
+      if (_live?.charts?.price) {
+        if (typeof StarResearch !== 'undefined' && typeof StarResearch.bindChartClick === 'function') {
+          StarResearch.bindChartClick();
+        }
+        return true;
+      }
       _live = buildLiveState(selectors);
       // ADR-023: LayoutController often attaches before charts exist — re-mirror owner now.
       if (typeof LayoutController !== 'undefined' && typeof LayoutController.apply === 'function') {
         LayoutController.apply();
       } else if (typeof paneLayout !== 'undefined' && paneLayout?.getBottomTimeAxisHostId) {
         setBottomTimeAxis(paneLayout.getBottomTimeAxisHostId());
+      }
+      if (typeof StarResearch !== 'undefined' && typeof StarResearch.bindChartClick === 'function') {
+        StarResearch.bindChartClick();
       }
       return !!_live;
     },
@@ -1533,7 +1548,11 @@
       const series = addPriceSeries(chart, next, resolvePricePaneConfig());
       _live.priceSeries = series;
       _live.priceStyle = next;
+      _live._researchPrimitiveSeries = null;
       if (painted.length) applyPriceSeriesData(_live, painted);
+      if (typeof StarResearchOverlay !== 'undefined' && typeof StarResearchOverlay.refresh === 'function') {
+        StarResearchOverlay.refresh();
+      }
       return true;
     },
 
@@ -1807,6 +1826,55 @@
         series.setMarkers(markers);
       } catch {
         /* series may be detached */
+      }
+    },
+
+    /**
+     * Wozduh pane click point only. Research decides whether it is a Star.
+     * Does not read or write the camera.
+     */
+    onWozduhClick(fn) {
+      const chart = _live?.charts?.wozduh;
+      if (!chart || typeof chart.subscribeClick !== 'function' || typeof fn !== 'function') return false;
+      if (_live._wozduhClick) return true;
+      const handler = (param) => {
+        if (!param || param.point == null) return;
+        fn({ x: param.point.x, y: param.point.y });
+      };
+      chart.subscribeClick(handler);
+      _live._wozduhClick = handler;
+      return true;
+    },
+
+    /**
+     * Selected-star research marks on the price series.
+     * Does not read the camera and does not write a range.
+     */
+    applyResearchMarkers(markers) {
+      const series = _live?.priceSeries;
+      if (!series || typeof series.setMarkers !== 'function') return false;
+      const list = Array.isArray(markers) ? markers.slice() : [];
+      list.sort((a, b) => a.time - b.time);
+      try {
+        series.setMarkers(list);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    /** Same price series. A replaced series (style swap) is attached again. */
+    attachResearchPrimitive(primitive) {
+      const series = _live?.priceSeries;
+      if (!series || typeof series.attachPrimitive !== 'function' || !primitive) return false;
+      if (_live._researchPrimitive === primitive && _live._researchPrimitiveSeries === series) return true;
+      try {
+        series.attachPrimitive(primitive);
+        _live._researchPrimitive = primitive;
+        _live._researchPrimitiveSeries = series;
+        return true;
+      } catch {
+        return false;
       }
     },
 

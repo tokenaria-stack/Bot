@@ -1,0 +1,89 @@
+STAR-RESEARCH-NAV-1
+Date: 2026-09-27
+Star selection and one centering command. No stop lines.
+
+============================================================
+1. VERDICT
+============================================================
+
+The temporary page is gone. The main chart is still the only chart.
+A star number asks the chart's existing history island to open
+around that time and center it once.
+
+Star 3456, typed once, landed in the middle of the visible window.
+The range did not move again after the load finished.
+Switching 1m to 15m left the number at 3456.
+
+No stop, swing, entry, or R line was drawn.
+
+============================================================
+2. CORRECTIONS TO THE CHAPTER PROMPT
+============================================================
+
+Nothing in the server existed only to serve the HTML file.
+The file server serves the whole web directory. The star address
+GET /api/research/star-stop is how this chart reads one certified
+row. That address, the stop calculation, and
+research/starstop/star_stops.json stayed.
+
+Centering does not enter TimeCamera as a new method.
+The selection calls the existing seekHistoryIsland(star OpenTime,
+current visible width). That load already fetches a history window
+whose end is half a chunk after the center, then the existing full
+paint issues one proposeAfterData for a HISTORY anchor.
+Paint of indicators does not get a second one of those.
+TimeCamera was not edited.
+
+The visible width is the width the camera already has, so the zoom
+stays. 140 bars is used only when the camera has no range yet.
+That 140 was already the island default. It is a viewing width,
+not a holding period.
+
+A slower reply cannot move the chart after a newer number has
+already been chosen.
+
+Changing timeframe does not send another star command.
+The number stays. The chart then does whatever it already does on
+a timeframe change. In the check below, that existing change kept
+the same market time, which was the star. This slice does not
+draw the star on the 1-hour or 4-hour candle.
+
+============================================================
+3. WHERE THE STATE LIVES
+============================================================
+
+web/ui/star-research.js
+index, count, and the star OpenTime.
+It is not inside TimeCamera, the pane splitter, or the indicators.
+The toolbar only calls it.
+
+============================================================
+4. WHAT WAS DELETED
+============================================================
+
+web/star-stop.html
+
+/star-stop.html now returns 404.
+The main chart still has its candles, Wozduh, and RSX.
+
+============================================================
+5. CHECK
+============================================================
+
+node web/star_research_nav_test.js
+node web/time_camera_test.js
+Both passed.
+
+On the running main chart, which was on 1 minute:
+  typed 3456
+  decision time 1655156700000
+  loaded 3000 bars, 1655066760 .. 1655246700
+  visible logical range 1424 .. 1574
+  the star bar is logical 1499, the middle of that range
+  2.5 seconds later the range was still 1424 .. 1574
+  temporary page 404
+  switched to 15m
+  the box still said 3456 / 8783
+  the 15-minute window still had that time at the same middle
+
+No stop overlay was added, so there was nothing of that kind to look at.
