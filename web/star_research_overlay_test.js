@@ -195,6 +195,23 @@ function main() {
     assert.strictEqual(Overlay.primitive.lines.length, plan.lines.length);
   });
 
+  test('population markers sit on the decision candle, not a fixed Y', () => {
+    const marks = Overlay.populationPlan([
+      { decisionAt: 1567997100000, side: 'down' },
+      { decisionAt: 1571070600000, side: 'up' },
+    ]);
+    assert.strictEqual(marks[0].time, 1567997100);
+    assert.strictEqual(marks[0].position, 'aboveBar');
+    assert.strictEqual(marks[0].shape, 'arrowDown');
+    assert.strictEqual(marks[0].color, Overlay.STAR_DOWN);
+    assert.strictEqual(marks[1].position, 'belowBar');
+    assert.strictEqual(marks[1].shape, 'arrowUp');
+    assert.strictEqual(marks[1].color, Overlay.STAR_UP);
+    assert.ok(marks.every((m) => m.y == null && m.text == null));
+    assert.ok(!src.includes('height * 0.12'));
+    assert.ok(!src.includes('crowd.length'));
+  });
+
   console.log('star research overlay tests passed');
 }
 

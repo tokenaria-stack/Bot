@@ -223,6 +223,7 @@ const StarInspection = (() => {
         '<span>Star</span>' +
         '<button type="button" data-star-prev>Prev</button>' +
         '<button type="button" data-star-next>Next</button>' +
+        '<button type="button" data-star-clear>Clear</button>' +
         '<button type="button" data-star-colors aria-label="Dot colors" aria-expanded="false" title="Dot colors">' +
           '<span class="star-color-icon" aria-hidden="true"></span>' +
         '</button>' +
@@ -233,8 +234,14 @@ const StarInspection = (() => {
           '<button type="button" data-star-color-reset>Reset</button>' +
         '</div>' +
       '</div>' +
-      '<div data-star-card><p class="star-empty">Select a Star.</p></div>';
+      '<div class="star-inspection-scroll" data-star-scroll>' +
+      '<div data-star-card><p class="star-empty">Select a Star.</p></div>' +
+      '</div>';
     host.appendChild(root);
+    const scroll = root.querySelector('[data-star-scroll]');
+    if (scroll) {
+      scroll.addEventListener('wheel', (ev) => { ev.stopPropagation(); }, { passive: true });
+    }
     const card = root.querySelector('[data-star-card]');
     card.addEventListener('toggle', (ev) => {
       if (ev.target && ev.target.matches && ev.target.matches('details')) fitValueColumns(card);
@@ -245,6 +252,9 @@ const StarInspection = (() => {
     });
     root.querySelector('[data-star-next]').addEventListener('click', () => {
       if (typeof StarResearch !== 'undefined') StarResearch.next();
+    });
+    root.querySelector('[data-star-clear]').addEventListener('click', () => {
+      if (typeof StarResearch !== 'undefined' && typeof StarResearch.clear === 'function') StarResearch.clear();
     });
     bindColors();
     const handle = root.querySelector('[data-star-resize]');

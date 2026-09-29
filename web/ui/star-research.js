@@ -79,8 +79,21 @@ const StarResearch = (() => {
     const input = typeof document !== 'undefined' ? document.getElementById('star-research-no') : null;
     if (!input) return;
     if (!force && document.activeElement === input) return;
-    if (state.index == null) return;
+    if (state.index == null) {
+      input.value = '';
+      return;
+    }
     input.value = String(state.index + 1);
+  }
+
+  function clear() {
+    state.seq += 1;
+    state.index = null;
+    state.decisionAt = null;
+    state.row = null;
+    paintNumber(true);
+    emitSelected();
+    return true;
   }
 
   function acceptBody(body, center) {
@@ -221,6 +234,7 @@ const StarResearch = (() => {
     const input = document.getElementById('star-research-no');
     const prev = document.getElementById('star-research-prev');
     const nextBtn = document.getElementById('star-research-next');
+    const clearBtn = document.getElementById('star-research-clear');
     if (input && !input.dataset.starResearch) {
       input.dataset.starResearch = '1';
       input.addEventListener('keydown', (ev) => {
@@ -236,6 +250,10 @@ const StarResearch = (() => {
     if (nextBtn && !nextBtn.dataset.starResearch) {
       nextBtn.dataset.starResearch = '1';
       nextBtn.addEventListener('click', () => { next(); });
+    }
+    if (clearBtn && !clearBtn.dataset.starResearch) {
+      clearBtn.dataset.starResearch = '1';
+      clearBtn.addEventListener('click', () => { clear(); });
     }
     paintCount();
   }
@@ -265,6 +283,7 @@ const StarResearch = (() => {
     bindChartClick,
     previous,
     next,
+    clear,
     noteTimeframe,
     onSelected,
     getState,

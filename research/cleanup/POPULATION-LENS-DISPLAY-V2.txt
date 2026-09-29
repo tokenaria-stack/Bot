@@ -1,0 +1,54 @@
+POPULATION-LENS-DISPLAY-V2
+Date: 2026-09-29
+
+Display only. starlens semantics unchanged.
+
+============================================================
+1. MARKERS
+============================================================
+
+Population members use the same series.setMarkers path as the
+selected Star. Time is decisionAt. Y is the 15m candle
+(aboveBar / belowBar). They are not a fixed pixel row.
+
+Up is #00E676 arrowUp below the bar.
+Down is #FF1744 arrowDown above the bar.
+Same green and red as the inspection side dot and the entry mark.
+
+The selected Star stays the gold marker plus the vertical line
+and stop rulers. Show Stars does not clear it.
+
+============================================================
+2. RAIL
+============================================================
+
+#star-inspection is a column. The header stays put.
+.star-inspection-scroll is overflow-y auto with overscroll-behavior
+contain. Wheel over the rail is stopped from reaching the chart.
+
+============================================================
+3. TESTS
+============================================================
+
+node web/star_research_overlay_test.js
+node web/star_lens_panel_test.js
+node web/star_research_nav_test.js
+go test ./forecast/starlens/
+go test ./server/ -count=1 -run StarLens
+
+Browser MCP was not opened (workspace rule). Reload 15m and check
+the candle arrows by eye.
+
+============================================================
+4. FILES
+============================================================
+
+web/ui/star-research-overlay.js
+web/ui/star-inspection-panel.js
+web/ui/star-lens-panel.js
+web/style.css
+web/index.html
+web/star_research_overlay_test.js
+web/star_lens_panel_test.js
+research/cleanup/POPULATION-LENS-DISPLAY-V2.txt
+living docs

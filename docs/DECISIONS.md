@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## POPULATION-LENS-DISPLAY-V2 — Stars on the candle, rail scrolls
+
+**Context:** Population marks had the right time and a fake Y, so they floated in a row. The rail was taller than the window and did not scroll.
+
+**Decision:** Paint population members with the existing price-series markers on the decision candle. Up is green, down is red. The selected Star stays gold. The inspection rail is a bounded scroll pane.
+
+**Rejected:** A fixed pixel Y — **Reason:** it is not a price. Shortening the lens form — **Reason:** the controls are the research surface.
+
+**Consequences:** Color pickers for Star up/down can wait. Schema 3 filters wait.
+
+---
+
 ## POPULATION-LENS-UI-V1 — workstation consumes the evaluator
 
 **Context:** The typed evaluator is frozen. A person needs to cut a population on the chart without a second filter engine.

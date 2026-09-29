@@ -4,6 +4,10 @@
  * Does not compute a swing, ATR, stop, entry, or R, and does not move the camera.
  */
 const StarResearchOverlay = (() => {
+  const STAR_UP = '#00E676';
+  const STAR_DOWN = '#FF1744';
+  const STAR_SELECTED = '#f0b429';
+
   function chartSec(ms) {
     const n = Number(ms);
     if (!Number.isFinite(n) || n <= 0) return null;
@@ -28,14 +32,14 @@ const StarResearchOverlay = (() => {
     const markers = [];
     const lines = [];
     const entries = [];
-    const entryColor = side === 'up' ? '#00E676' : (side === 'down' ? '#FF1744' : '');
+    const entryColor = side === 'up' ? STAR_UP : (side === 'down' ? STAR_DOWN : '');
     const starTime = chartSec(row.decisionAt);
     const markTime = starTime;
     if (starTime != null) {
       markers.push({
         time: starTime,
         position: side === 'down' ? 'aboveBar' : 'belowBar',
-        color: '#f0b429',
+        color: STAR_SELECTED,
         shape: side === 'down' ? 'arrowDown' : 'arrowUp',
         text: 'Star',
       });
@@ -94,6 +98,28 @@ const StarResearchOverlay = (() => {
     return { markers, lines, entries, status, markTime };
   }
 
+  /**
+   * Population members on the decision candle.
+   * Y is the series bar (aboveBar / belowBar), not a fixed pixel row.
+   */
+  function populationPlan(members) {
+    if (!Array.isArray(members)) return [];
+    const markers = [];
+    for (let i = 0; i < members.length; i++) {
+      const row = members[i];
+      const time = chartSec(row && row.decisionAt);
+      if (time == null) continue;
+      const down = row.side === 'down';
+      markers.push({
+        time: time,
+        position: down ? 'aboveBar' : 'belowBar',
+        color: down ? STAR_DOWN : STAR_UP,
+        shape: down ? 'arrowDown' : 'arrowUp',
+      });
+    }
+    return markers;
+  }
+
   function drawEntryTriangles(ctx, series, chart, entries, hr, vr) {
     const ts = chart && typeof chart.timeScale === 'function' ? chart.timeScale() : null;
     if (!ts || typeof ts.timeToCoordinate !== 'function' || !entries.length) return;
@@ -134,9 +160,8 @@ const StarResearchOverlay = (() => {
       const lines = this._owner.lines || [];
       const entries = this._owner.entries || [];
     const markTime = this._owner.markTime;
-    const crowd = this._owner.crowd || [];
     if (!series || !target || typeof target.useBitmapCoordinateSpace !== 'function') return;
-    if (!lines.length && !entries.length && markTime == null && !crowd.length) return;
+    if (!lines.length && !entries.length && markTime == null) return;
     target.useBitmapCoordinateSpace((scope) => {
         const ctx = scope.context;
         if (!ctx) return;
@@ -156,26 +181,7 @@ const StarResearchOverlay = (() => {
             ctx.stroke();
           }
         }
-        if (crowd.length) {
-          const ts = this._owner._chart && typeof this._owner._chart.timeScale === 'function'
-            ? this._owner._chart.timeScale() : null;
-          if (ts && typeof ts.timeToCoordinate === 'function') {
-            ctx.fillStyle = 'rgba(212, 180, 131, 0.55)';
-            const r = Math.max(2, 2 * hr);
-            const y = height - 8 * vr;
-            for (let i = 0; i < crowd.length; i++) {
-              const sec = Number(crowd[i].decisionAt);
-              if (!Number.isFinite(sec) || sec <= 0) continue;
-              const t = sec > 1e11 ? Math.floor(sec / 1000) : Math.floor(sec);
-              let x = null;
-              try { x = ts.timeToCoordinate(t); } catch { x = null; }
-              if (x == null || !Number.isFinite(x)) continue;
-              ctx.beginPath();
-              ctx.arc(x * hr, y, r, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-        }
+        drawEntryTriangles(ctx, series, this._owner._chart, entries, hr, vr);
         ctx.font = (12 * vr) + 'px sans-serif';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
@@ -231,6 +237,18 @@ const StarResearchOverlay = (() => {
       this._chart = param && param.chart ? param.chart : null;
       this._series = param && param.series ? param.series : null;
       this._requestUpdate = param && param.requestUpdate ? param.requestUpdate : null;
+      if (this._chart && typeof this._chart.timeScale === 'function' && !this._rangeHook) {
+        const ts = this._chart.timeScale();
+        if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
+          this._rangeHook = () => {
+            if (typeof StarLens !== 'undefined' && typeof StarLens.noteViewport === 'function') {
+              StarLens.noteViewport();
+            }
+            this.requestUpdate();
+          };
+          ts.subscribeVisibleTimeRangeChange(this._rangeHook);
+        }
+      }
     }
 
     detached() {
@@ -305,9 +323,10 @@ const StarResearchOverlay = (() => {
     primitive.lines = plan.lines;
     primitive.entries = plan.entries || [];
     primitive.markTime = plan.markTime == null ? null : plan.markTime;
-    primitive.crowd = onChart && typeof StarLens !== 'undefined' && typeof StarLens.getMarks === 'function'
+    const crowd = onChart && typeof StarLens !== 'undefined' && typeof StarLens.getMarks === 'function'
       ? StarLens.getMarks() : [];
-    deps.applyMarkers(plan.markers);
+    const pop = onChart ? populationPlan(crowd) : [];
+    deps.applyMarkers(pop.concat(plan.markers || []));
     deps.attach(primitive);
     deps.requestDraw();
     const status = plan.status || '';
@@ -317,6 +336,9 @@ const StarResearchOverlay = (() => {
 
   return {
     researchPlan,
+    populationPlan,
+    STAR_UP,
+    STAR_DOWN,
     refresh,
     noteUnresolved,
     bind,

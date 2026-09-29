@@ -992,6 +992,7 @@ body.star-inspection-docked #tab-live {
   z-index: 30;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   width: 380px;
   background: #131722;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -1014,11 +1015,21 @@ body.star-inspection-docked #tab-live {
 
 .star-inspection-bar {
   position: relative;
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   align-items: center;
   padding: 8px 12px 8px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.star-inspection-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .star-inspection-bar button {
@@ -1226,6 +1237,7 @@ body.star-inspection-docked #tab-live {
   color: #787b86;
   font-variant-numeric: tabular-nums;
 }
-#star-lens [data-save] {
-  margin-top: 8px;
-}
+.star-lens-help { color: #787b86; margin: 6px 0 8px; font-size: 10px; line-height: 1.35; }
+.star-lens-field { margin: 10px 0; }
+.star-lens-off { color: #787b86; font-weight: 400; }
+#star-lens input[type="range"] { width: 100%; }

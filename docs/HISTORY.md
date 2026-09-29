@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## POPULATION-LENS-DISPLAY-V2 — candle Stars and a scrolling rail (Sep 2026)
+
+- Population members use Lightweight Charts markers on the decision candle. Up green, down red.
+- Inspection rail overflow-y auto. Show Stars remains independent of Save.
+- Report `research/cleanup/POPULATION-LENS-DISPLAY-V2.txt`.
+
 ## POPULATION-LENS-UI-V1 — chart consumes the evaluator (Sep 2026)
 
 - Sources All / Up / Down / Survived / Stop First / Unordered / Discovery / Holdout and saved children.

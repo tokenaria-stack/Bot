@@ -51,4 +51,4 @@ strategy/     doc.go beacon only
 
 - **Core 5.0** data plane (Phases A–G) ✅
 - **Core 6.0 / 6.1** documentation OS ✅
-- **NEXT:** **POPULATION-LENS-UI-V1 frozen.** 191-coordinate filters are not started — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)
+- **NEXT:** **POPULATION-LENS-DISPLAY-V2 frozen.** 191-coordinate filters are not started — [`docs/OPEN_DEBTS.md`](docs/OPEN_DEBTS.md)
