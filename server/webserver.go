@@ -285,6 +285,7 @@ func (d *DashboardServer) Start(port string) error {
 	mux.HandleFunc("/api/research/star-stop", withGzip(d.handleStarStop))
 	mux.HandleFunc("/api/research/star-inspection", withGzip(d.handleStarInspection))
 	mux.HandleFunc("/api/research/star-lens/sources", withGzip(d.handleStarLensSources))
+	mux.HandleFunc("/api/research/star-lens/catalog", withGzip(d.handleStarLensCatalog))
 	mux.HandleFunc("/api/research/star-lens/evaluate", withGzip(d.handleStarLensEvaluate))
 	mux.HandleFunc("/api/research/star-lens/save", withGzip(d.handleStarLensSave))
 	mux.HandleFunc("/ws", d.handleWS)

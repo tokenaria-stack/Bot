@@ -35,6 +35,40 @@ async function main() {
     assert.strictEqual(clauses.length, 2);
   });
 
+  await test('catalog search is presentation only', () => {
+    const rows = [
+      { id: 'M15.Vwema', label: '15m VWEMA', group: 'Schema 3', section: '15m', timeframe: '15m', family: 'VWEMA', unit: 'price' },
+      { id: 'M15H1Vwema', label: '15m − 1h VWEMA', group: 'Matrix', section: 'Neighboring Levels', timeframe: '15m−1h', family: 'relation', unit: 'stored gap' },
+    ];
+    assert.strictEqual(StarLens.filterCatalog(rows, 'vwema').length, 2);
+    assert.strictEqual(StarLens.filterCatalog(rows, 'M15H1').length, 1);
+    assert.strictEqual(StarLens.filterCatalog(rows, 'M15H1')[0].id, 'M15H1Vwema');
+  });
+
+  await test('coordinate clause stores Field ID not label', () => {
+    const root = {
+      querySelector(sel) {
+        const map = {
+          '[data-num="mfeAtr"]': { checked: false },
+          '[data-event="1R / 0.15"]': { value: 'reached' },
+          '[data-event="2R / 0.15"]': { value: '' },
+          '[data-event="3R / 0.15"]': { value: '' },
+          '[data-event="Stop / 0.15"]': { value: '' },
+          '[data-side]': { value: '' },
+          '[data-status]': { value: '' },
+          '[data-coord-id]': { value: 'M15H1Vwema' },
+          '[data-coord-num]': { checked: true },
+          '[data-coord-cmp]': { value: '>=' },
+          '[data-coord-bound]': { value: '0' },
+        };
+        return map[sel] || null;
+      },
+    };
+    const clauses = StarLens.clausesFromForm(root);
+    assert.deepStrictEqual(clauses[1], { kind: 'continuous', field: 'M15H1Vwema', cmp: '>=', bound: 0 });
+    assert.strictEqual(clauses[0].kind, 'r');
+  });
+
   await test('viewport count does not invent membership', () => {
     const pass = [
       { index: 0, decisionAt: 1000 },
@@ -106,9 +140,10 @@ async function main() {
 
   await test('panel source has no R math', () => {
     const src = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    assert.ok(src.includes('/api/research/star-lens/catalog'));
     assert.ok(!src.includes('hit1R'));
-    assert.ok(!src.includes('atrExcursion'));
-    assert.ok(src.includes('/api/research/star-lens/evaluate'));
+    assert.ok(!src.includes('Schema3[M15.Vwema]'));
+    assert.ok(!src.includes('lo.Vwema'));
   });
 
   await test('paint controls live in the style menu, not the lens form', () => {

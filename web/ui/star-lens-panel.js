@@ -25,11 +25,14 @@ const StarLens = (() => {
     viewTo: 0,
     seq: 0,
     timer: 0,
+    selectedField: '',
+    catalog: [],
   };
 
   let fetchSources = defaultSources;
   let fetchEval = defaultEval;
   let fetchSave = defaultSave;
+  let fetchCatalog = defaultCatalog;
   let visibleRangeMs = defaultVisibleRangeMs;
 
   function defaultVisibleRangeMs() {
@@ -68,6 +71,9 @@ const StarLens = (() => {
       body: JSON.stringify(body),
     }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
   }
+  function defaultCatalog() {
+    return fetch('/api/research/star-lens/catalog').then((res) => (res.ok ? res.json() : null)).catch(() => null);
+  }
 
   function clausesFromForm(root) {
     const out = [];
@@ -92,7 +98,58 @@ const StarLens = (() => {
     if (side && side.value) out.push({ kind: 'side', side: side.value });
     const status = root.querySelector('[data-status]');
     if (status && status.value) out.push({ kind: 'status', status: status.value });
+    const cid = root.querySelector('[data-coord-id]');
+    const con = root.querySelector('[data-coord-num]');
+    const ccmp = root.querySelector('[data-coord-cmp]');
+    const cval = root.querySelector('[data-coord-bound]');
+    if (cid && cid.value && con && con.checked) {
+      const n = Number(cval && cval.value);
+      if (Number.isFinite(n)) {
+        out.push({ kind: 'continuous', field: cid.value, cmp: ccmp ? ccmp.value : '>=', bound: n });
+      }
+    }
     return out;
+  }
+
+  function catalogNeedle(entry) {
+    return [entry.id, entry.label, entry.group, entry.section, entry.timeframe, entry.family, entry.unit]
+      .join(' ').toLowerCase();
+  }
+
+  function filterCatalog(entries, query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return entries || [];
+    return (entries || []).filter((e) => catalogNeedle(e).indexOf(q) >= 0);
+  }
+
+  function escapeText(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
+  function renderCatalog(root, entries) {
+    const box = root && root.querySelector('[data-coord-list]');
+    if (!box) return;
+    const groups = {};
+    const order = [];
+    (entries || []).forEach((e) => {
+      const key = e.group + ' / ' + e.section;
+      if (!groups[key]) {
+        groups[key] = [];
+        order.push(key);
+      }
+      groups[key].push(e);
+    });
+    let html = '';
+    order.forEach((key) => {
+      html += '<div class="star-lens-cat-group">' + escapeText(key) + '</div>';
+      groups[key].forEach((e) => {
+        const on = e.id === state.selectedField ? ' star-lens-cat-item--on' : '';
+        html += '<button type="button" class="star-lens-cat-item' + on + '" data-coord-pick="' +
+          escapeText(e.id) + '">' + escapeText(e.label) +
+          '<span class="star-lens-cat-id">' + escapeText(e.id) + '</span></button>';
+      });
+    });
+    box.innerHTML = html || '<div class="star-lens-empty">no matches</div>';
   }
 
   function chartRange() {
@@ -203,6 +260,30 @@ const StarLens = (() => {
       if (slide) slide.disabled = !active;
       if (boundEl) boundEl.disabled = !active;
     });
+    const cid = root.querySelector('[data-coord-id]');
+    const field = cid ? cid.value : '';
+    if (field) {
+      const box = root.querySelector('[data-hist="coord"]');
+      const on = root.querySelector('[data-coord-num]');
+      const boundEl = root.querySelector('[data-coord-bound]');
+      const slide = root.querySelector('[data-slide="coord"]');
+      const miss = root.querySelector('[data-miss="coord"]');
+      const pic = nums.find((n) => n.field === field);
+      const active = !!(on && on.checked);
+      if (box) box.innerHTML = histogramSvg(pic, boundEl ? boundEl.value : null, '', active);
+      if (miss && pic) miss.textContent = 'missing ' + pic.missing + (active ? '' : ' · off');
+      if (pic && pic.rangeOk && slide && boundEl && document.activeElement !== slide && document.activeElement !== boundEl) {
+        slide.min = String(pic.min);
+        slide.max = String(pic.max);
+        slide.step = String((pic.max - pic.min) / 200 || 0.01);
+        if (!active) {
+          slide.value = String(pic.min);
+          boundEl.value = formatBound(pic.min);
+        }
+      }
+      if (slide) slide.disabled = !active;
+      if (boundEl) boundEl.disabled = !active;
+    }
     (last.events || []).forEach((ev) => {
       const box = root.querySelector('[data-rate="' + ev.name + '"]');
       if (box) box.innerHTML = eventCopy(ev);
@@ -219,6 +300,7 @@ const StarLens = (() => {
     const body = await fetchEval({
       source: state.source,
       clauses: state.clauses,
+      selectedField: state.selectedField,
       viewFrom: state.viewFrom,
       viewTo: state.viewTo,
     });
@@ -294,6 +376,23 @@ const StarLens = (() => {
       '<div data-count-mix></div></div>' +
       '<label class="star-lens-row"><input type="checkbox" data-show checked> Show stars on chart</label>' +
       '<select data-source></select>' +
+      '<div class="star-lens-catalog">' +
+      '<p class="star-lens-help">Research coordinates. Labels are not saved. The Field ID is.</p>' +
+      '<input data-coord-search type="search" placeholder="Search coordinates">' +
+      '<div class="star-lens-cat-list" data-coord-list></div>' +
+      '<div class="star-lens-field" data-coord-panel hidden>' +
+      '<div class="star-lens-row"><b data-coord-label></b> <code data-coord-shown></code></div>' +
+      '<div class="star-lens-meta" data-coord-meta></div>' +
+      '<label class="star-lens-row"><input type="checkbox" data-coord-num> in lens</label>' +
+      '<input type="hidden" data-coord-id value="">' +
+      '<div class="star-lens-row star-lens-row--controls">' +
+      '<select data-coord-cmp><option value=">=">&ge;</option><option value=">">&gt;</option>' +
+      '<option value="<=">&le;</option><option value="<">&lt;</option></select>' +
+      '<input data-coord-bound type="number" step="any" disabled>' +
+      '</div>' +
+      '<input data-slide="coord" type="range" disabled>' +
+      '<div data-hist="coord"></div>' +
+      '<div class="star-lens-meta" data-miss="coord"></div></div></div>' +
       fieldHtml + eventHtml +
       '<label class="star-lens-row">Side <select data-side><option value="">off</option>' +
       '<option value="up">up</option><option value="down">down</option></select></label>' +
@@ -319,6 +418,36 @@ const StarLens = (() => {
       state.source = sel.value || 'all';
       evaluate();
     });
+    fetchCatalog().then((doc) => {
+      state.catalog = (doc && doc.coordinates) || [];
+      renderCatalog(root, filterCatalog(state.catalog, (root.querySelector('[data-coord-search]') || {}).value));
+    });
+    root.addEventListener('click', (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('[data-coord-pick]') : null;
+      if (!btn) return;
+      const id = btn.getAttribute('data-coord-pick');
+      const entry = state.catalog.find((e) => e.id === id);
+      if (!entry) return;
+      state.selectedField = id;
+      const panel = root.querySelector('[data-coord-panel]');
+      const hid = root.querySelector('[data-coord-id]');
+      const lab = root.querySelector('[data-coord-label]');
+      const shown = root.querySelector('[data-coord-shown]');
+      const meta = root.querySelector('[data-coord-meta]');
+      if (panel) panel.hidden = false;
+      if (hid) hid.value = id;
+      if (lab) lab.textContent = entry.label;
+      if (shown) shown.textContent = id;
+      if (meta) meta.textContent = entry.group + ' · ' + entry.timeframe + ' · ' + entry.unit;
+      renderCatalog(root, filterCatalog(state.catalog, (root.querySelector('[data-coord-search]') || {}).value));
+      evaluate();
+    });
+    const search = root.querySelector('[data-coord-search]');
+    if (search) {
+      search.addEventListener('input', () => {
+        renderCatalog(root, filterCatalog(state.catalog, search.value));
+      });
+    }
     root.addEventListener('change', (ev) => {
       const sel = root.querySelector('[data-source]');
       if (sel) state.source = sel.value;
@@ -332,8 +461,15 @@ const StarLens = (() => {
       evaluate();
     });
     root.addEventListener('input', (ev) => {
+      if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-coord-search') != null) return;
       const slide = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-slide');
       if (!slide) return;
+      if (slide === 'coord') {
+        const bound = root.querySelector('[data-coord-bound]');
+        if (bound) bound.value = ev.target.value;
+        scheduleEvaluate();
+        return;
+      }
       const bound = root.querySelector('[data-bound="' + slide + '"]');
       if (bound) bound.value = ev.target.value;
       scheduleEvaluate();
@@ -356,6 +492,7 @@ const StarLens = (() => {
     if (opts && typeof opts.fetchSources === 'function') fetchSources = opts.fetchSources;
     if (opts && typeof opts.fetchEval === 'function') fetchEval = opts.fetchEval;
     if (opts && typeof opts.fetchSave === 'function') fetchSave = opts.fetchSave;
+    if (opts && typeof opts.fetchCatalog === 'function') fetchCatalog = opts.fetchCatalog;
     if (opts && typeof opts.visibleRangeMs === 'function') visibleRangeMs = opts.visibleRangeMs;
     if (typeof document !== 'undefined') mount();
   }
@@ -366,6 +503,8 @@ const StarLens = (() => {
     state.last = null;
     state.showStars = true;
     state.seq = 0;
+    state.selectedField = '';
+    state.catalog = [];
   }
 
   return {
@@ -377,6 +516,7 @@ const StarLens = (() => {
     clausesFromForm,
     viewCount,
     histogramSvg,
+    filterCatalog,
     setShowStars(on) { state.showStars = !!on; },
     _resetForTests,
   };

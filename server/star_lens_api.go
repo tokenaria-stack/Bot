@@ -237,11 +237,29 @@ func (d *DashboardServer) handleStarLensSources(w http.ResponseWriter, r *http.R
 	})
 }
 
+func (d *DashboardServer) handleStarLensCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, err := loadLens(); err != nil {
+		http.Error(w, "star lens artifact missing", http.StatusNotFound)
+		return
+	}
+	cat := starlens.ResearchCatalog()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"count":       len(cat),
+		"coordinates": cat,
+	})
+}
+
 type lensEvalRequest struct {
-	Source   string            `json:"source"`
-	Clauses  []starlens.Clause `json:"clauses"`
-	ViewFrom int64             `json:"viewFrom"`
-	ViewTo   int64             `json:"viewTo"`
+	Source        string            `json:"source"`
+	Clauses       []starlens.Clause `json:"clauses"`
+	SelectedField string            `json:"selectedField"`
+	ViewFrom      int64             `json:"viewFrom"`
+	ViewTo        int64             `json:"viewTo"`
 }
 
 type lensNumberWire struct {
@@ -368,6 +386,28 @@ func (d *DashboardServer) handleStarLensEvaluate(w http.ResponseWriter, r *http.
 			return
 		}
 		numbers = append(numbers, wire)
+	}
+	if req.SelectedField != "" {
+		extra := true
+		for _, field := range fields {
+			if field == req.SelectedField {
+				extra = false
+				break
+			}
+		}
+		if extra {
+			pic, err := result.NumberPicture(req.SelectedField)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			wire, err := wireNumber(req.SelectedField, pic)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			numbers = append(numbers, wire)
+		}
 	}
 	r1, err := result.RPicture(1)
 	if err != nil {

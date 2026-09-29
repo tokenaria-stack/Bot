@@ -1,0 +1,130 @@
+COORDINATE-CATALOG-UI-V1
+Date: 2026-09-29
+
+============================================================
+1. VERDICT
+============================================================
+
+COORDINATE_CATALOG_UI_V1_GREEN
+
+The researcher can search the 191 certified Field IDs, select
+one, inspect its existing NumberPicture, apply KindContinuous,
+and save the Field ID. Schema 3 and Matrix are group labels.
+
+f9edf3a attach / Number / Evaluate / ResearchUniverse were not
+modified. Comparison was not started.
+
+============================================================
+2. BASELINE
+============================================================
+
+COORDINATE-ATTACHMENT-LOAD-V1
+    f9edf3a9f1d880b1ee12d6b001cfb42f8986338e
+
+============================================================
+3. CORRECTIONS
+============================================================
+
+Catalog metadata lives in starlens.ResearchCatalog, derived from
+RawObservations + RelationNames. That is presentation, not a
+second evaluator inventory.
+
+H1RSX.* IDs must be classified before H1.* prefixes. Otherwise
+H1RSX.Value would be treated as an H1 timeframe TF field.
+
+The evaluate HTTP body still always returns the four outcome
+pictures. selectedField appends one extra picture. It does not
+return 191 pictures.
+
+1R self-exclusion means the 1R rate box on a mixed Lens is not
+the pass count. Mixed acceptance is lensPass, not Events[0].Reached.
+
+ResearchUniverse ID change from the attach chapter is unchanged.
+This chapter does not rewrite research/starstop/populations.
+
+============================================================
+4. FILES
+============================================================
+
+forecast/starlens/catalog.go
+forecast/starlens/catalog_test.go
+server/star_lens_api.go          selectedField + GET catalog
+server/star_lens_catalog_test.go live HTTP workflows
+server/webserver.go              /api/research/star-lens/catalog
+web/ui/star-lens-panel.js
+web/star_lens_panel_test.js
+web/style.css
+web/index.html                   cache bust 1.0.5-coord-catalog
+research/cleanup/COORDINATE-CATALOG-UI-V1.txt
+
+Not modified: eval.go, Number(), Attach*, ResearchUniverse,
+frozen JSON artifacts.
+
+============================================================
+5. INVENTORY SOURCE
+============================================================
+
+191 = RawObservations (142) + RelationNames (49)
+
+Grouping (UI only):
+
+    Schema 3 / 15m, 1h, 4h, Daily
+    Schema 3 / RSX, TV
+    Matrix / Same-TF
+    Matrix / RSX − Signal
+    Matrix / Neighboring Levels
+    Matrix / Neighboring Widths
+
+============================================================
+6. HTTP
+============================================================
+
+GET /api/research/star-lens/catalog
+    { count, coordinates: [{id,label,group,section,timeframe,family,unit}] }
+
+POST /api/research/star-lens/evaluate
+    selectedField: optional Field ID
+    numbers: four outcome pictures, plus selected Field if it is
+    not already one of those four
+
+Browser does not fetch Schema 3 or Matrix JSON.
+
+============================================================
+7. ACCEPTANCE (loadLens ResearchUniverse)
+============================================================
+
+M15.Vwema
+    catalog contains ID
+    evaluate selectedField picture not 8783 missing
+    KindContinuous threshold changes lensPass
+    picture min can stay below the bound (self-exclusion)
+    SaveChild Field = M15.Vwema
+
+1R reached AND M15.Vwema
+    lensPass in (0, 4160]
+
+1R reached AND M15H1Vwema
+    same KindContinuous path
+    SaveChild Field = M15H1Vwema
+    Matrix provenance on live universe
+    stripped provenance still rejected
+
+============================================================
+8. TESTS
+============================================================
+
+go test ./forecast/starlens
+go test ./server -run TestStarLens
+node web/star_lens_panel_test.js
+
+Frozen Schema 3 / Matrix / Outcome file hashes unchanged
+in TestStarLensCatalogAndSelectedField.
+
+go test ./... still blocked by unrelated cmd/repair_archive_gap
+and /tmp RSX CSV probes.
+
+============================================================
+9. STOP
+============================================================
+
+Do not start comparison in this chapter.
