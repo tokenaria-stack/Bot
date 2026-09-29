@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## POPULATION-LENS-CORE-V1 — typed evaluator (Sep 2026)
+
+- `forecast/starlens` evaluates membership, self-excluded pictures, and save-child replay.
+- 1R / 0.15 is reached only when stored `r` is present and positive. 47 rows are no R.
+- Report `research/cleanup/POPULATION-LENS-CORE-V1.txt`. Outcome JSON is not in this commit.
+
 ## UI-INSPECTION-SHELL-V1 — one Star on the existing chart (Sep 2026)
 
 - Right panel for the selected Star. Path words, schema-3 groups, and the 49 stored relations.

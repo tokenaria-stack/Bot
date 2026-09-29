@@ -1,0 +1,117 @@
+POPULATION-LENS-EVALUATOR-1
+Date: 2026-09-29
+
+The typed evaluator is in forecast/starlens.
+Tests are the consumer. There is no chart and no histogram screen.
+
+============================================================
+1. WHAT IT DOES
+============================================================
+
+A population is an immutable list of index, decisionAt, and side,
+plus the schema 3 digest, the schema 3 commit, and the outcome digest
+when the set was cut from the outcome file.
+
+A lens is an AND of typed clauses:
+
+    continuous field, comparison, bound
+    1R / 0.15, 2R / 0.15, or 3R / 0.15, as reached or not_reached
+    status, as a stored string or a discovery word
+    side, up or down
+    stop, touched or not_touched
+
+An empty lens returns the parent.
+A missing observation fails a clause on that field.
+It is not inserted as zero.
+
+Save writes a child file. The parent value is not edited.
+The outcome file is not edited.
+Replay of the parent and the stored clauses must equal the stored
+members. Certify returns an error when they differ and does not
+rewrite the child.
+
+The population id is the hash of the parent, the operation, the
+digests, and the clauses. The save time is stored and is not part
+of that hash.
+
+============================================================
+2. R AND THE STOP
+============================================================
+
+R state is distance present and greater than zero, then the stored
+hit flag.
+
+    reached
+    not reached on a valid R
+    no R
+
+The reader does not use forecast.StarOutcome for this.
+That struct decodes an omitted r as 0, so absence and a stored zero
+would look the same. The file omits r on the 47 undefined rows.
+The reader keeps a pointer and treats a nil or a non-positive
+distance as no R.
+
+hit2R is not copied onto hit1R. The archive test checks the
+implication and fails if a row breaks it. The counts on
+star_sl_outcome.json are 4160 reached, 4576 not reached, 47 no R,
+2486 reached 2R, 1642 reached 3R.
+
+Stop uses the same split. stopReached false on a row with no R is
+no stop, not "not touched". A not_touched clause does not include
+those 47. The audit said not to read that false as survived.
+The implementation prompt named StopReached as an event and did not
+spell the third state. The third state is in the evaluator because
+the false flag is the same trap as hit1R.
+
+============================================================
+3. PICTURES
+============================================================
+
+picture(X) is the parent, plus every clause except clauses on X.
+The threshold stays off its own picture, so both sides remain.
+Missing rows are a separate count.
+
+The 1R reached rate is computed on that base. With the clause
+active on the full archive, the rate is 4160/8783, not 1.
+The pass list is still the 4160.
+
+CountBins counts values into edges the caller supplies.
+Those edges are not written on the child.
+ViewCount uses decisionAt in [start, end).
+That range is not a clause and is not saved.
+Half-open is so a star on a shared boundary is in one view.
+
+============================================================
+4. WHAT THIS CHAPTER LEFT OUT
+============================================================
+
+No capture file. No timeToStopMs. No duration.
+No Schema 3 catalog. A later coordinate is another observed
+number on the same continuous clause. Row.Number is the slot.
+No OR. No manual edit. No UI. No bin chooser. No rank.
+
+============================================================
+5. FILES
+============================================================
+
+Added:
+    forecast/starlens/doc.go
+    forecast/starlens/population.go
+    forecast/starlens/value.go
+    forecast/starlens/row.go
+    forecast/starlens/clause.go
+    forecast/starlens/eval.go
+    forecast/starlens/outcome.go
+    forecast/starlens/save.go
+    forecast/starlens/eval_test.go
+    forecast/starlens/outcome_test.go
+    research/cleanup/POPULATION-LENS-EVALUATOR-1.txt
+
+Not modified:
+    research/starstop/star_sl_outcome.json
+    research/starstop/star_outcome_dataset.json
+    schema 3, the matrix, the discovery join
+    the outcome walk, the stop, the live frame
+
+go test ./forecast/starlens/ passed.
+No commit. No push.

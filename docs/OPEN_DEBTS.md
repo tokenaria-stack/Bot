@@ -76,7 +76,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **UI-INSPECTION-SHELL-V1 ✅ frozen.** Report `research/cleanup/UI-VISUAL-GRAMMAR-AND-INSPECTION-SHELL-V1.txt`. The panel reads certified rows. Do not recompute relations in the browser. Do not add a best-coordinate sort.
 
-**NEXT: inspection of the 191 fixed views, not started.** A human may name one coordinate or one relation when its fixed slices differ from both the unconditional baseline and the Side baseline, and the difference is not only Side. Use the slices already stored. Do not add a cutoff. Do not combine coordinates. Do not build a learner. If no such view exists, record that and stop. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**POPULATION-LENS-CORE-V1 ✅ frozen.** Report `research/cleanup/POPULATION-LENS-CORE-V1.txt`. The UI must call `forecast/starlens`. Do not recompute R or missingness in the browser.
+
+**NEXT: Population/Lens UI, not started.** Consume the evaluator. Do not add capture fields. Do not add a 191-coordinate catalog. Do not rank. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 

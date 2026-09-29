@@ -1,0 +1,795 @@
+POPULATION-FILTER-LENS-CONTRACT-AUDIT-V1
+Date: 2026-09-29
+READ-ONLY. No UI. No new field. No frozen artifact rewritten.
+
+============================================================
+1. SCOPE AND AUTHORITATIVE SOURCES
+============================================================
+
+This chapter freezes the contract for a later layer:
+
+    immutable Population
+        → temporary Lens
+        → saved child Population
+
+A Lens may read only columns that already exist.
+It does not rank them, score them, or choose a threshold.
+
+Authoritative sources inspected:
+
+    forecast/star_outcome.go
+    forecast/star_capture.go
+    forecast/star_stop.go
+    market/star_sl_outcome_cert_test.go
+    market/star_outcome_dataset_cert_test.go
+    market/star_discovery.go
+    research/starstop/star_sl_outcome.json
+    research/starstop/star_outcome_dataset.json
+    research/starstop/star_discovery_v1.json
+        (contract via market/star_discovery.go and
+         research/cleanup/DISCOVERY-PROTOCOL-V1.txt)
+    research/cleanup/STAR-SL-OUTCOME-1.txt
+    research/cleanup/DISCOVERY-PROTOCOL-V1.txt
+
+Frozen inputs named by the discovery chapter, not reopened:
+
+    Schema 3 commit 975da0d
+    digest 934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+
+    Relative Matrix V1 commit 0389023
+    digest 8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+
+    Discovery join
+    digest 72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b
+    file research/starstop/star_discovery_v1.json
+
+Outcome file research/starstop/star_sl_outcome.json
+Row digest 6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+Count 8783. Window 96. bufferAtr 0.15.
+This file is not a frozen chapter commit.
+A population that reads it stores this digest.
+The filename is not the identity.
+
+A second unfrozen file, research/starstop/star_outcome_dataset.json,
+digest e217ccb6d19f12bd1856107c6917a69452255b835667177dbb89f28349703804,
+carries the same Stars plus a capture object and a partial state copy.
+That state copy is not Schema 3.
+Capture columns are not columns of star_sl_outcome.json.
+They are listed in section 2 and are not part of the first outcome lens
+until a population names the dataset digest.
+
+The discovery join stores survival class and full-window favorable and
+adverse ATR only. It does not store percent, price, R, or extreme times.
+Those stay on the outcome row.
+
+Williams k = 2 builds the stop. It is not a lens field.
+
+============================================================
+2. OUTCOME-FIELD INVENTORY
+============================================================
+
+Source for sections 2 through 6, unless a row says otherwise:
+star_sl_outcome.json, one StarOutcome per Star, same decisionAt order
+as the stop file and Schema 3.
+
+Document header, not a per-Star dimension:
+    digest, count, window, bufferAtr,
+    noStructure, noAtr, noEntry, invalidGeometry,
+    stopFirst, survived, unordered, pathGap, incomplete,
+    hit1R, hit2R, hit3R counts.
+
+Per-Star fields:
+
+decisionAt
+    int64 millisecond open time of the Star bar.
+    Time. Identity. Always present.
+    Same instant as Schema 3 ConfirmedAt.
+    Real. Not a path measurement.
+
+side
+    string. Categorical. "up" or "down". Always present.
+    Not an outcome of the stop. A population may still cut on it.
+
+status
+    string. Categorical. One of:
+        NO_STRUCTURE       1
+        NO_ATR             0
+        NO_ENTRY           0
+        INVALID_GEOMETRY  46
+        STOP_FIRST         5887
+        SURVIVED_WINDOW    2777
+        UNORDERED_BAR      70
+        PATH_GAP           0
+        INCOMPLETE_WINDOW  2
+    Sum 8783.
+    SURVIVED_WINDOW means the 0.15 stop was not touched in a filled
+    96-bar window. It is not a winning trade and not a take-profit.
+
+entryOk
+    bool. Presence of the next-open entry. True on all 8783 rows
+    in this file, including NO_STRUCTURE.
+
+entryPrice
+    float64. Quote price of that next open. Continuous.
+    Present when entryOk. This file has no missing entry.
+    A cut on entry price is a price-level cut, not an excursion cut.
+
+excursionOk
+    bool. Full-window price excursion was written.
+    True on all 8783 rows in this file.
+    The walk sets it only after at least one successor bar.
+    A false flag is missing excursion, not a zero move.
+    This file simply has no such row.
+
+mfePrice
+    float64. Quote-price favorable excursion from the next open,
+    maximum over every supplied bar, including bars after the stop.
+    Continuous. Path fact.
+    Unit: price.
+    Observation iff excursionOk.
+    Zero is real. This file has 20 rows with excursionOk and
+    mfePrice 0.
+
+maePrice
+    float64. Quote-price adverse excursion. Same clock and same rule.
+    Zero is real. The NO_STRUCTURE Star has maePrice 0, excursionOk
+    true, and a real maeAt. That zero is an observation.
+
+atrExcursion
+    bool. Stored Star ATR was present and positive, so the ATR
+    excursion was written.
+    False on the one NO_STRUCTURE Star. True on the other 8782.
+
+mfeAtr
+    float64. mfePrice / stored Star ATR.
+    Continuous. Path fact. Unit: ATR multiples of that Star.
+    Observation iff atrExcursion.
+    The NO_STRUCTURE row stores mfeAtr 0 with atrExcursion false.
+    That 0 is not an observation.
+    Twenty other rows store mfeAtr 0 with atrExcursion true.
+    Those zeros are real.
+    Not interchangeable with mfePercent.
+
+maeAtr
+    float64. maePrice / stored Star ATR. Same rule as mfeAtr.
+
+mfePercent
+    float64. mfePrice / entryPrice.
+    Continuous. Path fact. Unit: fraction of the next open.
+    The file's median is about 0.015, which is 1.5 percent of entry.
+    Observation iff excursionOk and entryOk.
+    Not a percent of R. Not a rescaling of mfeAtr.
+    Zero is real under the same rule as mfePrice.
+
+maePercent
+    float64. maePrice / entryPrice. Same rule as mfePercent.
+
+mfeAt
+    int64. Open time of a successor bar that printed mfePrice.
+    Timestamp. Calendar time. Not a duration and not a bar count.
+    JSON omits 0. In this file every excursionOk row has mfeAt,
+    including the 20 real zero-price MFE rows, because the walk
+    stamps the first bar.
+    Absent mfeAt means no timestamp. It does not mean "peaked at
+    the decision."
+
+maeAt
+    int64. Open time of a successor bar that printed maePrice.
+    Same rule as mfeAt.
+
+stopPrice
+    float64. Quote price of the 0.15 stop.
+    JSON omits 0. Present only when the stored stop is valid.
+    Recipe field. Not a generic Star property.
+
+stopDistance
+    float64. Absolute entry-to-stop distance. This is one R, in price.
+    JSON omits 0. Present iff the stop is valid.
+    A valid stop cannot have distance 0. The walk rejects a
+    non-positive distance.
+    So an omitted stopDistance means R is undefined, not a tight stop.
+
+stopDistanceAtr
+    float64. stopDistance / stored Star ATR.
+    Continuous. Unit: ATR. Recipe field.
+    Same presence rule as stopDistance.
+    This is the width of the stop, not MFE and not MAE.
+
+r
+    float64. Same number as stopDistance, in price.
+    JSON omits 0. The JSON name is "r".
+    8736 rows have r. 47 do not:
+    46 INVALID_GEOMETRY and 1 NO_STRUCTURE.
+    Those 47 are "no R defined."
+
+stopReached
+    bool. The 0.15 stop was touched on a successor bar.
+    5957 true = STOP_FIRST 5887 + UNORDERED_BAR 70.
+    False is not a missing flag. On a valid stop it means the stop
+    was not touched in the bars that exist.
+    On the 47 rows with no R, false is "no stop to touch," which
+    the status already says. Do not read it as survived.
+
+stopAt
+    int64. Open time of the first bar that touched the stop.
+    JSON omits 0. Present on all 5957 stopReached rows.
+    Absent when the stop was not touched. Absence is not a time of 0.
+
+hit1R, hit2R, hit3R
+    bool. Event. Recipe field. See section 6.
+    JSON always writes the bool.
+    False is not, by itself, "not reached."
+
+at1R, at2R, at3R
+    int64. Open time of the bar that first awarded that R level.
+    JSON omits 0.
+    Present on every row where the matching hit flag is true.
+    This file: hit1R 4160, all 4160 have at1R.
+    Absent when that level was not awarded.
+    Timestamp of the award, not a duration.
+
+Not on this file, present only on star_outcome_dataset.json
+as capture, digest e217ccb6… :
+
+    eligible, known
+    stopReached, stopAt
+    timeKnown, timeToStopMs
+    favorablePrice, adversePrice
+    favorablePercent, adversePercent
+    atrKnown, favorableAtr, adverseAtr
+    exitKnown, exitDistance, exitPercent, exitAtr
+
+timeToStopMs is stopAt minus the open time of the first path bar,
+and only when the stop was touched. timeKnown false means there is
+no such duration. It is not zero milliseconds.
+Capture favorable and adverse stop before the stop bar and exclude
+that bar's wick. Full-window mfePrice includes bars after the stop.
+A lens must not draw those two under one name.
+The dataset's state object is not Schema 3 and is not a Matrix row.
+The first lens does not read it.
+
+============================================================
+3. FIELD TYPE CLASSIFICATION
+============================================================
+
+Identity
+    decisionAt, side, and the row index in the 8783.
+
+Categorical
+    status, side.
+
+Boolean event, three-state where section 6 or 8 says so
+    hit1R, hit2R, hit3R, stopReached.
+
+Presence flags, not filters a person toggles as outcomes
+    entryOk, excursionOk, atrExcursion.
+    They decide whether the matching number is in the histogram.
+
+Continuous path facts
+    mfePrice, maePrice, mfeAtr, maeAtr, mfePercent, maePercent.
+
+Continuous recipe facts, only when R is defined
+    stopPrice, stopDistance, stopDistanceAtr, r.
+
+Timestamps
+    mfeAt, maeAt, stopAt, at1R, at2R, at3R.
+
+Duration
+    none stored on star_sl_outcome.json.
+    timeToStopMs is stored only on the dataset capture.
+
+============================================================
+4. UNIT DEFINITIONS
+============================================================
+
+decisionAt, mfeAt, maeAt, stopAt, at1R, at2R, at3R
+    Unix milliseconds. Bar open times.
+    mfeAt and maeAt are not "bars until the extreme."
+
+side, status
+    The strings in section 2. No rename in the lens.
+
+entryPrice, mfePrice, maePrice, stopPrice, stopDistance, r
+    Quote price of the instrument.
+
+mfeAtr, maeAtr, stopDistanceAtr
+    Multiples of the stored 15-minute Star ATR.
+    stopDistanceAtr is the stop width under the 0.15 buffer.
+    mfeAtr is how far price traveled in favor, in that same ATR.
+    They share a unit and are different measurements.
+
+mfePercent, maePercent
+    Fractions of entryPrice. 0.015 is 1.5 percent of entry.
+    Not percent of R. Not ATR.
+
+hit1R, hit2R, hit3R, stopReached
+    Events under the 0.15 stop. No unit.
+
+timeToStopMs, dataset only
+    Milliseconds from the first path bar's open to stopAt.
+
+============================================================
+5. MISSING, OK, AND ZERO
+============================================================
+
+There is no global rule that zero means missing.
+
+Price and percent
+    In the histogram iff excursionOk, and for percent also entryOk.
+    Zero with those flags true is a real print.
+    This file: excursionOk is true on every row. Twenty MFE prices
+    are real zeros. The NO_STRUCTURE MAE price is a real zero.
+
+ATR excursion
+    In the histogram iff atrExcursion.
+    mfeAtr 0 and maeAtr 0 on the NO_STRUCTURE Star are missing.
+    mfeAtr 0 with atrExcursion true is a real zero. Twenty rows.
+
+R, stop price, stop distance
+    Defined iff r is present and greater than 0.
+    That is 8736 rows.
+    The other 47 have no R. Their omitted r, omitted stopDistance,
+    and hit flags false are one state: no R defined.
+    A valid stop does not store a zero distance.
+
+Extreme times
+    mfeAt and maeAt are in the time picture iff excursionOk and the
+    timestamp is present.
+    This file has both on every row.
+
+Stop time
+    stopAt is a timestamp iff stopReached.
+    Omitted stopAt with stopReached false means the stop was not
+    touched, or no stop exists. It is not a timestamp of 0.
+
+R times
+    at1R is a timestamp iff hit1R. Same for 2R and 3R.
+
+Discovery percentiles are a narrower set than these flags.
+They drop INCOMPLETE_WINDOW and PATH_GAP even when ATR excursion
+was written, and they drop the NO_STRUCTURE Star.
+The two incomplete rows in this file have real partial MFE
+(about 6.49 ATR and about 2.06 ATR).
+A lens histogram includes a row when the field's own flag is true.
+Leaving an incomplete window out is a status clause the person
+turns on. The histogram does not hide that clause.
+
+Invalid geometry, no structure, and unavailable R are never drawn
+as the number 0.
+
+============================================================
+6. 1R / 2R / 3R CONTRACT
+============================================================
+
+These events belong only to the frozen 0.15 ATR stop.
+bufferAtr on the outcome file is 0.15.
+One R is the absolute entry-to-stop distance stored as r.
+The UI label is "1R / 0.15", "2R / 0.15", "3R / 0.15".
+A later buffer would be a different event and a different file.
+This repository has no 0.25, 0.35, or 0.50 outcome file.
+
+For an up Star the level is entry + n * r.
+For a down Star the level is entry - n * r.
+n is 1, 2, or 3.
+
+Path rules, already in walkPath:
+
+    The Star bar is not a path bar.
+    The first path bar is the entry bar. Its open is the entry.
+    R is considered only on bars before the stop bar.
+    The stop bar does not award a new R level.
+    If that same bar also trades through an R level, status is
+    UNORDERED_BAR and that new level is not awarded.
+    Earlier levels on earlier bars stay. That is why 13 unordered
+    rows still have hit1R, and 2 of them have hit2R.
+    Bars after the stop update MFE and MAE and do not award R.
+    Reaching 1R does not mean the window was survived.
+    STOP_FIRST and hit1R both occur on 1879 rows.
+    SURVIVED_WINDOW and hit1R both occur on 2267 rows.
+    Those are different populations.
+    Neither is marked success.
+
+Counts in this file: hit1R 4160, hit2R 2486, hit3R 1642.
+hit2R with hit1R false: 0.
+hit3R with hit2R false: 0.
+On this recipe and this file, 3R implies 2R and 2R implies 1R,
+because the farther level cannot print without the nearer level
+on a bar that is allowed to award R.
+The lens still reads the stored bool. It does not infer 1R from 2R.
+Checking 2R / 0.15 is already the smaller set. Checking 1R as well
+does not remove any more of these 8783 rows.
+
+Three states, for each of 1R, 2R, and 3R:
+
+    reached
+        hit flag true. Requires R defined.
+    not reached on a valid R
+        r present and greater than 0, hit flag false.
+        4576 rows for 1R.
+    no R defined
+        r omitted or not greater than 0. 47 rows.
+        The hit flag is false here too.
+        The lens must not call this "not reached."
+
+The control shows three readings. A two-position checkbox is not
+enough. The clause a person can apply is "reached" or
+"not reached on a valid R." Rows with no R stay outside both.
+
+============================================================
+7. CONTINUOUS HISTOGRAM CONTRACT
+============================================================
+
+A continuous dimension gets a histogram and one threshold.
+The threshold is a number the person sets. This chapter does not
+choose one.
+
+The picture for field X is the distribution of X on
+
+    source population
+    intersect every other active lens clause
+    excluding the clause on X itself
+
+Only rows whose OK rule in section 5 passes contribute a number.
+Missing rows are counted beside the picture as missing.
+They are not stacked at zero.
+
+The handle marks the passing side of the X clause.
+The picture keeps the mass on both sides of the handle, so the
+person can see whether the handle sits in the dense part or in
+the tail.
+
+Bins are a display of that picture.
+They are not the discovery quintiles.
+They are not refit as research edges.
+They are not saved as the population.
+The saved fact is the threshold, the comparison, and the field name.
+
+Moving the X handle changes the lens-pass count, the chart marks,
+and every other picture and event rate.
+It does not change the source population.
+It does not redraw X from only the passing side.
+
+============================================================
+8. BOOLEAN AND CATEGORICAL EVENT CONTRACT
+============================================================
+
+status, side, stopReached, and the three R events are counts
+and clauses. They are not histograms.
+
+A status clause is equality with one stored status string.
+The discovery words map onto those strings and nothing else:
+
+    survived     SURVIVED_WINDOW
+    stop first   STOP_FIRST
+    unordered    UNORDERED_BAR
+    no reading   every other status
+
+The lens may offer the four discovery words.
+It may also offer the raw status, so incomplete is not silently
+called "no reading" when the person is looking at partial MFE.
+The label uses the status string or the discovery word above.
+It does not say "target" or "win."
+
+stopReached is its own event.
+It is true for both STOP_FIRST and UNORDERED_BAR.
+
+R events use the three states in section 6.
+
+An event control shows its rate on the set defined by the other
+clauses, excluding itself.
+If the picture were drawn after its own clause, a checked
+"1R / 0.15 reached" would always read 100 percent.
+The check is the clause. The rate is the shape before that clause.
+
+============================================================
+9. TIME-FIELD CONTRACT
+============================================================
+
+mfeAt, maeAt, stopAt, at1R, at2R, and at3R are bar open times.
+A histogram of those values is a calendar of when the event
+printed. It is not "time to peak."
+
+No duration column exists on star_sl_outcome.json.
+This chapter does not add one.
+
+If a later lens shows a duration, the only transformation this
+contract allows, and only for mfeAt or maeAt, is:
+
+    extreme open time minus decisionAt, in milliseconds
+
+and only when the extreme time is present under section 5.
+That difference is not a bar count.
+The entry bar opens after decisionAt. Entry time is not a field
+on the outcome row, so this contract does not define
+"bars after entry."
+The UI does not invent a second subtraction.
+
+stopAt minus decisionAt is not time-to-stop.
+timeToStopMs already has a definition on the capture, and it is
+not on the outcome file. A lens that wants it names the dataset
+digest and requires timeKnown. known false on capture excursion
+means there was no pre-stop bar. That is not a zero excursion.
+
+A calendar cut on decisionAt is allowed. The holdout wall
+1767225600000 is one such bound a person may type.
+Using it records a time clause.
+It does not move discovery slice edges.
+
+============================================================
+10. AND SEMANTICS
+============================================================
+
+Every active clause in one lens is combined with AND.
+
+A Star passes the lens when it is in the source population and
+it satisfies every clause.
+A missing value fails a clause on that value.
+It does not pass as zero.
+
+An empty lens passes the whole source population.
+
+============================================================
+11. OR AND SAVED-POPULATION UNION
+============================================================
+
+The lens has no OR control.
+"1R or survived" is not a checkbox mode.
+
+A union, if built later, is an operation on two populations that
+have already been saved. It is not part of this lens.
+This chapter does not specify its screen.
+
+============================================================
+12. POPULATION AND LENS
+============================================================
+
+A population is an immutable set of Star identities plus the
+record of the operation that made the set.
+
+A lens is a temporary query over one population.
+Changing the lens does not add, remove, or rewrite members.
+Closing the lens leaves the population as it was.
+
+The source populations the lens is allowed to open first are
+groupings already defined:
+
+    all 8783
+    side up, side down
+    one status, or one discovery survival word
+    discovery period, holdout period
+        decisionAt < 1767225600000, and the complement
+    a discovery slice or its missing group, for one coordinate,
+        using the stored edges and SliceIndex
+    a child that was saved earlier
+
+A discovery slice is a rank group of one coordinate.
+It is not a bin of the MFE histogram.
+
+============================================================
+13. HISTOGRAM SELF-CLAUSE EXCLUSION
+============================================================
+
+histogram(X) and the event rate of X are computed on the source
+population intersected with every active clause except the clause
+on X.
+
+The X control then shows which side of that picture passes.
+
+This is the rule for MFE ATR, MFE percent, MAE ATR, MAE percent,
+the other continuous fields in section 2, and for status, side,
+stopReached, and 1R / 0.15, 2R / 0.15, 3R / 0.15.
+
+============================================================
+14. THREE COUNTS
+============================================================
+
+Population count
+    Members of the immutable source.
+
+Lens-pass count
+    Source members that satisfy every active clause.
+    Equal to the population count when the lens is empty.
+
+Chart-view count
+    Lens-pass members whose decisionAt lies in the current
+    visible chart range.
+    The mark is the decision candle, the same instant the
+    inspection shell already uses.
+    Stars that pass the lens and sit off-screen count in the
+    lens and not in the view.
+
+The panel shows all three.
+The camera is not a member, not a clause, and not an identity.
+
+============================================================
+15. POPULATION IDENTITY AND PROVENANCE
+============================================================
+
+A row index is meaningful only inside one named universe.
+This universe is the 8783 Stars in decisionAt order.
+
+Each member stores:
+
+    index
+    decisionAt
+    side
+
+Those three must match the row in the named files.
+The repository does not have a second Star id. This contract
+does not add one.
+
+The population stores the digests it actually depends on:
+
+    Always, for this universe:
+        Schema 3 digest 934e2e0d… and commit 975da0d
+    When the set is a discovery slice or the discovery baseline:
+        discovery digest 72f653c3…
+        matrix digest 8c08c2a6… and commit 0389023
+    When any field in section 2 is read:
+        outcome digest 6a11ed61…
+    When a capture field is read:
+        dataset digest e217ccb6…
+        not the outcome digest alone
+
+The operation record is append-only on the child, not an edit
+of the parent. Each line has the parent, the operation, the
+field, the bound or the event state, and the time it was saved.
+
+============================================================
+16. SAVE-CHILD SEMANTICS
+============================================================
+
+Save freezes the current lens as a new population.
+
+The parent is unchanged.
+The child stores:
+
+    parent identity
+    operation: lens
+    each clause: field, comparison, bound or event state
+    the digests from section 15
+    the member identities that passed
+
+Replay of the parent plus those clauses must produce the same
+members. A mismatch is a broken child. It is not rewritten in
+place and it is not treated as the parent.
+
+The camera is not stored.
+Prev and next, when this is built, walk the lens in decisionAt
+order. They are not a new population.
+
+Manual inclusion or exclusion, when it is built, is a child
+with its own line. It is not an edit of the parent.
+This chapter does not build that control. It only says the
+parent stays immutable.
+
+============================================================
+17. DISCOVERY AND HOLDOUT
+============================================================
+
+A population may contain discovery members, holdout members, or
+both. decisionAt before 1767225600000 is discovery. The rest is
+holdout. The panel shows both counts.
+
+Holdout members stay visible when they are in the set.
+The lens does not drop them on its own.
+
+This chapter adds no train, validation, or holdout selection rule.
+Discovery slice edges stay the edges already stored.
+A histogram of a mixed population is a picture of that population.
+It is not a new fit of those edges, and it is not a reason to
+move them.
+
+============================================================
+18. OUTCOME DIGEST REQUIREMENTS
+============================================================
+
+Any population whose clauses or path pictures use section 2
+stores outcome digest
+
+    6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+
+together with the Schema 3 digest, and the matrix and discovery
+digests when those files define the parent.
+
+Any population that uses capture stores dataset digest
+
+    e217ccb6d19f12bd1856107c6917a69452255b835667177dbb89f28349703804
+
+The outcome chapter is not frozen by being named here.
+Saving a lens does not write either JSON file.
+
+============================================================
+19. FUTURE SCHEMA 3 AND MATRIX COMPATIBILITY
+============================================================
+
+A later clause may name one Schema 3 coordinate or one stored
+relation. The operation is the same continuous clause: a field,
+an OK rule, and a bound.
+
+The OK rule is the one discovery already uses.
+VWEMA, orange mid, and the channel bounds are present when the
+bar is present and the number is finite.
+ValuesOK is not their gate.
+Every other raw coordinate uses its existing OK flag.
+A relation uses the stored relation OK flag.
+The browser does not subtract the two operands.
+
+Missing fails the clause and stays out of that histogram.
+A stored zero with OK true is a real zero.
+
+This chapter does not inventory the 191 names into a filter
+catalog and does not add a second representation for them.
+Discovery slices of those coordinates remain the frozen rank
+groups. A person's bound on the same coordinate is a different
+population and is labeled as that person's cut.
+
+============================================================
+20. NON-GOALS
+============================================================
+
+This chapter does not decide a strongest field, a best threshold,
+a best population, a region, a side, a strategy, or a trading rule.
+It does not rank, score, train, or search.
+It does not treat SURVIVED_WINDOW, hit1R, or a large MFE as success.
+It does not build the chart, the histogram control, or the tree.
+It does not add OR.
+It does not add a duration column.
+It does not reopen Schema 3, the matrix, the discovery join, or
+the outcome walk.
+
+============================================================
+21. CORRECTIONS
+============================================================
+
+The requested inventory asked for time-to-stop as if it lived
+with MFE on the outcome artifact. It does not.
+star_sl_outcome.json has no timeToStopMs.
+That duration is capture.timeToStopMs on star_outcome_dataset.json,
+and only when timeKnown is true.
+Full-window MFE and capture favorable excursion are different
+clocks. The contract keeps them apart.
+
+The histogram self-clause rule is also the rule for event rates.
+A checked 1R control would otherwise report 100 percent.
+
+On this file, 2R implies 1R and 3R implies 2R.
+The implication is a property of these stored flags, 0 exceptions.
+The lens still stores and reads each flag.
+It does not manufacture the nearer flag from the farther one.
+
+The NO_STRUCTURE row is the missing-versus-zero example.
+maePrice 0 is real. mfeAtr 0 is not, because atrExcursion is false.
+
+Incomplete windows keep a partial MFE in the outcome file.
+Discovery percentiles left them out. The lens includes them until
+a status clause says otherwise.
+
+A duration of "bars to the peak" is not defined. Entry time is
+not on the outcome row. The only reserved subtraction is
+mfeAt or maeAt minus decisionAt, in milliseconds, and this chapter
+does not expose it.
+
+The dataset state block is not Schema 3. Later coordinate filters
+read Schema 3 and the matrix, not that block.
+
+============================================================
+22. FILES
+============================================================
+
+Inspected, not modified:
+    forecast/star_outcome.go
+    forecast/star_capture.go
+    forecast/star_stop.go
+    market/star_sl_outcome_cert_test.go
+    market/star_outcome_dataset_cert_test.go
+    market/star_discovery.go
+    research/starstop/star_sl_outcome.json
+    research/starstop/star_outcome_dataset.json
+    research/cleanup/STAR-SL-OUTCOME-1.txt
+    research/cleanup/DISCOVERY-PROTOCOL-V1.txt
+
+Written:
+    research/cleanup/POPULATION-FILTER-LENS-CONTRACT-AUDIT-V1.txt
+
+No commit. No push.

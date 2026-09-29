@@ -1,0 +1,44 @@
+POPULATION-LENS-CORE-V1
+Date: 2026-09-29
+CERTIFIED. Core evaluator only. No chart.
+
+forecast/starlens
+    go test ./forecast/starlens/  PASS
+
+real archive, when star_sl_outcome.json is present:
+    8783 total
+    4160  1R / 0.15 reached
+    4576  1R / 0.15 not reached on valid R
+    47    1R / 0.15 no R
+    2486  2R / 0.15 reached
+    1642  3R / 0.15 reached
+    1879  STOP_FIRST and 1R reached
+    2267  SURVIVED_WINDOW and 1R reached
+    2R implies 1R, 3R implies 2R, zero exceptions
+
+self-exclusion:
+    1R rate = 4160 / 8783
+    pass set = 4160
+
+missing:
+    1 ATR MFE observation missing
+    20 real MFE zeros retained
+
+persistence:
+    child replay equals stored members
+    parent unchanged
+    PASS
+
+source integrity:
+    star_sl_outcome.json is not in this commit
+    digest 6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+    the archive test hashes the file before and after evaluation
+    PASS on a local copy
+
+The archive test skips when the outcome file is not on disk.
+A clean checkout of this freeze does not require that JSON.
+
+Contract:
+    research/cleanup/POPULATION-FILTER-LENS-CONTRACT-AUDIT-V1.txt
+Implementation notes:
+    research/cleanup/POPULATION-LENS-EVALUATOR-1.txt

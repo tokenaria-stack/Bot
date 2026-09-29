@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## POPULATION-LENS-CORE-V1 — typed lens, no chart
+
+**Context:** A population is an immutable set of Stars. A person needs to cut it on certified outcome fields without treating `hit1R:false` as one meaning.
+
+**Decision:** Freeze `forecast/starlens`. Clauses are typed. R is reached or not-reached only when the stored distance is present and positive. Missing is not zero. Pictures omit a field's own clause. Save writes a child. Replay must match the stored members. The outcome JSON stays outside this commit.
+
+**Rejected:** A generic boolean filter — **Reason:** the 47 rows with no R also store hit flags false. Calculating R or missingness in the UI — **Reason:** the evaluator already owns those rules.
+
+**Consequences:** The next chapter is a UI that calls this package. It does not recompute R state. Capture fields stay out. Schema 3 filters stay later.
+
+---
+
 ## UI-INSPECTION-SHELL-V1 — the panel reads certified rows
 
 **Context:** The path join is frozen and no region is named. A person needs to see one Star's state, relations, and path before any later inspection of the 191 views.
