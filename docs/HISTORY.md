@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## LEGACY-CHART-TOGGLE-CLEANUP-V1 — unreachable spike painter and toggle shims (Sep 2026)
+
+- Removed `buildSpikeMarkers*`, FE spike annotation ingest, and boot `renderFib` / `lastFibZones` shims.
+- Did not change `market` Volume Spike detector, Frame fields, or `ChartOscillator` JSON.
+- Report `research/cleanup/LEGACY-CHART-TOGGLE-CLEANUP-V1.txt`.
+
 ## STAR-MICROSCOPE-SHELL-V1 — rail navigator, style menu, dead checkbox bar (Sep 2026)
 
 - Star identity, ordinal, Prev/Next/Clear live only on the inspection header. Lens collapse does not hide them.

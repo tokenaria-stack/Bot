@@ -18,13 +18,11 @@
   window.isLoadingHistory = window.isLoadingHistory ?? false;
   window.isAppInitialized = window.isAppInitialized ?? false;
   window.sessionTrades = window.sessionTrades ?? [];
-  window.spikeMarkers = window.spikeMarkers ?? [];
   window.refreshTimer = window.refreshTimer ?? null;
   window.orderFlowPollTimer = window.orderFlowPollTimer ?? null;
   window.isUpdatingData = false;
   window.__isDashboardLoading = false;
   window.__isSettingsUpdating = false;
-  window.lastFibZones = window.lastFibZones ?? [];
 
   let backendTradingTimeframe = null;
   let liveHistoryScrollArmed = false;
@@ -632,8 +630,6 @@
           ? ChartAdapter.getPriceSeries(ctx)
           : null,
       }),
-      setToggleSeriesVisible: noop,
-      renderFib: noop,
       setEquityData: noop,
       fitEquityContent: noop,
       resizeEquity: noop,

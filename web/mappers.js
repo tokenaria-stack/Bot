@@ -279,8 +279,6 @@ function normalizeOscPoint(p) {
   ['rsiVolSlow', p.rsiVolSlow],
   ['color', p.color],
   ['marker', p.marker],
-  ['volumeSpikeUp', p.volumeSpikeUp],
-  ['volumeSpikeDown', p.volumeSpikeDown],
   ];
   for (const [key, value] of fields) {
     if (value !== undefined) res[key] = value;
@@ -301,8 +299,6 @@ function chartPointsToOsc(points) {
       rsiVolSlow: p.rsiVolSlow ?? p.wozduh_down ?? p.RsiVolSlow,
       color: p.color ?? p.Color,
       marker: p.marker ?? p.Marker,
-      volumeSpikeUp: p.volumeSpikeUp ?? p.VolumeSpikeUp,
-      volumeSpikeDown: p.volumeSpikeDown ?? p.VolumeSpikeDown,
     }))
     .filter(Boolean);
 }
@@ -458,42 +454,6 @@ function mapNavigatorLinesForChart(lines, candles) {
   }).filter(Boolean);
 }
 
-function buildSpikeMarkersFromGrid(annotationMap, { showSpike = true } = {}) {
-  if (!showSpike || !annotationMap) return [];
-  const markers = [];
-  annotationMap.forEach((ann, ms) => {
-    if (!ann.spikeUp && !ann.spikeDown) return;
-    const time = ChartDataStore.msToChartSec(ms);
-    if (ann.spikeUp) {
-      markers.push({
-        time,
-        position: 'belowBar',
-        color: (typeof ChartTheme !== 'undefined') ? ChartTheme.spikeUp : TV.green,
-        shape: 'circle',
-        text: '▲',
-      });
-    }
-    if (ann.spikeDown) {
-      markers.push({
-        time,
-        position: 'aboveBar',
-        color: (typeof ChartTheme !== 'undefined') ? ChartTheme.spikeDown : TV.red,
-        shape: 'circle',
-        text: '▼',
-      });
-    }
-  });
-  return markers.sort((a, b) => a.time - b.time);
-}
-
-/** @deprecated Use buildSpikeMarkersFromGrid — kept for callers passing annotation Map. */
-function buildSpikeMarkers(annotationMapOrOsc) {
-  if (annotationMapOrOsc instanceof Map) {
-    return buildSpikeMarkersFromGrid(annotationMapOrOsc);
-  }
-  return buildSpikeMarkersFromGrid(new Map());
-}
-
 function normalizeTradeRow(t) {
   const pnl = Number(t.pnl ?? 0);
   return {
@@ -544,8 +504,6 @@ if (typeof window !== 'undefined') {
     normalizeTf,
     resolveTf,
     normalizeTradeRow,
-    buildSpikeMarkers,
-    buildSpikeMarkersFromGrid,
   };
 }
 

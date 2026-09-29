@@ -33,7 +33,7 @@ class ColumnarStore {
     this._plots = {};
     /** @type {object[]} wire-format annotations for full paint */
     this._annotations = [];
-    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, rsxLabel, ... } */
+    /** @type {Map<number, object>} snappedMs → { rsxLabel, ... } */
     this._annotationMap = new Map();
     /** @type {object[]} sparse Wozduh crossover presentation events */
     this._wozduhCrossovers = [];
@@ -546,18 +546,11 @@ class ColumnarStore {
     if (ann?.color) props.color = ann.color;
     if (ann?.position) props.position = ann.position;
     if (ann?.shape) props.shape = ann.shape;
-    if (ann?.spikeUp) props.spikeUp = true;
-    if (ann?.spikeDown) props.spikeDown = true;
     return props;
   }
 
-  static _propsFromTick(tick) {
-    if (!tick || typeof tick !== 'object') return null;
-    const props = {};
-    if (tick.volumeSpikeUp || tick.VolumeSpikeUp) props.spikeUp = true;
-    if (tick.volumeSpikeDown || tick.VolumeSpikeDown) props.spikeDown = true;
-    // Phase F: tick.marker L/LL/S/SS no longer published to the chart store.
-    return Object.keys(props).length ? props : null;
+  static _propsFromTick(_tick) {
+    return null;
   }
 
   _mergeAnnotationProps(ms, incoming) {
@@ -566,8 +559,6 @@ class ColumnarStore {
     }
     const existing = this._annotationMap.get(ms) || { timeMs: ms };
     const merged = { ...existing, ...incoming, timeMs: ms };
-    if (existing.spikeUp || incoming.spikeUp) merged.spikeUp = true;
-    if (existing.spikeDown || incoming.spikeDown) merged.spikeDown = true;
     this._annotationMap.set(ms, merged);
     return merged;
   }

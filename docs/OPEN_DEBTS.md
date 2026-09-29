@@ -80,6 +80,8 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **POPULATION-LENS-UI-V1 ✅ frozen.** Report `research/cleanup/POPULATION-LENS-UI-V1.txt`. The rail sends typed clauses to `forecast/starlens`. Do not compute R or missingness in the browser.
 
+**LEGACY-CHART-TOGGLE-CLEANUP-V1 ✅ frozen.** Report `research/cleanup/LEGACY-CHART-TOGGLE-CLEANUP-V1.txt`. Presentation spike painter gone. Do not restore `.indicator-bar`. Do not delete Frame/wire Volume Spike facts in a UI chapter.
+
 **STAR-MICROSCOPE-SHELL-V1 ✅ frozen.** Report `research/cleanup/STAR-MICROSCOPE-SHELL-V1.txt`. One Star navigator on the rail. Do not put Star Prev/Next back on the chart toolbar. Do not restore `.indicator-bar`. Volume-spike Frame/wire stubs wait for a later fact chapter.
 
 **STAR-CHART-VISUAL-DISPLAY-V1 ✅ frozen.** Report `research/cleanup/STAR-CHART-VISUAL-DISPLAY-V1.txt`. Population paint is canvas Star4 plus local colors/shape. Path clip is 96 successor bars. Do not write those prefs into Population JSON.

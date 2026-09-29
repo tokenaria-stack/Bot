@@ -424,6 +424,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **POPULATION-LENS-UI-V1 ✅ frozen.** The inspection rail posts typed clauses to the evaluator. Chart marks are the current pass list inside the viewport. The selected Star stays the microscope. No learner.
 
+**LEGACY-CHART-TOGGLE-CLEANUP-V1 ✅ frozen.** Dead spike painter and toggle shims removed. Frame/wire Volume Spike facts stay dormant.
+
 **STAR-MICROSCOPE-SHELL-V1 ✅ frozen.** The rail header is the only Star navigator. Population/Lens stays collapsible underneath. Chart style prefs live in the microscope style menu. The timeframe toolbar has no Star strip. The dead indicator checkbox bar is gone.
 
 **STAR-CHART-VISUAL-DISPLAY-V1 ✅ frozen.** Population Stars are canvas Star4 (or chosen shape) on the 15m candle high/low. Path lines end at successor bar 96. Show and Save are unchanged.

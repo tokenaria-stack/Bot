@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## LEGACY-CHART-TOGGLE-CLEANUP-V1 — dead presentation only (Sep 2026)
+
+**Context:** The four-checkbox strip was already gone. A spike marker painter and boot fib/toggle shims still sat on a path with no live caller.
+
+**Decision:** Delete the unreachable spike painter, FE spike annotation ingest, and `lastFibZones` / `renderFib` / `setToggleSeriesVisible` shims. Leave `market` detector, Frame fields, snapshot, and `ChartOscillator` wire bools.
+
+**Rejected:** Deleting `DetectWozduxVolumeSpike*` — **Reason:** that is a dormant market fact, not product chrome.
+
+**Consequences:** A later chapter may reintroduce Volume Spike as an explicit research fact. Do not restore the checkbox strip.
+
+---
+
 ## STAR-MICROSCOPE-SHELL-V1 — one rail navigator (Sep 2026)
 
 **Context:** Star Prev/Next lived twice. Style lived on the Lens form. A dead indicator checkbox strip sat under the timeframe bar.

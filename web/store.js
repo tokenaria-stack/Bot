@@ -7,7 +7,6 @@ class ChartDataStore {
     this.context = context;
     this.candles = new Map();
     this.osc = new Map();
-    /** @type {Map<number, object>} snappedMs → { spikeUp, spikeDown, rsxLabel, ... } */
     this.annotations = new Map();
     this._dirtyMs = null;
     this._dirtyIsNewBar = false;
@@ -135,21 +134,14 @@ class ChartDataStore {
     return props;
   }
 
-  _propsFromOscPoint(snapped) {
-    if (!snapped) return null;
-    const props = {};
-    if (snapped.volumeSpikeUp) props.spikeUp = true;
-    if (snapped.volumeSpikeDown) props.spikeDown = true;
-    // Phase F: snapped.marker L/LL/S/SS not stored.
-    return Object.keys(props).length ? props : null;
+  _propsFromOscPoint(_snapped) {
+    return null;
   }
 
   _mergeAnnotationProps(ms, incoming) {
     if (!incoming || !Object.keys(incoming).length) return this.annotations.get(ms) || null;
     const existing = this.annotations.get(ms) || { timeMs: ms };
     const merged = Object.assign({}, existing, incoming, { timeMs: ms });
-    if (existing.spikeUp || incoming.spikeUp) merged.spikeUp = true;
-    if (existing.spikeDown || incoming.spikeDown) merged.spikeDown = true;
     const changed = JSON.stringify(merged) !== JSON.stringify(existing);
     this.annotations.set(ms, merged);
     if (changed) this._dirtyAnnotations = true;

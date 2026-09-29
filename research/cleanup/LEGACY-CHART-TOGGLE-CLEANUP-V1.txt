@@ -1,0 +1,31 @@
+LEGACY-CHART-TOGGLE-CLEANUP-V1
+Shallow presentation cleanup. Not a Volume Spike engine deletion.
+
+Already gone (STAR-MICROSCOPE-SHELL-V1)
+  .indicator-bar
+  #tog-jurik #tog-spike #tog-volume #tog-fib
+  ToolbarController listeners
+  isSpikeEnabled / isFibEnabled
+
+Reachability (this chapter)
+  toggle → listeners → gone
+  ChartOscillator volumeSpike* still on the Go wire, always compacted false
+  FE used to copy those bools into annotation maps
+  annotationToNativeMarker / applyLiveAnnotationLayer never paint spikeUp
+  buildSpikeMarkersFromGrid had zero callers (including tests)
+  lastFibZones / renderFib / setToggleSeriesVisible were boot noops only
+
+Deleted
+  mappers buildSpikeMarkers*
+  mappers / store / columnar ingest of volumeSpike* into annotations
+  ChartTheme spikeUp / spikeDown
+  boot lastFibZones, spikeMarkers, renderFib, setToggleSeriesVisible
+
+Left
+  market DetectWozduxVolumeSpikeUp/Down
+  Frame + snapshot fields
+  ChartOscillator volumeSpikeUp / volumeSpikeDown
+  strategy/ untouched
+
+Do not restore the checkbox strip.
+A later chapter may reintroduce Volume Spike as a named research fact.

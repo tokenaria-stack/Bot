@@ -29,10 +29,6 @@ const ChartTheme = {
   hiddenDiv: '#7b1fa2',
   rsxJurikDot: '#c8a882',
 
-  // ── Volume spikes ───────────────────────────────────────────────────────────
-  spikeUp: '#089981',
-  spikeDown: '#f23645',
-
   // ── Navigator / trendline primitives ────────────────────────────────────────
   navHH: '#089981',
   navLL: '#f23645',
