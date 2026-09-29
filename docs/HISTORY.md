@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-CHART-VISUAL-DISPLAY-V1 — Star4, display menu, 96-bar path clip (Sep 2026)
+
+- Population glyphs use the Wozduh four-pointed star on canvas. Shape and up/down colors are local display prefs.
+- Swing keeps the circle. Path lines start at swing (or decision) and end at successor bar 96.
+- Report `research/cleanup/STAR-CHART-VISUAL-DISPLAY-V1.txt`.
+
 ## POPULATION-LENS-DISPLAY-V2 — candle Stars and a scrolling rail (Sep 2026)
 
 - Population members use Lightweight Charts markers on the decision candle. Up green, down red.

@@ -80,10 +80,12 @@ function main() {
 
   test('star, swing, and next-open entry use the supplied times', () => {
     const plan = Overlay.researchPlan(star2);
-    const byText = Object.fromEntries(plan.markers.map((m) => [m.text.split(' ')[0], m]));
+    const byText = Object.fromEntries(plan.markers.filter((m) => m.text).map((m) => [m.text.split(' ')[0], m]));
     assert.strictEqual(byText.Star.time, 1567997100);
-    assert.strictEqual(byText.swing.time, 1567985400);
-    assert.strictEqual(byText.swing.text, 'swing 10392.25');
+    assert.strictEqual(byText.swing, undefined);
+    const swing = plan.markers.find((m) => m.shape === 'circle');
+    assert.strictEqual(swing.time, 1567985400);
+    assert.strictEqual(swing.text, undefined);
     assert.strictEqual(byText.entry, undefined);
     assert.strictEqual(plan.entries[0].time, 1567998000);
     assert.strictEqual(plan.entries[0].price, 10295.81);
@@ -147,7 +149,7 @@ function main() {
     const plan = Overlay.researchPlan(star272);
     assert.strictEqual(plan.status, 'invalid_geometry');
     assert.ok(plan.markers.some((m) => m.text === 'Star'));
-    assert.ok(plan.markers.some((m) => m.text === 'swing 7206.2'));
+    assert.ok(plan.markers.some((m) => m.shape === 'circle' && m.time === 1574471700 && m.text == null));
     assert.ok(plan.lines.some((item) => item.id === 'entry'));
     assert.strictEqual(line(plan, 'swing'), null);
     assert.strictEqual(line(plan, 'stop'), null);
@@ -178,10 +180,11 @@ function main() {
   test('painting on 15m does not move the camera', () => {
     let cameras = 0;
     let drawn = 0;
+    let markers = null;
     Overlay.bind({
       getRow: () => star2,
       getTf: () => '15m',
-      applyMarkers: () => true,
+      applyMarkers: (next) => { markers = next; return true; },
       attach: () => true,
       requestDraw: () => { drawn += 1; },
       paintStatus: (text) => { assert.strictEqual(text, 'valid'); },
@@ -189,27 +192,50 @@ function main() {
     });
     const plan = Overlay.refresh();
     assert.ok(plan.markers.some((m) => m.text === 'Star'));
+    assert.ok(markers.every((m) => m.text === 'Star' || m.shape === 'circle'));
+    assert.ok(!markers.some((m) => m.shape === 'star4'));
     assert.strictEqual(line(plan, 'stop').price, star2.stopPrice);
     assert.strictEqual(drawn, 1);
     assert.strictEqual(cameras, 0);
     assert.strictEqual(Overlay.primitive.lines.length, plan.lines.length);
+    assert.strictEqual(Overlay.primitive.fromSec, plan.fromSec);
+    assert.strictEqual(Overlay.primitive.toSec, plan.toSec);
   });
 
   test('population markers sit on the decision candle, not a fixed Y', () => {
     const marks = Overlay.populationPlan([
       { decisionAt: 1567997100000, side: 'down' },
       { decisionAt: 1571070600000, side: 'up' },
-    ]);
+    ], { shape: 'star4', upColor: Overlay.STAR_UP, downColor: Overlay.STAR_DOWN });
     assert.strictEqual(marks[0].time, 1567997100);
-    assert.strictEqual(marks[0].position, 'aboveBar');
-    assert.strictEqual(marks[0].shape, 'arrowDown');
+    assert.strictEqual(marks[0].side, 'down');
+    assert.strictEqual(marks[0].shape, 'star4');
     assert.strictEqual(marks[0].color, Overlay.STAR_DOWN);
-    assert.strictEqual(marks[1].position, 'belowBar');
-    assert.strictEqual(marks[1].shape, 'arrowUp');
+    assert.strictEqual(marks[1].side, 'up');
     assert.strictEqual(marks[1].color, Overlay.STAR_UP);
-    assert.ok(marks.every((m) => m.y == null && m.text == null));
+    assert.ok(marks.every((m) => m.y == null && m.position == null));
     assert.ok(!src.includes('height * 0.12'));
     assert.ok(!src.includes('crowd.length'));
+  });
+
+  test('path lines span swing to the last 96-bar successor', () => {
+    const plan = Overlay.researchPlan(star2);
+    assert.strictEqual(Overlay.WINDOW_BARS, 96);
+    assert.strictEqual(plan.fromSec, 1567985400);
+    assert.strictEqual(plan.toSec, 1567997100 + 96 * 900);
+    assert.strictEqual(plan.toSec, Overlay.pathWindowEndSec(star2.decisionAt));
+    const noSwing = Overlay.researchPlan(star1);
+    assert.strictEqual(noSwing.fromSec, 1567965600);
+    assert.strictEqual(noSwing.toSec, 1567965600 + 96 * 900);
+    assert.ok(!src.includes('ctx.moveTo(0, py)'));
+    assert.ok(!src.includes('bitmapSize.width'));
+  });
+
+  test('selected Star stays the yellow labeled arrow', () => {
+    const plan = Overlay.researchPlan(star127);
+    const star = plan.markers.find((m) => m.text === 'Star');
+    assert.strictEqual(star.color, '#f0b429');
+    assert.strictEqual(star.shape, 'arrowUp');
   });
 
   console.log('star research overlay tests passed');

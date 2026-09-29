@@ -1232,6 +1232,11 @@ body.star-inspection-docked #tab-live {
   align-items: center;
   margin: 6px 0 2px;
 }
+.star-lens-paint {
+  margin: 8px 0 10px;
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
 .star-lens-hist { display: block; margin-top: 2px; }
 .star-lens-meta, .star-lens-rate, .star-lens-empty {
   color: #787b86;

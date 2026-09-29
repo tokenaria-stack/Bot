@@ -1,0 +1,42 @@
+STAR-CHART-VISUAL-DISPLAY-V1
+Presentation only. Evaluator, Population, Lens, and outcome artifacts unchanged.
+
+Paint layers
+  Population  canvas glyphs (default Wozduh pathStar4)
+  Selected    existing yellow LWC arrow + "Star"
+  Path        swing circle, SL/TP/R, same dash/color, clipped in time
+
+Population Y
+  Up   candle low
+  Down candle high
+  from liveColumnarStore via ChartAdapter.candleHighLowAt
+  off-scale prices are not drawn (not clamped)
+
+Display prefs
+  key star-population-display-v1
+  shape upColor downColor
+  not wozduh_crossover_prefs
+  not Population JSON
+  changing prefs does not evaluate or Save
+
+Path clip
+  start  swingAt seconds, else decisionAt
+  end    decisionAt seconds + 96 * 900
+  forecast.StarOutcomeWindow = 96
+  Star bar is not a successor; last successor open is +96 * 15m
+  not 98, not viewport width
+
+Corrections vs prompt draft
+  98 bars was a mistake; visual window is 96
+  line style unchanged; only x0/x1
+  four-pointed star, not five-point
+  layer toggles not added
+
+Tests
+  web/star_research_overlay_test.js
+  web/star_population_display_test.js
+  web/star_lens_panel_test.js
+  web/star_research_nav_test.js
+  web/star_inspection_grammar_test.js
+  go test ./forecast/starlens/
+  go test ./server/ -count=1 -run StarLens

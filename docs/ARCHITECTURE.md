@@ -424,6 +424,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **POPULATION-LENS-UI-V1 ✅ frozen.** The inspection rail posts typed clauses to the evaluator. Chart marks are the current pass list inside the viewport. The selected Star stays the microscope. No learner.
 
+**STAR-CHART-VISUAL-DISPLAY-V1 ✅ frozen.** Population Stars are canvas Star4 (or chosen shape) on the 15m candle high/low. Path lines end at successor bar 96. Show and Save are unchanged.
+
 **POPULATION-LENS-DISPLAY-V2 ✅ frozen.** Population Stars are series markers on the 15m decision candle, green up and red down. The rail scrolls. Show is display only.
 
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.

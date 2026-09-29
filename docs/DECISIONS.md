@@ -7,7 +7,19 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
-## POPULATION-LENS-DISPLAY-V2 — Stars on the candle, rail scrolls
+## STAR-CHART-VISUAL-DISPLAY-V1 — Population Star4, bounded path (Sep 2026)
+
+**Context:** Population used LWC arrows. SL/TP spanned the pane. Swing carried a debug label.
+
+**Decision:** Draw Population glyphs on the research canvas with the Wozduh Star4 path. Display prefs live in `star-population-display-v1`. Path lines run from swing (or decision) to the last of 96 successor 15m bars. Selected Star stays yellow. Swing keeps the dot, not the number.
+
+**Rejected:** `setMarkers` for Population Star4 — **Reason:** LWC has no four-pointed star. Reusing `wozduh_crossover_prefs` — **Reason:** that store is live Wozduh paint. 98-bar visual window — **Reason:** the frozen outcome window is 96.
+
+**Consequences:** Layer show/hide besides Show Stars waits. Color menu is display only.
+
+---
+
+
 
 **Context:** Population marks had the right time and a fake Y, so they floated in a row. The rail was taller than the window and did not scroll.
 

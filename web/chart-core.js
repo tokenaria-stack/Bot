@@ -1863,6 +1863,28 @@
       }
     },
 
+    /**
+     * OHLC high/low at a unix-second candle time. Display only.
+     */
+    candleHighLowAt(timeSec) {
+      const store = (typeof window !== 'undefined') ? window.liveColumnarStore : null;
+      if (!store || timeSec == null) return null;
+      const snap = typeof store.snapshot === 'function' ? store.snapshot() : null;
+      const times = snap?.times;
+      const highs = snap?.candles?.high;
+      const lows = snap?.candles?.low;
+      if (!Array.isArray(times) || !Array.isArray(highs) || !Array.isArray(lows)) return null;
+      const want = Number(timeSec);
+      for (let i = times.length - 1; i >= 0; i--) {
+        if (Number(times[i]) !== want) continue;
+        const high = Number(highs[i]);
+        const low = Number(lows[i]);
+        if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+        return { high, low };
+      }
+      return null;
+    },
+
     /** Same price series. A replaced series (style swap) is attached again. */
     attachResearchPrimitive(primitive) {
       const series = _live?.priceSeries;

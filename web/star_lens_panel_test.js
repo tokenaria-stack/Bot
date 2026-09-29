@@ -111,6 +111,18 @@ async function main() {
     assert.ok(src.includes('/api/research/star-lens/evaluate'));
   });
 
+  await test('paint controls do not evaluate or save', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    assert.ok(src.includes('isPaintControl'));
+    assert.ok(src.includes('data-paint-shape'));
+    assert.ok(src.includes('applyPaintForm'));
+    const evalBlock = src.slice(src.indexOf('root.addEventListener(\'change\''));
+    const paintReturn = evalBlock.indexOf('applyPaintForm(root)');
+    const evaluateCall = evalBlock.indexOf('evaluate();');
+    assert.ok(paintReturn >= 0 && evaluateCall > paintReturn);
+    assert.ok(!src.includes('wozduh_crossover_prefs'));
+  });
+
   console.log('ALL PASS');
 }
 
