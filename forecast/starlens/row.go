@@ -60,9 +60,16 @@ func (r Row) Ref() StarRef {
 	return StarRef{Index: r.Index, DecisionAt: r.DecisionAt, Side: r.Side}
 }
 
+// CoordinatesAttached is true after AttachCoordinates.
+// It is table completeness, not an observation.
+func (r Row) CoordinatesAttached() bool {
+	return r.coords != nil
+}
+
 // Number returns one continuous field.
-// The bool is false when the name is not an outcome field.
+// The bool is false when the name is not a known continuous field.
 // OK on the value is that field's own presence rule.
+// This method does not load Schema 3 or Matrix files.
 func (r Row) Number(field string) (Observed, bool) {
 	switch field {
 	case FieldEntryPrice:

@@ -214,6 +214,19 @@ func TestNoReadingAndRawStatus(t *testing.T) {
 	}
 }
 
+func TestUnattachedCoordinateFailsClosed(t *testing.T) {
+	parent := fixtureParent(t)
+	table := fixture()
+	_, err := Evaluate(parent, table, []Clause{Continuous("M15.Vwema", CmpGTE, 0)})
+	if err == nil || !strings.Contains(err.Error(), "coordinates are not attached") {
+		t.Fatalf("want attach error, got %v", err)
+	}
+	_, err = Evaluate(parent, table, []Clause{Continuous(FieldMFEATR, CmpGTE, 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBinsAndViewportStayOutsideTheLens(t *testing.T) {
 	parent := fixtureParent(t)
 	table := fixture()

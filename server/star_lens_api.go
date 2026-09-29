@@ -57,7 +57,10 @@ func readLens() (*lensStore, error) {
 	if digest != starlens.OutcomeDigest {
 		return nil, fmt.Errorf("star lens: outcome digest %s", digest)
 	}
-	universe, err := starlens.OutcomeUniverse(rows)
+	if err := starlens.AttachFrozenCoordinates(rows); err != nil {
+		return nil, err
+	}
+	universe, err := starlens.ResearchUniverse(rows)
 	if err != nil {
 		return nil, err
 	}

@@ -44,6 +44,36 @@ func init() {
 	}
 }
 
+func clausesUseCoordinates(clauses []Clause) bool {
+	for _, c := range clauses {
+		if c.Kind != KindContinuous {
+			continue
+		}
+		if _, ok := schema3IDs[c.Field]; ok {
+			return true
+		}
+		if _, ok := matrixIDs[c.Field]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func requireCoordinatesAttached(table []Row, clauses []Clause) error {
+	if !clausesUseCoordinates(clauses) {
+		return nil
+	}
+	if len(table) == 0 {
+		return fmt.Errorf("starlens: coordinates are not attached")
+	}
+	for i := range table {
+		if table[i].coords == nil {
+			return fmt.Errorf("starlens: coordinates are not attached")
+		}
+	}
+	return nil
+}
+
 func requireMatrixProvenance(prov Provenance, clauses []Clause) error {
 	if !clausesUseMatrix(clauses) {
 		return nil
@@ -126,6 +156,34 @@ func AttachCoordinates(rows []Row, snaps []market.StarSnapshotV3, rels []market.
 		rows[i].coords = coords
 	}
 	return nil
+}
+
+// AttachFrozenCoordinates loads the certified Schema 3 and Matrix files
+// and projects them onto rows. It does not rewrite those files.
+func AttachFrozenCoordinates(rows []Row) error {
+	s3Path, err := FindSchema3File()
+	if err != nil {
+		return err
+	}
+	digest, snaps, err := ReadSchema3File(s3Path)
+	if err != nil {
+		return err
+	}
+	if digest != Schema3Digest {
+		return fmt.Errorf("starlens: schema 3 digest %s", digest)
+	}
+	mxPath, err := FindMatrixFile()
+	if err != nil {
+		return err
+	}
+	mdigest, rels, err := ReadMatrixFile(mxPath)
+	if err != nil {
+		return err
+	}
+	if mdigest != MatrixDigest {
+		return fmt.Errorf("starlens: matrix digest %s", mdigest)
+	}
+	return AttachCoordinates(rows, snaps, rels)
 }
 
 func FindSchema3File() (string, error) {

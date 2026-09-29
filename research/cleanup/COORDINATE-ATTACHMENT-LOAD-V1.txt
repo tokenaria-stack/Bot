@@ -1,0 +1,178 @@
+COORDINATE-ATTACHMENT-LOAD-V1
+Date: 2026-09-29
+
+============================================================
+1. VERDICT
+============================================================
+
+COORDINATE_ATTACHMENT_LOAD_V1_GREEN
+
+The HTTP Lens store loads outcomes, then the frozen Schema 3
+file, then the frozen Matrix file, then AttachCoordinates.
+The live universe carries outcome + Schema 3 + Matrix provenance.
+Evaluate errors if a Schema 3 or Matrix clause is used on a
+table with no coords map.
+
+M15.Vwema, M15H1Vwema, and H4RSX.Value are not 8,783 missing
+on the HTTP-loaded table.
+
+No catalog UI. No comparison. Frozen JSON bytes unchanged.
+
+============================================================
+2. BASELINE
+============================================================
+
+Engine:        f7dd0c2e72880ffcedc583c4720396bcdb1a1c75
+Open-checks:   c9cb89a
+
+============================================================
+3. CORRECTIONS
+============================================================
+
+OutcomeUniverse is unchanged (no Matrix strings) so fixture
+SaveChild tests keep their old identity. The HTTP store uses
+ResearchUniverse, which adds matrixDigest and matrixCommit.
+That changes the live universe ID. Saved children from before
+this chapter still load by their own ID; they were not rewritten.
+
+Number() still returns OK=false when coords is nil. Evaluate
+errors first when a research-coordinate clause is present and
+any row lacks the map. That is table completeness, not a new
+missing rule. A coordinate that is attached and all-missing
+in a small parent is still allowed.
+
+Matrix 0/true is certified across RelationNames, not only
+H4D1Vwema==0 (daily VWEMA zero makes H4D1Vwema equal H4 VWEMA,
+which is not necessarily 0).
+
+============================================================
+4. FILES
+============================================================
+
+server/star_lens_api.go
+    AttachFrozenCoordinates after outcome load
+    ResearchUniverse instead of OutcomeUniverse
+
+server/star_lens_attach_test.go
+    HTTP/store load path certification
+
+forecast/starlens/coord.go
+    requireCoordinatesAttached
+    AttachFrozenCoordinates (digest check, then AttachCoordinates)
+
+forecast/starlens/eval.go
+    fail-closed before filter
+
+forecast/starlens/eval_test.go
+    unattached M15.Vwema errors; mfeAtr still evaluates
+
+forecast/starlens/population.go
+    ResearchUniverse
+
+forecast/starlens/row.go
+    CoordinatesAttached; Number comment
+
+research/cleanup/COORDINATE-ATTACHMENT-LOAD-V1.txt
+
+============================================================
+5. SOURCES (UNCHANGED)
+============================================================
+
+Outcome
+    research/starstop/star_sl_outcome.json
+    digest 6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+
+Schema 3
+    research/starstop/star_snapshot_v3.json
+    digest 934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+    commit 975da0d
+    file SHA 18f1e5ec79ee2ec4f2ab2afd5d5fbb213acd332df4e1396681bddd8ec652463a
+
+Matrix
+    research/starstop/star_relative_v1.json
+    digest 8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    commit 0389023
+    file SHA 514d513dd173bba6d62b05aa0d1b3c15bf1a4ca3216aaf1d8db4ec8550c109c6
+
+============================================================
+6. ATTACHMENT PATH
+============================================================
+
+readLens:
+    ReadOutcomeFile
+    AttachFrozenCoordinates
+        ReadSchema3File (digest must match)
+        ReadMatrixFile (digest must match)
+        AttachCoordinates (identity: index, DecisionAt=ConfirmedAt, side)
+    ResearchUniverse
+
+Row still holds Field → Observed, not StarSnapshotV3.
+
+Number() does not open files.
+
+============================================================
+7. PROVENANCE
+============================================================
+
+Live universe (source "all" and named sources):
+
+    outcomeDigest, schema3Digest, schema3Commit,
+    matrixDigest, matrixCommit
+
+SaveChild Matrix clause: still requires non-empty matrix
+digest and commit. HTTP universe now supplies them.
+Stripping them still rejects.
+
+============================================================
+8. FAIL-CLOSED
+============================================================
+
+Evaluate + Schema 3/Matrix Field + coords == nil on any row
+    → error "coordinates are not attached"
+
+Evaluate + outcome Field only, coords nil
+    → unchanged
+
+============================================================
+9. TESTS
+============================================================
+
+go test ./forecast/starlens  PASS
+go test ./server -run 'TestStarLensStoreAttachesCoordinates|TestStarLensEvaluateUsesEvaluator|TestStarLensViewport'
+    PASS
+
+HTTP/store (loadLens):
+    all 8783 rows CoordinatesAttached
+    order preserved
+    M15.Vwema / M15H1Vwema / H4RSX.Value: observed and missing,
+    not 8783 missing
+    Star 1567965600000: D1.Vwema missing, M15.Vwema observed,
+    H4D1Vwema 0/false
+    ≥4 daily VWEMA observed zeros
+    Matrix 0/true exists; Matrix missing exists
+    1R reached still 4160
+    SaveChild M15H1Vwema on live universe succeeds
+    SaveChild Matrix without provenance fails
+    frozen file hashes unchanged
+
+TestUnattachedCoordinateFailsClosed PASS
+
+go test ./... not required. Known unrelated:
+    cmd/repair_archive_gap unused identifier
+    indicators /tmp RSX CSV probes
+
+============================================================
+10. NOT IN THIS CHAPTER
+============================================================
+
+Catalog UI, comparison, ranking, discovery bounds, Volume Spike.
+Evaluate still pictures only four outcome fields on the HTTP
+JSON response. That is catalog-chapter work, not a load bug.
+The store can evaluate M15.Vwema; the evaluate handler does
+not yet return that picture to the browser.
+
+============================================================
+11. STOP
+============================================================
+
+Do not start COORDINATE-CATALOG-UI-V1 in this commit.

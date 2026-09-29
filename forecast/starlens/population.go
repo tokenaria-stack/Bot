@@ -98,6 +98,17 @@ func OutcomeUniverse(rows []Row) (Population, error) {
 	})
 }
 
+// ResearchUniverse is the live HTTP table: outcomes plus Schema 3 and Matrix.
+func ResearchUniverse(rows []Row) (Population, error) {
+	return Universe(rows, Provenance{
+		Schema3Digest: Schema3Digest,
+		Schema3Commit: Schema3Commit,
+		OutcomeDigest: OutcomeDigest,
+		MatrixDigest:  MatrixDigest,
+		MatrixCommit:  MatrixCommit,
+	})
+}
+
 func (p Population) cloneMembers() []StarRef {
 	out := make([]StarRef, len(p.Members))
 	copy(out, p.Members)

@@ -48,6 +48,9 @@ func Evaluate(parent Population, table []Row, clauses []Clause) (Result, error) 
 			return Result{}, err
 		}
 	}
+	if err := requireCoordinatesAttached(table, clauses); err != nil {
+		return Result{}, err
+	}
 	parentIdx := make([]int, 0, len(parent.Members))
 	for _, member := range parent.Members {
 		row, err := rowAt(table, member)
