@@ -1,0 +1,264 @@
+COORDINATE-FILTER-IMPLEMENTATION-V1-OPEN-CHECKS
+Date: 2026-09-29
+Status: FROZEN CHECKLIST. Do not fix in this file.
+Engine freeze: f7dd0c2e72880ffcedc583c4720396bcdb1a1c75
+
+These are errors, gaps, and suspicious places found after
+COORDINATE-FILTER-IMPLEMENTATION-V1. They are not a new filter
+engine. They wait for a later chapter (catalog/UI wiring, or a
+small engine patch if a listed item is confirmed as a bug).
+
+Certification of the engine chapter remains:
+
+    Targeted tests pass (forecast/starlens, server, market).
+    go test ./... is blocked by failures this chapter does not own.
+
+Do not “green” the full suite by editing cmd/repair_archive_gap
+or inventing /tmp RSX CSVs here.
+
+============================================================
+1. LIVE WORKSTATION IS STILL OUTCOME-ONLY
+============================================================
+
+server/star_lens_api.go loadLens / readLens:
+
+    Reads star_sl_outcome.json only.
+    Does not call ReadSchema3File, ReadMatrixFile, or AttachCoordinates.
+
+store.rows therefore have coords == nil.
+
+If the UI (or a hand-written POST) sends Field "M15.Vwema" today:
+
+    knownField accepts it (202 catalog).
+    Number returns Observed{OK:false} for every Star.
+    The clause fails the whole table.
+    The researcher sees an empty Lens and may think VWEMA is unused.
+
+This is the main trap for Stage 1 UI. The engine can evaluate 191
+IDs; the HTTP store cannot observe them until attach is wired.
+
+Pictures on evaluate still hard-code four outcome fields:
+
+    mfeAtr, maeAtr, mfePercent, maePercent
+
+A catalog selection of M15.Vwema would not even get a histogram
+from the current response even after attach, unless that list
+becomes the selected Field (or includes it).
+
+Save from the API copies parent Provenance. Universe Provenance
+has no matrixDigest. Saving M15H1Vwema will reject until the
+store’s universe/parent carries Matrix identity.
+
+CHECK LATER:
+
+    Wire attach once, at load, by Star identity.
+    Put matrixDigest/matrixCommit on populations that may save
+    Matrix clauses.
+    Picture the clause Field, not a fixed four-name list.
+    Do not attach Schema 3 structs onto the JSON wire.
+
+============================================================
+2. Number() TREATS “NOT ATTACHED” AS MISSING
+============================================================
+
+row.go Number default:
+
+    known coordinate + coords == nil  →  Observed{}, true
+    (OK false, looks like missing)
+
+There is no error “coordinates not loaded”.
+
+Tests that Evaluate Schema 3 without AttachCoordinates will pass
+empty sets and look like a threshold that matches nobody.
+
+CHECK LATER:
+
+    Fail Evaluate when a Schema 3/Matrix Field is used and
+    coords is nil (or attach is required at table construction).
+    Distinguish load-error from field-missing.
+
+Comment on Number() still says the bool is false when the name
+is not an outcome field. That comment is stale.
+
+============================================================
+3. SAVE ALWAYS REQUIRES OUTCOME DIGEST
+============================================================
+
+SaveChild still errors if OutcomeDigest is empty, even for a
+Lens that only names Schema 3 IDs.
+
+Fine for the current workstation (outcomes always present).
+Wrong if a later chapter wants a Schema-3-only universe.
+
+Schema 3 Fields do not require extra provenance beyond the
+existing schema3Digest/commit. Matrix Fields do. Asymmetric
+on purpose; document it in the UI so mixed Lenses are obvious.
+
+ReadSchema3File / ReadMatrixFile do not check file digest
+against Schema3Digest / MatrixDigest. Only tests do.
+
+CHECK LATER:
+
+    Optional: verify digest at load in the server.
+    Do not silently accept a replaced JSON with a new hash.
+
+============================================================
+4. JOIN ASSUMES INDEX ALIGNMENT
+============================================================
+
+AttachCoordinates requires:
+
+    len(rows) == len(snaps) == len(rels)
+    snaps[i].ConfirmedAt == rows[i].DecisionAt
+    snaps[i].Side == rows[i].Side
+    same for Matrix ConfirmedAt/Side
+
+It does not match by scanning decisionAt if order diverges.
+Frozen artifacts are the same 8783 order. A future file that
+is sorted differently will fail at i, not rematch.
+
+ConfirmedAt is used as the Schema 3 / Matrix clock. Outcome
+uses DecisionAt. Frozen equality is certified; if a later
+artifact splits those clocks, join breaks.
+
+CHECK LATER:
+
+    If a mismatch appears, fail loud (already does per index).
+    Do not fuzzy-match by time ignoring index.
+
+============================================================
+5. MEMORY / LOAD COST
+============================================================
+
+Full attach projects 191 Observed values per Star
+(8783 × 191 maps). TestFrozenCoordinateFiles already loads
+both JSON files (~60MB + ~24MB) plus the projection.
+
+Server boot does not pay that yet. After Stage 1 wiring it will.
+
+CHECK LATER:
+
+    One map per row is simple, not compact.
+    Do not “optimize” by copying StarSnapshotV3 onto Row.
+    Measure RSS after attach before inventing a packed table.
+
+============================================================
+6. TESTS THAT ARE WEAKER THAN THE CONTRACT SOUND
+============================================================
+
+TestFrozenCoordinateFiles:
+
+    Daily VWEMA zeros: asserts zeros >= 4, not exactly 4 and
+    not the four timestamps 1567997100000 …
+    Absent Star: checks D1 missing and M15/H1 readable.
+    Does not assert H4 (that Star’s H4 is Present false).
+    Does not assert Matrix daily relations OK false on that Star.
+
+TestSameContinuousHoldsPath:
+
+    Proves Number + holdContinuous agree for five Fields.
+    Does not prove Evaluate used holdContinuous via a hook;
+    it compares clause.holds to holdContinuous on the same row.
+
+TestNoBrowserSubtractionInStarlens:
+
+    Greps coord.go only. Does not scan web/.
+
+Catalog uniqueness is a Go map, so collisions would shrink
+len(continuousIDs) below 202. That test exists. Display names
+and units are not in the catalog (UI chapter).
+
+CHECK LATER:
+
+    Tighten frozen-file assertions to the four known daily
+    VWEMA-zero decision times and the 15 daily Matrix Rels
+    on 1567965600000.
+    Add a web/ grep in the catalog chapter: no A-B subtract.
+
+============================================================
+7. DISPLAY / UNIT METADATA ABSENT
+============================================================
+
+The engine catalog is IDs only. No timeframe, unit, or
+human name for the UI.
+
+Stage 1 must not invent a second ID list. Generate labels
+from the same RawObservations / RelationNames order.
+
+RSX-minus-close-mid mixes RSI units and price. Frozen.
+The UI must not “normalize” that relation.
+
+============================================================
+8. UNRELATED REPOSITORY FAILURES (DO NOT TOUCH HERE)
+============================================================
+
+go test ./... (observed 2026-09-29):
+
+    cmd/repair_archive_gap — unused identifier `restored`
+    indicators TestMarketRSXParityStage2/3Probe,
+    TestStage4DataWindowBar — missing /tmp/*.csv
+
+Not owned by this chapter. Do not patch them to claim a
+green umbrella test.
+
+Dirty tree not in f7dd0c2 (leave alone):
+
+    .cursor/rules/mcp-on-request.mdc
+    Unrelated star_stop / outcome / cleanup audits
+
+============================================================
+9. IMPORT DAG
+============================================================
+
+starlens imports market (observation SSOT). market imports
+forecast, not starlens. No cycle today.
+
+CHECK LATER:
+
+    Do not import starlens from market.
+    Do not reimplement 142 OK rules in server or web.
+
+============================================================
+10. INTENTIONAL NON-GOALS (NOT ERRORS)
+============================================================
+
+    No 191 widgets
+    No comparison endpoint
+    No discovery P20 as default Bound
+    No Volume Spike coordinate
+    No EMA12 accel / signal accel
+    No 15m−4h / 15m−Daily Matrix IDs
+
+These are frozen omissions, not bugs.
+
+============================================================
+11. RECOMMENDED ORDER WHEN WE RETURN
+============================================================
+
+1. Confirm attach + provenance on the live lens store
+   (so Number is not silently missing).
+2. Coordinate catalog UI: one Field → one KindContinuous clause.
+3. Histogram for the selected Field (self-exclusion already
+   in Evaluate).
+4. Only then comparison of two Populations, same Field, same bins.
+
+Do not start (4) until (1)–(3) can do:
+
+    All Stars → M15.Vwema >= X
+    and
+    1R reached AND M15.Vwema >= X
+    and
+    1R reached AND M15H1Vwema >= X
+
+on the same evaluator.
+
+============================================================
+12. FREEZE
+============================================================
+
+This checklist is frozen as research notes.
+No code change in this chapter.
+
+Engine commit remains:
+
+    f7dd0c2e72880ffcedc583c4720396bcdb1a1c75
