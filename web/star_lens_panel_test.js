@@ -111,16 +111,16 @@ async function main() {
     assert.ok(src.includes('/api/research/star-lens/evaluate'));
   });
 
-  await test('paint controls do not evaluate or save', () => {
-    const src = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
-    assert.ok(src.includes('isPaintControl'));
-    assert.ok(src.includes('data-paint-shape'));
-    assert.ok(src.includes('applyPaintForm'));
-    const evalBlock = src.slice(src.indexOf('root.addEventListener(\'change\''));
-    const paintReturn = evalBlock.indexOf('applyPaintForm(root)');
-    const evaluateCall = evalBlock.indexOf('evaluate();');
-    assert.ok(paintReturn >= 0 && evaluateCall > paintReturn);
-    assert.ok(!src.includes('wozduh_crossover_prefs'));
+  await test('paint controls live in the style menu, not the lens form', () => {
+    const lens = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    const shell = fs.readFileSync(path.join(__dirname, 'ui/star-inspection-panel.js'), 'utf8');
+    assert.ok(!lens.includes('data-paint-shape'));
+    assert.ok(!lens.includes('star-lens-paint'));
+    assert.ok(shell.includes('data-paint-shape'));
+    assert.ok(shell.includes('data-paint-size'));
+    assert.ok(shell.includes('data-paint-up'));
+    assert.ok(shell.includes('applyChartStyle'));
+    assert.ok(!lens.includes('wozduh_crossover_prefs'));
   });
 
   console.log('ALL PASS');

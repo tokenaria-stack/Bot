@@ -221,13 +221,32 @@ const StarInspection = (() => {
       '<div class="star-inspection-resize" data-star-resize></div>' +
       '<div class="star-inspection-bar">' +
         '<span>Star</span>' +
-        '<button type="button" data-star-prev>Prev</button>' +
-        '<button type="button" data-star-next>Next</button>' +
-        '<button type="button" data-star-clear>Clear</button>' +
-        '<button type="button" data-star-colors aria-label="Dot colors" aria-expanded="false" title="Dot colors">' +
+        '<i id="star-research-side" class="star-side" aria-hidden="true"></i>' +
+        '<input id="star-research-no" type="number" min="1" step="1" inputmode="numeric" aria-label="Star ordinal">' +
+        '<span id="star-research-count">— / —</span>' +
+        '<button type="button" id="star-research-prev">Prev</button>' +
+        '<button type="button" id="star-research-next">Next</button>' +
+        '<button type="button" id="star-research-clear">Clear</button>' +
+        '<span id="star-research-status"></span>' +
+        '<button type="button" data-star-colors aria-label="Style" aria-expanded="false" title="Style">' +
           '<span class="star-color-icon" aria-hidden="true"></span>' +
         '</button>' +
         '<div class="star-color-pop" data-star-color-pop hidden>' +
+          '<div class="star-style-kicker">Chart</div>' +
+          '<label>Shape <select data-paint-shape>' +
+            '<option value="star4">Star</option>' +
+            '<option value="arrow">Arrow</option>' +
+            '<option value="circle">Circle</option>' +
+            '<option value="triangle">Triangle</option>' +
+            '<option value="square">Square</option>' +
+            '<option value="diamond">Diamond</option>' +
+          '</select></label>' +
+          '<label>Size <input type="range" data-paint-size min="4" max="18" step="1"></label>' +
+          '<div class="star-style-pair">' +
+            '<label>Up <input type="color" data-paint-up></label>' +
+            '<label>Down <input type="color" data-paint-down></label>' +
+          '</div>' +
+          '<div class="star-style-kicker">Table</div>' +
           '<label>Negative / low <input type="color" data-star-color="low"></label>' +
           '<label>Center <input type="color" data-star-color="mid"></label>' +
           '<label>Positive / high <input type="color" data-star-color="high"></label>' +
@@ -247,16 +266,11 @@ const StarInspection = (() => {
       if (ev.target && ev.target.matches && ev.target.matches('details')) fitValueColumns(card);
     }, true);
     applyWidth();
-    root.querySelector('[data-star-prev]').addEventListener('click', () => {
-      if (typeof StarResearch !== 'undefined') StarResearch.previous();
-    });
-    root.querySelector('[data-star-next]').addEventListener('click', () => {
-      if (typeof StarResearch !== 'undefined') StarResearch.next();
-    });
-    root.querySelector('[data-star-clear]').addEventListener('click', () => {
-      if (typeof StarResearch !== 'undefined' && typeof StarResearch.clear === 'function') StarResearch.clear();
-    });
     bindColors();
+    bindChartStyle();
+    if (typeof StarResearch !== 'undefined' && typeof StarResearch.init === 'function') {
+      StarResearch.init();
+    }
     const handle = root.querySelector('[data-star-resize]');
     handle.addEventListener('pointerdown', (ev) => {
       const startX = ev.clientX;
@@ -358,6 +372,49 @@ const StarInspection = (() => {
     });
   }
 
+  function bindChartStyle() {
+    const pop = root.querySelector('[data-star-color-pop]');
+    if (!pop) return;
+    syncChartStyle(pop);
+    pop.addEventListener('input', (ev) => applyChartStyle(ev.target));
+    pop.addEventListener('change', (ev) => applyChartStyle(ev.target));
+  }
+
+  function chartStyleApi() {
+    return typeof StarPopulationDisplay !== 'undefined' ? StarPopulationDisplay : null;
+  }
+
+  function syncChartStyle(pop) {
+    const api = chartStyleApi();
+    if (!pop || !api || typeof api.get !== 'function') return;
+    const prefs = api.get();
+    const shape = pop.querySelector('[data-paint-shape]');
+    const size = pop.querySelector('[data-paint-size]');
+    const up = pop.querySelector('[data-paint-up]');
+    const down = pop.querySelector('[data-paint-down]');
+    if (shape) shape.value = prefs.shape;
+    if (size) size.value = String(prefs.size);
+    if (up) up.value = prefs.upColor;
+    if (down) down.value = prefs.downColor;
+  }
+
+  function applyChartStyle(el) {
+    if (!el || typeof el.getAttribute !== 'function') return;
+    const api = chartStyleApi();
+    if (!api || typeof api.set !== 'function') return;
+    const key = el.getAttribute('data-paint-shape') != null ? 'shape'
+      : (el.getAttribute('data-paint-size') != null ? 'size'
+        : (el.getAttribute('data-paint-up') != null ? 'upColor'
+          : (el.getAttribute('data-paint-down') != null ? 'downColor' : '')));
+    if (!key) return;
+    const patch = {};
+    patch[key] = key === 'size' ? Number(el.value) : el.value;
+    api.set(patch);
+    if (typeof StarResearchOverlay !== 'undefined' && typeof StarResearchOverlay.refresh === 'function') {
+      StarResearchOverlay.refresh();
+    }
+  }
+
   function applyWidth() {
     if (!root || !document.body) return;
     const narrow = window.innerWidth < 1100 || width > window.innerWidth - 480;
@@ -373,6 +430,7 @@ const StarInspection = (() => {
       StarResearch.onSelected(() => {
         const state = StarResearch.getState();
         if (state && state.index != null) load(state.index);
+        else paint(null);
       });
     }
   }

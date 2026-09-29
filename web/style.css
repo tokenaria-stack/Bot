@@ -752,8 +752,7 @@
 }
 
 .command-bar,
-.toolbar,
-.indicator-bar {
+.toolbar {
   flex-shrink: 0;
 }
 
@@ -1017,10 +1016,40 @@ body.star-inspection-docked #tab-live {
   position: relative;
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  padding: 8px 12px 8px 14px;
+  padding: 6px 10px 6px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.star-inspection-bar #star-research-no {
+  width: 4.6em;
+  background: #131722;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font: inherit;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.star-inspection-bar #star-research-no::-webkit-inner-spin-button,
+.star-inspection-bar #star-research-no::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.star-inspection-bar #star-research-count {
+  color: #787b86;
+  font-variant-numeric: tabular-nums;
+}
+
+.star-inspection-bar #star-research-status {
+  display: none;
 }
 
 .star-inspection-scroll {
@@ -1064,8 +1093,8 @@ body.star-inspection-docked #tab-live {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
+  gap: 6px;
+  min-width: 196px;
   padding: 10px;
   background: #1e222d;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1081,6 +1110,32 @@ body.star-inspection-docked #tab-live {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+  font-size: 11px;
+}
+
+.star-style-kicker {
+  color: #787b86;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.star-style-kicker:first-child {
+  margin-top: 0;
+}
+
+.star-style-pair {
+  display: flex;
+  gap: 10px;
+}
+
+.star-style-pair label {
+  flex: 1;
+}
+
+.star-color-pop input[type="range"] {
+  width: 108px;
 }
 
 [data-star-card] {
@@ -1128,10 +1183,12 @@ body.star-inspection-docked #tab-live {
 }
 
 .star-side {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: block;
+  flex: 0 0 auto;
+  background: #3a3f4b;
 }
 
 .star-side--up {
@@ -1231,11 +1288,6 @@ body.star-inspection-docked #tab-live {
   gap: 6px;
   align-items: center;
   margin: 6px 0 2px;
-}
-.star-lens-paint {
-  margin: 8px 0 10px;
-  padding: 6px 0 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .star-lens-hist { display: block; margin-top: 2px; }
 .star-lens-meta, .star-lens-rate, .star-lens-empty {

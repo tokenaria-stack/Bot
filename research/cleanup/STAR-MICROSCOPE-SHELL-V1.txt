@@ -1,0 +1,36 @@
+STAR-MICROSCOPE-SHELL-V1
+Accepted panels and microscope. Presentation only.
+
+Rail header (does not collapse with Population/Lens)
+  Star
+  direction dot (up green / down red)
+  ordinal input (walk position, no spinner)
+  ordinal / walk length
+  Prev Next Clear
+  style popover (chart glyphs + table dots)
+
+Removed
+  chart toolbar Star Prev/Next/Clear
+  .indicator-bar (RSX Jurik / Volume Spike / Volume / Fib Zones)
+
+Navigation
+  walk = current evaluator pass (decisionAt order)
+  empty walk before first evaluate → sequential catalog
+  Clear → selected Star only
+  Next after Clear → first walk member
+  Prev after Clear → last walk member
+  new walk keeps the Star when it still belongs, else first member
+
+Not in this freeze
+  forecast/starlens
+  Population JSON
+  Volume-spike Frame/wire stubs (dead overlay, later fact chapter)
+  191-coordinate filters
+
+Tests
+  web/star_research_nav_test.js
+  web/star_lens_panel_test.js
+  web/star_population_display_test.js
+  web/star_research_overlay_test.js
+  web/star_research_click_test.js
+  web/star_inspection_grammar_test.js

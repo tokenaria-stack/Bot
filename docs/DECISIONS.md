@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## STAR-MICROSCOPE-SHELL-V1 — one rail navigator (Sep 2026)
+
+**Context:** Star Prev/Next lived twice. Style lived on the Lens form. A dead indicator checkbox strip sat under the timeframe bar.
+
+**Decision:** The inspection rail header is the only Star navigator: direction dot, ordinal, walk length, Prev, Next, Clear. Display prefs sit in the existing style popover. The toolbar Star strip and `.indicator-bar` are gone.
+
+**Rejected:** Keeping two navigators in sync — **Reason:** they already diverged. Wiring the legacy RSX/Volume/Spike/Fib checkboxes — **Reason:** they did not control live paint.
+
+**Consequences:** Ordinal is position in the current Lens walk, not the global 1…8783 catalog. Volume-spike Frame/wire stubs stay until a later fact chapter.
+
+---
+
 ## STAR-CHART-VISUAL-DISPLAY-V1 — Population Star4, bounded path (Sep 2026)
 
 **Context:** Population used LWC arrows. SL/TP spanned the pane. Swing carried a debug label.

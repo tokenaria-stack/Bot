@@ -24,6 +24,7 @@ async function main() {
   const src = fs.readFileSync(path.join(__dirname, 'ui', 'star-research.js'), 'utf8');
   const camera = fs.readFileSync(path.join(__dirname, 'ui', 'time-camera.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const shell = fs.readFileSync(path.join(__dirname, 'ui', 'star-inspection-panel.js'), 'utf8');
   assert.ok(!fs.existsSync(path.join(__dirname, 'star-stop.html')), 'temporary page must be gone');
   assert.ok(!src.includes('proposeFromPane'), 'selection must not propose from a pane');
   assert.ok(!src.includes('setData'), 'selection must not paint');
@@ -32,7 +33,12 @@ async function main() {
   assert.ok(src.includes('seekHistoryIsland'), 'selection uses the existing history island');
   assert.ok(src.includes('noteTimeframe'), 'timeframe keeps identity without a seek');
   assert.ok(!camera.includes('StarResearch'), 'TimeCamera does not know about stars');
-  assert.ok(html.includes('id="star-research-no"'));
+  assert.ok(!html.includes('id="star-research-no"'));
+  assert.ok(!html.includes('id="star-research-prev"'));
+  assert.ok(shell.includes('id="star-research-no"'));
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert.ok(css.includes('#star-research-no::-webkit-inner-spin-button'));
+  assert.ok(shell.includes('id="star-research-prev"'));
   assert.ok(!html.includes('star-stop.html'));
 
   await test('enter a number seeks that star once', async () => {
@@ -128,6 +134,50 @@ async function main() {
     await StarResearch.selectNumber(2);
     assert.strictEqual(await StarResearch.next(), false);
     assert.strictEqual(seeks, 2);
+  });
+
+  await test('ordinal walks the population, not the global catalog', async () => {
+    StarResearch._resetForTests();
+    const seeks = [];
+    StarResearch.init({
+      fetchStar: async (index) => row(index, 8783, 100 + index),
+      seek: (t) => { seeks.push(t); return true; },
+    });
+    StarResearch.setWalk([10, 20, 30]);
+    assert.strictEqual(await StarResearch.selectOrdinal(2), true);
+    assert.strictEqual(StarResearch.getState().index, 20);
+    assert.strictEqual(StarResearch.getState().ordinal, 2);
+    assert.strictEqual(StarResearch.getState().walkLength, 3);
+    assert.strictEqual(await StarResearch.next(), true);
+    assert.strictEqual(StarResearch.getState().index, 30);
+    assert.strictEqual(await StarResearch.next(), false);
+    StarResearch.clear();
+    assert.strictEqual(StarResearch.getState().index, null);
+    assert.strictEqual(StarResearch.getState().walkLength, 3);
+    assert.strictEqual(await StarResearch.previous(), true);
+    assert.strictEqual(StarResearch.getState().index, 30);
+    StarResearch.clear();
+    assert.strictEqual(await StarResearch.next(), true);
+    assert.strictEqual(StarResearch.getState().index, 10);
+  });
+
+  await test('a new walk keeps the star when it still belongs', async () => {
+    StarResearch._resetForTests();
+    let seeks = 0;
+    StarResearch.init({
+      fetchStar: async (index) => row(index, 8783, index),
+      seek: () => { seeks += 1; return true; },
+    });
+    await StarResearch.selectNumber(21);
+    StarResearch.setWalk([10, 20, 30]);
+    assert.strictEqual(StarResearch.getState().index, 20);
+    assert.strictEqual(StarResearch.getState().ordinal, 2);
+    const afterKeep = seeks;
+    StarResearch.setWalk([20, 40]);
+    assert.strictEqual(StarResearch.getState().index, 20);
+    assert.strictEqual(seeks, afterKeep);
+    await StarResearch.setWalk([1, 2]);
+    assert.strictEqual(StarResearch.getState().index, 1);
   });
 
   console.log('star_research_nav_test: ALL PASS');

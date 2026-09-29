@@ -69,45 +69,6 @@ const StarLens = (() => {
     }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
   }
 
-  function paintApi() {
-    return typeof StarPopulationDisplay !== 'undefined' ? StarPopulationDisplay : null;
-  }
-
-  function syncPaintForm(root) {
-    const api = paintApi();
-    if (!root || !api || typeof api.get !== 'function') return;
-    const prefs = api.get();
-    const shape = root.querySelector('[data-paint-shape]');
-    const up = root.querySelector('[data-paint-up]');
-    const down = root.querySelector('[data-paint-down]');
-    if (shape) shape.value = prefs.shape;
-    if (up) up.value = prefs.upColor;
-    if (down) down.value = prefs.downColor;
-  }
-
-  function applyPaintForm(root) {
-    const api = paintApi();
-    if (!root || !api || typeof api.set !== 'function') return;
-    const shape = root.querySelector('[data-paint-shape]');
-    const up = root.querySelector('[data-paint-up]');
-    const down = root.querySelector('[data-paint-down]');
-    api.set({
-      shape: shape ? shape.value : undefined,
-      upColor: up ? up.value : undefined,
-      downColor: down ? down.value : undefined,
-    });
-    if (typeof StarResearchOverlay !== 'undefined' && typeof StarResearchOverlay.refresh === 'function') {
-      StarResearchOverlay.refresh();
-    }
-  }
-
-  function isPaintControl(el) {
-    if (!el || typeof el.getAttribute !== 'function') return false;
-    return el.getAttribute('data-paint-shape') != null
-      || el.getAttribute('data-paint-up') != null
-      || el.getAttribute('data-paint-down') != null;
-  }
-
   function clausesFromForm(root) {
     const out = [];
     if (!root) return out;
@@ -219,7 +180,6 @@ const StarLens = (() => {
     if (view) view.textContent = state.showStars ? String(last.chartView) : 'hidden';
     if (mix) mix.textContent = 'discovery ' + last.discovery + ' · holdout ' + last.holdout;
     if (show) show.checked = state.showStars;
-    syncPaintForm(root);
     const nums = last.numbers || [];
     FIELDS.forEach((item) => {
       const box = root.querySelector('[data-hist="' + item.field + '"]');
@@ -333,18 +293,6 @@ const StarLens = (() => {
       '<div>Chart view <b data-count-view>—</b></div>' +
       '<div data-count-mix></div></div>' +
       '<label class="star-lens-row"><input type="checkbox" data-show checked> Show stars on chart</label>' +
-      '<div class="star-lens-paint">' +
-      '<label class="star-lens-row">Shape <select data-paint-shape>' +
-      '<option value="star4">Star</option>' +
-      '<option value="arrow">Arrow</option>' +
-      '<option value="circle">Circle</option>' +
-      '<option value="triangle">Triangle</option>' +
-      '<option value="square">Square</option>' +
-      '<option value="diamond">Diamond</option>' +
-      '</select></label>' +
-      '<label class="star-lens-row">Up <input type="color" data-paint-up></label>' +
-      '<label class="star-lens-row">Down <input type="color" data-paint-down></label>' +
-      '</div>' +
       '<select data-source></select>' +
       fieldHtml + eventHtml +
       '<label class="star-lens-row">Side <select data-side><option value="">off</option>' +
@@ -371,12 +319,7 @@ const StarLens = (() => {
       state.source = sel.value || 'all';
       evaluate();
     });
-    syncPaintForm(root);
     root.addEventListener('change', (ev) => {
-      if (isPaintControl(ev.target)) {
-        applyPaintForm(root);
-        return;
-      }
       const sel = root.querySelector('[data-source]');
       if (sel) state.source = sel.value;
       const show = root.querySelector('[data-show]');
@@ -389,10 +332,6 @@ const StarLens = (() => {
       evaluate();
     });
     root.addEventListener('input', (ev) => {
-      if (isPaintControl(ev.target)) {
-        applyPaintForm(root);
-        return;
-      }
       const slide = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-slide');
       if (!slide) return;
       const bound = root.querySelector('[data-bound="' + slide + '"]');

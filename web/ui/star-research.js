@@ -69,21 +69,52 @@ const StarResearch = (() => {
     }
   }
 
+  function walkLength() {
+    if (state.walk) return state.walk.length;
+    return state.count > 0 ? state.count : 0;
+  }
+
+  function ordinalOf(index) {
+    if (index == null) return null;
+    if (state.walk) {
+      const at = state.walk.indexOf(index);
+      return at < 0 ? null : at + 1;
+    }
+    return index + 1;
+  }
+
   function paintCount() {
     const el = typeof document !== 'undefined' ? document.getElementById('star-research-count') : null;
     if (!el) return;
-    el.textContent = state.count > 0 ? '/ ' + state.count : '/ —';
+    const len = walkLength();
+    const ord = ordinalOf(state.index);
+    if (len <= 0) {
+      el.textContent = '— / —';
+      return;
+    }
+    el.textContent = (ord == null ? '—' : String(ord)) + ' / ' + len;
   }
 
   function paintNumber(force) {
     const input = typeof document !== 'undefined' ? document.getElementById('star-research-no') : null;
     if (!input) return;
     if (!force && document.activeElement === input) return;
-    if (state.index == null) {
-      input.value = '';
-      return;
-    }
-    input.value = String(state.index + 1);
+    const ord = ordinalOf(state.index);
+    input.value = ord == null ? '' : String(ord);
+  }
+
+  function paintSide() {
+    const el = typeof document !== 'undefined' ? document.getElementById('star-research-side') : null;
+    if (!el) return;
+    const side = state.row && state.row.side === 'down' ? 'down' : (state.row && state.row.side === 'up' ? 'up' : '');
+    el.className = 'star-side' + (side ? ' star-side--' + side : '');
+    el.title = side || '';
+  }
+
+  function paintNav(force) {
+    paintCount();
+    paintNumber(force);
+    paintSide();
   }
 
   function clear() {
@@ -91,7 +122,7 @@ const StarResearch = (() => {
     state.index = null;
     state.decisionAt = null;
     state.row = null;
-    paintNumber(true);
+    paintNav(true);
     emitSelected();
     return true;
   }
@@ -106,8 +137,7 @@ const StarResearch = (() => {
     state.count = Number(body.count) > 0 ? Number(body.count) : state.count;
     state.decisionAt = Number(body.row.decisionAt);
     state.row = body.row;
-    paintCount();
-    paintNumber(center !== true);
+    paintNav(center !== true);
     if (center) seek(state.decisionAt, visibleBars());
     emitSelected();
     return true;
@@ -167,10 +197,21 @@ const StarResearch = (() => {
     return applyIndex(n - 1);
   }
 
+  function selectOrdinal(raw) {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n) || n < 1) return Promise.resolve(false);
+    if (state.walk) {
+      if (n > state.walk.length) return Promise.resolve(false);
+      return applyIndex(state.walk[n - 1]);
+    }
+    return selectNumber(n);
+  }
+
   function walkAt(delta) {
-    if (!state.walk || !state.walk.length) return null;
+    if (!state.walk) return null;
+    if (!state.walk.length) return false;
     if (state.index == null) {
-      return delta > 0 ? state.walk[0] : null;
+      return delta > 0 ? state.walk[0] : state.walk[state.walk.length - 1];
     }
     const at = state.walk.indexOf(state.index);
     if (at < 0) {
@@ -185,7 +226,11 @@ const StarResearch = (() => {
     const stepped = walkAt(-1);
     if (stepped === false) return Promise.resolve(false);
     if (stepped != null) return applyIndex(stepped);
-    if (state.index == null || state.index <= 0) return Promise.resolve(false);
+    if (state.index == null) {
+      if (state.count <= 0) return Promise.resolve(false);
+      return applyIndex(state.count - 1);
+    }
+    if (state.index <= 0) return Promise.resolve(false);
     return applyIndex(state.index - 1);
   }
 
@@ -201,11 +246,25 @@ const StarResearch = (() => {
   }
 
   function setWalk(list) {
-    if (!Array.isArray(list) || !list.length) {
+    if (!Array.isArray(list)) {
       state.walk = null;
-      return;
+      paintNav();
+      return Promise.resolve();
     }
     state.walk = list.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n >= 0);
+    if (state.index == null) {
+      paintNav();
+      return Promise.resolve();
+    }
+    if (state.walk.indexOf(state.index) >= 0) {
+      paintNav();
+      return Promise.resolve();
+    }
+    if (!state.walk.length) {
+      clear();
+      return Promise.resolve();
+    }
+    return applyIndex(state.walk[0]);
   }
 
   /** Timeframe changes keep this identity and do not move the camera. */
@@ -220,6 +279,8 @@ const StarResearch = (() => {
       decisionAt: state.decisionAt,
       row: state.row,
       number: state.index == null ? null : state.index + 1,
+      ordinal: ordinalOf(state.index),
+      walkLength: walkLength(),
     };
   }
 
@@ -238,10 +299,15 @@ const StarResearch = (() => {
     if (input && !input.dataset.starResearch) {
       input.dataset.starResearch = '1';
       input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+          ev.preventDefault();
+          return;
+        }
         if (ev.key !== 'Enter') return;
         ev.preventDefault();
-        selectNumber(input.value);
+        selectOrdinal(input.value);
       });
+      input.addEventListener('wheel', (ev) => { ev.preventDefault(); }, { passive: false });
     }
     if (prev && !prev.dataset.starResearch) {
       prev.dataset.starResearch = '1';
@@ -255,7 +321,7 @@ const StarResearch = (() => {
       clearBtn.dataset.starResearch = '1';
       clearBtn.addEventListener('click', () => { clear(); });
     }
-    paintCount();
+    paintNav();
   }
 
   function _resetForTests() {
@@ -278,6 +344,7 @@ const StarResearch = (() => {
   return {
     init,
     selectNumber,
+    selectOrdinal,
     selectOpenTime,
     onPaneClick,
     bindChartClick,

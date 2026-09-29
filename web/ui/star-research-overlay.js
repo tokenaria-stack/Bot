@@ -9,7 +9,6 @@ const StarResearchOverlay = (() => {
   const STAR_SELECTED = '#f0b429';
   const WINDOW_BARS = 96;
   const BAR_SEC = 15 * 60;
-  const GLYPH_R = 4.5;
   const OUTLINE = '#111111';
 
   function chartSec(ms) {
@@ -43,7 +42,7 @@ const StarResearchOverlay = (() => {
     if (typeof StarPopulationDisplay !== 'undefined' && typeof StarPopulationDisplay.get === 'function') {
       return StarPopulationDisplay.get();
     }
-    return { shape: 'star4', upColor: STAR_UP, downColor: STAR_DOWN };
+    return { shape: 'star4', size: 9, upColor: STAR_UP, downColor: STAR_DOWN };
   }
 
   /**
@@ -278,7 +277,8 @@ const StarResearchOverlay = (() => {
   function drawPopulation(ctx, series, chart, glyphs, hr, vr) {
     const ts = chart && typeof chart.timeScale === 'function' ? chart.timeScale() : null;
     if (!ts || typeof ts.timeToCoordinate !== 'function' || !glyphs.length) return;
-    const r = GLYPH_R * Math.min(hr, vr);
+    const paint = paintPrefs();
+    const r = Math.max(2, Number(paint.size) / 2) * Math.min(hr, vr);
     for (let i = 0; i < glyphs.length; i++) {
       const mark = glyphs[i];
       const candle = deps.candleAt(mark.time);

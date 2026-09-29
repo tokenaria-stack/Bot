@@ -5,8 +5,11 @@
 const StarPopulationDisplay = (() => {
   const STORAGE_KEY = 'star-population-display-v1';
   const SHAPES = Object.freeze(['star4', 'arrow', 'circle', 'triangle', 'square', 'diamond']);
+  const SIZE_MIN = 4;
+  const SIZE_MAX = 18;
   const DEFAULTS = Object.freeze({
     shape: 'star4',
+    size: 9,
     upColor: '#00E676',
     downColor: '#FF1744',
   });
@@ -21,10 +24,16 @@ const StarPopulationDisplay = (() => {
     return SHAPES.indexOf(value) >= 0;
   }
 
+  function sizeOk(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= SIZE_MIN && n <= SIZE_MAX;
+  }
+
   function normalize(raw) {
     const src = raw && typeof raw === 'object' ? raw : {};
     return {
       shape: shapeOk(src.shape) ? src.shape : DEFAULTS.shape,
+      size: sizeOk(src.size) ? Math.round(Number(src.size)) : DEFAULTS.size,
       upColor: hexOk(src.upColor) ? src.upColor : DEFAULTS.upColor,
       downColor: hexOk(src.downColor) ? src.downColor : DEFAULTS.downColor,
     };
@@ -64,6 +73,7 @@ const StarPopulationDisplay = (() => {
   function reset() {
     memory = {
       shape: DEFAULTS.shape,
+      size: DEFAULTS.size,
       upColor: DEFAULTS.upColor,
       downColor: DEFAULTS.downColor,
     };
@@ -83,6 +93,8 @@ const StarPopulationDisplay = (() => {
   const api = {
     STORAGE_KEY,
     SHAPES,
+    SIZE_MIN,
+    SIZE_MAX,
     DEFAULTS,
     get,
     set,

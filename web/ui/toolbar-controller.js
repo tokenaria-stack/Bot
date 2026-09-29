@@ -76,14 +76,6 @@ const ToolbarController = (() => {
       : ((typeof ChartTheme !== 'undefined') ? ChartTheme.bear : TV.red);
   }
 
-  function isSpikeEnabled() {
-    return document.getElementById('tog-spike')?.checked ?? true;
-  }
-
-  function isFibEnabled() {
-    return document.getElementById('tog-fib')?.checked ?? false;
-  }
-
   function setRulerActive(active) {
     document.getElementById('ruler-btn')?.classList.toggle('active', !!active);
   }
@@ -91,45 +83,6 @@ const ToolbarController = (() => {
   function init() {
     if (typeof SettingsRenderer !== 'undefined') {
       SettingsRenderer.initToolbarToggles('live');
-    } else {
-      const toggles = {
-        'tog-jurik': 'rsx',
-        'tog-volume': 'volume',
-      };
-      Object.entries(toggles).forEach(([id, seriesKey]) => {
-        const el = document.getElementById(id);
-        if (!el) {
-          console.warn(`[ToolbarController] #${id} not found`);
-          return;
-        }
-        const applyVisibility = () => {
-          el.closest('.ind-toggle')?.classList.toggle('active', el.checked);
-          ChartAdapter.setToggleSeriesVisible('live', seriesKey, el.checked);
-        };
-        applyVisibility();
-        el.addEventListener('change', applyVisibility);
-      });
-    }
-
-    const togSpike = document.getElementById('tog-spike');
-    if (togSpike) {
-      togSpike.addEventListener('change', (e) => {
-        e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-      });
-    } else {
-      console.warn('[ToolbarController] #tog-spike not found');
-    }
-
-    const togFib = document.getElementById('tog-fib');
-    if (togFib) {
-      togFib.addEventListener('change', (e) => {
-        e.target.closest('.ind-toggle')?.classList.toggle('active', e.target.checked);
-        if (typeof ChartAdapter.renderFib === 'function') {
-          ChartAdapter.renderFib(typeof lastFibZones !== 'undefined' ? lastFibZones : []);
-        }
-      });
-    } else {
-      console.warn('[ToolbarController] #tog-fib not found');
     }
 
     const rulerBtn = document.getElementById('ruler-btn');
@@ -177,8 +130,6 @@ const ToolbarController = (() => {
     updateOscHeader,
     setBuffering,
     updateVolume,
-    isSpikeEnabled,
-    isFibEnabled,
     setRulerActive,
     getSandboxMode: () => cachedSandboxMode,
   };

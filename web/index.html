@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=4.3.14-star-chart-visual" />
+  <link rel="stylesheet" href="/style.css?v=4.3.18-no-ind-bar" />
   <style>
     :root {
       --tv-bg: #131722;
@@ -150,35 +150,6 @@
       font-weight: 700;
       color: var(--tv-text);
       white-space: nowrap;
-    }
-
-    .star-research {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-left: 8px;
-      font-size: 12px;
-      color: var(--tv-muted);
-      white-space: nowrap;
-    }
-    .star-research input {
-      width: 5.2em;
-      background: var(--tv-bg);
-      color: var(--tv-text);
-      border: 1px solid var(--tv-border);
-      border-radius: 4px;
-      padding: 2px 6px;
-      font: inherit;
-      text-align: right;
-    }
-    .star-research button {
-      background: transparent;
-      color: var(--tv-text);
-      border: 1px solid var(--tv-border);
-      border-radius: 4px;
-      padding: 2px 8px;
-      font: inherit;
-      cursor: pointer;
     }
 
     .toolbar-symbol span {
@@ -564,36 +535,6 @@
     .regime.EXPANSION { background: #2962ff33; color: #58a6ff; }
     .regime.SQUEEZE   { background: #f7931a33; color: #f7931a; }
     .regime.CLIMAX    { background: #f2364533; color: #f23645; }
-
-    /* ── Indicator toggles ── */
-    .indicator-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 14px;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--tv-border);
-      background: rgba(30,34,45,0.95);
-    }
-
-    .ind-toggle {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
-      color: var(--tv-muted);
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .ind-toggle input { accent-color: var(--tv-accent); cursor: pointer; }
-    .ind-toggle.active { color: var(--tv-text); }
-
-    .ind-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
 
     /* ── Slim header merged into command-bar ── */
     .slim-header {
@@ -1313,16 +1254,6 @@
       <span id="timeframe-label">1m</span>
     </div>
 
-    <div class="star-research" id="star-research">
-      <span>Star</span>
-      <input id="star-research-no" type="number" min="1" step="1" inputmode="numeric" aria-label="Star">
-      <span id="star-research-count">/ —</span>
-      <span id="star-research-status"></span>
-      <button type="button" id="star-research-prev">Prev</button>
-      <button type="button" id="star-research-next">Next</button>
-      <button type="button" id="star-research-clear">Clear</button>
-    </div>
-
     <div class="tf-bar" id="tf-bar">
       <div class="tf-favorites" id="tf-favorites"></div>
       <div class="tf-picker">
@@ -1366,13 +1297,6 @@
 
   <main class="workspace-main" id="workspace-main">
     <div id="tab-live" class="tab-content active">
-      <div class="indicator-bar">
-        <label class="ind-toggle active"><input type="checkbox" id="tog-jurik" checked /><span class="ind-dot" style="background:#c8a882"></span>RSX Jurik</label>
-        <label class="ind-toggle active"><input type="checkbox" id="tog-spike" checked /><span class="ind-dot" style="background:#f7931a"></span>Volume Spike</label>
-        <label class="ind-toggle active"><input type="checkbox" id="tog-volume" checked /><span class="ind-dot" style="background:#787b86"></span>Volume</label>
-        <label class="ind-toggle active"><input type="checkbox" id="tog-fib" checked /><span class="ind-dot" style="background:#e3b341"></span>Fib Zones</label>
-      </div>
-
       <div id="live-chart-container" class="pro-chart-root">
       <div class="charts-stack" id="charts-stack">
       <div class="chart-wrap chart-wrapper" id="price-wrap" data-pane-host="price">
@@ -1722,17 +1646,17 @@
   <script src="/ui/rsx-controller.js?v=3.3.0-dag-demand-1" defer></script>
   <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.5.2-wozduh-family-indent-1" defer></script>
-  <script src="/ui/toolbar-controller.js?v=4.3.0-price-series-style-1" defer></script>
+  <script src="/ui/toolbar-controller.js?v=4.3.1-no-ind-bar" defer></script>
   <script src="/ui/legend-renderer.js?v=4.2.1" defer></script>
   <script src="/ui/layout-controller.js?v=4.4.0" defer></script>
   <script src="/ui/pane-layout.js?v=1.4.0" defer></script>
-  <script src="/ui/star-research.js?v=1.0.2-star-clear" defer></script>
-  <script src="/ui/star-population-display.js?v=1.0.0-star-chart-visual" defer></script>
-  <script src="/ui/star-research-overlay.js?v=1.0.4-star-chart-visual" defer></script>
+  <script src="/ui/star-research.js?v=1.0.4-star-nav-nospin" defer></script>
+  <script src="/ui/star-population-display.js?v=1.0.1-star-style-menu" defer></script>
+  <script src="/ui/star-research-overlay.js?v=1.0.5-star-style-menu" defer></script>
   <script src="/ui/star-inspection-grammar.js?v=1.0.1-star-dot-colors" defer></script>
   <script src="/ui/star-inspection-swatches.js?v=1.0.0-star-line-swatch" defer></script>
-  <script src="/ui/star-inspection-panel.js?v=1.0.9-star-scroll" defer></script>
-  <script src="/ui/star-lens-panel.js?v=1.0.3-star-chart-visual" defer></script>
+  <script src="/ui/star-inspection-panel.js?v=1.0.11-star-nav-rail" defer></script>
+  <script src="/ui/star-lens-panel.js?v=1.0.4-star-style-menu" defer></script>
   <script src="/boot.js?v=4.41.0-price-series-style-1" defer></script>
 </body>
 </html>

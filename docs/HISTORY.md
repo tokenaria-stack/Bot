@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## STAR-MICROSCOPE-SHELL-V1 — rail navigator, style menu, dead checkbox bar (Sep 2026)
+
+- Star identity, ordinal, Prev/Next/Clear live only on the inspection header. Lens collapse does not hide them.
+- Chart Star appearance (shape, size, colors) lives in the style popover. The old indicator-bar checkboxes are deleted.
+- Report `research/cleanup/STAR-MICROSCOPE-SHELL-V1.txt`.
+
 ## STAR-CHART-VISUAL-DISPLAY-V1 — Star4, display menu, 96-bar path clip (Sep 2026)
 
 - Population glyphs use the Wozduh four-pointed star on canvas. Shape and up/down colors are local display prefs.

@@ -22,6 +22,7 @@ test('defaults are star4 green/red', () => {
   Display._resetForTests();
   const prefs = Display.get();
   assert.strictEqual(prefs.shape, 'star4');
+  assert.strictEqual(prefs.size, 9);
   assert.strictEqual(prefs.upColor, '#00E676');
   assert.strictEqual(prefs.downColor, '#FF1744');
 });
@@ -33,18 +34,21 @@ test('supported shapes persist and bad values fall back', () => {
   });
   assert.strictEqual(Display.set({ shape: 'pentagon' }).shape, 'star4');
   assert.strictEqual(Display.set({ upColor: 'green' }).upColor, '#00E676');
-  Display.set({ upColor: '#112233', downColor: '#aabbcc' });
+  Display.set({ upColor: '#112233', downColor: '#aabbcc', size: 14 });
   Display._resetForTests();
   mem[Display.STORAGE_KEY] = JSON.stringify({
     shape: 'diamond',
+    size: 14,
     upColor: '#112233',
     downColor: '#aabbcc',
   });
   assert.deepStrictEqual(Display.get(), {
     shape: 'diamond',
+    size: 14,
     upColor: '#112233',
     downColor: '#aabbcc',
   });
+  assert.strictEqual(Display.set({ size: 99 }).size, 9);
 });
 
 test('storage key is not the Wozduh crossover store', () => {
