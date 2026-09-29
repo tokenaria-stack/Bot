@@ -12,6 +12,7 @@ const StarResearch = (() => {
     decisionAt: null,
     row: null,
     seq: 0,
+    walk: null,
   };
   const listeners = [];
 
@@ -153,17 +154,45 @@ const StarResearch = (() => {
     return applyIndex(n - 1);
   }
 
+  function walkAt(delta) {
+    if (!state.walk || !state.walk.length) return null;
+    if (state.index == null) {
+      return delta > 0 ? state.walk[0] : null;
+    }
+    const at = state.walk.indexOf(state.index);
+    if (at < 0) {
+      return delta > 0 ? state.walk[0] : state.walk[state.walk.length - 1];
+    }
+    const next = at + delta;
+    if (next < 0 || next >= state.walk.length) return false;
+    return state.walk[next];
+  }
+
   function previous() {
+    const stepped = walkAt(-1);
+    if (stepped === false) return Promise.resolve(false);
+    if (stepped != null) return applyIndex(stepped);
     if (state.index == null || state.index <= 0) return Promise.resolve(false);
     return applyIndex(state.index - 1);
   }
 
   function next() {
+    const stepped = walkAt(1);
+    if (stepped === false) return Promise.resolve(false);
+    if (stepped != null) return applyIndex(stepped);
     if (state.count > 0 && state.index != null && state.index >= state.count - 1) {
       return Promise.resolve(false);
     }
     const index = state.index == null ? 0 : state.index + 1;
     return applyIndex(index);
+  }
+
+  function setWalk(list) {
+    if (!Array.isArray(list) || !list.length) {
+      state.walk = null;
+      return;
+    }
+    state.walk = list.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n >= 0);
   }
 
   /** Timeframe changes keep this identity and do not move the camera. */
@@ -217,6 +246,7 @@ const StarResearch = (() => {
     state.decisionAt = null;
     state.row = null;
     state.seq = 0;
+    state.walk = null;
     listeners.length = 0;
     fetchStar = defaultFetchStar;
     fetchAt = defaultFetchAt;
@@ -238,6 +268,7 @@ const StarResearch = (() => {
     noteTimeframe,
     onSelected,
     getState,
+    setWalk,
     _resetForTests,
   };
 })();

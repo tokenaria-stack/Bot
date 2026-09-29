@@ -422,6 +422,8 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **POPULATION-LENS-CORE-V1 ✅ frozen.** `forecast/starlens` evaluates an immutable population through typed clauses. R is the 0.15 stop. Missing is not zero. Pictures omit a field's own clause. Save writes a child. The outcome file is not in this commit. No chart.
 
+**POPULATION-LENS-UI-V1 ✅ frozen.** The inspection rail posts typed clauses to the evaluator. Chart marks are the current pass list inside the viewport. The selected Star stays the microscope. No learner.
+
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
 **DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.

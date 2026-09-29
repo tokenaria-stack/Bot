@@ -1,0 +1,83 @@
+POPULATION-LENS-UI-V1
+Date: 2026-09-29
+
+The workstation consumes forecast/starlens.
+The browser does not compute R state, missingness, or self-exclusion.
+
+============================================================
+1. API
+============================================================
+
+GET  /api/research/star-lens/sources
+POST /api/research/star-lens/evaluate
+POST /api/research/star-lens/save
+
+Evaluate calls starlens.Evaluate.
+Pictures and event rates come from NumberPicture / RPicture / StopPicture.
+Histogram bins are display edges over those values.
+They are not stored on a saved child.
+
+Named sources: All, Up, Down, Survived, Stop First, Unordered,
+Discovery, Holdout.
+Discovery / Holdout are member splits on decisionAt vs 1767225600000.
+They are not discovery slice edges.
+
+Save writes research/starstop/populations/<id>.json
+after Certify. The outcome file is not written.
+
+============================================================
+2. UI
+============================================================
+
+#star-lens sits in the existing inspection rail.
+Counts: population, lens, chart view, discovery/holdout.
+Thresholds and event states are typed clauses sent to the API.
+Prev/Next walk the last pass list when one exists.
+
+Chart marks for the pass set in the current view are time ticks
+on the existing overlay. They do not own cursorTime.
+The selected Star remains the microscope.
+
+Viewport changes recount chart view from the last pass list.
+They do not re-evaluate membership.
+
+============================================================
+3. CORRECTIONS
+============================================================
+
+starlens was not changed.
+Capture was not read.
+Schema 3 filters were not added.
+
+Equal-width histogram edges are chosen on the server from the
+picture min and max. That is a display argument, not a research
+edge. The saved child still stores the clause bound.
+
+============================================================
+4. TESTS
+============================================================
+
+go test ./forecast/starlens/
+go test ./server/ -count=1 -run 'StarLens|Inspection'
+node web/star_lens_panel_test.js
+node web/star_research_nav_test.js
+node web/star_research_overlay_test.js
+
+============================================================
+5. FILES
+============================================================
+
+Added:
+    server/star_lens_api.go
+    server/star_lens_api_test.go
+    web/ui/star-lens-panel.js
+    web/star_lens_panel_test.js
+    research/cleanup/POPULATION-LENS-UI-V1.txt
+
+Modified:
+    server/webserver.go
+    web/ui/star-research.js
+    web/ui/star-research-overlay.js
+    web/index.html
+    web/style.css
+    living docs

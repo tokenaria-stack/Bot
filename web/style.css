@@ -1189,3 +1189,43 @@ body.star-inspection-docked #tab-live {
   background: transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
+
+#star-lens {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+#star-lens summary {
+  cursor: pointer;
+  color: #d1d4dc;
+  font-weight: 600;
+}
+.star-lens-counts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px 8px;
+  margin: 8px 0;
+  color: #787b86;
+}
+.star-lens-counts b { color: #d1d4dc; }
+#star-lens select,
+#star-lens input[type="number"] {
+  background: #1e222d;
+  color: #d1d4dc;
+  border: 1px solid #2a2e39;
+  font-size: 11px;
+}
+.star-lens-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0 2px;
+}
+.star-lens-hist { display: block; margin-top: 2px; }
+.star-lens-meta, .star-lens-rate, .star-lens-empty {
+  color: #787b86;
+  font-variant-numeric: tabular-nums;
+}
+#star-lens [data-save] {
+  margin-top: 8px;
+}

@@ -134,8 +134,9 @@ const StarResearchOverlay = (() => {
       const lines = this._owner.lines || [];
       const entries = this._owner.entries || [];
     const markTime = this._owner.markTime;
+    const crowd = this._owner.crowd || [];
     if (!series || !target || typeof target.useBitmapCoordinateSpace !== 'function') return;
-    if (!lines.length && !entries.length && markTime == null) return;
+    if (!lines.length && !entries.length && markTime == null && !crowd.length) return;
     target.useBitmapCoordinateSpace((scope) => {
         const ctx = scope.context;
         if (!ctx) return;
@@ -155,7 +156,26 @@ const StarResearchOverlay = (() => {
             ctx.stroke();
           }
         }
-        drawEntryTriangles(ctx, series, this._owner._chart, entries, hr, vr);
+        if (crowd.length) {
+          const ts = this._owner._chart && typeof this._owner._chart.timeScale === 'function'
+            ? this._owner._chart.timeScale() : null;
+          if (ts && typeof ts.timeToCoordinate === 'function') {
+            ctx.fillStyle = 'rgba(212, 180, 131, 0.55)';
+            const r = Math.max(2, 2 * hr);
+            const y = height - 8 * vr;
+            for (let i = 0; i < crowd.length; i++) {
+              const sec = Number(crowd[i].decisionAt);
+              if (!Number.isFinite(sec) || sec <= 0) continue;
+              const t = sec > 1e11 ? Math.floor(sec / 1000) : Math.floor(sec);
+              let x = null;
+              try { x = ts.timeToCoordinate(t); } catch { x = null; }
+              if (x == null || !Number.isFinite(x)) continue;
+              ctx.beginPath();
+              ctx.arc(x * hr, y, r, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
         ctx.font = (12 * vr) + 'px sans-serif';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
@@ -274,6 +294,9 @@ const StarResearchOverlay = (() => {
   }
 
   function refresh() {
+    if (typeof StarLens !== 'undefined' && typeof StarLens.noteViewport === 'function') {
+      StarLens.noteViewport();
+    }
     const row = deps.getRow();
     const onChart = deps.getTf() === '15m';
     const plan = onChart
@@ -282,6 +305,8 @@ const StarResearchOverlay = (() => {
     primitive.lines = plan.lines;
     primitive.entries = plan.entries || [];
     primitive.markTime = plan.markTime == null ? null : plan.markTime;
+    primitive.crowd = onChart && typeof StarLens !== 'undefined' && typeof StarLens.getMarks === 'function'
+      ? StarLens.getMarks() : [];
     deps.applyMarkers(plan.markers);
     deps.attach(primitive);
     deps.requestDraw();

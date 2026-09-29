@@ -7,6 +7,18 @@ Format per entry: Context → Decision → Rejected (with Reason) → Consequenc
 
 ---
 
+## POPULATION-LENS-UI-V1 — workstation consumes the evaluator
+
+**Context:** The typed evaluator is frozen. A person needs to cut a population on the chart without a second filter engine.
+
+**Decision:** The inspection rail hosts Population/Lens. The browser posts clauses to `/api/research/star-lens/evaluate`. Membership, R states, missing counts, and self-excluded pictures come from `forecast/starlens`. Save writes a child after Certify. Viewport only recounts chart-view marks.
+
+**Rejected:** Computing `hit1R` in JS — **Reason:** 47 rows would be misclassified. Recalculating pictures in the browser — **Reason:** self-exclusion already lives in the evaluator.
+
+**Consequences:** Schema 3 filters and capture stay later. Histogram bin edges are display-only.
+
+---
+
 ## POPULATION-LENS-CORE-V1 — typed lens, no chart
 
 **Context:** A population is an immutable set of Stars. A person needs to cut it on certified outcome fields without treating `hit1R:false` as one meaning.

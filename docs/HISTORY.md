@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## POPULATION-LENS-UI-V1 — chart consumes the evaluator (Sep 2026)
+
+- Sources All / Up / Down / Survived / Stop First / Unordered / Discovery / Holdout and saved children.
+- Histograms and 1R / 0.15 rates come from `starlens` pictures. Viewport does not change membership.
+- Report `research/cleanup/POPULATION-LENS-UI-V1.txt`.
+
 ## POPULATION-LENS-CORE-V1 — typed evaluator (Sep 2026)
 
 - `forecast/starlens` evaluates membership, self-excluded pictures, and save-child replay.
