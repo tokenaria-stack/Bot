@@ -13,6 +13,8 @@ import (
 const (
 	Schema3Digest = "934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7"
 	Schema3Commit = "975da0d"
+	MatrixDigest  = "8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a"
+	MatrixCommit  = "0389023"
 	OutcomeDigest = "6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62"
 	OutcomeBuffer = 0.15
 	UniverseStars = 8783
@@ -33,6 +35,8 @@ type Provenance struct {
 	Schema3Digest string `json:"schema3Digest"`
 	Schema3Commit string `json:"schema3Commit"`
 	OutcomeDigest string `json:"outcomeDigest,omitempty"`
+	MatrixDigest  string `json:"matrixDigest,omitempty"`
+	MatrixCommit  string `json:"matrixCommit,omitempty"`
 }
 
 // Population is an immutable set of Star identities.

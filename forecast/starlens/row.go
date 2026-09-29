@@ -51,6 +51,9 @@ type Row struct {
 	At1R   Observed
 	At2R   Observed
 	At3R   Observed
+
+	// coords is the 191 Schema 3 + Matrix projection. It is not a Schema 3 row.
+	coords map[string]Observed
 }
 
 func (r Row) Ref() StarRef {
@@ -85,7 +88,13 @@ func (r Row) Number(field string) (Observed, bool) {
 	case FieldR:
 		return r.R, true
 	default:
-		return Observed{}, false
+		if _, ok := continuousIDs[field]; !ok {
+			return Observed{}, false
+		}
+		if r.coords == nil {
+			return Observed{}, true
+		}
+		return r.coords[field], true
 	}
 }
 

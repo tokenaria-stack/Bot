@@ -1,0 +1,748 @@
+COORDINATE-FILTER-COMPARISON-CONTRACT-AUDIT-V1
+Date: 2026-09-29
+Status: READ-ONLY. No implementation. No commit. No push.
+
+============================================================
+1. VERDICT
+============================================================
+
+READY FOR IMPLEMENTATION
+
+The frozen Schema 3 row, the frozen Relative Matrix, and the
+frozen Population/Lens evaluator already define:
+
+    142 raw numeric Schema 3 coordinates
+    49 stored Matrix relations
+    = 191 logical research coordinates
+
+Observation is field-specific. Missing is not zero.
+There is one continuous-clause architecture. Comparison is a
+view over two Populations using the same picture and the same
+caller-supplied bins.
+
+This chapter does not add filters, UI, endpoints, or scoring.
+
+============================================================
+2. FROZEN FOUNDATION (UNCHANGED)
+============================================================
+
+Population/Lens core          06f7bec
+Population/Lens UI            ce30e82
+STAR-MICROSCOPE-SHELL-V1      d2a3f1db85990ac2b30b309be9a295060aca0610
+LEGACY-CHART-TOGGLE-CLEANUP   a9eae14cd2ad65478567d25b56d3bd307c0e5a9b
+
+Schema 3 Daily Projection     commit 975da0d
+    digest 934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+    file   research/starstop/star_snapshot_v3.json
+
+Relative Matrix V1            commit 0389023
+    digest 8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    file   research/starstop/star_relative_v1.json
+
+Discovery Protocol V1         commit b4cf366
+    join digest 72f653c3cbf51a22cd9c3ae2bc555e9535a845f709a696ee9d1bdab1977adb8b
+    file   research/starstop/star_discovery_v1.json
+
+Holdout wall (Discovery):     1767225600000  (2026-01-01 UTC)
+
+StarOutcomeWindow             96  (15m bars)
+
+The 142 + 49 lists are already encoded in:
+
+    market.RawObservations(StarSnapshotV3)   // len == 142
+    StarRelations.Relations()                // [49]Rel
+    relationNames()                          // 49 stable IDs
+
+Do not regenerate those artifacts. Do not change those digests.
+
+============================================================
+3. CORRECTIONS TO THE AUDIT PROMPT
+============================================================
+
+The prompt is mostly right. These points must not be implemented
+as written.
+
+3.1 Do not invent RawCoordinateClause and RelationClause kinds.
+
+    Frozen starlens already has KindContinuous with Field, Cmp,
+    Bound. Outcome fields, Schema 3 coordinates, and Matrix
+    relations must enter that same kind.
+
+    New kinds named after the source artifact would become a
+    second and third engine in everything but name.
+
+    Stable IDs (section 6 and 8) go in Clause.Field.
+    Observation is looked up by that ID. Comparison stays the
+    same Cmp tokens: >  >=  <  <=.
+
+3.2 Width is not "Present AND finite" the way VWEMA is.
+
+    Volume-channel Width is stored only when ValuesOK is true
+    (all of VWEMA, ChanMid, ChanUp, ChanDn finite). WidthOK
+    is then true. The evaluator uses Present AND WidthOK.
+    It does not re-derive width in the browser.
+
+    Close-channel width uses CloseWidthOK, which is CloseUpOK
+    AND CloseDnOK. It does not use ValuesOK.
+
+3.3 ValuesOK is not a coordinate.
+
+    It is an aggregate gate used to write Width and Distance.
+    It is not in the 142. Filtering on ValuesOK would be a new
+    categorical clause, not a numeric coordinate.
+
+3.4 TVDirection, TVConfirmedAt, Present, OpenTime, CloseTime
+    are not among the 142.
+
+    TVAge is the only TV numeric coordinate. TVDirection remains
+    a category (later Kind if a consumer exists; not this 191).
+
+3.5 EMA12 acceleration is not missing from the 142.
+
+    StarTF stores Ema12 and Ema12Slope only. readStarTF discards
+    the accel return from projectSample. Signal acceleration is
+    also not stored. Those absences are frozen Schema 3, not
+    audit omissions.
+
+3.6 Discovery P20/P40/P60/P80 are not Lens defaults.
+
+    They are descriptive five-slice views on the discovery
+    period. A Lens bound is an explicit user cut. Do not copy
+    discovery edges into Clause.Bound.
+
+3.7 The prompt's example "VWEMA(15m) - VWEMA(1h)" is a Matrix
+    relation ID (M15H1Vwema), not two raw fields subtracted in
+    the browser.
+
+3.8 Current Provenance (forecast/starlens/population.go) stores
+    Schema3Digest, Schema3Commit, OutcomeDigest only.
+
+    That is correct for outcome-only populations. Matrix clauses
+    require additional fields on the same Provenance object
+    (section 16). Do not invent a second provenance type.
+
+============================================================
+4. ONE EVALUATOR
+============================================================
+
+Forbidden:
+
+    OutcomeFilterEngine
+    Schema3FilterEngine
+    MatrixFilterEngine
+    ComparisonEvaluator
+
+Required:
+
+    starlens.Evaluate(parent, table, clauses)
+    AND of typed clauses
+    self-exclusion via Clause.key() == "n:" + Field
+    NumberPicture with Missing count and observed Values
+    CountBins(values, callerEdges)
+
+The table row must later expose Number(field) for:
+
+    existing outcome fields
+    142 Schema 3 IDs
+    49 Matrix IDs
+
+Join is by Star identity (index, decisionAt, side), the same
+order as Schema 3 / outcomes. The Matrix file does not copy
+the 142 raw values. Load Schema 3 for raw IDs. Load Matrix
+for relation IDs. Do not subtract two Schema 3 fields in JS.
+
+============================================================
+5. WHAT IS NOT A COORDINATE
+============================================================
+
+Not in the 191:
+
+    Side, TVDirection
+    Present, ValuesOK
+    OpenTime, CloseTime, AnchorAt, ConfirmedAt, TVConfirmedAt
+    Outcome fields (entry, MFE/MAE, stop, R, status)
+    Discovery slice index
+    Histogram bin edges
+    Holdout membership
+
+MFE ATR is an outcome field (mfeAtr). It is not Schema 3.
+
+15m RSX minus signal is Schema 3 root RSXMinusSignal.
+It is not a Matrix relation.
+
+============================================================
+6. RAW SCHEMA 3 — 142 COORDINATES
+============================================================
+
+Proof of count (from RawObservations, not from the number 142):
+
+    appendTF × 4 timeframes × 30 numbers  = 120
+    root 15m RSX family                     =   6
+    H1RSX, H4RSX, D1RSX × 5                 =  15
+    TVAge                                   =   1
+                                          -----
+                                            142
+
+Timeframes: M15, H1, H4, D1.
+Schema 2 is 15m / 1h / 4h. Schema 3 adds D1 + D1RSX.
+No Daily TV. No FeatureRuntime2. No new indicators.
+
+6.1 Per-timeframe block (30 × 4)
+
+ID prefix is TF in {M15, H1, H4, D1}.
+Source: StarSnapshotV3.{m15|h1|h4|d1} on star_snapshot_v3.json.
+
+ID                        Display                         Unit
+TF.Vwema                  VWEMA (TF)                      price
+TF.ChanMid                Orange mid (TF)                 price
+TF.ChanUp                 Orange upper (TF)               price
+TF.ChanDn                 Orange lower (TF)               price
+TF.Slope                  VWEMA slope (TF)                price / bar of TF
+TF.Width                  Volume-channel width (TF)       price
+TF.WidthChange            Width change (TF)               price / bar of TF
+TF.Distance               VWEMA − orange mid (TF)         price
+TF.MidSlope               Orange-mid slope (TF)           price / bar of TF
+TF.MidAccel               Orange-mid acceleration (TF)    price / bar² of TF
+TF.Ema5                   EMA5 (TF)                       price
+TF.Ema5Slope              EMA5 slope (TF)                 price / bar of TF
+TF.Ema5Accel              EMA5 acceleration (TF)          price / bar² of TF
+TF.Ema12                  EMA12 (TF)                      price
+TF.Ema12Slope             EMA12 slope (TF)                price / bar of TF
+TF.VwemaAccel             VWEMA acceleration (TF)         price / bar² of TF
+TF.RsiClose               RSI close (TF)                  RSI points
+TF.RsiCloseSlope          RSI close slope (TF)            RSI / bar of TF
+TF.RsiCloseAccel          RSI close acceleration (TF)     RSI / bar² of TF
+TF.CloseMid               Close-channel mid (TF)          price
+TF.CloseUp                Close-channel upper (TF)        price
+TF.CloseDn                Close-channel lower (TF)        price
+TF.CloseWidth             Close-channel width (TF)        price
+TF.CloseWidthChange       Close-width change (TF)         price / bar of TF
+TF.Ema7                   EMA7 (TF)                       price
+TF.Ema7Slope              EMA7 slope (TF)                 price / bar of TF
+TF.Ema7Accel              EMA7 acceleration (TF)          price / bar² of TF
+TF.Macd                   MACD (TF)                       price
+TF.MacdSlope              MACD slope (TF)                 price / bar of TF
+TF.MacdAccel              MACD acceleration (TF)          price / bar² of TF
+
+"bar of TF" means one closed bar of that timeframe.
+Slope and acceleration are stored. The filter does not recompute
+them. Frozen formulas:
+
+    slope[t]        = value[t] − value[t−1]
+    acceleration[t] = value[t] − 2·value[t−1] + value[t−2]
+
+6.2 Root 15m RSX (6)
+
+Present is implied by the 15m Star bar (always the Star's 15m).
+
+ID                 Display                         Unit              OK
+RSX                RSX (15m)                       RSX               RSXOK
+RSXSlope           RSX slope (15m)                 RSX / 15m bar     RSXSlopeOK
+RSXAccel           RSX acceleration (15m)          RSX / 15m bar²    RSXAccelOK
+Signal             RSX signal (15m)                RSX               SignalOK
+SignalSlope        RSX signal slope (15m)          RSX / 15m bar     SignalSlopeOK
+RSXMinusSignal     RSX − signal (15m)              RSX               RSXMinusOK
+
+RSXMinusOK is written only when RSXOK and SignalOK.
+This ID is the 15m gap. The Matrix does not repeat it.
+
+6.3 Higher-TF RSX blocks (5 × 3 = 15)
+
+Prefix in {H1RSX, H4RSX, D1RSX}.
+Operand Present is the matching StarTF Present (H1, H4, D1).
+
+ID                      Display                    Unit           OK
+PREFIX.Value            RSX (TF)                   RSX            Present AND ValueOK
+PREFIX.Slope            RSX slope (TF)             RSX / TF bar   Present AND SlopeOK
+PREFIX.Accel            RSX acceleration (TF)      RSX / TF bar²  Present AND AccelOK
+PREFIX.Signal           RSX signal (TF)            RSX            Present AND SignalOK
+PREFIX.SignalSlope      RSX signal slope (TF)      RSX / TF bar   Present AND SignalSlopeOK
+
+There is no PREFIX.MinusSignal raw field.
+H1/H4/D1 minus-signal live only on the Matrix.
+
+6.4 TVAge (1)
+
+ID     Display                         Unit
+TVAge  Causal RSX TV divergence age    native 15m bars, uncapped
+
+Observation: TVAgeOK.
+TVAge 0 with TVAgeOK true means the fact is confirmed on the
+Star bar. That is an observed zero.
+TVAgeOK false stores 0 and is missing.
+
+============================================================
+7. RAW OBSERVATION FAMILIES
+============================================================
+
+Family A — lineFinite (Present AND finite). ValuesOK is NOT the gate.
+
+    TF.Vwema, TF.ChanMid, TF.ChanUp, TF.ChanDn
+
+    Present false → missing (stored 0 is not a reading).
+    Present true, non-finite → missing.
+    Present true, finite 0 → observed zero.
+
+    Test already frozen: M15.Vwema = 0, ValuesOK false, Present true
+    is observed zero (star_discovery_test.go).
+
+Family B — Present AND named OK flag (false OK stores 0, not a reading).
+
+    Slope, Width, WidthChange, Distance,
+    MidSlope, MidAccel,
+    Ema5, Ema5Slope, Ema5Accel,
+    Ema12, Ema12Slope,
+    VwemaAccel,
+    RsiClose, RsiCloseSlope, RsiCloseAccel,
+    CloseMid, CloseUp, CloseDn, CloseWidth, CloseWidthChange,
+    Ema7, Ema7Slope, Ema7Accel,
+    Macd, MacdSlope, MacdAccel,
+    root RSX family, H*RSX family, TVAge.
+
+Family C — volume-channel width and distance (write-time).
+
+    WidthOK and DistanceOK are set only inside ValuesOK
+    (all four orange/VWEMA numbers finite). Then:
+
+        Width    = ChanUp − ChanDn
+        Distance = Vwema − ChanMid
+
+    Evaluator observation: Present AND WidthOK / DistanceOK.
+    Do not treat Width as observed merely because Vwema is finite.
+
+Family D — close-channel width.
+
+    CloseWidthOK := CloseUpOK AND CloseDnOK
+    CloseWidth   := CloseUp − CloseDn
+    CloseWidthChangeOK requires CloseWidthOK and a finite previous
+    close-channel width.
+
+    Independent of ValuesOK / orange channel.
+
+Real zero vs missing (all families):
+
+    OK true, value 0  → numeric observation; histogram includes it
+    OK false          → missing; excluded from Values; clause fails
+    Never coerce missing to 0.
+
+============================================================
+8. MATRIX — 49 RELATIONS
+============================================================
+
+Source: research/starstop/star_relative_v1.json
+        market.StarRelations / Relations() / relationNames()
+
+No 15m−4h. No 15m−Daily. No copy of the 142.
+
+Each Rel: Value float64, OK bool.
+relSub: if either operand not OK → Rel{} (0, false).
+If both OK and a−b == 0 → Value 0, OK true.
+
+8.1 Same-TF (16)
+
+Operands use Present AND field OK, except VWEMA/orange mid
+inside slope which use SlopeOK / MidSlopeOK.
+
+ID                            Display
+M15Ema7MinusMacd              EMA7 − MACD (15m)
+M15Ema7MinusCloseMid          EMA7 − close mid (15m)
+M15RsiCloseMinusCloseMid      RSI close − close mid (15m)
+M15VwemaSlopeMinusMidSlope    VWEMA slope − orange-mid slope (15m)
+H1Ema7MinusMacd               (same, 1h)
+H1Ema7MinusCloseMid
+H1RsiCloseMinusCloseMid
+H1VwemaSlopeMinusMidSlope
+H4Ema7MinusMacd
+H4Ema7MinusCloseMid
+H4RsiCloseMinusCloseMid
+H4VwemaSlopeMinusMidSlope
+D1Ema7MinusMacd
+D1Ema7MinusCloseMid
+D1RsiCloseMinusCloseMid
+D1VwemaSlopeMinusMidSlope
+
+Unit: price, except RSI−mid (RSI vs price — stored as Schema 3
+does; do not rescale) and the slope gap (price / bar of that TF).
+
+8.2 RSX − signal (3) — not 15m
+
+ID                 Display                    Operands
+H1RsxMinusSignal   H1 RSX − signal            H1 Present AND H1RSX.ValueOK
+                                              H1 Present AND H1RSX.SignalOK
+H4RsxMinusSignal   H4 RSX − signal            analogous
+D1RsxMinusSignal   D1 RSX − signal            analogous
+
+15m equivalent is raw RSXMinusSignal. Do not add M15RsxMinusSignal.
+
+8.3 Neighboring levels, lower minus higher (24)
+
+Pairs: M15−H1, H1−H4, H4−D1.
+Series: OrangeMid, Vwema, Ema5, Ema12, RsiClose, Ema7, Macd, Rsx.
+
+IDs:
+
+M15H1OrangeMid M15H1Vwema M15H1Ema5 M15H1Ema12
+M15H1RsiClose  M15H1Ema7  M15H1Macd M15H1Rsx
+
+H1H4OrangeMid  H1H4Vwema  H1H4Ema5  H1H4Ema12
+H1H4RsiClose   H1H4Ema7   H1H4Macd  H1H4Rsx
+
+H4D1OrangeMid  H4D1Vwema  H4D1Ema5  H4D1Ema12
+H4D1RsiClose   H4D1Ema7   H4D1Macd  H4D1Rsx
+
+Orange mid and VWEMA operands: lineFinite (Present AND finite).
+EMA/RSI/MACD: Present AND that line's OK.
+RSX: lower Present AND that TF's RSX ValueOK
+     (15m uses root RSXOK; 1h/4h/D1 use *RSX.ValueOK).
+
+8.4 Neighboring widths (6)
+
+ID               Display
+M15H1Width       volume-channel width 15m − 1h
+M15H1CloseWidth  close-channel width 15m − 1h
+H1H4Width
+H1H4CloseWidth
+H4D1Width
+H4D1CloseWidth
+
+Operands: Present AND WidthOK, or Present AND CloseWidthOK.
+
+8.5 Count
+
+    16 + 3 + 24 + 6 = 49
+
+Frozen Stars with daily absent (ConfirmedAt 1567965600000 up):
+15 daily-touching relations are 0 / OK false; lower TF relations
+remain readings.
+
+============================================================
+9. TYPED CLAUSE MODEL
+============================================================
+
+No new Kind.
+
+    Clause{
+        Kind:  "continuous"
+        Field: <outcome ID | Schema 3 ID | Matrix ID>
+        Cmp:   ">" | ">=" | "<" | "<="
+        Bound: float64   // 0 is a real bound; always stored
+    }
+
+Existing outcome Field names stay as they are
+(entryPrice, mfeAtr, …).
+
+Schema 3 Field names are the IDs in section 6
+(e.g. M15.Vwema, H1RSX.Value, TVAge, RSXMinusSignal).
+
+Matrix Field names are the IDs in section 8
+(e.g. M15H1Vwema, H1RsxMinusSignal).
+
+knownField expands to all 11 outcome + 142 + 49 names.
+Unknown Field is a validate error.
+
+key() remains "n:" + Field so two clauses on the same ID
+share one picture (self-exclusion). Clauses on M15.Vwema and
+M15H1Vwema are different keys.
+
+Side, status, R, stop stay their existing kinds.
+They may share a Lens with continuous coordinate clauses.
+
+Example Lens (one Evaluate):
+
+    KindContinuous Field=mfeAtr           Cmp=>= Bound=4
+    KindContinuous Field=M15H1Vwema       Cmp=>= Bound=0
+    KindContinuous Field=H4RSX.Value      Cmp=<  Bound=50
+
+AND. Missing on any clause fails that row for Pass.
+
+============================================================
+10. EVALUATION SEMANTICS
+============================================================
+
+For a continuous clause on field F:
+
+    n = row.Number(F)
+    if !n.OK → fail
+    compare n.Value to Bound with Cmp
+
+Schema 3 Number(F) uses section 7.
+Matrix Number(F) uses stored Rel.OK and Rel.Value.
+Do not recompute Rel.
+
+Pass membership is parent members that satisfy every clause.
+Order remains parent/table order: decisionAt ascending.
+Prev/Next walk that order. Do not sort by coordinate value.
+
+Empty clause list: parent unchanged (frozen Evaluate).
+
+============================================================
+11. SELF-EXCLUSION AND PICTURES
+============================================================
+
+Same as outcome NumberPicture.
+
+picture(F) is computed on:
+
+    parent
+    AND all clauses whose key() != "n:"+F
+
+Then F's own bound produces Pass.
+
+NumberPicture:
+
+    Base     = size of that self-excluded set
+    Missing  = count with !OK
+    Values   = observed numbers only (zeros with OK stay here)
+
+Do not put discovery slices on this picture.
+Do not use a special Schema 3 or Matrix histogram rule.
+
+============================================================
+12. COMPARISON (VIEW, NOT AN ENGINE)
+============================================================
+
+Inputs:
+
+    Population A
+    Population B
+    coordinate ID F
+    shared bin edges (caller-supplied, strictly increasing)
+
+Procedure:
+
+    Evaluate A with its stored clauses (or current lens)
+    Evaluate B the same way
+    a = A.NumberPicture(F)
+    b = B.NumberPicture(F)
+    CountBins(a.Values, edges)
+    CountBins(b.Values, edges)
+
+Same F, same observation rule, same edges, same scale.
+
+Display may show:
+
+    distribution A / B
+    missing A / B
+    Base / observed counts
+    pass membership lists already owned by each Population
+
+Must not compute:
+
+    separation, effect size, predictive power, "strength", "best"
+    ranking of coordinates or populations
+    automatic bin search
+    holdout-driven selection of F, edges, or populations
+
+Holdout may be displayed as composition (count of members with
+decisionAt >= 1767225600000). It must not choose anything.
+
+============================================================
+13. HISTOGRAM BINS
+============================================================
+
+Edges are display arguments.
+They are not research facts, not Population state, not
+discovery slices, not provenance.
+
+Comparison uses one edge list for A and B.
+Do not fit bins independently. Do not save bins on the child.
+
+CountBins contract (already frozen):
+
+    edges inclusive on the right
+    last bin is above the last edge
+    empty or non-increasing edges are an error
+
+============================================================
+14. DISCOVERY SLICES
+============================================================
+
+Frozen discovery pictures remain descriptive.
+They may be inspected as a separate research view.
+
+They are not default Clause.Bound values.
+They are not comparison bins.
+
+============================================================
+15. NO BROWSER MATH
+============================================================
+
+The browser must not:
+
+    subtract VWEMA across timeframes
+    compute OK / missing
+    recompute slope, acceleration, RSX−signal, widths
+
+The browser sends Field, Cmp, Bound, population IDs, bin edges.
+It renders Pass, counts, Values, Missing, metadata (display name,
+unit, timeframe).
+
+============================================================
+16. PROVENANCE (MINIMUM)
+============================================================
+
+Identity is digests and commits, not filenames.
+
+Any Population that uses outcome fields or path pictures:
+
+    outcomeDigest
+        6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+
+Any Population (universe already requires this):
+
+    schema3Digest
+        934e2e0d584297b50f199cd102511f6ecfb93a034ce94d9b27d6046675d8eee7
+    schema3Commit
+        975da0d
+
+Any Population whose clauses include a Matrix ID:
+
+    matrixDigest
+        8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    matrixCommit
+        0389023
+
+A mixed Lens (outcome + Schema 3 + Matrix) stores all of the
+above on the same Provenance object. Child copies parent
+Provenance (frozen SaveChild). Implementation must refuse to
+save Matrix clauses if matrix digest/commit are empty.
+
+Discovery join digest is required only if the Population is
+defined from discovery membership. Coordinate filters do not
+write discovery artifacts.
+
+============================================================
+17. FUTURE UI / API CONTRACT
+============================================================
+
+Not implemented here. Requests the later chapter may serve.
+
+17.1 Picture / Pass
+
+Request:
+    populationId
+    clauses (typed, including coordinate Fields)
+    pictureField          // one ID; optional current clause on that ID
+    binEdges              // optional; display only
+
+Response:
+    pass[]                // StarRef, decisionAt order
+    populationCount
+    lensPass
+    picture: { base, missing, values[] }
+    bins[]                // if edges supplied
+    fieldMeta: { id, displayName, timeframe, unit, source }
+
+17.2 Comparison
+
+Request:
+    populationIdA
+    populationIdB
+    field
+    binEdges              // required, shared
+
+Response:
+    pictureA, pictureB
+    binsA, binsB          // same edges
+    meta
+    no score fields
+
+17.3 Catalog (optional helper)
+
+    list of 11+142+49 continuous IDs with meta
+    generated from the same adapters as Number()
+    not a second inventory file
+
+Do not ship 191 widgets in this chapter.
+Do not expose indicator constructors or HistoryBus.
+
+============================================================
+18. TESTS THE IMPLEMENTATION CHAPTER MUST SATISFY
+============================================================
+
+Count:
+    RawObservations length 142
+    Relations length 49
+    known continuous IDs = 11 outcome + 142 + 49
+    unique IDs; no M15H4*, no M15D1*, no M15RsxMinusSignal relation
+
+Observation:
+    Present + finite VWEMA 0 with ValuesOK false → clause can pass
+        bound <= 0; histogram includes 0; Missing does not increment
+    Present false VWEMA 0 → Missing; clause fails
+    Width with ValuesOK false → not observed
+    CloseWidth with CloseWidthOK → independent of ValuesOK
+    Matrix 0 OK false → Missing, not observed zero
+    Matrix 0 OK true → observed zero
+    daily absent Star: D1* raw missing; M15/H1/H4 still readable
+    real daily VWEMA 0 ValuesOK true remains observed
+
+Evaluator:
+    mixed outcome + Schema 3 + Matrix AND
+    missing fails the clause
+    self-exclusion: picture(F) ignores only F's clauses
+    Pass order is decisionAt ascending
+    CountBins shared edges for two populations
+    validate rejects unknown Field and unknown Cmp
+
+Provenance:
+    save with Matrix Field requires matrix digest+commit
+    certify mismatch on members or provenance fails
+    no write to star_snapshot_v3.json / star_relative_v1.json
+
+Forbidden:
+    no browser subtraction tests that load two raw fields
+    no ranking / effect-size helpers
+    no holdout used to pick Bound or edges
+    no discovery edges copied into default Bound
+
+============================================================
+19. CERTIFICATION CHECKS (THIS AUDIT)
+============================================================
+
+    raw 142                         PASS (RawObservations)
+    matrix 49                       PASS (Relations / relationNames)
+    total 191                       PASS
+    no duplicate logical IDs        PASS (TF prefix + relation names)
+    15m RSX−signal not in Matrix    PASS (root RSXMinusSignal only)
+    no 15m−4h / 15m−Daily neighbors PASS
+    missing != zero                 PASS (Observed / Rel)
+    VWEMA/orange not ValuesOK       PASS (finiteObs / lineFinite)
+    width uses WidthOK              PASS (readStarTF + widthGap)
+    close width uses CloseWidthOK   PASS
+    Matrix OK semantics             PASS (relSub)
+    slope/accel stored not rebuilt  PASS (filter reads coordinates)
+
+No frozen-artifact contradiction that blocks the contract.
+EMA12 accel absence is Schema 3 law, not a gap.
+
+============================================================
+20. IMPLEMENTATION HANDOFF
+============================================================
+
+When accepted:
+
+    1. Extend starlens Row.Number / knownField / adapters.
+       Join Schema 3 + Matrix by Star identity. Do not copy 142
+       into the Matrix file.
+
+    2. Extend Provenance with matrixDigest / matrixCommit.
+
+    3. Keep KindContinuous. Expand Field catalog.
+
+    4. Comparison = two NumberPicture + one CountBins edge list.
+
+    5. UI later: catalog + one bound control, not 191 defaults
+       from discovery.
+
+    6. Do not resurrect Volume Spike as a coordinate here.
+       It remains dormant debt, not a Schema 3 field.
+
+Do not implement until this contract is accepted.
+
+============================================================
+21. FINAL
+============================================================
+
+READY FOR IMPLEMENTATION
+)

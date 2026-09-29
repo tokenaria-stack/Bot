@@ -225,7 +225,8 @@ func DescribeEpisodes(times []int64) EpisodeRuns {
 	return out
 }
 
-type observation struct {
+// CoordObservation is one Schema 3 or Matrix number under its frozen OK rule.
+type CoordObservation struct {
 	Name  string
 	Value float64
 	OK    bool
@@ -234,8 +235,8 @@ type observation struct {
 // RawObservations is the 142 schema-3 numbers in a fixed order.
 // VWEMA, orange mid, and the channel bounds are observations when
 // the bar is present and the number is finite. ValuesOK is not the gate.
-func RawObservations(row StarSnapshotV3) []observation {
-	out := make([]observation, 0, 142)
+func RawObservations(row StarSnapshotV3) []CoordObservation {
+	out := make([]CoordObservation, 0, 142)
 	out = appendTF(out, "M15", row.M15)
 	out = appendTF(out, "H1", row.H1)
 	out = appendTF(out, "H4", row.H4)
@@ -253,17 +254,17 @@ func RawObservations(row StarSnapshotV3) []observation {
 	return out
 }
 
-func RelationObservations(rel StarRelations) []observation {
-	names := relationNames()
+func RelationObservations(rel StarRelations) []CoordObservation {
+	names := RelationNames()
 	values := rel.Relations()
-	out := make([]observation, len(values))
+	out := make([]CoordObservation, len(values))
 	for i := range values {
-		out[i] = observation{Name: names[i], Value: values[i].Value, OK: values[i].OK}
+		out[i] = CoordObservation{Name: names[i], Value: values[i].Value, OK: values[i].OK}
 	}
 	return out
 }
 
-func appendTF(dst []observation, name string, tf StarTF) []observation {
+func appendTF(dst []CoordObservation, name string, tf StarTF) []CoordObservation {
 	p := tf.Present
 	dst = append(dst, finiteObs(name+".Vwema", tf.Vwema, p))
 	dst = append(dst, finiteObs(name+".ChanMid", tf.ChanMid, p))
@@ -298,7 +299,7 @@ func appendTF(dst []observation, name string, tf StarTF) []observation {
 	return dst
 }
 
-func appendRSX(dst []observation, name string, tf StarTF, rsx StarRSX) []observation {
+func appendRSX(dst []CoordObservation, name string, tf StarTF, rsx StarRSX) []CoordObservation {
 	p := tf.Present
 	dst = append(dst, flagObs(name+".Value", rsx.Value, p && rsx.ValueOK))
 	dst = append(dst, flagObs(name+".Slope", rsx.Slope, p && rsx.SlopeOK))
@@ -308,21 +309,22 @@ func appendRSX(dst []observation, name string, tf StarTF, rsx StarRSX) []observa
 	return dst
 }
 
-func finiteObs(name string, v float64, present bool) observation {
+func finiteObs(name string, v float64, present bool) CoordObservation {
 	if !present || !starFinite(v) {
-		return observation{Name: name}
+		return CoordObservation{Name: name}
 	}
-	return observation{Name: name, Value: v, OK: true}
+	return CoordObservation{Name: name, Value: v, OK: true}
 }
 
-func flagObs(name string, v float64, ok bool) observation {
+func flagObs(name string, v float64, ok bool) CoordObservation {
 	if !ok {
-		return observation{Name: name}
+		return CoordObservation{Name: name}
 	}
-	return observation{Name: name, Value: v, OK: true}
+	return CoordObservation{Name: name, Value: v, OK: true}
 }
 
-func relationNames() [49]string {
+// RelationNames is the frozen 49 Matrix IDs in audit order.
+func RelationNames() [49]string {
 	return [49]string{
 		"M15Ema7MinusMacd", "M15Ema7MinusCloseMid", "M15RsiCloseMinusCloseMid", "M15VwemaSlopeMinusMidSlope",
 		"H1Ema7MinusMacd", "H1Ema7MinusCloseMid", "H1RsiCloseMinusCloseMid", "H1VwemaSlopeMinusMidSlope",

@@ -18,6 +18,9 @@ func SaveChild(parent Population, table []Row, clauses []Clause, path string, sa
 	if parent.Provenance.OutcomeDigest == "" {
 		return Population{}, fmt.Errorf("starlens: outcome digest is required")
 	}
+	if err := requireMatrixProvenance(parent.Provenance, clauses); err != nil {
+		return Population{}, err
+	}
 	result, err := Evaluate(parent, table, clauses)
 	if err != nil {
 		return Population{}, err

@@ -1,0 +1,98 @@
+COORDINATE-FILTER-IMPLEMENTATION-V1
+Date: 2026-09-29
+
+============================================================
+1. VERDICT
+============================================================
+
+COORDINATE_FILTER_IMPLEMENTATION_V1_GREEN
+
+The existing Population/Lens evaluator now resolves 202 continuous
+IDs through one Number() gateway:
+
+    11 outcome fields
+    142 Schema 3 coordinates
+    49 Matrix relations
+
+KindContinuous is unchanged. No 191 UI. No comparison UI.
+Frozen Schema 3 and Matrix files were not rewritten.
+
+============================================================
+2. CORRECTIONS
+============================================================
+
+The prompt used maePct / mfePct. Frozen outcome IDs remain
+maePercent / mfePercent.
+
+starlens imports market only for the frozen observation adapters
+(RawObservations, RelationObservations). market already imports
+forecast, not starlens, so there is no cycle.
+
+Rows do not hold StarSnapshotV3. AttachCoordinates stores a
+Field → Observed map (the 191 projection). That is not a second
+copy of the Matrix's job and not a Schema 3 blob.
+
+============================================================
+3. FILES
+============================================================
+
+forecast/starlens/coord.go          load, attach, catalog, matrix provenance
+forecast/starlens/coord_test.go     catalog, Number/holds, missing/zero, mixed lens, files
+forecast/starlens/row.go            coords map; Number default path
+forecast/starlens/clause.go         catalog knownField; holdContinuous
+forecast/starlens/population.go     MatrixDigest / MatrixCommit
+forecast/starlens/save.go           reject Matrix clauses without provenance
+market/star_discovery.go            CoordObservation, RelationNames (same 142/49)
+
+research/cleanup/COORDINATE-FILTER-IMPLEMENTATION-V1.txt
+
+Not changed: star_snapshot_v3.json, star_relative_v1.json,
+star_discovery_v1.json, web/, starlens API pictures list.
+
+============================================================
+4. TESTS
+============================================================
+
+TestContinuousCatalogCount          11+142+49=202 unique; no M15H4*/M15D1*/M15RsxMinusSignal
+TestSameContinuousHoldsPath         mfeAtr, M15.Vwema, M15H1Vwema, H4RSX.Value, TVAge
+                                    Number → holdContinuous
+TestVwemaZeroObservation            Present+0+ValuesOK false vs Present false
+TestWidthAndCloseWidthGates         WidthOK vs CloseWidthOK
+TestMatrixZeroOK                    0/false vs 0/true
+TestDailyAbsenceDoesNotPoisonLowerTF
+TestNonFiniteOrangeIsMissing
+TestCoordinateSelfExclusion
+TestMixedLensANDAndOrder
+TestMatrixProvenanceSave            outcome-only ok; Matrix without digest rejected
+TestUnknownContinuousRejected
+TestFrozenCoordinateFiles           hashes, 8783 join, absent daily Star, ≥4 D1 VWEMA zeros
+TestNoBrowserSubtractionInStarlens
+
+go test ./forecast/starlens  PASS
+go test ./server             PASS
+go test ./market             PASS
+go test ./...                (run at freeze)
+
+Schema 3 file SHA
+    18f1e5ec79ee2ec4f2ab2afd5d5fbb213acd332df4e1396681bddd8ec652463a
+Matrix file SHA
+    514d513dd173bba6d62b05aa0d1b3c15bf1a4ca3216aaf1d8db4ec8550c109c6
+
+============================================================
+5. PROVENANCE
+============================================================
+
+Same Provenance struct. Optional:
+
+    matrixDigest  8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    matrixCommit  0389023
+
+SaveChild copies parent provenance. Matrix Field without both
+strings is rejected. Empty strings are not filled in.
+
+============================================================
+6. NOT IN THIS CHAPTER
+============================================================
+
+191 widgets, comparison endpoint, discovery bounds as defaults,
+ranking, holdout selection, Volume Spike, artifact regeneration.

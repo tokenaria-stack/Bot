@@ -98,13 +98,27 @@ func (c Clause) validate() error {
 }
 
 func knownField(field string) (struct{}, bool) {
-	switch field {
-	case FieldEntryPrice, FieldMFEPrice, FieldMAEPrice, FieldMFEATR, FieldMAEATR,
-		FieldMFEPercent, FieldMAEPercent, FieldStopPrice, FieldStopDistance,
-		FieldStopDistanceATR, FieldR:
+	if _, ok := continuousIDs[field]; ok {
 		return struct{}{}, true
+	}
+	return struct{}{}, false
+}
+
+func holdContinuous(n Observed, cmp string, bound float64) (bool, error) {
+	if !n.OK {
+		return false, nil
+	}
+	switch cmp {
+	case CmpGT:
+		return n.Value > bound, nil
+	case CmpGTE:
+		return n.Value >= bound, nil
+	case CmpLT:
+		return n.Value < bound, nil
+	case CmpLTE:
+		return n.Value <= bound, nil
 	default:
-		return struct{}{}, false
+		return false, fmt.Errorf("starlens: comparison %q", cmp)
 	}
 }
 
@@ -157,21 +171,7 @@ func (c Clause) holds(row Row) (bool, error) {
 		if !ok {
 			return false, fmt.Errorf("starlens: continuous field %q", c.Field)
 		}
-		if !n.OK {
-			return false, nil
-		}
-		switch c.Cmp {
-		case CmpGT:
-			return n.Value > c.Bound, nil
-		case CmpGTE:
-			return n.Value >= c.Bound, nil
-		case CmpLT:
-			return n.Value < c.Bound, nil
-		case CmpLTE:
-			return n.Value <= c.Bound, nil
-		default:
-			return false, fmt.Errorf("starlens: comparison %q", c.Cmp)
-		}
+		return holdContinuous(n, c.Cmp, c.Bound)
 	case KindR:
 		state, err := row.level(c.Level)
 		if err != nil {
