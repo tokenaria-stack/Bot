@@ -3,6 +3,12 @@
  * This file does not compute R state, missingness, or self-exclusion.
  */
 const StarLens = (() => {
+  const Metric = typeof StarMetricGroup !== 'undefined'
+    ? StarMetricGroup
+    : require('./star-metric-group.js');
+  const Swatches = typeof StarInspectionSwatches !== 'undefined'
+    ? StarInspectionSwatches
+    : require('./star-inspection-swatches.js');
   const FIELDS = [
     { field: 'mfeAtr', label: 'MFE ATR' },
     { field: 'maeAtr', label: 'MAE ATR' },
@@ -27,7 +33,11 @@ const StarLens = (() => {
     timer: 0,
     selectedField: '',
     catalog: [],
+    catalogOpen: {},
+    catHeight: 280,
   };
+
+  const CAT_HEIGHT_KEY = 'star-lens-cat-height';
 
   let fetchSources = defaultSources;
   let fetchEval = defaultEval;
@@ -126,30 +136,137 @@ const StarLens = (() => {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   }
 
+  function pickCoordinate(root, id) {
+    const entry = state.catalog.find((e) => e.id === id);
+    if (!entry) return;
+    state.selectedField = id;
+    const panel = root.querySelector('[data-coord-panel]');
+    const hid = root.querySelector('[data-coord-id]');
+    const lab = root.querySelector('[data-coord-label]');
+    const shown = root.querySelector('[data-coord-shown]');
+    const meta = root.querySelector('[data-coord-meta]');
+    if (panel) panel.hidden = false;
+    if (hid) hid.value = id;
+    if (lab) lab.textContent = entry.label;
+    if (shown) shown.textContent = id;
+    if (meta) meta.textContent = entry.group + ' · ' + entry.timeframe + ' · ' + entry.unit;
+    renderCatalog(root, state.catalog);
+    evaluate();
+  }
+
+  function catalogGroup(key) {
+    let found = null;
+    Metric.bundleCatalog(state.catalog).forEach((sec) => {
+      (sec.groups || []).forEach((g) => { if (g.key === key) found = g; });
+    });
+    return found;
+  }
+
+  function groupHit(g, q) {
+    if (!q) return true;
+    const rows = [g.level, g.slope, g.accel].concat((g.extras || []).map((x) => x.reading || x));
+    return rows.some((e) => e && catalogNeedle(e).indexOf(q) >= 0);
+  }
+
+  function catalogChecked(g, id, expanded) {
+    if (!id) return false;
+    if (expanded) return state.selectedField === id;
+    return Metric.memberIds(g).indexOf(state.selectedField) >= 0;
+  }
+
+  function catalogSwatch(entry) {
+    if (!entry) return '<span></span>';
+    const factory = typeof window !== 'undefined' ? window.DDRFactory : null;
+    const marks = Swatches.specs(entry.id).map((spec) => {
+      let hex = null;
+      if (factory && typeof factory.swatchHex === 'function') hex = factory.swatchHex(spec.seriesId, spec.field);
+      if (!hex) return '<i class="star-swatch star-swatch--absent"></i>';
+      return '<i class="star-swatch" style="background:' + escapeText(hex) + '"></i>';
+    }).join('');
+    return '<span class="star-swatches">' + marks + '</span>';
+  }
+
+  function clampCatHeight(n) {
+    const vh = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight * 0.7 : 700;
+    const v = Number(n);
+    if (!Number.isFinite(v)) return 280;
+    return Math.min(vh, Math.max(120, Math.round(v)));
+  }
+
+  function readCatHeight() {
+    try {
+      if (typeof localStorage === 'undefined') return 280;
+      const raw = localStorage.getItem(CAT_HEIGHT_KEY);
+      if (raw == null || raw === '') return 280;
+      return clampCatHeight(raw);
+    } catch {
+      return 280;
+    }
+  }
+
+  function writeCatHeight(n) {
+    state.catHeight = clampCatHeight(n);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(CAT_HEIGHT_KEY, String(state.catHeight));
+    } catch { /* preference only */ }
+    return state.catHeight;
+  }
+
+  function applyCatHeight(root) {
+    const box = root && root.querySelector('[data-coord-list]');
+    if (!box) return;
+    box.style.height = state.catHeight + 'px';
+  }
+
+  function catalogRow(g, role, entry, expanded) {
+    if (!entry) return '';
+    const pick = role === 'father' ? (g.level && g.level.id) : entry.id;
+    const kids = Metric.canExpand(g);
+    const child = role !== 'father';
+    const on = pick === state.selectedField || (!expanded && !child && catalogChecked(g, g.level && g.level.id, false));
+    const name = child ? Metric.childLabel(role) : (g.label || entry.label);
+    const tri = (!child && kids)
+      ? '<button type="button" class="star-metric-tri" data-catalog-tri="' + Metric.escapeText(g.key) + '">' +
+        (expanded ? '▼' : '▶') + '</button>'
+      : '<span></span>';
+    const swatch = catalogSwatch(entry);
+    const checkId = child ? entry.id : (g.level && g.level.id);
+    const checked = catalogChecked(g, checkId, child || expanded);
+    const cls = 'star-metric-row' + (child ? ' star-metric-row--child' : ' star-metric-row--father') +
+      (on ? ' star-metric-row--on' : '');
+    return '<div class="' + cls + '">' +
+      (child ? '<span></span>' : swatch) +
+      (child ? swatch : tri) +
+      '<input type="checkbox" class="star-metric-check" data-coord-check="' + Metric.escapeText(checkId) + '"' +
+        (child ? '' : ' data-role="father"') +
+        (checked ? ' checked' : '') + '>' +
+      '<button type="button" class="star-metric-name" data-coord-pick="' + Metric.escapeText(pick) + '">' +
+        Metric.escapeText(name) + '</button>' +
+      '</div>';
+  }
+
   function renderCatalog(root, entries) {
     const box = root && root.querySelector('[data-coord-list]');
     if (!box) return;
-    const groups = {};
-    const order = [];
-    (entries || []).forEach((e) => {
-      const key = e.group + ' / ' + e.section;
-      if (!groups[key]) {
-        groups[key] = [];
-        order.push(key);
-      }
-      groups[key].push(e);
-    });
+    const q = String((root.querySelector('[data-coord-search]') || {}).value || '').trim().toLowerCase();
+    const sections = Metric.bundleCatalog(entries);
     let html = '';
-    order.forEach((key) => {
-      html += '<div class="star-lens-cat-group">' + escapeText(key) + '</div>';
-      groups[key].forEach((e) => {
-        const on = e.id === state.selectedField ? ' star-lens-cat-item--on' : '';
-        html += '<button type="button" class="star-lens-cat-item' + on + '" data-coord-pick="' +
-          escapeText(e.id) + '">' + escapeText(e.label) +
-          '<span class="star-lens-cat-id">' + escapeText(e.id) + '</span></button>';
+    sections.forEach((sec) => {
+      const groups = (sec.groups || []).filter((g) => groupHit(g, q));
+      if (!groups.length) return;
+      html += '<div class="star-lens-cat-group">' + escapeText(sec.title) + '</div>';
+      groups.forEach((g) => {
+        const expanded = !!state.catalogOpen[g.key];
+        html += '<div class="star-metric star-metric--catalog' + (expanded ? ' is-open' : '') +
+          '" data-catalog-key="' + escapeText(g.key) + '">';
+        html += catalogRow(g, 'father', g.level, expanded);
+        if (expanded && g.accel) html += catalogRow(g, 'accel', g.accel, true);
+        if (expanded && g.slope) html += catalogRow(g, 'slope', g.slope, true);
+        html += '</div>';
       });
     });
     box.innerHTML = html || '<div class="star-lens-empty">no matches</div>';
+    applyCatHeight(root);
   }
 
   function chartRange() {
@@ -379,7 +496,10 @@ const StarLens = (() => {
       '<div class="star-lens-catalog">' +
       '<p class="star-lens-help">Research coordinates. Labels are not saved. The Field ID is.</p>' +
       '<input data-coord-search type="search" placeholder="Search coordinates">' +
+      '<div class="star-lens-cat-wrap">' +
       '<div class="star-lens-cat-list" data-coord-list></div>' +
+      '<div class="star-lens-cat-resize" data-coord-resize></div>' +
+      '</div>' +
       '<div class="star-lens-field" data-coord-panel hidden>' +
       '<div class="star-lens-row"><b data-coord-label></b> <code data-coord-shown></code></div>' +
       '<div class="star-lens-meta" data-coord-meta></div>' +
@@ -410,6 +530,26 @@ const StarLens = (() => {
     if (scroll) scroll.insertBefore(root, scroll.firstChild);
     else if (host) host.appendChild(root);
     else document.body.appendChild(root);
+    state.catHeight = readCatHeight();
+    applyCatHeight(root);
+    const resize = root.querySelector('[data-coord-resize]');
+    if (resize) {
+      resize.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        const startY = ev.clientY;
+        const startH = state.catHeight;
+        function move(e) {
+          writeCatHeight(startH + (e.clientY - startY));
+          applyCatHeight(root);
+        }
+        function up() {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        }
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    }
     fetchSources().then((doc) => {
       const sel = root.querySelector('[data-source]');
       if (!sel || !doc || !doc.populations) return;
@@ -420,35 +560,50 @@ const StarLens = (() => {
     });
     fetchCatalog().then((doc) => {
       state.catalog = (doc && doc.coordinates) || [];
-      renderCatalog(root, filterCatalog(state.catalog, (root.querySelector('[data-coord-search]') || {}).value));
+      renderCatalog(root, state.catalog);
     });
     root.addEventListener('click', (ev) => {
+      const tri = ev.target && ev.target.closest ? ev.target.closest('[data-catalog-tri]') : null;
+      if (tri) {
+        ev.preventDefault();
+        const key = tri.getAttribute('data-catalog-tri');
+        state.catalogOpen[key] = !state.catalogOpen[key];
+        renderCatalog(root, state.catalog);
+        return;
+      }
       const btn = ev.target && ev.target.closest ? ev.target.closest('[data-coord-pick]') : null;
       if (!btn) return;
-      const id = btn.getAttribute('data-coord-pick');
-      const entry = state.catalog.find((e) => e.id === id);
-      if (!entry) return;
-      state.selectedField = id;
-      const panel = root.querySelector('[data-coord-panel]');
-      const hid = root.querySelector('[data-coord-id]');
-      const lab = root.querySelector('[data-coord-label]');
-      const shown = root.querySelector('[data-coord-shown]');
-      const meta = root.querySelector('[data-coord-meta]');
-      if (panel) panel.hidden = false;
-      if (hid) hid.value = id;
-      if (lab) lab.textContent = entry.label;
-      if (shown) shown.textContent = id;
-      if (meta) meta.textContent = entry.group + ' · ' + entry.timeframe + ' · ' + entry.unit;
-      renderCatalog(root, filterCatalog(state.catalog, (root.querySelector('[data-coord-search]') || {}).value));
-      evaluate();
+      pickCoordinate(root, btn.getAttribute('data-coord-pick'));
     });
     const search = root.querySelector('[data-coord-search]');
     if (search) {
       search.addEventListener('input', () => {
-        renderCatalog(root, filterCatalog(state.catalog, search.value));
+        renderCatalog(root, state.catalog);
       });
     }
     root.addEventListener('change', (ev) => {
+      const chk = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-coord-check');
+      if (chk) {
+        const wrap = ev.target.closest('[data-catalog-key]');
+        const g = wrap ? catalogGroup(wrap.getAttribute('data-catalog-key')) : null;
+        const expanded = !!(wrap && wrap.classList.contains('is-open'));
+        if (g && ev.target.getAttribute('data-role') === 'father' && !expanded) {
+          const ids = Metric.memberIds(g);
+          if (ev.target.checked) {
+            if (ids.indexOf(state.selectedField) < 0) pickCoordinate(root, chk);
+            else renderCatalog(root, state.catalog);
+          } else if (ids.indexOf(state.selectedField) >= 0) {
+            state.selectedField = '';
+            const hid = root.querySelector('[data-coord-id]');
+            if (hid) hid.value = '';
+            renderCatalog(root, state.catalog);
+            evaluate();
+          }
+          return;
+        }
+        pickCoordinate(root, chk);
+        return;
+      }
       const sel = root.querySelector('[data-source]');
       if (sel) state.source = sel.value;
       const show = root.querySelector('[data-show]');
@@ -505,6 +660,8 @@ const StarLens = (() => {
     state.seq = 0;
     state.selectedField = '';
     state.catalog = [];
+    state.catalogOpen = {};
+    state.catHeight = 280;
   }
 
   return {

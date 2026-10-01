@@ -158,6 +158,18 @@ async function main() {
     assert.ok(!lens.includes('wozduh_crossover_prefs'));
   });
 
+  await test('coordinate tree is vertically resizable and catalog uses Field swatches', () => {
+    const lens = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+    assert.ok(lens.includes('data-coord-resize'));
+    assert.ok(lens.includes('StarInspectionSwatches'));
+    assert.ok(lens.includes('catalogSwatch'));
+    assert.ok(css.includes('ns-resize'));
+    assert.ok(css.includes('star-lens-cat-resize'));
+    const research = fs.readFileSync(path.join(__dirname, 'ui/star-research.js'), 'utf8');
+    assert.ok(/paintNav\(\);\s*bindChartClick\(\);/.test(research));
+  });
+
   console.log('ALL PASS');
 }
 

@@ -77,6 +77,16 @@ test('grammar does not rank a list', () => {
   assert.strictEqual(G.dotColor(0.2), G.dotColor(0.2));
 });
 
+test('microscope uses the three-row metric grid', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'ui/star-inspection-panel.js'), 'utf8');
+  assert.ok(src.includes('star-metric-row--father'));
+  assert.ok(src.includes('star-metric-row--child'));
+  assert.ok(src.includes("childLabel('accel')"));
+  assert.ok(!src.includes('childLabel(\'value\')'));
+  assert.ok(!src.includes('data-metric-check'));
+  assert.ok(!src.includes('type="checkbox"'));
+});
+
 test('cursor time does not replace the selected Star', () => {
   const Panel = require('./ui/star-inspection-panel.js');
   Panel.noteCursor(10);

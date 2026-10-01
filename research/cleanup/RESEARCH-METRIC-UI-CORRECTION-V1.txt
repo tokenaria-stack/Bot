@@ -1,0 +1,106 @@
+RESEARCH-METRIC-UI-CORRECTION-V1
+Date: 2026-10-01
+
+============================================================
+1. VERDICT
+============================================================
+
+RESEARCH_METRIC_UI_CORRECTION_V1_GREEN
+
+Four presentation/interaction corrections only.
+
+No research engine change. Schema 3, Matrix, Outcome,
+AttachCoordinates, Number(), Evaluate(), Population evaluator,
+Lens semantics, Field IDs, Star identity, and Prev/Next/Clear
+were not modified.
+
+============================================================
+2. BASELINE / FINAL
+============================================================
+
+Baseline (origin HEAD at start of this chapter):
+    cfcd531a817819c99428f58e9cdde85a7a050863
+    COORDINATE-CATALOG-UI-V1
+
+Final commit: recorded after this report is included in the commit.
+
+============================================================
+3. CORRECTIONS
+============================================================
+
+1. Microscope checkboxes removed.
+   They had no consumer. They were not given a new job.
+   Hierarchy, triangles, family colors, accel/slope/dot/value,
+   collapse, and father-row value are unchanged.
+
+2. Population tree color squares.
+   Catalog rows called a hard-coded absent swatch. They now
+   use StarInspectionSwatches.specs(Field ID) and
+   DDRFactory.swatchHex — the same lookup as the microscope.
+   FIELD leaf aliases live in that existing swatch file, not
+   a second color table.
+   Father: [color] [triangle] [checkbox] [name]
+   Child:  [empty] [color] [checkbox] [short name]
+
+3. Coordinate tree vertical resize.
+   Handle is the bottom edge of .star-lens-cat-list only
+   (data-coord-resize, ns-resize). Height clamp 120px .. 70vh.
+   Preference key: localStorage star-lens-cat-height.
+   Search, histogram, rail width, and microscope are untouched.
+
+4. Wozduh Star click restored (regression, not a new selector).
+   Cause: ChartAdapter.onWozduhClick subscribed the first
+   callback and then returned true on later binds without
+   updating the function. StarResearch.init also never retried
+   bindChartClick after the inspection shell mounted.
+   Fix: store _wozduhClickFn on the live chart state and call
+   the current function from the existing subscribeClick
+   handler. StarResearch.init() ends with bindChartClick().
+   Selection is still StarResearch.onPaneClick → selectOpenTime
+   → existing microscope onSelected. No second selectedStar.
+
+============================================================
+4. FILES
+============================================================
+
+    web/ui/star-inspection-panel.js
+    web/ui/star-lens-panel.js
+    web/ui/star-inspection-swatches.js
+    web/ui/star-research.js
+    web/ui/star-metric-group.js
+    web/chart-core.js
+    web/style.css
+    web/index.html
+    web/star_*_test.js (focused UI)
+    research/cleanup/RESEARCH-METRIC-GROUP-V1.txt
+    research/cleanup/RESEARCH-METRIC-UI-CORRECTION-V1.txt
+
+Frozen research artifacts under research/starstop/ were not
+touched.
+
+============================================================
+5. TESTS
+============================================================
+
+    node web/star_metric_group_test.js
+    node web/star_inspection_grammar_test.js
+    node web/star_inspection_swatch_test.js
+    node web/star_lens_panel_test.js
+    node web/star_research_click_test.js
+    node web/star_research_nav_test.js
+
+All pass. Unrelated go test ./... failures were not repaired.
+
+============================================================
+6. GPT PROMPT CORRECTIONS
+============================================================
+
+The chapter prompt asked not to hard-code a new color table.
+Mapping Schema 3 leaves (Vwema, ChanMid, Ema5, …) onto the
+existing LINE keys is required because catalog IDs are Pascal
+Field names and microscope IDs are lowercase reading ids.
+That map is in StarInspectionSwatches, the same owner as
+before — not a second registry.
+
+The click regression was not a deleted handler. Restoring
+meant fixing the existing bind, not adding a click system.

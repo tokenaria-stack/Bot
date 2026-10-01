@@ -1,0 +1,70 @@
+RESEARCH-METRIC-GROUP-V1
+Date: 2026-10-01
+
+============================================================
+1. VERDICT
+============================================================
+
+RESEARCH_METRIC_GROUP_V1_GREEN
+
+Population/Lens catalog and Star inspection use the same
+fixed-column tree: father [color] [triangle] [checkbox] [name].
+Child rows leave column 1 empty and put color under the triangle.
+A line is at most three rows. There is no value child. The line
+value stays on the father when the group expands. Expansion only
+moves acceleration and slope onto child rows. Timeframe is a
+section title above the lines. Microscope right columns stay
+accel | slope | dot | value.
+
+f9edf3a attach / Number / Evaluate / ResearchUniverse were not
+modified. Comparison / histogram rewrite was not started.
+
+============================================================
+2. WHAT CHANGED
+============================================================
+
+web/ui/star-metric-group.js
+    bundleReadings for inspection IDs (stem + Slope/Accel).
+    bundleCatalog for Schema 3 lines by timeframe, then leftovers.
+
+web/ui/star-inspection-panel.js
+    8-column CSS grid rows. Collapsed father shows accel+slope
+    glyphs on the father. Expanded father keeps [dot][value].
+
+web/ui/star-lens-panel.js
+    Catalog tree with the same 4 identity columns. Checkbox on a
+    collapsed father is aggregate (any Field in the group selected).
+    Expanded father checkbox is the parent Field only. Name click
+    still selects one Field ID for the existing histogram panel.
+
+web/style.css
+    .star-metric-row fixed columns, not flex packing.
+
+============================================================
+3. CHECKBOX SEMANTICS
+============================================================
+
+Inspection: local fold memory. Collapsed father toggles every
+member. Expanded father toggles the line only.
+
+Catalog: one selectedField still drives the histogram. Collapsed
+father checked if any member is selected. Unchecking it clears
+the selection when the selected Field is in that group.
+
+============================================================
+4. TESTS
+============================================================
+
+node web/star_metric_group_test.js
+node web/star_inspection_grammar_test.js
+node web/star_lens_panel_test.js
+
+VWEMA rowCount is 3. EMA12 (slope, no accel) is 2.
+
+============================================================
+5. NOT IN THIS CHAPTER
+============================================================
+
+Live chart series hide/show from these checkboxes.
+Comparison coordinates as a second tree grammar.
+Engine attach / Number / Evaluate.

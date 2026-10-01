@@ -15,6 +15,15 @@ function ids(readingId) {
   return S.specs(readingId).map((spec) => spec.seriesId + ':' + spec.field);
 }
 
+test('Schema 3 Field IDs use the same series as inspection ids', () => {
+  assert.deepStrictEqual(ids('M15.Vwema'), ids('m15.vwema'));
+  assert.deepStrictEqual(ids('M15.ChanMid'), ['woz_vol_rsi_ema5_chan:midColor']);
+  assert.deepStrictEqual(ids('M15.Ema5'), ids('m15.ema5'));
+  assert.deepStrictEqual(ids('H1RSX.Value'), ['line_rsx:color']);
+  assert.deepStrictEqual(ids('H1RSX.Slope'), ['line_rsx:color']);
+  assert.deepStrictEqual(ids('M15.Slope'), ['woz_rsi_hl2_vwema:color']);
+});
+
 test('a line and its slope share one series', () => {
   assert.deepStrictEqual(ids('m15.vwema'), ['woz_rsi_hl2_vwema:color']);
   assert.deepStrictEqual(ids('h4.vwemaSlope'), ['woz_rsi_hl2_vwema:color']);

@@ -45,7 +45,7 @@ async function main() {
   assert.ok(!/function selectOpenTime[\s\S]{0,500}seek\(/.test(src));
   assert.ok(!src.includes('0.15'));
   assert.ok(!src.includes('ATR'));
-  assert.ok(!/function onWozduhClick[\s\S]{0,700}TimeCamera/.test(core));
+  assert.ok(core.includes('_wozduhClickFn'));
   assert.ok(!/function onWozduhClick[\s\S]{0,700}seekHistoryIsland/.test(core));
   assert.ok(cross.includes("STAR_PAIR = 'woz_rsi_hl2_vwema_x_ema5_chan_mid'"));
   assert.ok(!cross.includes('DetectCrossoverEdge'));

@@ -9,6 +9,9 @@ const StarInspection = (() => {
   const Swatches = typeof StarInspectionSwatches !== 'undefined'
     ? StarInspectionSwatches
     : require('./star-inspection-swatches.js');
+  const Metric = typeof StarMetricGroup !== 'undefined'
+    ? StarMetricGroup
+    : require('./star-metric-group.js');
   const workspace = {
     cursorTime: null,
     selectedIndex: null,
@@ -66,37 +69,95 @@ const StarInspection = (() => {
     return '<span class="star-swatches">' + marks + '</span>';
   }
 
-  function readingRow(reading) {
+  function cellSwatch(reading) {
+    if (!reading) return '<span></span>';
+    return swatchHtml(reading);
+  }
+
+  function cellDot(reading) {
+    if (!reading) return '<span></span>';
     const ok = !!reading.ok;
     const color = ok ? Grammar.dotColor(reading.position, palette) : null;
-    const dot = color
+    return color
       ? '<i class="star-dot" style="background:' + color + '"></i>'
       : '<i class="star-dot star-dot--absent"></i>';
-    const arrow = Grammar.arrowGlyph(reading.arrow, reading.value, ok);
-    const text = Grammar.formatValue(reading.value, ok, reading.family);
-    return '<div class="star-read">' +
-      swatchHtml(reading) +
-      '<span class="star-read-label">' + escapeText(reading.label) + '</span>' +
-      '<span class="star-read-arrow">' + escapeText(arrow) + '</span>' +
-      dot +
-      '<span class="star-read-value">' + escapeText(text) + '</span>' +
+  }
+
+  function cellValue(reading) {
+    if (!reading) return '<span class="star-metric-val"></span>';
+    return '<span class="star-metric-val">' +
+      escapeText(Grammar.formatValue(reading.value, !!reading.ok, reading.family)) + '</span>';
+  }
+
+  function cellGlyph(kind, reading) {
+    if (!reading) return '<span class="star-metric-g"></span>';
+    return '<span class="star-metric-g">' +
+      escapeText(Grammar.arrowGlyph(kind, reading.value, !!reading.ok)) + '</span>';
+  }
+
+  function metricClusterHtml(cluster) {
+    const level = cluster.level;
+    if (!level) return '';
+    const kids = Metric.canExpand(cluster);
+    const open = !!(kids && foldOpen('metric:' + cluster.key, false));
+    const tri = kids
+      ? '<button type="button" class="star-metric-tri" data-metric-tri>' + (open ? '▼' : '▶') + '</button>'
+      : '<span></span>';
+    const accelCol = open ? '<span class="star-metric-g"></span>' : cellGlyph('accel', cluster.accel);
+    const slopeCol = open ? '<span class="star-metric-g"></span>' : cellGlyph('slope', cluster.slope);
+    let html = '<div class="star-metric' + (open ? ' is-open' : '') + '" data-metric-key="' +
+      escapeText(cluster.key) + '" data-open="' + (open ? '1' : '0') + '">';
+    html += '<div class="star-metric-row star-metric-row--father">' +
+      cellSwatch(level) + tri +
+      '<span class="star-metric-name">' + escapeText(level.label) + '</span>' +
+      accelCol + slopeCol + cellDot(level) + cellValue(level) +
       '</div>';
+    if (open && cluster.accel) {
+      html += '<div class="star-metric-row star-metric-row--child">' +
+        '<span></span>' + cellSwatch(cluster.accel) +
+        '<span class="star-metric-name">' + escapeText(Metric.childLabel('accel')) + '</span>' +
+        cellGlyph('accel', cluster.accel) + '<span class="star-metric-g"></span>' +
+        cellDot(cluster.accel) + cellValue(cluster.accel) +
+        '</div>';
+    }
+    if (open && cluster.slope) {
+      html += '<div class="star-metric-row star-metric-row--child">' +
+        '<span></span>' + cellSwatch(cluster.slope) +
+        '<span class="star-metric-name">' + escapeText(Metric.childLabel('slope')) + '</span>' +
+        '<span class="star-metric-g"></span>' + cellGlyph('slope', cluster.slope) +
+        cellDot(cluster.slope) + cellValue(cluster.slope) +
+        '</div>';
+    }
+    if (open) {
+      (cluster.extras || []).forEach((x) => {
+        const r = x.reading;
+        html += '<div class="star-metric-row star-metric-row--child">' +
+          '<span></span>' + cellSwatch(r) +
+          '<span class="star-metric-name">' + escapeText(Metric.childLabel(x.role)) + '</span>' +
+          '<span class="star-metric-g"></span><span class="star-metric-g"></span>' +
+          cellDot(r) + cellValue(r) +
+          '</div>';
+      });
+    }
+    html += '</div>';
+    return html;
   }
 
   function groups(readings) {
+    const clusters = Metric.bundleReadings(readings);
     const order = [];
     const buckets = {};
-    (readings || []).forEach((reading) => {
-      const name = reading.group || 'State';
+    clusters.forEach((cluster) => {
+      const name = cluster.group || 'State';
       if (!buckets[name]) {
         buckets[name] = [];
         order.push(name);
       }
-      buckets[name].push(reading);
+      buckets[name].push(cluster);
     });
     return order.map((name) => {
       const open = foldOpen(name, name === '15m' || name === '15m relations' || name === '15m to 1h');
-      const rows = buckets[name].map(readingRow).join('');
+      const rows = buckets[name].map(metricClusterHtml).join('');
       return '<details class="star-group" data-fold="' + escapeText(name) + '"' + (open ? ' open' : '') + '>' +
         '<summary>' + escapeText(name) + '</summary>' + rows + '</details>';
     });
@@ -116,11 +177,12 @@ const StarInspection = (() => {
     if (!root) return null;
     const card = root.querySelector('[data-star-card]');
     if (!card) return null;
-    const nodes = card.querySelectorAll('details[data-fold]');
-    if (!nodes.length) return null;
     const open = {};
-    nodes.forEach((el) => {
+    card.querySelectorAll('details[data-fold]').forEach((el) => {
       open[el.getAttribute('data-fold')] = el.open;
+    });
+    card.querySelectorAll('[data-metric-key]').forEach((el) => {
+      open['metric:' + el.getAttribute('data-metric-key')] = el.getAttribute('data-open') === '1';
     });
     return open;
   }
@@ -141,7 +203,8 @@ const StarInspection = (() => {
     const card = root.querySelector('[data-star-card]');
     if (!card) return;
     const captured = captureFolds();
-    if (captured) foldMemory = captured;
+    if (captured) foldMemory = Object.assign({}, captured, foldMemory || {});
+    else if (!foldMemory) foldMemory = {};
     if (!body) {
       lastBody = null;
       card.innerHTML = '<p class="star-empty">Select a Star.</p>';
@@ -178,14 +241,14 @@ const StarInspection = (() => {
     if (!card) return;
     card.querySelectorAll('section').forEach((section) => {
       const probe = document.createElement('span');
-      probe.className = 'star-read-value';
+      probe.className = 'star-metric-val';
       probe.style.position = 'absolute';
       probe.style.visibility = 'hidden';
       probe.style.width = 'auto';
       probe.style.whiteSpace = 'nowrap';
       section.appendChild(probe);
       let max = 0;
-      section.querySelectorAll('.star-read-value').forEach((el) => {
+      section.querySelectorAll('.star-metric-val').forEach((el) => {
         if (el === probe) return;
         const fold = el.closest('details');
         if (fold && !fold.open) return;
@@ -265,6 +328,19 @@ const StarInspection = (() => {
     card.addEventListener('toggle', (ev) => {
       if (ev.target && ev.target.matches && ev.target.matches('details')) fitValueColumns(card);
     }, true);
+    card.addEventListener('click', (ev) => {
+      const tri = ev.target && ev.target.closest ? ev.target.closest('[data-metric-tri]') : null;
+      if (!tri || !lastBody) return;
+      ev.preventDefault();
+      const wrap = tri.closest('[data-metric-key]');
+      if (!wrap) return;
+      const key = wrap.getAttribute('data-metric-key');
+      const captured = captureFolds();
+      if (captured) foldMemory = Object.assign({}, captured, foldMemory);
+      if (!foldMemory) foldMemory = {};
+      foldMemory['metric:' + key] = wrap.getAttribute('data-open') !== '1';
+      paint(lastBody);
+    });
     applyWidth();
     bindColors();
     bindChartStyle();

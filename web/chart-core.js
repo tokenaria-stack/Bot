@@ -1834,12 +1834,15 @@
      * Does not read or write the camera.
      */
     onWozduhClick(fn) {
-      const chart = _live?.charts?.wozduh;
-      if (!chart || typeof chart.subscribeClick !== 'function' || typeof fn !== 'function') return false;
+      if (typeof fn !== 'function' || !_live) return false;
+      const chart = _live.charts && _live.charts.wozduh;
+      if (!chart || typeof chart.subscribeClick !== 'function') return false;
+      _live._wozduhClickFn = fn;
       if (_live._wozduhClick) return true;
       const handler = (param) => {
         if (!param || param.point == null) return;
-        fn({ x: param.point.x, y: param.point.y });
+        const next = _live._wozduhClickFn;
+        if (typeof next === 'function') next({ x: param.point.x, y: param.point.y });
       };
       chart.subscribeClick(handler);
       _live._wozduhClick = handler;

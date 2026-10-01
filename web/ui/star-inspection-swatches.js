@@ -40,6 +40,23 @@ const StarInspectionSwatches = (() => {
     return spec ? [spec] : [];
   }
 
+  const FIELD = {
+    Vwema: 'vwema', Slope: 'vwema', VwemaAccel: 'vwema', Distance: 'vwema',
+    ChanMid: 'orange', ChanUp: 'orange', ChanDn: 'orange',
+    MidSlope: 'orange', MidAccel: 'orange',
+    Width: 'width', WidthChange: 'width',
+    Ema5: 'ema5', Ema5Slope: 'ema5', Ema5Accel: 'ema5',
+    Ema12: 'ema12', Ema12Slope: 'ema12',
+    RsiClose: 'rsi', RsiCloseSlope: 'rsi', RsiCloseAccel: 'rsi',
+    CloseMid: 'closeMid', CloseUp: 'closeMid', CloseDn: 'closeMid',
+    CloseWidth: 'closeWidth', CloseWidthChange: 'closeWidth',
+    Ema7: 'ema7', Ema7Slope: 'ema7', Ema7Accel: 'ema7',
+    Macd: 'macd', MacdSlope: 'macd', MacdAccel: 'macd',
+    Value: 'rsx', Accel: 'rsx', RSX: 'rsx', RSXSlope: 'rsx', RSXAccel: 'rsx',
+    Signal: 'signal', SignalSlope: 'signal',
+    RSXMinusSignal: 'rsx',
+  };
+
   function specs(readingId) {
     const id = String(readingId || '');
     if (id.indexOf('rel.') === 0) {
@@ -49,6 +66,13 @@ const StarInspectionSwatches = (() => {
       return pair.map((key) => LINE[key]).filter(Boolean);
     }
     const leaf = id.slice(id.lastIndexOf('.') + 1);
+    const rsx = /RSX/.test(id) || leaf === 'rsx' || leaf === 'rsxMinus';
+    if (rsx) {
+      if (leaf === 'Signal' || leaf === 'SignalSlope' || leaf === 'signal') return one('signal');
+      if (leaf === 'rsxMinus' || leaf === 'RSXMinusSignal') return [LINE.rsx, LINE.signal];
+      return one('rsx');
+    }
+    if (FIELD[leaf]) return one(FIELD[leaf]);
     if (leaf === 'rsxMinus') return [LINE.rsx, LINE.signal];
     if (/Slope$/.test(leaf) || /Accel$/.test(leaf)) {
       return one(leaf.replace(/Slope$|Accel$/, ''));

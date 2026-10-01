@@ -322,6 +322,7 @@ const StarResearch = (() => {
       clearBtn.addEventListener('click', () => { clear(); });
     }
     paintNav();
+    bindChartClick();
   }
 
   function _resetForTests() {
