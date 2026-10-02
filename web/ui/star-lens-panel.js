@@ -469,19 +469,27 @@ const StarLens = (() => {
     state.timer = setTimeout(() => { state.timer = 0; evaluate(); }, 40);
   }
 
+  function paintViewCount(root) {
+    if (!root || !state.last) return;
+    const view = root.querySelector('[data-count-view]');
+    if (view) view.textContent = state.showStars ? String(state.last.chartView) : 'hidden';
+  }
+
   function noteViewport() {
     if (!state.last) return;
     const range = chartRange();
     state.viewFrom = range.from;
     state.viewTo = range.to;
     state.last.chartView = viewCount(state.last.pass, range.from, range.to);
-    const root = document.getElementById('star-lens');
-    paint(root);
+    if (typeof document !== 'undefined') paintViewCount(document.getElementById('star-lens'));
+    if (typeof StarResearchOverlay !== 'undefined' && typeof StarResearchOverlay.syncPopulation === 'function') {
+      StarResearchOverlay.syncPopulation();
+    }
   }
 
   function getMarks() {
     if (!state.showStars || !state.last || !Array.isArray(state.last.pass)) return [];
-    return state.last.pass;
+    return marksInView(state.last.pass, state.viewFrom, state.viewTo);
   }
 
   function mount() {
@@ -720,10 +728,16 @@ const StarLens = (() => {
     state.last = null;
     state.showStars = true;
     state.seq = 0;
+    state.viewFrom = 0;
+    state.viewTo = 0;
     state.selectedField = '';
     state.catalog = [];
     state.catalogOpen = {};
     state.catHeight = 280;
+  }
+
+  function _setLastForTests(body) {
+    state.last = body;
   }
 
   return {
@@ -731,6 +745,7 @@ const StarLens = (() => {
     evaluate,
     noteViewport,
     getMarks,
+    marksInView,
     chartRange,
     clausesFromForm,
     binThreshold,
@@ -740,6 +755,7 @@ const StarLens = (() => {
     filterCatalog,
     setShowStars(on) { state.showStars = !!on; },
     _resetForTests,
+    _setLastForTests,
   };
 })();
 

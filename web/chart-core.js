@@ -1878,14 +1878,25 @@
       const lows = snap?.candles?.low;
       if (!Array.isArray(times) || !Array.isArray(highs) || !Array.isArray(lows)) return null;
       const want = Number(timeSec);
-      for (let i = times.length - 1; i >= 0; i--) {
-        if (Number(times[i]) !== want) continue;
-        const high = Number(highs[i]);
-        const low = Number(lows[i]);
-        if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
-        return { high, low };
+      if (!Number.isFinite(want)) return null;
+      let lo = 0;
+      let hi = times.length - 1;
+      let idx = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const t = Number(times[mid]);
+        if (t === want) {
+          idx = mid;
+          break;
+        }
+        if (t < want) lo = mid + 1;
+        else hi = mid - 1;
       }
-      return null;
+      if (idx < 0) return null;
+      const high = Number(highs[idx]);
+      const low = Number(lows[idx]);
+      if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+      return { high, low };
     },
 
     /** Same price series. A replaced series (style swap) is attached again. */

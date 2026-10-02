@@ -1,0 +1,105 @@
+POPULATION-OVERLAY-PERFORMANCE-V1
+Date: 2026-10-02
+
+============================================================
+1. VERDICT
+============================================================
+
+POPULATION_OVERLAY_PERFORMANCE_V1_GREEN
+
+The chart paints the visible slice of state.last.pass.
+It does not change membership, Evaluate, or the histogram.
+
+============================================================
+2. COMMITS
+============================================================
+
+Baseline:
+    139918651dec83b818c3ebe27f5ddb5b41e745e1
+    RESPONSIVE-HISTOGRAM-V2
+
+Final: this chapter commit.
+
+============================================================
+3. THREE CLOCKS
+============================================================
+
+Evaluate clock
+    Field + comparator + bound
+        → Evaluate
+        → state.last.pass (authoritative membership)
+        → header — / pass.length
+        → Prev / Next walk
+        → paint Lens form (histograms, sliders)
+
+Viewport clock
+    visible unix range
+        → viewCount  (Chart view number)
+        → marksInView → getMarks
+        → populationPlan of that slice
+        → requestUpdate
+
+Draw clock
+    primitive.glyphs already clipped
+        → candle high/low at each mark (binary search)
+        → path at that Y
+
+Pan no longer rebuilds histogram SVG. That was a second lag
+source GPT's overlay note underweighted.
+
+============================================================
+4. GATEWAY
+============================================================
+
+getMarks() is the only chart paint list.
+
+    showStars off → []
+    else marksInView(pass, viewFrom, viewTo)
+
+marksInView does not copy rows and does not filter pass.
+Prev / Next still receive the full pass order from Evaluate.
+
+bin.count is never a paint list.
+
+============================================================
+5. CANDLE LOOKUP
+============================================================
+
+ChartAdapter.candleHighLowAt scanned the columnar store from the
+tip for every glyph. After clipping, a zoomed-out 15m window can
+still contain hundreds of marks; each O(n) scan was the dominant
+cost.
+
+The store times are ordered. The lookup is now a binary search.
+Semantics are unchanged: exact unix-second match, high/low of
+that candle.
+
+Not LOD. Not a downsample. Missing candles still skip the glyph.
+
+============================================================
+6. WHAT WAS NOT DONE
+============================================================
+
+    LOD / pooling / WebGL / workers
+    drawPopulation shape math
+    TimeCamera
+    Wozduh
+    Schema 3 / Matrix / Outcome
+    histogram chapter
+    a second population
+
+============================================================
+7. TESTS
+============================================================
+
+    node web/star_lens_panel_test.js
+    node web/star_research_overlay_test.js
+    node web/star_population_display_test.js
+
+============================================================
+8. FROZEN ARTIFACTS
+============================================================
+
+    Schema3Commit  975da0d
+    MatrixDigest   8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    OutcomeDigest  6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62

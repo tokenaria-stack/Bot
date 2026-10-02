@@ -420,6 +420,8 @@ const StarResearchOverlay = (() => {
           this._rangeHook = () => {
             if (typeof StarLens !== 'undefined' && typeof StarLens.noteViewport === 'function') {
               StarLens.noteViewport();
+            } else {
+              syncPopulation();
             }
             this.requestUpdate();
           };
@@ -494,6 +496,14 @@ const StarResearchOverlay = (() => {
     deps.paintStatus('not a star');
   }
 
+  function syncPopulation() {
+    const onChart = deps.getTf() === '15m';
+    const crowd = onChart && typeof StarLens !== 'undefined' && typeof StarLens.getMarks === 'function'
+      ? StarLens.getMarks() : [];
+    primitive.glyphs = onChart ? populationPlan(crowd) : [];
+    return primitive.glyphs;
+  }
+
   function refresh() {
     if (typeof StarLens !== 'undefined' && typeof StarLens.noteViewport === 'function') {
       StarLens.noteViewport();
@@ -508,9 +518,7 @@ const StarResearchOverlay = (() => {
     primitive.markTime = plan.markTime == null ? null : plan.markTime;
     primitive.fromSec = plan.fromSec == null ? null : plan.fromSec;
     primitive.toSec = plan.toSec == null ? null : plan.toSec;
-    const crowd = onChart && typeof StarLens !== 'undefined' && typeof StarLens.getMarks === 'function'
-      ? StarLens.getMarks() : [];
-    primitive.glyphs = onChart ? populationPlan(crowd) : [];
+    syncPopulation();
     deps.applyMarkers(plan.markers || []);
     deps.attach(primitive);
     deps.requestDraw();
@@ -529,6 +537,7 @@ const StarResearchOverlay = (() => {
     STAR_UP,
     STAR_DOWN,
     refresh,
+    syncPopulation,
     noteUnresolved,
     bind,
     primitive,

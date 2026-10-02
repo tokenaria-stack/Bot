@@ -238,6 +238,40 @@ function main() {
     assert.strictEqual(star.shape, 'arrowUp');
   });
 
+  test('syncPopulation paints only the viewport crowd, not the walk', () => {
+    const pass = [
+      { index: 0, decisionAt: 1_000_000, side: 'up' },
+      { index: 1, decisionAt: 2_000_000, side: 'down' },
+      { index: 2, decisionAt: 9_000_000, side: 'up' },
+    ];
+    Overlay.bind({
+      getRow: () => null,
+      getTf: () => '15m',
+      applyMarkers: () => true,
+      attach: () => true,
+      requestDraw: () => {},
+      paintStatus: () => {},
+    });
+    const StarLens = {
+      getMarks() { return pass.slice(0, 2); },
+    };
+    global.StarLens = StarLens;
+    Overlay.syncPopulation();
+    assert.strictEqual(Overlay.primitive.glyphs.length, 2);
+    assert.strictEqual(Overlay.primitive.glyphs[0].time, 1000);
+    assert.strictEqual(Overlay.primitive.glyphs[1].time, 2000);
+    Overlay.bind({ getTf: () => '1h' });
+    Overlay.syncPopulation();
+    assert.deepStrictEqual(Overlay.primitive.glyphs, []);
+    delete global.StarLens;
+    assert.ok(src.includes('syncPopulation'));
+    assert.ok(src.includes('timeToCoordinate'));
+    const adapter = fs.readFileSync(path.join(__dirname, 'chart-core.js'), 'utf8');
+    const lookup = adapter.split('candleHighLowAt(timeSec)')[1].split('attachResearchPrimitive')[0];
+    assert.ok(lookup.includes('while (lo <= hi)'));
+    assert.ok(!lookup.includes('times.length - 1; i >= 0'));
+  });
+
   console.log('star research overlay tests passed');
 }
 

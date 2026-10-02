@@ -136,6 +136,33 @@ async function main() {
     assert.strictEqual(StarLens.viewCount(pass, 50 * 1000, 130 * 1000), 0);
   });
 
+  await test('getMarks clips to the viewport and does not rewrite pass', () => {
+    StarLens._resetForTests();
+    StarLens.init({
+      visibleRangeMs: () => ({ from: 1000, to: 3000 }),
+      fetchSources: async () => null,
+      fetchEval: async () => null,
+    });
+    const pass = [
+      { index: 0, decisionAt: 500 },
+      { index: 1, decisionAt: 1500 },
+      { index: 2, decisionAt: 2500 },
+      { index: 3, decisionAt: 3500 },
+    ];
+    StarLens._setLastForTests({ pass: pass, population: 4, lensPass: 4 });
+    StarLens.noteViewport();
+    const marks = StarLens.getMarks();
+    assert.deepStrictEqual(marks.map((m) => m.index), [1, 2]);
+    assert.strictEqual(marks.length, StarLens.viewCount(pass, 1000, 3000));
+    assert.strictEqual(pass.length, 4);
+    assert.strictEqual(marks[0], pass[1]);
+    const overlay = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    const note = overlay.split('function noteViewport')[1].split('function getMarks')[0];
+    assert.ok(!note.includes('paint('));
+    assert.ok(note.includes('paintViewCount'));
+    assert.ok(overlay.includes('return marksInView'));
+  });
+
   await test('show off returns no marks while pass remains', () => {
     StarLens._resetForTests();
     StarLens.setShowStars(false);
