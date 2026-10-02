@@ -18,7 +18,8 @@ the panel and does not run Evaluate.
 Baseline:
     240e697  Freeze TOP-TOOLBAR-CLEANUP-V1
 
-Final: this chapter commit.
+Final:
+    a69b54a TOOL-DOCK-SHELL-V1
 
 ============================================================
 3. LAYOUT

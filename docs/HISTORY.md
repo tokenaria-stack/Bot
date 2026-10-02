@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TOOL-DOCK-SHELL-V1 — right rail for the research pane (Oct 2026)
+
+- 40px dock, one Research button. Pane sits left of the dock. Hide does not destroy Lens/Star state.
+- Chart padding is dock + panel (panel 0 when closed).
+- Report `research/cleanup/TOOL-DOCK-SHELL-V1.txt`. Commit `a69b54a`.
+
 ## TOP-TOOLBAR-CLEANUP-V1 — one chrome row (Oct 2026)
 
 - Merged command-bar and toolbar. Live sits before BTCUSDT. Ind is last among tools.
