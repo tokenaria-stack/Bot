@@ -1,0 +1,86 @@
+TOOL-DOCK-SHELL-V1
+Date: 2026-10-02
+
+============================================================
+1. VERDICT
+============================================================
+
+TOOL_DOCK_SHELL_V1_GREEN
+
+The workspace is [ chart | research (optional) | 40px dock ].
+The dock toggles #star-inspection visibility. It does not unmount
+the panel and does not run Evaluate.
+
+============================================================
+2. COMMITS
+============================================================
+
+Baseline:
+    240e697  Freeze TOP-TOOLBAR-CLEANUP-V1
+
+Final: this chapter commit.
+
+============================================================
+3. LAYOUT
+============================================================
+
+#tool-dock
+    position:absolute; right:0; width: 40px; z-index 40
+    always in #workspace-main
+
+#star-inspection
+    right: var(--tool-dock-width)
+    hidden when closed (display:none via [hidden], node kept)
+
+#tab-live padding-right
+    calc(--tool-dock-width + --star-inspection-width)
+
+When the panel is an overlay (narrow window), --star-inspection-width
+is 0 so the chart only loses the dock. The floating panel still sits
+left of the dock, not on top of it.
+
+Existing drag-resize of the research pane still calls applyWidth.
+
+Chart size still comes from ChartAdapter ResizeObserver on the host.
+No second sizing path.
+
+============================================================
+4. TOGGLE
+============================================================
+
+researchOpen boolean. Default true (same as before this chapter).
+
+Click Research → hidden = !open → applyWidth.
+
+Lens/Star/histogram modules are not called.
+
+============================================================
+5. CORRECTIONS
+============================================================
+
+GPT's "tiny {id,icon,toggle} table" was not added. One button in
+the dock DOM is enough.
+
+Ind stays only on the top chrome.
+
+============================================================
+6. TESTS
+============================================================
+
+    node web/tool_dock_shell_test.js
+    node web/star_inspection_grammar_test.js
+    node web/star_lens_panel_test.js
+    node web/star_research_nav_test.js
+
+Schema 3 / Matrix / Outcome files were not modified.
+
+============================================================
+7. FILES
+============================================================
+
+    web/ui/tool-dock.js          (new)
+    web/ui/star-inspection-panel.js  applyWidth respects hidden + dock
+    web/style.css
+    web/index.html
+    web/tool_dock_shell_test.js
+    research/cleanup/TOOL-DOCK-SHELL-V1.txt

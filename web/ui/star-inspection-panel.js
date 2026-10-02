@@ -492,8 +492,14 @@ const StarInspection = (() => {
   }
 
   function applyWidth() {
-    if (!root || !document.body) return;
-    const narrow = window.innerWidth < 1100 || width > window.innerWidth - 480;
+    if (!root || typeof document === 'undefined' || !document.body) return;
+    if (root.hidden) {
+      document.body.classList.remove('star-inspection-docked');
+      document.body.style.setProperty('--star-inspection-width', '0px');
+      return;
+    }
+    const dock = (typeof ToolDock !== 'undefined' && ToolDock.WIDTH) ? ToolDock.WIDTH : 40;
+    const narrow = window.innerWidth < 1100 || width > window.innerWidth - 480 - dock;
     root.classList.toggle('is-overlay', narrow);
     root.style.width = width + 'px';
     document.body.classList.toggle('star-inspection-docked', !narrow);
@@ -511,7 +517,7 @@ const StarInspection = (() => {
     }
   }
 
-  return { init, noteCursor, noteViewport, getWorkspace };
+  return { init, noteCursor, noteViewport, getWorkspace, applyWidth };
 })();
 
 if (typeof document !== 'undefined') {

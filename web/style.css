@@ -978,14 +978,57 @@
   font-weight: 600;
 }
 
-body.star-inspection-docked #tab-live {
-  padding-right: var(--star-inspection-width, 380px);
+body.star-inspection-docked #tab-live,
+#tab-live {
+  padding-right: calc(var(--tool-dock-width, 40px) + var(--star-inspection-width, 0px));
+}
+
+#tool-dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: var(--tool-dock-width, 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 4px;
+  background: #1e222d;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+}
+
+.tool-dock-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #787b86;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-dock-btn:hover {
+  color: #d1d4dc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tool-dock-btn.is-open {
+  color: #fff;
+  border-color: rgba(41, 98, 255, 0.45);
+  background: rgba(41, 98, 255, 0.2);
 }
 
 #star-inspection {
   position: absolute;
   top: 0;
-  right: 0;
+  right: var(--tool-dock-width, 40px);
   bottom: 0;
   z-index: 30;
   display: flex;
@@ -996,6 +1039,10 @@ body.star-inspection-docked #tab-live {
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   color: #d1d4dc;
   font: 12px/1.35 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+#star-inspection[hidden] {
+  display: none !important;
 }
 
 #star-inspection.is-overlay {
