@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=4.3.18-no-ind-bar" />
+  <link rel="stylesheet" href="/style.css?v=4.3.19-one-toolbar" />
   <style>
     :root {
       --tv-bg: #131722;
@@ -48,36 +48,10 @@
       overflow: hidden;
     }
 
-    /* ── Unified command bar (tabs + controls) ── */
-    .command-bar {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      height: 46px;
-      padding: 0 10px;
-      border-bottom: 1px solid var(--tv-border);
-      background: var(--tv-panel);
-      flex-shrink: 0;
-      overflow-x: auto;
-      overflow-y: hidden;
-      white-space: nowrap;
-      scrollbar-gutter: stable;
-    }
-
-    .command-bar::-webkit-scrollbar { height: 4px; }
-    .command-bar::-webkit-scrollbar-thumb { background: var(--tv-border); border-radius: 2px; }
-
     .command-tabs {
       display: flex;
       align-items: center;
       gap: 4px;
-      flex-shrink: 0;
-    }
-
-    .command-sep {
-      width: 1px;
-      height: 22px;
-      background: var(--tv-border);
       flex-shrink: 0;
     }
 
@@ -104,13 +78,6 @@
       border-color: rgba(41, 98, 255, 0.45);
     }
 
-    .command-cluster {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
     .command-spacer { flex: 1; min-width: 8px; }
 
     .btn-ghost {
@@ -129,7 +96,7 @@
     .btn-ghost:hover { color: var(--tv-text); border-color: var(--tv-muted); }
     .btn-ghost.active { color: #fff; border-color: var(--tv-accent); background: rgba(41,98,255,0.15); }
 
-    /* ── Chart toolbar (compact second row) ── */
+    /* ── Single chrome row ── */
     .toolbar {
       display: flex;
       align-items: center;
@@ -150,13 +117,6 @@
       font-weight: 700;
       color: var(--tv-text);
       white-space: nowrap;
-    }
-
-    .toolbar-symbol span {
-      color: var(--tv-muted);
-      font-weight: 500;
-      font-size: 11px;
-      margin-left: 4px;
     }
 
     .tf-bar {
@@ -496,123 +456,6 @@
     .tool-btn:hover { border-color: var(--tv-muted); color: var(--tv-text); }
     .tool-btn.active { background: rgba(41,98,255,0.2); border-color: var(--tv-accent); color: #fff; }
 
-    .toolbar-meta {
-      margin-left: auto;
-      display: flex;
-      gap: 14px;
-      font-size: 0.75rem;
-      color: var(--tv-muted);
-      align-items: center;
-      flex-shrink: 0;
-    }
-
-    .toolbar-meta span {
-      display: inline-flex;
-      align-items: center;
-      white-space: nowrap;
-    }
-
-    .toolbar-meta .meta-val {
-      display: inline-block;
-      min-width: 4.5ch;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .toolbar-meta strong { color: var(--tv-text); margin-left: 4px; }
-
-    .regime {
-      display: inline-block;
-      min-width: 72px;
-      text-align: center;
-      padding: 2px 7px;
-      border-radius: 3px;
-      font-size: 0.68rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      box-sizing: border-box;
-    }
-    .regime.EXPANSION { background: #2962ff33; color: #58a6ff; }
-    .regime.SQUEEZE   { background: #f7931a33; color: #f7931a; }
-    .regime.CLIMAX    { background: #f2364533; color: #f23645; }
-
-    /* ── Slim header merged into command-bar ── */
-    .slim-header {
-      display: contents;
-    }
-
-    .header-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .status-badge {
-      display: inline-block;
-      min-width: 82px;
-      text-align: center;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      background: #2b313f;
-      color: #787b86;
-      flex-shrink: 0;
-    }
-
-    .status-badge.in-position {
-      background: rgba(8, 153, 129, 0.2);
-      color: #089981;
-    }
-
-    .status-badge.idle {
-      background: #2b313f;
-      color: #787b86;
-    }
-
-    .score-block {
-      font-variant-numeric: tabular-nums;
-      flex: 0 0 168px;
-      width: 168px;
-    }
-
-    .score-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 168px;
-    }
-
-    .score-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      flex: 0 0 16px;
-      width: 16px;
-      font-weight: 600;
-    }
-
-    .mini-input {
-      width: 42px;
-      height: 24px;
-      background: #131722;
-      border: 1px solid var(--tv-border);
-      border-radius: 3px;
-      color: var(--tv-text);
-      font-size: 11px;
-      padding: 0 4px;
-      font-family: inherit;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .mini-input:focus {
-      outline: none;
-      border-color: var(--tv-accent);
-    }
-
     .matrix-btn {
       background: transparent;
       border: 1px solid var(--tv-border);
@@ -926,10 +769,6 @@
       overflow: hidden;
     }
 
-    @media (max-width: 900px) {
-      .command-bar { gap: 10px; }
-    }
-
     .charts-stack {
       flex: 1;
       display: grid;
@@ -1173,86 +1012,17 @@
     #timeline-sync-badge.is-stalled::before {
       background: #f7931a;
     }
-
-    @media (max-width: 768px) {
-      .toolbar-meta { display: none; }
-      .slim-header { gap: 16px; }
-    }
   </style>
 </head>
 <body>
   <div id="app-container">
   <header class="app-chrome" id="app-chrome">
-  <div class="command-bar">
+  <div class="toolbar">
     <div class="command-tabs tabs-nav">
       <button type="button" class="tab-btn active" data-tab="tab-live">Live</button>
     </div>
 
-    <div class="command-sep"></div>
-
-    <div class="command-cluster">
-      <span id="sandbox-badge" class="sandbox-badge">SANDBOX</span>
-    </div>
-
-    <div class="command-cluster score-block">
-      <div class="score-row">
-        <span class="score-label">L</span>
-        <input type="number" id="ui-threshold-long" value="70" min="10" max="200" step="5" class="mini-input" title="Long threshold" />
-      </div>
-    </div>
-
-    <div class="command-cluster score-block">
-      <div class="score-row">
-        <span class="score-label">S</span>
-        <input type="number" id="ui-threshold-short" value="70" min="10" max="200" step="5" class="mini-input" title="Short threshold" />
-      </div>
-    </div>
-
-    <button type="button" class="matrix-btn" id="matrix-open-btn" title="Signal Matrix">Matrix</button>
-
-    <div class="risk-menu-wrap">
-      <button type="button" class="matrix-btn" id="btn-risk-menu" title="Risk Settings">Risk</button>
-      <div id="risk-settings-menu" class="indicator-settings-menu indicator-settings-menu--floating indicator-settings-menu--dropup" data-float-direction="down" hidden>
-        <div class="setting-row">
-          <label>Risk Per Trade (%)</label>
-          <input type="number" id="risk-per-trade" min="0.1" max="100" step="0.1" value="1" />
-        </div>
-        <div class="setting-row">
-          <label>Max Drawdown (%)</label>
-          <input type="number" id="risk-max-drawdown" min="0.1" max="100" step="0.1" value="5" />
-        </div>
-        <div class="setting-row">
-          <label>Leverage</label>
-          <input type="number" id="risk-leverage" min="1" max="125" step="1" value="10" />
-        </div>
-        <div class="setting-row">
-          <label>Stop Loss Type</label>
-          <select id="risk-stop-loss-type">
-            <option value="fractal_atr">Fractal + ATR</option>
-            <option value="fixed_pct">Fixed %</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label>ATR Multiplier</label>
-          <input type="number" id="risk-atr-multiplier" min="0.1" max="10" step="0.1" value="1.5" />
-        </div>
-        <button type="button" class="risk-save-btn" id="risk-save-btn">Save</button>
-      </div>
-    </div>
-
-    <div class="risk-menu-wrap ind-menu-wrap">
-      <button type="button" class="matrix-btn" id="btn-ind-menu" title="Indicators">Ind</button>
-      <div id="ind-menu" class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="down" hidden></div>
-    </div>
-
-    <div class="command-spacer"></div>
-  </div>
-
-  <div class="toolbar">
-    <div class="toolbar-symbol">
-      <span id="symbol">BTCUSDT</span>
-      <span id="timeframe-label">1m</span>
-    </div>
+    <span class="toolbar-symbol" id="symbol">BTCUSDT</span>
 
     <div class="tf-bar" id="tf-bar">
       <div class="tf-favorites" id="tf-favorites"></div>
@@ -1288,11 +1058,14 @@
       </div>
     </div>
 
-    <div class="toolbar-meta">
-      <span>Regime<strong><span id="regime" class="regime meta-val">—</span></strong></span>
+    <div class="risk-menu-wrap ind-menu-wrap">
+      <button type="button" class="matrix-btn" id="btn-ind-menu" title="Indicators">Ind</button>
+      <div id="ind-menu" class="indicator-settings-menu indicator-settings-menu--floating" data-float-direction="down" hidden></div>
     </div>
-  </div>
 
+    <div class="command-spacer"></div>
+    <span id="sandbox-badge" class="sandbox-badge">SANDBOX</span>
+  </div>
   </header>
 
   <main class="workspace-main" id="workspace-main">
@@ -1641,12 +1414,12 @@
   <script src="/ui/navigator-controller.js?v=3.1.0" defer></script>
   <script src="/ui/wozduh-controller.js?v=4.0.0" defer></script>
   <script src="/ui/risk-controller.js?v=3.1.0" defer></script>
-  <script src="/ui/timeframe-controller.js?v=3.7.1" defer></script>
+  <script src="/ui/timeframe-controller.js?v=3.7.2-one-toolbar" defer></script>
   <script src="/ui/price-style-controller.js?v=1.1.0-price-series-style-1-1" defer></script>
   <script src="/ui/rsx-controller.js?v=3.3.0-dag-demand-1" defer></script>
   <script src="/ui/floating-menu.js?v=4.0.1" defer></script>
   <script src="/ui/settings-renderer.js?v=4.5.2-wozduh-family-indent-1" defer></script>
-  <script src="/ui/toolbar-controller.js?v=4.3.1-no-ind-bar" defer></script>
+  <script src="/ui/toolbar-controller.js?v=4.3.2-one-toolbar" defer></script>
   <script src="/ui/legend-renderer.js?v=4.2.1" defer></script>
   <script src="/ui/layout-controller.js?v=4.4.0" defer></script>
   <script src="/ui/pane-layout.js?v=1.4.0" defer></script>

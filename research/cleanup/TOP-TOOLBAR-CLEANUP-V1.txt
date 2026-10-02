@@ -1,0 +1,95 @@
+TOP-TOOLBAR-CLEANUP-V1
+Date: 2026-10-02
+
+============================================================
+1. VERDICT
+============================================================
+
+TOP_TOOLBAR_CLEANUP_V1_GREEN
+
+One horizontal chrome row. Score-era L/S, Matrix, Risk, and Regime
+are gone from the live layout. Research was not touched.
+
+============================================================
+2. COMMITS
+============================================================
+
+Baseline:
+    f5ee50beff65811ab51b7f247bfda0e1ca9e0384
+    Freeze RESPONSIVE-HISTOGRAM-V2 and POPULATION-OVERLAY-PERFORMANCE-V1
+
+Final: this chapter commit.
+
+============================================================
+3. CORRECTIONS VS THE PROMPT
+============================================================
+
+1. The redundant current-TF label was not a third control. It was
+   #timeframe-label next to BTCUSDT, painted from both
+   TimeframeController and ToolbarController. Removing it leaves one
+   TF group: favorites + existing dropdown. Current TF remains the
+   active chip and #tf-current-btn.
+
+2. BTCUSDT is now the #symbol node itself (class toolbar-symbol).
+   Previously the identity span was muted because .toolbar-symbol span
+   styled the TF label. That rule is deleted.
+
+3. Matrix chrome is gone. The off-chrome #matrix-modal HTML remains.
+   StrategyController still hides it if present. Deleting that modal
+   is prove-dead, not this row merge. RiskController stays a no-op
+   socket because boot / Wozduh / navigator still call hideMenu.
+
+4. No new toolbar framework. command-bar was deleted as a row, not
+   rebranded.
+
+============================================================
+4. REMOVED
+============================================================
+
+    L/S inputs and score-block wrappers
+    Matrix header button
+    Risk button and risk-settings-menu
+    Regime paint (#regime, toolbar-meta, ToolbarController
+      volatilityRegime path)
+    #timeframe-label
+    second chrome row (.command-bar)
+
+============================================================
+5. RETAINED
+============================================================
+
+    Live (tabs-nav chip, leading)
+    BTCUSDT (#symbol)
+    TF group (#tf-bar / favorites / #tf-current-btn / dropdown)
+    Ruler
+    candle-style (#price-style-bar)
+    Ind (#btn-ind-menu / #ind-menu)
+    SANDBOX (trailing, not a primary tool)
+
+============================================================
+6. LAYOUT
+============================================================
+
+#app-chrome contains one .toolbar, height 36px, flex-wrap: nowrap,
+overflow: visible so the existing TF dropdown still opens.
+
+Vertical reclaim: command-bar 46px + toolbar 36px → one 36px row.
+
+============================================================
+7. TESTS
+============================================================
+
+    node web/top_toolbar_cleanup_test.js
+    node web/legacy_chart_toggle_cleanup_test.js
+    node web/price_series_style_test.js
+    node web/timeframe_catalog_test.js
+
+Schema 3 / Matrix / Outcome research artifacts were not modified.
+
+============================================================
+8. NOT THIS CHAPTER
+============================================================
+
+TOOL-DOCK-SHELL-V1
+MTF
+research engine / Lens / overlay

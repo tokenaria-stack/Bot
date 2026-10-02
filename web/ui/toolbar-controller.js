@@ -16,13 +16,6 @@ const ToolbarController = (() => {
     return v.toFixed(2);
   }
 
-  function resolveTfLabel(state) {
-    const tf = state.timeframe || state.tradingTimeframe
-      || (typeof getActiveTf === 'function' ? getActiveTf() : null)
-      || '1m';
-    return TF_DISPLAY[tf] || tf;
-  }
-
   function updateHeaderData(state) {
     if (!state) return;
 
@@ -35,19 +28,6 @@ const ToolbarController = (() => {
 
     if (state.symbol) {
       setTextIfChanged(document.getElementById('symbol'), state.symbol || 'BTCUSDT');
-    }
-    if (state.timeframe || state.tradingTimeframe) {
-      setTextIfChanged(document.getElementById('timeframe-label'), resolveTfLabel(state));
-    }
-
-    if ('volatilityRegime' in state) {
-      const regime = state.volatilityRegime || '';
-      const regimeEl = document.getElementById('regime');
-      if (regimeEl) {
-        setTextIfChanged(regimeEl, regime || '—');
-        const regimeClass = regime ? `regime meta-val ${regime}` : 'regime meta-val';
-        if (regimeEl.className !== regimeClass) regimeEl.className = regimeClass;
-      }
     }
 
     const sandboxEl = document.getElementById('sandbox-badge');

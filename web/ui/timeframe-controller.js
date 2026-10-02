@@ -74,9 +74,7 @@ const TimeframeController = (() => {
   function syncToolbar() {
     const activeTf = getActiveTf();
     const tfBtn = document.getElementById('tf-current-btn');
-    const tfLabelEl = document.getElementById('timeframe-label');
     if (tfBtn) tfBtn.textContent = `${tfLabel(activeTf)} ▾`;
-    if (tfLabelEl) tfLabelEl.textContent = tfLabel(activeTf);
     renderTfBar();
     renderTfMenu();
   }
@@ -98,9 +96,7 @@ const TimeframeController = (() => {
       favEl.appendChild(btn);
     });
     const tfBtn = document.getElementById('tf-current-btn');
-    const tfLabelEl = document.getElementById('timeframe-label');
     if (tfBtn) tfBtn.textContent = `${tfLabel(activeTf)} ▾`;
-    if (tfLabelEl) tfLabelEl.textContent = tfLabel(activeTf);
   }
 
   function renderTfMenu() {
