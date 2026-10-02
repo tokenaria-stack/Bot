@@ -1349,6 +1349,7 @@ body.star-inspection-docked #tab-live {
   margin: 6px 0 2px;
 }
 .star-lens-hist { display: block; margin-top: 2px; }
+.star-lens-hist-bar { cursor: pointer; }
 .star-lens-meta, .star-lens-rate, .star-lens-empty {
   color: #787b86;
   font-variant-numeric: tabular-nums;

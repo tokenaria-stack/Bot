@@ -115,6 +115,43 @@ func TestStarLensCatalogAndSelectedField(t *testing.T) {
 	if picRel.Missing == starlens.UniverseStars {
 		t.Fatal("matrix all missing")
 	}
+	if len(pic1.Hist) < 50 {
+		t.Fatalf("coarse M15.Vwema hist %d", len(pic1.Hist))
+	}
+	sumH := 0
+	for i, b := range pic1.Hist {
+		sumH += b.Count
+		if i == 0 && !b.OpenLow {
+			t.Fatal("first bin openLow")
+		}
+		if i == len(pic1.Hist)-1 && !b.OpenHigh {
+			t.Fatal("last bin openHigh")
+		}
+		if i > 0 && pic1.Hist[i-1].To != b.From {
+			t.Fatalf("gap/overlap %v %v", pic1.Hist[i-1], b)
+		}
+	}
+	if sumH != pic1.Observed {
+		t.Fatalf("sum %d observed %d missing %d", sumH, pic1.Observed, pic1.Missing)
+	}
+	if pic1.Observed+pic1.Missing != pic1.Base {
+		t.Fatalf("picture base %d obs %d miss %d", pic1.Base, pic1.Observed, pic1.Missing)
+	}
+	mid := pic1.Hist[len(pic1.Hist)/2]
+	if mid.OpenLow || mid.OpenHigh {
+		t.Fatalf("want interior %+v", mid)
+	}
+	mixedBin, _ := evalSelected([]starlens.Clause{
+		starlens.REvent(1, "reached"),
+		starlens.Continuous("M15.Vwema", starlens.CmpGTE, mid.From),
+		starlens.Continuous("M15.Vwema", starlens.CmpLT, mid.To),
+	}, "M15.Vwema")
+	if mixedBin == 0 || mixedBin > 4160 {
+		t.Fatalf("1R+vwema bin %d", mixedBin)
+	}
+	if len(picRel.Hist) < 8 {
+		t.Fatalf("matrix hist %d", len(picRel.Hist))
+	}
 	mixedM, _ := evalSelected([]starlens.Clause{
 		starlens.REvent(1, "reached"),
 		starlens.Continuous("M15H1Vwema", starlens.CmpGTE, picRel.Min),

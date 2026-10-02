@@ -80,9 +80,30 @@ async function main() {
   });
 
   await test('histogram does not plot missing as a zero bar', () => {
-    const html = StarLens.histogramSvg({ rangeOk: true, bins: [2, 0, 5], min: 0, max: 10, missing: 1 }, 0, '>=', true);
-    assert.ok(html.includes('0.00') || html.includes('0'));
+    const html = StarLens.histogramSvg({
+      rangeOk: true,
+      hist: [
+        { from: 0, to: 5, count: 2, openLow: true },
+        { from: 5, to: 10, count: 0 },
+        { from: 10, to: 15, count: 5, openHigh: true },
+      ],
+      min: 0,
+      max: 15,
+      missing: 1,
+    }, 'mfeAtr', 0, true);
+    assert.ok(html.includes('data-hist-from'));
     assert.ok(!html.includes('hit1R'));
+  });
+
+  await test('interior histogram bin becomes two existing continuous clauses', () => {
+    const clauses = StarLens.clausesFromBin('M15.Vwema', { from: 25, to: 30, openLow: false, openHigh: false });
+    assert.deepStrictEqual(clauses[0], { kind: 'continuous', field: 'M15.Vwema', cmp: '>=', bound: 25 });
+    assert.deepStrictEqual(clauses[1], { kind: 'continuous', field: 'M15.Vwema', cmp: '<', bound: 30 });
+    assert.strictEqual(clauses.length, 2);
+    const lo = StarLens.clausesFromBin('M15.Vwema', { from: 0, to: 5, openLow: true, openHigh: false });
+    assert.deepStrictEqual(lo, [{ kind: 'continuous', field: 'M15.Vwema', cmp: '<', bound: 5 }]);
+    const hi = StarLens.clausesFromBin('M15.Vwema', { from: 70, to: 80, openLow: false, openHigh: true });
+    assert.deepStrictEqual(hi, [{ kind: 'continuous', field: 'M15.Vwema', cmp: '>=', bound: 70 }]);
   });
 
   await test('chart range uses chart unix time, not TimeCamera bar indices', () => {
@@ -143,7 +164,7 @@ async function main() {
     assert.ok(src.includes('/api/research/star-lens/catalog'));
     assert.ok(!src.includes('hit1R'));
     assert.ok(!src.includes('Schema3[M15.Vwema]'));
-    assert.ok(!src.includes('lo.Vwema'));
+    assert.ok(!src.includes('KindRange'));
   });
 
   await test('paint controls live in the style menu, not the lens form', () => {

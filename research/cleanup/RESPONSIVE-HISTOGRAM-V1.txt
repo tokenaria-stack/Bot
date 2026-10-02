@@ -1,0 +1,110 @@
+RESPONSIVE-HISTOGRAM-V1
+Date: 2026-10-02
+
+============================================================
+1. VERDICT
+============================================================
+
+RESPONSIVE_HISTOGRAM_V1_GREEN
+
+Lens histograms now carry server-authoritative half-open bins.
+Clicking a bar sends existing KindContinuous clauses. The slider
+path is unchanged. Population overlay was not touched.
+
+============================================================
+2. COMMITS
+============================================================
+
+Baseline:
+    c019ad76caa39669c17d471e641fc59964a281b7
+
+Final commit: this chapter's commit SHA (recorded at git).
+
+============================================================
+3. CORRECTION TO THE PROMPT
+============================================================
+
+CountBins remains the original right-closed counter
+(v <= edge, plus overflow). That contract cannot express
+[from, to) without an epsilon hack.
+
+Display histograms therefore count with CountHalfOpen:
+
+    v < cut0            → first bin  (open below)
+    cut[i] <= v < cut[i+1]
+    v >= last cut       → last bin   (open above)
+
+CountHalfOpen is the same counting family, presentation-only.
+It is not a second observation set and not a new evaluator.
+NumberPicture.Values remain the only observations.
+
+DisplayBinCount: n<80 → n bins, else 64. Not a research constant.
+
+============================================================
+4. DATA FLOW
+============================================================
+
+    NumberPicture (self-exclusion unchanged)
+        ↓
+    DisplayHistogram → CountHalfOpen
+        ↓
+    HTTP hist[{from,to,count,openLow?,openHigh?}] + observed + missing
+        ↓
+    browser draws those bins
+        ↓
+    click uses the bin's from/to
+        ↓
+    KindContinuous (no KindRange)
+        ↓
+    Evaluate → state.last.pass
+
+Interior: Field >= from AND Field < to
+First (openLow): Field < to
+Last (openHigh): Field >= from
+Degenerate min==max: Field >= from
+
+============================================================
+5. INVARIANTS
+============================================================
+
+sum(bin.count) == observed  (enforced in wireNumber)
+observed + missing == NumberPicture.Base
+Missing is not a bar.
+Real 0 with OK=true is an observation.
+Boundary value belongs to exactly one bin (CountHalfOpen).
+Adjacent bins share To == next.From (no gap, no overlap).
+Browser does not bin and does not compute membership.
+
+============================================================
+6. FROZEN ARTIFACTS (UNCHANGED)
+============================================================
+
+    Schema3Commit  975da0d
+    MatrixDigest   8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    OutcomeDigest  6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+
+catalog test still checks frozen file hashes.
+
+============================================================
+7. TESTS
+============================================================
+
+    go test ./forecast/starlens
+    go test ./server -run 'StarLens'
+    node web/star_lens_panel_test.js
+
+M15.Vwema hist length >= 50 on the live universe picture.
+1R + interior VWEMA interval evaluates through the existing engine.
+Matrix M15H1Vwema still pictures.
+
+Unrelated ./server sqlite InitDB failures under sandbox were not
+repaired.
+
+============================================================
+8. NOT IN THIS CHAPTER
+============================================================
+
+drawPopulation, populationPlan, marksInView, camera, Prev/Next,
+LOD, workers, KindRange, Schema 3 / Matrix / Outcome files.
+
+Next: POPULATION-OVERLAY-PERFORMANCE-V1

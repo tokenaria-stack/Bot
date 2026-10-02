@@ -35,6 +35,7 @@ const StarLens = (() => {
     catalog: [],
     catalogOpen: {},
     catHeight: 280,
+    histSel: null,
   };
 
   const CAT_HEIGHT_KEY = 'star-lens-cat-height';
@@ -93,6 +94,10 @@ const StarLens = (() => {
       const cmp = root.querySelector('[data-cmp="' + item.field + '"]');
       const val = root.querySelector('[data-bound="' + item.field + '"]');
       if (!on || !on.checked) return;
+      if (state.histSel && state.histSel.field === item.field) {
+        clausesFromBin(item.field, state.histSel).forEach((c) => out.push(c));
+        return;
+      }
       const n = Number(val && val.value);
       if (!Number.isFinite(n)) return;
       out.push({ kind: 'continuous', field: item.field, cmp: cmp ? cmp.value : '>=', bound: n });
@@ -113,9 +118,13 @@ const StarLens = (() => {
     const ccmp = root.querySelector('[data-coord-cmp]');
     const cval = root.querySelector('[data-coord-bound]');
     if (cid && cid.value && con && con.checked) {
-      const n = Number(cval && cval.value);
-      if (Number.isFinite(n)) {
-        out.push({ kind: 'continuous', field: cid.value, cmp: ccmp ? ccmp.value : '>=', bound: n });
+      if (state.histSel && state.histSel.field === cid.value) {
+        clausesFromBin(cid.value, state.histSel).forEach((c) => out.push(c));
+      } else {
+        const n = Number(cval && cval.value);
+        if (Number.isFinite(n)) {
+          out.push({ kind: 'continuous', field: cid.value, cmp: ccmp ? ccmp.value : '>=', bound: n });
+        }
       }
     }
     return out;
@@ -294,23 +303,63 @@ const StarLens = (() => {
     return out;
   }
 
-  function histogramSvg(pic, bound, cmp, active) {
-    if (!pic || !pic.rangeOk || !pic.bins || !pic.bins.length) {
+  function clausesFromBin(field, bin) {
+    const out = [];
+    if (!field || !bin) return out;
+    const from = Number(bin.from);
+    const to = Number(bin.to);
+    if (bin.openHigh && !bin.openLow) {
+      if (Number.isFinite(from)) out.push({ kind: 'continuous', field: field, cmp: '>=', bound: from });
+      return out;
+    }
+    if (bin.openLow && !bin.openHigh) {
+      if (Number.isFinite(to)) out.push({ kind: 'continuous', field: field, cmp: '<', bound: to });
+      return out;
+    }
+    if (bin.openLow && bin.openHigh) {
+      if (Number.isFinite(from)) out.push({ kind: 'continuous', field: field, cmp: '>=', bound: from });
+      return out;
+    }
+    if (Number.isFinite(from)) out.push({ kind: 'continuous', field: field, cmp: '>=', bound: from });
+    if (Number.isFinite(to)) out.push({ kind: 'continuous', field: field, cmp: '<', bound: to });
+    return out;
+  }
+
+  function histSelected(bin) {
+    const sel = state.histSel;
+    if (!sel || !bin) return false;
+    return Number(sel.from) === Number(bin.from) && Number(sel.to) === Number(bin.to) &&
+      !!sel.openLow === !!bin.openLow && !!sel.openHigh === !!bin.openHigh;
+  }
+
+  function histogramSvg(pic, field, bound, active) {
+    const rows = pic && pic.hist && pic.hist.length ? pic.hist : null;
+    if (!pic || !pic.rangeOk || !rows) {
       return '<div class="star-lens-empty">no observations</div>';
     }
-    const max = Math.max.apply(null, pic.bins.concat([1]));
+    let peak = 1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].count > peak) peak = rows[i].count;
+    }
     const w = 248;
     const h = 52;
-    const gap = 1;
-    const bw = (w - gap * pic.bins.length) / pic.bins.length;
+    const gap = 0.4;
+    const bw = (w - gap * rows.length) / rows.length;
     let bars = '';
-    for (let i = 0; i < pic.bins.length; i++) {
-      const bh = (pic.bins[i] / max) * (h - 12);
-      bars += '<rect x="' + (i * (bw + gap)).toFixed(2) + '" y="' + (h - 12 - bh).toFixed(2) +
-        '" width="' + bw.toFixed(2) + '" height="' + bh.toFixed(2) + '" fill="#5d6b7a"></rect>';
+    for (let i = 0; i < rows.length; i++) {
+      const bin = rows[i];
+      const bh = (bin.count / peak) * (h - 12);
+      const on = state.histSel && state.histSel.field === field && histSelected(bin);
+      bars += '<rect class="star-lens-hist-bar" data-hist-bar="1" data-hist-field="' + escapeText(field) +
+        '" data-hist-from="' + bin.from + '" data-hist-to="' + bin.to +
+        '" data-hist-open-low="' + (bin.openLow ? '1' : '0') +
+        '" data-hist-open-high="' + (bin.openHigh ? '1' : '0') +
+        '" x="' + (i * (bw + gap)).toFixed(2) + '" y="' + (h - 12 - bh).toFixed(2) +
+        '" width="' + bw.toFixed(2) + '" height="' + Math.max(0, bh).toFixed(2) +
+        '" fill="' + (on ? '#f0b429' : '#5d6b7a') + '"></rect>';
     }
     let handle = '';
-    if (active && Number.isFinite(Number(bound)) && pic.max > pic.min) {
+    if (active && !state.histSel && Number.isFinite(Number(bound)) && pic.max > pic.min) {
       let x = ((Number(bound) - pic.min) / (pic.max - pic.min)) * w;
       if (x < 0) x = 0;
       if (x > w) x = w;
@@ -363,7 +412,7 @@ const StarLens = (() => {
       const miss = root.querySelector('[data-miss="' + item.field + '"]');
       const pic = nums.find((n) => n.field === item.field);
       const active = !!(on && on.checked);
-      if (box) box.innerHTML = histogramSvg(pic, boundEl ? boundEl.value : null, '', active);
+      if (box) box.innerHTML = histogramSvg(pic, item.field, boundEl ? boundEl.value : null, active);
       if (miss && pic) miss.textContent = 'missing ' + pic.missing + (active ? '' : ' · off');
       if (pic && pic.rangeOk && slide && boundEl && document.activeElement !== slide && document.activeElement !== boundEl) {
         slide.min = String(pic.min);
@@ -387,7 +436,7 @@ const StarLens = (() => {
       const miss = root.querySelector('[data-miss="coord"]');
       const pic = nums.find((n) => n.field === field);
       const active = !!(on && on.checked);
-      if (box) box.innerHTML = histogramSvg(pic, boundEl ? boundEl.value : null, '', active);
+      if (box) box.innerHTML = histogramSvg(pic, field, boundEl ? boundEl.value : null, active);
       if (miss && pic) miss.textContent = 'missing ' + pic.missing + (active ? '' : ' · off');
       if (pic && pic.rangeOk && slide && boundEl && document.activeElement !== slide && document.activeElement !== boundEl) {
         slide.min = String(pic.min);
@@ -563,6 +612,28 @@ const StarLens = (() => {
       renderCatalog(root, state.catalog);
     });
     root.addEventListener('click', (ev) => {
+      const bar = ev.target && ev.target.closest ? ev.target.closest('[data-hist-bar]') : null;
+      if (bar) {
+        const field = bar.getAttribute('data-hist-field');
+        const bin = {
+          from: Number(bar.getAttribute('data-hist-from')),
+          to: Number(bar.getAttribute('data-hist-to')),
+          openLow: bar.getAttribute('data-hist-open-low') === '1',
+          openHigh: bar.getAttribute('data-hist-open-high') === '1',
+        };
+        if (state.histSel && state.histSel.field === field && histSelected(bin)) {
+          state.histSel = null;
+        } else {
+          state.histSel = { field: field, from: bin.from, to: bin.to, openLow: bin.openLow, openHigh: bin.openHigh };
+          const outcome = root.querySelector('[data-num="' + field + '"]');
+          if (outcome) outcome.checked = true;
+          const coordOn = root.querySelector('[data-coord-num]');
+          const cid = root.querySelector('[data-coord-id]');
+          if (coordOn && cid && cid.value === field) coordOn.checked = true;
+        }
+        evaluate();
+        return;
+      }
       const tri = ev.target && ev.target.closest ? ev.target.closest('[data-catalog-tri]') : null;
       if (tri) {
         ev.preventDefault();
@@ -620,11 +691,14 @@ const StarLens = (() => {
       const slide = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-slide');
       if (!slide) return;
       if (slide === 'coord') {
+        const hid = root.querySelector('[data-coord-id]');
+        if (state.histSel && hid && state.histSel.field === hid.value) state.histSel = null;
         const bound = root.querySelector('[data-coord-bound]');
         if (bound) bound.value = ev.target.value;
         scheduleEvaluate();
         return;
       }
+      if (state.histSel && state.histSel.field === slide) state.histSel = null;
       const bound = root.querySelector('[data-bound="' + slide + '"]');
       if (bound) bound.value = ev.target.value;
       scheduleEvaluate();
@@ -662,6 +736,7 @@ const StarLens = (() => {
     state.catalog = [];
     state.catalogOpen = {};
     state.catHeight = 280;
+    state.histSel = null;
   }
 
   return {
@@ -671,6 +746,7 @@ const StarLens = (() => {
     getMarks,
     chartRange,
     clausesFromForm,
+    clausesFromBin,
     viewCount,
     histogramSvg,
     filterCatalog,

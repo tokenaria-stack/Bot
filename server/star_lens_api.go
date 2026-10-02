@@ -262,15 +262,23 @@ type lensEvalRequest struct {
 	ViewTo        int64             `json:"viewTo"`
 }
 
+type lensHistBin struct {
+	From     float64 `json:"from"`
+	To       float64 `json:"to"`
+	Count    int     `json:"count"`
+	OpenLow  bool    `json:"openLow,omitempty"`
+	OpenHigh bool    `json:"openHigh,omitempty"`
+}
+
 type lensNumberWire struct {
-	Field   string    `json:"field"`
-	Base    int       `json:"base"`
-	Missing int       `json:"missing"`
-	Min     float64   `json:"min"`
-	Max     float64   `json:"max"`
-	RangeOK bool      `json:"rangeOk"`
-	Edges   []float64 `json:"edges"`
-	Bins    []int     `json:"bins"`
+	Field    string        `json:"field"`
+	Base     int           `json:"base"`
+	Missing  int           `json:"missing"`
+	Observed int           `json:"observed"`
+	Min      float64       `json:"min"`
+	Max      float64       `json:"max"`
+	RangeOK  bool          `json:"rangeOk"`
+	Hist     []lensHistBin `json:"hist"`
 }
 
 type lensEventWire struct {
@@ -283,34 +291,8 @@ type lensEventWire struct {
 	RateOK     bool    `json:"rateOk"`
 }
 
-func displayEdges(values []float64) []float64 {
-	if len(values) == 0 {
-		return nil
-	}
-	lo, hi := values[0], values[0]
-	for _, v := range values[1:] {
-		if v < lo {
-			lo = v
-		}
-		if v > hi {
-			hi = v
-		}
-	}
-	if hi == lo {
-		return []float64{hi}
-	}
-	const n = 20
-	step := (hi - lo) / n
-	edges := make([]float64, n)
-	for i := 1; i <= n; i++ {
-		edges[i-1] = lo + float64(i)*step
-	}
-	edges[n-1] = hi
-	return edges
-}
-
 func wireNumber(field string, pic starlens.NumberPicture) (lensNumberWire, error) {
-	out := lensNumberWire{Field: field, Base: pic.Base, Missing: pic.Missing}
+	out := lensNumberWire{Field: field, Base: pic.Base, Missing: pic.Missing, Observed: len(pic.Values)}
 	if len(pic.Values) == 0 {
 		return out, nil
 	}
@@ -324,13 +306,19 @@ func wireNumber(field string, pic starlens.NumberPicture) (lensNumberWire, error
 		}
 	}
 	out.RangeOK = true
-	edges := displayEdges(pic.Values)
-	bins, err := starlens.CountBins(pic.Values, edges)
+	hist, err := starlens.DisplayHistogram(pic.Values)
 	if err != nil {
 		return out, err
 	}
-	out.Edges = edges
-	out.Bins = bins
+	out.Hist = make([]lensHistBin, len(hist))
+	sum := 0
+	for i, b := range hist {
+		out.Hist[i] = lensHistBin{From: b.From, To: b.To, Count: b.Count, OpenLow: b.OpenLow, OpenHigh: b.OpenHigh}
+		sum += b.Count
+	}
+	if sum != out.Observed {
+		return out, fmt.Errorf("starlens: histogram sum %d observed %d", sum, out.Observed)
+	}
 	return out, nil
 }
 
