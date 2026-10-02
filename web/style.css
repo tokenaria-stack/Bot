@@ -864,7 +864,7 @@
 /* Price / bottom-axis owner: clear the time-axis strip. */
 .scale-controls {
   position: absolute;
-  right: 6px;
+  right: 2px;
   bottom: 22px;
   z-index: 16;
   display: flex;
@@ -877,7 +877,7 @@
 
 /* Intermediate panes: no visible time axis (ADR-023) — sit closer to the edge. */
 .chart-wrap[data-bottom-time-axis="0"] .scale-controls {
-  bottom: 6px;
+  bottom: 4px;
 }
 
 /* Explicit owner (footer or price) keeps clearance above the axis. */

@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const PRICE_SCALE_MIN = 75;
+  const PRICE_SCALE_MIN = 48;
   /** @type {{ charts: object, priceSeries: object, volumeSeries: object, priceStyle: string, _syncingCrosshair: boolean, _disposers: (() => void)[] }|null} */
   let _live = null;
   let _liveUpdating = false;
@@ -241,6 +241,7 @@
       autoScale: !!prefs.isAuto,
       minimumWidth: PRICE_SCALE_MIN,
       alignLabels: true,
+      ticksVisible: false,
       borderVisible: true,
       ...extra,
     };

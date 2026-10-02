@@ -360,7 +360,7 @@
   function priceScaleWidth(chart) {
     try {
       const w = chart.priceScale('right').width();
-      return Number.isFinite(w) && w > 0 ? w : 70;
+      return Number.isFinite(w) && w > 0 ? w : 48;
     } catch {
       return 70;
     }
@@ -369,7 +369,7 @@
   function isPointerOnPriceScale(host, chart, clientX) {
     if (!host) return false;
     const rect = host.getBoundingClientRect();
-    const scaleW = chart ? priceScaleWidth(chart) : 70;
+    const scaleW = chart ? priceScaleWidth(chart) : 48;
     return clientX >= rect.right - scaleW;
   }
 
