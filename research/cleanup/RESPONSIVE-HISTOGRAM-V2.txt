@@ -18,7 +18,8 @@ Baseline:
     fec8a28972d66d1c0dd7b46c73c881119cdaa561
     RESPONSIVE-HISTOGRAM-V1
 
-Final: this chapter commit.
+Final:
+    139918651dec83b818c3ebe27f5ddb5b41e745e1
 
 ============================================================
 3. CORRECTION

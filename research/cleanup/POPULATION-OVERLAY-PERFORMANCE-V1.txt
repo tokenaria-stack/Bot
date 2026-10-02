@@ -18,7 +18,8 @@ Baseline:
     139918651dec83b818c3ebe27f5ddb5b41e745e1
     RESPONSIVE-HISTOGRAM-V2
 
-Final: this chapter commit.
+Final:
+    18609b1169728fda6056fb61e7e6d1039328543c
 
 ============================================================
 3. THREE CLOCKS

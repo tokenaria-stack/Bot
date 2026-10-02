@@ -432,6 +432,10 @@ Future strategies live under `decision/`. They consume market state without impo
 
 **POPULATION-LENS-DISPLAY-V2 ✅ frozen.** Population Stars are series markers on the 15m decision candle, green up and red down. The rail scrolls. Show is display only.
 
+**RESPONSIVE-HISTOGRAM-V2 ✅ frozen `1399186`.** Histogram and slider are two inputs for one continuous Lens bound. A bar click is a representative threshold, not an interval population. Yellow line is that bound.
+
+**POPULATION-OVERLAY-PERFORMANCE-V1 ✅ frozen `18609b1`.** Chart glyphs are `marksInView` of `state.last.pass`. Pan does not rebuild histograms. Candle high/low is a binary search. Membership, Evaluate, and Prev/Next are unchanged. No LOD.
+
 **LABEL-SET-C ✅ frozen `ce3e542`.** Brain V2 native tape door: `forecast.GenerateLabelSetFromTape2` / `market.DumpLabelSetFromTape2` reads `feature-tape-v2` directly. Shared owner is the existing first-passage / 1m finer core (`buildLabelsFromCandidates`). V1 `GenerateLabelSet` remains a legacy tape door into that core. Not a v2→v1 adapter. Format stays `label-set-v2` (fields are candidate-source generic). Target C only.
 
 **DATASET-C + VALIDATION-PLAN-C ✅ frozen `151e530`.** Native `BuildResearchDatasetFromTape2` joins Tape2 + LabelSet-C in memory (`ResearchRow2` / `FeatureVector2`). Shared exclusive partition with V1. `ResearchValidationPlanC()` binds Target C (H=72) + pinned policy; `CompileValidationPlan` is unchanged (market-time `HorizonEnd`, not row-index gap). No dataset/plan disk files.

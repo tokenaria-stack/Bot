@@ -8,6 +8,17 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## POPULATION-OVERLAY-PERFORMANCE-V1 — viewport glyphs only (Oct 2026)
+
+- `getMarks` returns `marksInView` of `state.last.pass`. Pan updates the Chart-view count and glyph list, not histogram SVG.
+- `candleHighLowAt` is a binary search. Evaluate, header pass length, and Prev/Next are unchanged.
+- Report `research/cleanup/POPULATION-OVERLAY-PERFORMANCE-V1.txt`. Commit `18609b1`.
+
+## RESPONSIVE-HISTOGRAM-V2 — one threshold, two inputs (Oct 2026)
+
+- Histogram click writes one continuous bound and moves the slider. No interval clauses. Yellow line is the bound.
+- Report `research/cleanup/RESPONSIVE-HISTOGRAM-V2.txt`. Commit `1399186`.
+
 ## LEGACY-CHART-TOGGLE-CLEANUP-V1 — unreachable spike painter and toggle shims (Sep 2026)
 
 - Removed `buildSpikeMarkers*`, FE spike annotation ingest, and boot `renderFib` / `lastFibZones` shims.

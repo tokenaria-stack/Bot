@@ -88,7 +88,9 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **POPULATION-LENS-DISPLAY-V2 ✅ frozen.** Report `research/cleanup/POPULATION-LENS-DISPLAY-V2.txt`. Population Stars sit on the 15m candle, green up / red down. The rail scrolls. Show is not Save.
 
-**NEXT: 191-coordinate filters and population comparison, not started.** Do not add capture fields. Do not rank. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
+**RESPONSIVE-HISTOGRAM-V2 ✅ frozen `1399186`.** Report `research/cleanup/RESPONSIVE-HISTOGRAM-V2.txt`. Histogram click sets the same single bound as the slider. Do not restore interval-bin populations.
+
+**POPULATION-OVERLAY-PERFORMANCE-V1 ✅ frozen `18609b1`.** Report `research/cleanup/POPULATION-OVERLAY-PERFORMANCE-V1.txt`. Paint the visible pass slice only. Do not add LOD, workers, or a second population. Do not rank. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
