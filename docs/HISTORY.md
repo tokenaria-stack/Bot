@@ -8,6 +8,12 @@ Full pre-Core-6.0 Russian chronicle lived in `MEMORY.md`; git history retains it
 
 ---
 
+## TOP-TOOLBAR-CLEANUP-V1 — one chrome row (Oct 2026)
+
+- Merged command-bar and toolbar. Live sits before BTCUSDT. Ind is last among tools.
+- Removed L/S, Matrix, Risk, Regime, and the duplicate TF label.
+- Report `research/cleanup/TOP-TOOLBAR-CLEANUP-V1.txt`. Commit `c3d8493`.
+
 ## POPULATION-OVERLAY-PERFORMANCE-V1 — viewport glyphs only (Oct 2026)
 
 - `getMarks` returns `marksInView` of `state.last.pass`. Pan updates the Chart-view count and glyph list, not histogram SVG.

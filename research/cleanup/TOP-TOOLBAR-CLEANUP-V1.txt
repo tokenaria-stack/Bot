@@ -18,7 +18,8 @@ Baseline:
     f5ee50beff65811ab51b7f247bfda0e1ca9e0384
     Freeze RESPONSIVE-HISTOGRAM-V2 and POPULATION-OVERLAY-PERFORMANCE-V1
 
-Final: this chapter commit.
+Final:
+    c3d849323efd73a10c23f10a05e1ce28092e86cd
 
 ============================================================
 3. CORRECTIONS VS THE PROMPT

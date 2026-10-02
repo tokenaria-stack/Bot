@@ -92,6 +92,8 @@ Do not mix these into TP-STOP / FeatureSpec / tape chapters.
 
 **POPULATION-OVERLAY-PERFORMANCE-V1 ✅ frozen `18609b1`.** Report `research/cleanup/POPULATION-OVERLAY-PERFORMANCE-V1.txt`. Paint the visible pass slice only. Do not add LOD, workers, or a second population. Do not rank. TP-STOP-FACT-GAP-1 stays on the Brain-3 ledger.
 
+**TOP-TOOLBAR-CLEANUP-V1 ✅ frozen `c3d8493`.** Report `research/cleanup/TOP-TOOLBAR-CLEANUP-V1.txt`. One chrome row. Do not restore L/S, Matrix, Risk, or Regime. Next shell: TOOL-DOCK-SHELL-V1.
+
 **Cleanup (scale + timeline forest):** deleted `web/scale_blank_price_diag_test.js` (diag duplicate of paint/ownership tests). Keep `scale_paint_ownership_test.js`, `scale_controller_test.js` observation tests, timeline state/recovery tests, `[FEGap]`/`[FEGapRecovered]`, `[HealProbe]`, opt-in TipSSOT/ProjCont. Keep Brain3/opportunity canvases. Deleted volume-ingest canvas (SSOT is `research/volume/`).
 
 **After freeze (cleanup rule):** prove dead → delete → tests → smoke → checkpoint. No speculative deletion of TimeCamera / hydration / prune.
