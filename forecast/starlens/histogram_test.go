@@ -80,6 +80,24 @@ func TestDisplayBinCountIsPresentation(t *testing.T) {
 	}
 }
 
+func TestDisplayBinsHaveFiniteEdges(t *testing.T) {
+	values := []float64{0, 10, 20, 30, 40}
+	bins, err := DisplayHistogram(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bins[0].From != 0 || !bins[0].OpenLow {
+		t.Fatalf("first %+v", bins[0])
+	}
+	last := bins[len(bins)-1]
+	if last.To != 40 || !last.OpenHigh {
+		t.Fatalf("last %+v", last)
+	}
+	if last.From == last.To {
+		t.Fatal("open tail without a finite display span")
+	}
+}
+
 func TestZeroIsObserved(t *testing.T) {
 	bins, err := DisplayHistogram([]float64{0, 0, 1})
 	if err != nil {

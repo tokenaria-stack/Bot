@@ -1,0 +1,100 @@
+RESPONSIVE-HISTOGRAM-V2
+Date: 2026-10-02
+
+============================================================
+1. VERDICT
+============================================================
+
+RESPONSIVE_HISTOGRAM_V2_GREEN
+
+The histogram is a second input for the same single-bound Lens
+clause. It is not an interval filter and not a second population.
+
+============================================================
+2. COMMITS
+============================================================
+
+Baseline:
+    fec8a28972d66d1c0dd7b46c73c881119cdaa561
+    RESPONSIVE-HISTOGRAM-V1
+
+Final: this chapter commit.
+
+============================================================
+3. CORRECTION
+============================================================
+
+V1 treated a bar click as Field >= from AND Field < to. That was
+the wrong product: the user wanted click-as-slider, not bin
+membership.
+
+histSel is gone. clausesFromForm reads only the form bound.
+
+OpenLow / OpenHigh remain display tags for which bin contains the
+threshold. They are not Lens clauses.
+
+============================================================
+4. REPRESENTATIVE POLICY
+============================================================
+
+Every displayed bin has finite from and to (observed min/max of
+the NumberPicture, not ±inf).
+
+    representative = (from + to) / 2
+    if from == to: that value
+
+The browser uses server from/to only. Midpoint is a V1 click
+policy, isolated in binThreshold. It is not a research constant.
+
+Better than shipping a server `representative` field: the evaluator
+never sees bins, so there is no research meaning to freeze on the
+wire. Open tails already have finite display edges (observed min/max),
+so a midpoint of the painted interval is defined without a new DTO.
+
+Open-ended counting still uses CountHalfOpen for bar heights.
+Click does not invent ±inf midpoints because the painted interval
+is finite.
+
+============================================================
+5. CANONICAL STATE
+============================================================
+
+    Field + cmp + bound   (one KindContinuous)
+
+Slider writes that bound.
+Histogram click writes the same bound, then the slider and number
+field show it, then Evaluate.
+
+Yellow line = the bound on the min–max axis.
+Containing bin is shaded; moving the slider inside the same bin
+moves the yellow line, not back to the midpoint.
+
+Header — / N is state.last.pass.length (walk length), not bin.count.
+
+============================================================
+6. SELF-EXCLUSION
+============================================================
+
+Unchanged. ChanMid histogram stays the NumberPicture with ChanMid
+clauses omitted. Threshold changes pass, not the distribution.
+
+============================================================
+7. FROZEN ARTIFACTS
+============================================================
+
+    Schema3Commit  975da0d
+    MatrixDigest   8c08c2a643023ee04985d2e5fed6d1cbbf285a4148e216681088f4ec49c3ec8a
+    OutcomeDigest  6a11ed6121ae16bb39de247afabb39c454d6985b751fc995410ba5b7cb0cfe62
+
+============================================================
+8. TESTS
+============================================================
+
+    go test ./forecast/starlens
+    go test ./server -run 'StarLens'
+    node web/star_lens_panel_test.js
+
+Overlay, drawPopulation, marksInView, Prev/Next, Schema 3, Matrix,
+and Outcome were not modified.
+
+Next: POPULATION-OVERLAY-PERFORMANCE-V1

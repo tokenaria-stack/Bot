@@ -95,15 +95,31 @@ async function main() {
     assert.ok(!html.includes('hit1R'));
   });
 
-  await test('interior histogram bin becomes two existing continuous clauses', () => {
-    const clauses = StarLens.clausesFromBin('M15.Vwema', { from: 25, to: 30, openLow: false, openHigh: false });
-    assert.deepStrictEqual(clauses[0], { kind: 'continuous', field: 'M15.Vwema', cmp: '>=', bound: 25 });
-    assert.deepStrictEqual(clauses[1], { kind: 'continuous', field: 'M15.Vwema', cmp: '<', bound: 30 });
-    assert.strictEqual(clauses.length, 2);
-    const lo = StarLens.clausesFromBin('M15.Vwema', { from: 0, to: 5, openLow: true, openHigh: false });
-    assert.deepStrictEqual(lo, [{ kind: 'continuous', field: 'M15.Vwema', cmp: '<', bound: 5 }]);
-    const hi = StarLens.clausesFromBin('M15.Vwema', { from: 70, to: 80, openLow: false, openHigh: true });
-    assert.deepStrictEqual(hi, [{ kind: 'continuous', field: 'M15.Vwema', cmp: '>=', bound: 70 }]);
+  await test('histogram click is a midpoint threshold, not an interval', () => {
+    assert.strictEqual(StarLens.binThreshold(35, 40), 37.5);
+    assert.strictEqual(StarLens.binThreshold(10, 10), 10);
+    assert.strictEqual(StarLens.boundInBin(37.5, { from: 35, to: 40 }), true);
+    assert.strictEqual(StarLens.boundInBin(38.7, { from: 35, to: 40 }), true);
+    assert.strictEqual(StarLens.boundInBin(40, { from: 35, to: 40 }), false);
+    assert.strictEqual(StarLens.boundInBin(41, { from: 40, to: 50, openHigh: true, openLow: false }), true);
+    const html = StarLens.histogramSvg({
+      rangeOk: true,
+      hist: [
+        { from: 0, to: 5, count: 2, openLow: true },
+        { from: 5, to: 10, count: 0 },
+        { from: 10, to: 15, count: 5, openHigh: true },
+      ],
+      min: 0,
+      max: 15,
+      missing: 1,
+    }, 'mfeAtr', 7.5, true);
+    assert.ok(html.includes('data-hist-from'));
+    assert.ok(html.includes('#f0b429'));
+    assert.ok(!html.includes('hit1R'));
+    const src = fs.readFileSync(path.join(__dirname, 'ui/star-lens-panel.js'), 'utf8');
+    assert.ok(!src.includes('histSel'));
+    assert.ok(!src.includes('KindRange'));
+    assert.ok(src.includes('binThreshold'));
   });
 
   await test('chart range uses chart unix time, not TimeCamera bar indices', () => {
